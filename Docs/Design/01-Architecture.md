@@ -169,7 +169,7 @@ la même raison. Rien de tout cela n'est consommé pendant une partie.
 
 Ordre prévu :
 
-1. **Fait (octobre 2026, non déployé).** Worker + lobby (Cloudflare), et la
+1. **Fait et déployé (octobre 2026).** Worker + lobby (Cloudflare), et la
    GitHub Action de déploiement. Existe :
    - `package.json` racine, workspaces npm (`worker`) ;
    - `worker/` : `wrangler.toml`, `src/index.ts`, `src/lobby.ts`,
@@ -178,9 +178,13 @@ Ordre prévu :
    - `.github/workflows/deploy.yml` : sur le modèle de vitrine, `wrangler
      deploy` dans `worker/`. Pas encore d'étape de build du client.
 
-   Avant le premier déploiement : créer le secret du Worker
-   (`npx wrangler secret put LOBBY_SECRET` dans `worker/`), et les secrets
-   GitHub `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` du dépôt. Sans
+   Déployé le 20 octobre 2026 sur
+   `https://fronts-of-iron.paul-raynaud.workers.dev`. En place : les secrets
+   GitHub `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` du dépôt (ceux de
+   vitrine ne sont pas visibles depuis ce dépôt), et le secret du Worker
+   `LOBBY_SECRET`. Sa valeur n'existe que dans `server/.env` (ignoré par git,
+   pour le serveur de la partie 3) ; pour la changer, réécrire ce fichier puis
+   `npx wrangler secret put LOBBY_SECRET` dans `worker/`. Sans
    `LOBBY_SECRET`, inscriptions et signaux répondent `503`.
 2. Moteur (`packages/engine`) avec la carte de test.
 3. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
