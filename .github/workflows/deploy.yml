@@ -1,0 +1,31 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      # Le build du client (npm ci, puis build Vite) s'ajoutera ici quand
+      # client/ existera. Le Worker n'en a pas besoin : wrangler compile
+      # lui-même src/index.ts.
+
+      - name: Deploy Worker
+        run: wrangler deploy
+        working-directory: ./worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

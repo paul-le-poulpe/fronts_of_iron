@@ -1,0 +1,27 @@
+name = "fronts-of-iron"
+main = "src/index.ts"
+account_id = "2808dbbc2de69c79fa846846b70c00ef"
+workers_dev = true
+compatibility_date = "2026-10-15"
+
+# Page d'accueil : fichiers de public/. Les chemins /api/* passent d'abord par
+# le Worker (src/index.ts).
+[assets]
+directory = "public"
+binding = "ASSETS"
+run_worker_first = [ "/api/*" ]
+
+# Le lobby : une seule instance (nommée "lobby") de la classe Lobby.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+# Déclaration de la classe. Sur le plan gratuit, seul le stockage SQLite est
+# disponible. `exports` remplace l'ancien tableau `migrations` (les deux sont
+# incompatibles) ; voir Docs/Design/01-Architecture.md §4.
+[exports.Lobby]
+type = "durable-object"
+storage = "sqlite"
+
+[observability]
+enabled = true

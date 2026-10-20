@@ -1,0 +1,10 @@
+{
+  "name": "fronts-of-iron",
+  "private": true,
+  "workspaces": [
+    "worker"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
