@@ -1,12 +1,19 @@
 # Fronts of Iron — conventions du projet
 
-Jeu de stratégie multijoueur dans le navigateur, très proche d'OpenFront
-(territoire au pixel près, expansion, attaques), avec un peu de profondeur
-inspirée de Hearts of Iron. **Parties courtes. Pas de brouillard de guerre.**
+Jeu de stratégie multijoueur dans le navigateur. **Parties courtes. Pas de
+brouillard de guerre.** L'architecture réseau s'inspire d'OpenFront (lockstep) ;
+**le jeu lui-même n'est pas OpenFront.**
 
-Lire `Docs/Design/01-Architecture.md` avant de toucher au réseau, au lobby ou au
-moteur : il dit ce qui existe, pourquoi, et ce qu'une modification bien
-intentionnée casserait sans bruit.
+**Les règles du jeu ne sont pas encore définies.** Elles seront écrites dans
+`Docs/Design/00-Game.md`, rédigé avec l'auteur. Tant que ce document n'existe
+pas ou ne tranche pas un point, aucune règle de jeu n'est implémentée ni
+inventée — et rien n'est repris d'OpenFront « par défaut ».
+
+À lire avant de toucher au code :
+- `Docs/Design/00-Game.md` (quand il existe) — ce que le jeu est, et chaque
+  action du joueur, qui devient un type d'ordre du moteur ;
+- `Docs/Design/01-Architecture.md` — réseau, lobby, moteur : ce qui existe,
+  pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit.
 
 ---
 
@@ -18,7 +25,7 @@ contient `.git`), pas le dossier parent.
 ```
 packages/
   shared/    formats des messages (ordre, tour, hash) — lus par client et serveur
-  engine/    simulation déterministe : carte, territoire, troupes, économie
+  engine/    simulation déterministe ; ses règles viennent de Docs/Design/00-Game.md
 client/      page du jeu (Vite + TypeScript) : interface + engine dans un Web Worker
 worker/      Worker Cloudflare : sert client/ compilé + lobby (Durable Object)
 server/      Node : relais des tours d'une partie, lancé sur le PC de l'hôte
@@ -36,6 +43,12 @@ encore est listé dans `Docs/Design/01-Architecture.md` §9.
 Depuis la racine du dépôt, après `npm install` :
 
 - `npm run typecheck` — typecheck TypeScript de tous les workspaces.
+- `npm test` — tests de tous les workspaces. Pour le moteur : déterminisme
+  (10 000 tours joués dans deux processus séparés → mêmes hashes), ordres
+  invalides sans effet, et recherche des fonctions interdites par la règle 2
+  dans `packages/engine/src`.
+- `cd packages/engine && npm run bench` — temps moyen d'un tour et d'un hash
+  sur la carte de test.
 - `cd worker && npx wrangler dev` — Worker et lobby en local sur
   `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
   (copier `worker/.dev.vars.example` ; fichier ignoré par git).

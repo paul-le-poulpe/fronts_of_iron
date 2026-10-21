@@ -35,8 +35,9 @@ en octobre 2026. Rien n'en est copié (règle 1 du `CLAUDE.md`).
 
 ## 3. Le lockstep (modèle d'OpenFront)
 
-- Le client n'envoie que des **ordres** (« attaquer vers ce pixel avec 30 % des
-  troupes »).
+- Le client n'envoie que des **ordres** : une action du joueur et ses
+  paramètres. La liste des ordres viendra de `00-Game.md` ; aucune n'est
+  décidée.
 - Le serveur accumule les ordres reçus. Toutes les **100 ms**, il crée
   `{ numéroDeTour, ordres }`, l'ajoute à la liste des tours de la partie, vide
   la file, et envoie ce tour à tous les clients.
@@ -127,6 +128,10 @@ la même raison. Rien de tout cela n'est consommé pendant une partie.
 
 ## 5. La carte
 
+**Provisoire.** Cette section suppose un territoire possédé case par case,
+comme dans OpenFront. C'est la forme de stockage envisagée, pas une règle du
+jeu : `00-Game.md` la confirme ou la remplace.
+
 - Une case par pixel. L'adresse d'une case est `y × largeur + x`.
 - Terrain : un octet par case (terre, côte, océan, altitude sur 5 bits).
   Propriétaire : un entier 16 bits par case, 0 = personne. Deux tableaux plats
@@ -186,9 +191,17 @@ Ordre prévu :
    pour le serveur de la partie 3) ; pour la changer, réécrire ce fichier puis
    `npx wrangler secret put LOBBY_SECRET` dans `worker/`. Sans
    `LOBBY_SECRET`, inscriptions et signaux répondent `503`.
-2. Moteur (`packages/engine`) avec la carte de test.
-3. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
-4. Client (`client/`).
+2. **Prochaine étape : `Docs/Design/00-Game.md`**, rédigé avec l'auteur dans
+   une session dédiée. Le moteur en dépend.
+3. Moteur (`packages/engine`). **Fait, non commité : la partie qui ne dépend
+   pas des règles** — carte (`terrain`, `owner`), carte de test générée,
+   générateur aléatoire seedé dans l'état, application d'un tour avec
+   validation des ordres et liste des cases modifiées, hash de l'état, tests
+   de déterminisme. Un seul ordre, `demo_claim`, exemple jetable. Détail :
+   `02-Engine.md`. **Les règles du jeu attendent `00-Game.md`.**
+4. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
+   Ne dépend pas des règles : il relaie des ordres sans les lire.
+5. Client (`client/`).
 
 ## 10. Pièges
 
@@ -197,5 +210,7 @@ Ordre prévu :
   tard, seulement chez certains joueurs. Le hash du §3 est ce qui le détecte.
 - Mettre l'état de la partie dans un message réseau « pour simplifier »
   supprime la raison d'être du lockstep et multiplie la bande passante.
+- Les pièges propres au moteur (hash, ordres, numéros de tour) sont dans
+  `02-Engine.md` §6.
 - Une page servie en `https` ne peut pas ouvrir un WebSocket `ws://` : l'hôte
   doit être joint en `wss://`, ce que fournit le tunnel.

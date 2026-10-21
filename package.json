@@ -2,9 +2,11 @@
   "name": "fronts-of-iron",
   "private": true,
   "workspaces": [
-    "worker"
+    "worker",
+    "packages/engine"
   ],
   "scripts": {
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   }
 }
