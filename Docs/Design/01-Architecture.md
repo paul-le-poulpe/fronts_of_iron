@@ -132,6 +132,12 @@ la même raison. Rien de tout cela n'est consommé pendant une partie.
 comme dans OpenFront. C'est la forme de stockage envisagée, pas une règle du
 jeu : `00-Game.md` la confirme ou la remplace.
 
+`00-Game.md` §3.2 et §12 : le propriétaire d'une case n'est pas conquis case
+par case, il se déduit des villes (rayon de contrôle et partage de Voronoi).
+Le tableau `owner` reste, comme résultat calculé, réécrit quand une ville est
+fondée. La carte gagne un octet de fertilité par case (0 à 10) et un bit par
+ressource naturelle et par case.
+
 - Une case par pixel. L'adresse d'une case est `y × largeur + x`.
 - Terrain : un octet par case (terre, côte, océan, altitude sur 5 bits).
   Propriétaire : un entier 16 bits par case, 0 = personne. Deux tableaux plats
@@ -191,8 +197,10 @@ Ordre prévu :
    pour le serveur de la partie 3) ; pour la changer, réécrire ce fichier puis
    `npx wrangler secret put LOBBY_SECRET` dans `worker/`. Sans
    `LOBBY_SECRET`, inscriptions et signaux répondent `503`.
-2. **Prochaine étape : `Docs/Design/00-Game.md`**, rédigé avec l'auteur dans
-   une session dédiée. Le moteur en dépend.
+2. **En cours : `Docs/Design/00-Game.md`**, rédigé avec l'auteur dans une
+   session dédiée. Le moteur en dépend. Décrits (octobre 2026) : villes et
+   leurs rayons, population, agriculture et pêche, extraction, usines (en
+   partie). Le reste est dans ses points ouverts (§13).
 3. Moteur (`packages/engine`). **Fait, non commité : la partie qui ne dépend
    pas des règles** — carte (`terrain`, `owner`), carte de test générée,
    générateur aléatoire seedé dans l'état, application d'un tour avec
