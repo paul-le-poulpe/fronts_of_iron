@@ -201,7 +201,8 @@ Ordre prévu :
 2. **En cours : `Docs/Design/00-Game.md`**, rédigé avec l'auteur dans une
    session dédiée. Le moteur en dépend. Décrits (octobre 2026) : villes et
    leurs rayons, population, agriculture et pêche, extraction, usines (en
-   partie), zones maritimes (en partie). Le reste est dans ses points ouverts (§13).
+   partie), zones maritimes (en partie), capitale et routes (en partie). Le
+   reste est dans ses points ouverts (§13).
 3. Moteur (`packages/engine`). **Fait, non commité : la partie qui ne dépend
    pas des règles** — carte (`terrain`, `owner`), carte de test générée,
    générateur aléatoire seedé dans l'état, application d'un tour avec
@@ -210,7 +211,10 @@ Ordre prévu :
    `02-Engine.md`. **Les règles du jeu attendent `00-Game.md`.**
 4. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
    Ne dépend pas des règles : il relaie des ordres sans les lire.
-5. Client (`client/`).
+5. Client (`client/`). Seul existe `client/public/icons/` : des icônes
+   provisoires (carrés gris), que l'auteur remplace par ses dessins sous le
+   même nom (00-Game §11). Pas encore de `package.json` : `client/` n'est pas
+   un workspace npm.
 
 ## 10. Pièges
 
