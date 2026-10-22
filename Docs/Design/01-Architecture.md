@@ -15,7 +15,7 @@ en octobre 2026. Rien n'en est copié (règle 1 du `CLAUDE.md`).
 | Worker | Cloudflare | sert la page du jeu (fichiers statiques de `client/` compilé) |
 | Lobby | Cloudflare, un Durable Object unique | tient la liste des parties ouvertes et l'adresse de leur hôte |
 | Tunnel | Cloudflare (`cloudflared` sur le PC de l'hôte) | donne une adresse `https://` publique au serveur de l'hôte et relaie ses WebSocket |
-| Serveur | Node, sur le PC de l'hôte | relaie les ordres d'une partie, envoie un tour toutes les 100 ms |
+| Serveur | Node, sur le PC de l'hôte | relaie les ordres d'une partie, envoie un tour à chaque pas (100 ms par défaut) |
 | Client | navigateur de chaque joueur | interface, et moteur dans un Web Worker |
 
 ## 2. Déroulement
@@ -36,11 +36,14 @@ en octobre 2026. Rien n'en est copié (règle 1 du `CLAUDE.md`).
 ## 3. Le lockstep (modèle d'OpenFront)
 
 - Le client n'envoie que des **ordres** : une action du joueur et ses
-  paramètres. La liste des ordres viendra de `00-Game.md` ; aucune n'est
-  décidée.
-- Le serveur accumule les ordres reçus. Toutes les **100 ms**, il crée
+  paramètres. La liste des ordres est dans `00-Game.md` §9.
+- Le serveur accumule les ordres reçus. À chaque **pas**, il crée
   `{ numéroDeTour, ordres }`, l'ajoute à la liste des tours de la partie, vide
   la file, et envoie ce tour à tous les clients.
+- **Le pas** vaut 100 ms par défaut. C'est un réglage du serveur seulement (une
+  variable d'environnement, règle 5 du `CLAUDE.md`) : le moteur ne compte que
+  des tours et ne connaît pas leur durée. Changer le pas change la vitesse de
+  la partie en temps réel, jamais ses résultats (`00-Game.md` §1.1).
 - Chaque client applique les ordres du tour dans son moteur. Même état de
   départ, même graine, mêmes ordres dans le même ordre : même état d'arrivée.
 - Tous les N tours, chaque client envoie au serveur un **hash** de son état. Le
@@ -49,8 +52,10 @@ en octobre 2026. Rien n'en est copié (règle 1 du `CLAUDE.md`).
 - **Reconnexion** : le client donne le numéro du dernier tour reçu, le serveur
   lui renvoie les tours suivants, le client les rejoue. Les parties étant
   courtes, rejouer depuis le début reste acceptable.
-- **Pause** : le serveur cesse d'envoyer des tours ; elle prend effet à la fin
-  d'un tour.
+- **Pause, outil de développement seulement** : le serveur cesse d'envoyer des
+  tours ; elle prend effet à la fin d'un tour. Commandée sur le serveur de
+  l'hôte, jamais par un ordre de joueur : le jeu n'a pas de pause
+  (`00-Game.md` §1.1).
 
 Conséquence voulue : le serveur ne calcule rien, ne connaît pas l'état, et
 reste léger. Conséquence acceptée : chaque client a l'état complet, donc pas de

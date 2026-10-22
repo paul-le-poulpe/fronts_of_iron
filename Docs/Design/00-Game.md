@@ -14,6 +14,21 @@ d'OpenFront par défaut.
 Stratégie multijoueur dans le navigateur. Parties courtes. Pas de brouillard de
 guerre.
 
+### 1.1 La partie
+
+- **Fin de partie** : hors périmètre pour l'instant. En développement, l'auteur
+  arrête la partie lui-même. Aucune condition de victoire n'est implémentée.
+- **Joueurs** : le nombre maximal est réglé dans le lobby, à la création de la
+  partie. Cible : jusqu'à 100 joueurs par partie.
+- **Rythme** : temps réel, un tour toutes les 100 ms par défaut, pas réglable.
+  Le moteur ne connaît que des tours, et toutes les règles sont exprimées en
+  tours. Changer le pas change donc la vitesse de la partie en temps réel, pas
+  ses résultats : 100 tours durent 10 s à 100 ms, 20 s à 200 ms.
+- **Pas de pause pour les joueurs.** La pause existe seulement comme outil de
+  développement : l'hôte arrête l'envoi des tours (01-Architecture §3). Ce
+  n'est pas un ordre de joueur.
+- **Joueurs non humains (IA)** : reporté.
+
 Modules prévus :
 
 | Module | État |
@@ -853,16 +868,8 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 ## 13. Points ouverts
 
 **Partie**
-- Fin de partie : condition de victoire, et durée visée. Seul acquis : les
-  parties sont courtes.
-- Nombre de joueurs par partie : minimum, maximum. Le lobby a déjà un champ
-  `maxPlayers` (01-Architecture §4), sans valeur de jeu derrière.
-- Rythme : temps continu sans pause (un tour toutes les 100 ms du début à la
-  fin), ou pause et vitesses réglables comme dans Hearts of Iron. Si pause ou
-  vitesse : qui la commande (l'hôte, un vote). L'architecture permet les deux
-  (01-Architecture §3, pause).
-- Joueurs non humains : y en a-t-il (pays joués par une IA, bots) ? Si oui,
-  leur IA fait partie du moteur, doit être déterministe, et chaque client la
+- Fin de partie et IA : reportées par l'auteur (§1.1). Une IA, le jour où elle
+  existe, fait partie du moteur, doit être déterministe, et chaque client la
   calcule entièrement.
 
 **Zones maritimes**
