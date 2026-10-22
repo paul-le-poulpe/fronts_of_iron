@@ -209,7 +209,7 @@ L'auteur a annoncé d'autres règles de placement, à décrire (§13).
   mine ou une usine, et rien ne passe réellement par une route. Où l'on
   extrait et où l'on produit est une question d'affichage seulement.
 - La liaison à la capitale sert à fixer un **coût** : un groupe de villes
-  relié par mer emploie des bateaux de commerce et des marins (§3.6). C'est
+  relié par mer emploie des navires de transport et des marins (§3.6). C'est
   ce qui représente le coût d'une ville éloignée de la capitale, sur une île
   ou derrière un autre joueur.
 
@@ -310,14 +310,15 @@ ne le calcule pas.
   bateaux (ordre ; bouton de la section maritime, §1). Le plus court chemin de
   ses routes maritimes ne passe pas par ces zones.
 - **Coût** : une route maritime emploie des **marins** (population) et des
-  **bateaux de commerce** (nom provisoire). Les bateaux de commerce sont un
-  bien, produit par des lignes comme les tracteurs ou les bateaux de pêche
-  (§8). Même mécanisme que les fermiers et les tracteurs (§6.2, §6.3) :
+  **navires de transport**. Les navires de transport sont un bien, produit
+  par des lignes comme les tracteurs ou les bateaux de pêche (§8). Nom choisi
+  par l'auteur, plus générique que « commerce » : ils transporteront aussi
+  autre chose. Même mécanisme que les fermiers et les tracteurs (§6.2, §6.3) :
 
   ```
   travail      = quantité transportée × longueur du chemin        par tour
   Mécanisation = M_base + (M_max − M_base) × f(x)                 travail par marin
-                 x : bateaux de commerce par marin, ramené sur 0…1 par m_max (§6.2)
+                 x : navires de transport par marin, ramené sur 0…1 par m_max (§6.2)
   marins       = travail / Mécanisation
   ```
 
@@ -420,7 +421,7 @@ Tous les flux sont comptés par nation, pas par ville. Deux catégories :
 | Catégorie | Origine | Connues à ce jour |
 | --- | --- | --- |
 | Ressources naturelles | extraites de la carte, dans la zone des villes | blé (§6), poisson (§6), fer (§7) ; liste dans le fichier de configuration |
-| Biens | fabriqués par les usines à partir des ressources (§8) | machines : tracteurs, bateaux de pêche, engins miniers ; bateaux de commerce (§3.6) |
+| Biens | fabriqués par les usines à partir des ressources (§8) | machines : tracteurs, bateaux de pêche, engins miniers ; navires de transport (§3.6) |
 
 - Nourriture = blé + poisson. Elle ne sert qu'à fixer la population maximale
   (§4.1).
@@ -700,7 +701,7 @@ consommation[r]   = somme, sur les biens b qui utilisent r, de production[b] × 
 - La structure des arbres est dans le fichier de configuration.
 - Exemples de l'auteur :
   - usine de tracteurs → chars ;
-  - usine de bateaux de pêche → bateaux de commerce (§3.6) → navires de
+  - usine de bateaux de pêche → navires de transport (§3.6) → navires de
     guerre.
 - Les autres arbres (dont l'usine de bateaux) viendront plus tard.
 
@@ -758,7 +759,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FARMING.mechanizationCurveExponent` | `n` de la courbe §6.3, entier ≥ 1 |
 | `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux |
 | `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les engins miniers |
-| `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les bateaux de commerce ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
+| `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio, `productionPerLine` (§8), nom du fichier d'icône |
 | `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, icône (§8.3) |
@@ -966,7 +967,7 @@ valider sur la visualisation.
 - Longueur d'une liaison maritime, en entiers : la distance exacte demande une
   racine carrée. Piste : racine carrée entière calculée en entiers, une fois
   par liaison à la génération.
-- Bateaux de commerce par marin : dépend du nombre de marins, qui dépend de la
+- Navires de transport par marin : dépend du nombre de marins, qui dépend de la
   mécanisation (même boucle qu'à l'extraction).
 
 **Armement**
