@@ -20,6 +20,7 @@ tourner et tester la chaîne. Ce n'est pas une règle du jeu.
 | `src/rng.ts` | générateur aléatoire xoshiro128** |
 | `src/map.ts` | bits du terrain, `GameMap`, parcours des 4 voisins |
 | `src/mapgen.ts` | `generateTestMap(seed)` |
+| `src/seazones.ts` | zones maritimes (00-Game §2.1) : `generateSeaZones`, `computeSeaZones`, `landMask` |
 | `src/state.ts` | `GameState`, `createGame`, `setOwner` |
 | `src/intents.ts` | types d'ordres, validation, `demo_claim` |
 | `src/turn.ts` | `applyTurn(state, { turn, intents })` |
@@ -27,6 +28,7 @@ tourner et tester la chaîne. Ce n'est pas une règle du jeu.
 | `test/*.test.ts` | tests (`npm test`) |
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure |
 | `test/bench.ts` | mesure (`npm run bench`) |
+| `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
 
 Aucune dépendance à l'exécution. `typescript` et `@types/node` sont des
 dépendances de développement ; `@types/node` ne sert qu'aux tests :
@@ -63,6 +65,23 @@ largeur depuis le bord marque l'océan, puis la côte est marquée.
 
 Résultat avec les réglages actuels : un continent central, 30 à 40 % de terre
 selon la graine, parfois un lac ou un îlot.
+
+### Zones maritimes
+
+`generateSeaZones(width, height, land, cfg, onStep?)` : `land` vaut 1 sur la
+terre, 0 sur l'eau (`landMask(map)` le tire d'une `GameMap`). Le module ne lit
+rien d'autre de la carte. Renvoie la case de chaque point. `onStep` reçoit les
+points après chaque étape ; seule la visualisation s'en sert.
+
+`computeSeaZones(width, height, land, points)` : zone et distance de chaque
+case. Parcours parti de tous les points à la fois, avec une file par distance
+modulo 8 (algorithme de Dial ; coûts 5 et 7). Une case dont la zone ou la
+distance s'améliore est remise en file ; l'entrée périmée est sautée quand sa
+distance ne correspond plus. Égalité de distance : le plus petit indice de
+point gagne.
+
+Usage prévu : les points sont calculés une fois à la création de la partie,
+après la carte. Ils ne sont pas encore dans `GameState` ni dans le hash.
 
 ## 3. Le générateur aléatoire
 
@@ -153,12 +172,18 @@ du jeu, tous peuvent être remis en cause par `00-Game.md`.
    resynchroniser, partie 3).
 6. Carte de test 800 × 500 et ses réglages (`src/config.ts`).
 7. `demo_claim` (§4) : exemple, à supprimer.
+8. Zones maritimes : les choix provisoires du prototype sont listés dans
+   00-Game §2.1 ; `SEA_ZONES.spacing` et `minBasinArea` sont des valeurs
+   d'essai.
 
 ## 8. Mesures
 
 `npm run bench`, sur le PC de l'auteur (Node 24.19), 20 octobre 2026 :
 
 - génération de la carte de test (400 000 cases) : 105 ms ;
+- zones maritimes sur cette carte (graine 12345, 50 + 50 itérations, 155
+  points) : environ 2,5 s, mesuré par `npm run viz:sea` le 22 octobre 2026.
+  Une fois par partie ;
 - tour moyen sur 10 000 tours, 33 ordres `demo_claim` par tour (8 joueurs ×
   4, plus un ordre malformé) : 1,3 µs. Chiffre sans valeur pour le vrai jeu :
   `demo_claim` ne fait presque rien ;

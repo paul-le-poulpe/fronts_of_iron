@@ -1,4 +1,4 @@
-export { MAX_PLAYERS, TEST_MAP, type TestMapConfig } from "./config.ts";
+export { MAX_PLAYERS, SEA_ZONES, TEST_MAP, type SeaZonesConfig, type TestMapConfig } from "./config.ts";
 export {
   altitude,
   forEachNeighbor,
@@ -10,6 +10,13 @@ export {
   type GameMap,
 } from "./map.ts";
 export { generateTestMap } from "./mapgen.ts";
+export {
+  computeSeaZones,
+  generateSeaZones,
+  landMask,
+  type SeaZones,
+  type SeaZonesStep,
+} from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
 export { createGame, isPlayerId, setOwner, type GameSetup, type GameState, type Player } from "./state.ts";
 export { applyIntent, type DemoClaimIntent, type Intent } from "./intents.ts";

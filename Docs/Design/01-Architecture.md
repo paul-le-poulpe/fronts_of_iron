@@ -136,7 +136,9 @@ jeu : `00-Game.md` la confirme ou la remplace.
 par case, il se déduit des villes (rayon de contrôle et partage de Voronoi).
 Le tableau `owner` reste, comme résultat calculé, réécrit quand une ville est
 fondée. La carte gagne un octet de fertilité par case (0 à 10) et un bit par
-ressource naturelle et par case.
+ressource naturelle et par case. Elle gagne aussi la liste des points des zones
+maritimes (`00-Game.md` §2.1), calculée à la génération par un module qui ne
+lit que le masque terre / eau : il reste valable si le générateur change.
 
 - Une case par pixel. L'adresse d'une case est `y × largeur + x`.
 - Terrain : un octet par case (terre, côte, océan, altitude sur 5 bits).
@@ -200,7 +202,7 @@ Ordre prévu :
 2. **En cours : `Docs/Design/00-Game.md`**, rédigé avec l'auteur dans une
    session dédiée. Le moteur en dépend. Décrits (octobre 2026) : villes et
    leurs rayons, population, agriculture et pêche, extraction, usines (en
-   partie). Le reste est dans ses points ouverts (§13).
+   partie), zones maritimes (en partie). Le reste est dans ses points ouverts (§13).
 3. Moteur (`packages/engine`). **Fait, non commité : la partie qui ne dépend
    pas des règles** — carte (`terrain`, `owner`), carte de test générée,
    générateur aléatoire seedé dans l'état, application d'un tour avec

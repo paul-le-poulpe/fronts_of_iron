@@ -18,6 +18,7 @@ Modules prévus :
 
 | Module | État |
 | --- | --- |
+| Zones maritimes (maillage de la mer) | décrit en partie (§2.1) |
 | Villes | décrit (§3) |
 | Population | décrit en partie (§4) |
 | Flux et ressources | décrit en partie (§5) |
@@ -25,7 +26,7 @@ Modules prévus :
 | Extraction des ressources naturelles | décrit en partie (§7) |
 | Usines et biens | décrit en partie (§8) |
 | Armement (seule production stockée) | annoncé, non décrit |
-| Routes terrestres et maritimes | annoncé, non décrit |
+| Routes terrestres et maritimes | annoncé. Nœuds : les villes sur terre, les zones maritimes en mer (§2.1). Routes non décrites |
 | Croissance des villes | annoncé, non décrit |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
 | Armée, combat | annoncé, non décrit |
@@ -56,6 +57,79 @@ définie par l'auteur ; elle n'est pas inventée.
   le fer y soit plus fréquent.
 - Le propriétaire d'une case n'est pas conquis case par case : il se déduit des
   villes (§3.2).
+
+### 2.1 Zones maritimes
+
+La mer est découpée en zones maritimes. Elles servent de nœuds aux routes
+maritimes, comme les villes sur terre (routes : non décrites). Elles sont
+calculées une fois, à la génération de la carte, et ne changent pas pendant la
+partie.
+
+- **Entrée** : largeur, hauteur, et pour chaque case : terre ou eau (la carte
+  de hauteur comparée au niveau de la mer). Le module ne lit rien d'autre ;
+  changer le générateur de carte ne le touche pas.
+- **Sortie** : une liste de points (x, y entiers). Chaque point est le centre
+  d'une zone. Seuls les points sont stockés ; les zones sont recalculées à
+  partir d'eux (affichage, routes).
+- **Zone d'un point** : les cases d'eau plus proches de ce point que de tout
+  autre point, la distance étant mesurée le long d'un chemin qui ne passe que
+  par l'eau. La terre sépare donc deux zones : une zone ne passe jamais
+  par-dessus la terre pour prendre l'eau de l'autre côté. Une case d'eau
+  qu'aucun chemin d'eau ne relie à un point n'est dans aucune zone. À égalité,
+  la case va au point de plus petit indice.
+- Calcul de toutes les zones : un parcours de proche en proche sur les cases
+  d'eau, parti de tous les points à la fois.
+
+Étapes :
+
+1. **Grille.** Un point tous les `SEA_ZONES.spacing` cases, en x et en y. Le
+   premier est à `spacing / 2` du bord gauche et du bord haut. Chaque point a
+   son carré de côté `spacing`.
+2. **Suppression.** Le point dont le carré a plus de `SEA_ZONES.maxLandPercent`
+   % de terre est supprimé.
+3. **Itérations.** `SEA_ZONES.iterations` fois : calculer les zones, puis
+   déplacer chaque point au barycentre de sa zone (moyenne entière des x et des
+   y de ses cases). Méthode connue sous le nom de relaxation de Lloyd.
+4. **Correction, par bassin.** Un bassin est un ensemble de cases d'eau
+   reliées entre elles par l'eau. Chaque bassin est traité séparément :
+   - surface < `SEA_ZONES.minBasinArea` cases : aucun point. Le bassin n'a pas
+     de zone maritime, aucune flotte n'y opère ;
+   - sinon : nombre de points visé = surface / `spacing²` (la densité de la
+     grille de départ), au moins 1. On ajoute ou retire des points dans le
+     bassin jusqu'à l'atteindre. Où ajouter et lesquels retirer : à définir
+     (§13).
+5. **Itérations finales.** `SEA_ZONES.finalIterations` itérations de plus,
+   comme à l'étape 3.
+
+Conséquence de l'étape 2 : une mer intérieure entourée de terre, dont le carré
+dépasse le seuil de terre, perd son point. Comme une zone ne traverse pas la
+terre, cette eau n'est alors dans aucune zone. L'étape 4 lui redonne un point
+si sa surface atteint `minBasinArea`.
+
+**Limite connue** : le bassin ne sépare que l'eau entièrement fermée. Une mer
+reliée au reste par un détroit (exemple : la Méditerranée et l'Atlantique) est
+dans le même bassin, alors qu'une flotte qui y opère n'est pas dans l'océan.
+Elle devrait avoir ses propres points. Non résolu (§13).
+
+La carte est générée par chaque client à partir de la graine (02-Engine §2).
+Ce calcul aussi : il est donc fait en entiers, dans un ordre de parcours fixé
+(règle 2 du `CLAUDE.md`).
+
+**Prototype** (`packages/engine/src/seazones.ts`, visualisation pas à pas :
+02-Engine §1). Pour qu'il tourne, les points ouverts du §13 ont reçu des choix
+provisoires, tous à valider :
+- parcours : pas orthogonal de coût 5, pas en diagonale de coût 7, diagonale
+  interdite entre deux cases de terre qui se touchent par un coin ;
+- point de la grille sur la terre, dans un carré gardé : déplacé sur la case
+  d'eau du carré la plus proche ;
+- carré coupé par le bord : pourcentage calculé sur sa partie dans la carte ;
+- barycentre hors de sa zone : case de la zone la plus proche du barycentre ;
+- nombre de points visé par bassin : surface / `spacing²` arrondi au plus
+  proche, au moins 1 ;
+- correction, répétée jusqu'à ce que chaque bassin ait son nombre de points :
+  bassin sans point → un point au barycentre du bassin ; trop peu → un point
+  de plus dans chacune des plus grandes zones, sur sa case la plus éloignée de
+  son point ; trop → les points des plus petites zones sont retirés.
 
 ## 3. Les villes
 
@@ -427,6 +501,19 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.specializationPercent` | `x` : ouvriers en moins, en %, par ligne supplémentaire du même bien dans une usine (§8) |
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
+| `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
+| `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
+| `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |
+| `SEA_ZONES.minBasinArea` | surface minimale d'un bassin, en cases d'eau ; en dessous, il n'a aucune zone maritime (§2.1) |
+| `SEA_ZONES.finalIterations` | itérations zones → barycentre après la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur |
+
+Dans `config.ts`, `SEA_ZONES.spacing` et `SEA_ZONES.minBasinArea` ont des
+valeurs d'essai, choisies pour faire tourner la visualisation. Elles ne sont
+pas fixées.
+
+Le générateur de la carte de test a déjà ses réglages, `TEST_MAP` dans
+`packages/engine/src/config.ts` (02-Engine §2). `SEA_ZONES` en est séparé : il
+s'applique à toute carte.
 
 ## 11. Affichage
 
@@ -453,6 +540,9 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   cases à portée de cette ville.
 - La carte gagne la fertilité (un octet par case) et la présence des
   ressources (un bit par ressource et par case).
+- La carte gagne la liste des points des zones maritimes (§2.1), calculée après
+  le terrain, à partir du seul masque terre / eau. Module séparé du générateur
+  de carte.
 - Les villes, la population, sa répartition, les usines et leur progression
   entrent dans l'état de la partie, donc dans le hash (02-Engine §6).
 - **Les flux se citent en boucle** : les tracteurs d'un tour viennent des
@@ -462,6 +552,38 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   décalage). À valider.
 
 ## 13. Points ouverts
+
+**Zones maritimes**
+
+Les points suivants ont un choix provisoire dans le prototype (§2.1), à
+valider sur la visualisation.
+- Correction (§2.1, étape 4) : où ajouter un point dans un bassin, lequel
+  retirer.
+- Mers reliées au reste par un détroit (Méditerranée) : comment les séparer de
+  l'océan pour qu'elles aient leurs propres points. On essaie d'abord la
+  correction par bassin seule. Piste, non décidée :
+  1. calculer pour chaque case d'eau sa distance à la terre (parcours parti
+     de toutes les côtes à la fois) ;
+  2. dans un tableau temporaire, ne garder que l'eau à au moins
+     `straitWidth / 2` de la terre (`SEA_ZONES.straitWidth`, réglage à
+     ajouter). Les passages plus étroits, les détroits, disparaissent de ce
+     tableau, et l'eau gardée se coupe en morceaux ;
+  3. rattacher chaque case d'eau retirée au morceau le plus proche par l'eau.
+     Chaque morceau devient une mer, traitée comme un bassin à l'étape 4.
+
+  Le tableau temporaire ne sert qu'à la génération, et la carte ne change pas.
+  Les zones des deux côtés d'un détroit se touchent, donc les routes y passent.
+  Défaut prévu : un archipel aux passages étroits se coupe en petits
+  morceaux. Un morceau sous `minBasinArea` serait fusionné avec son voisin,
+  et non supprimé.
+- Barycentre qui tombe sur la terre ou hors de sa zone (zone en forme de C).
+- Point de la grille qui tombe sur la terre, dans un carré gardé.
+- Carrés coupés par le bord de la carte : pourcentage de terre calculé sur la
+  partie dans la carte ?
+- Pas du parcours (4 voisins, 8 voisins, diagonales pondérées) : il donne la
+  forme des zones.
+- Voisinage entre zones, et lien entre une ville côtière et une zone : avec les
+  routes maritimes.
 
 **Villes**
 - Les autres règles de placement annoncées par l'auteur.

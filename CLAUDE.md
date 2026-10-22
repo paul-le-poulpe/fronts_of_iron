@@ -49,6 +49,9 @@ Depuis la racine du dépôt, après `npm install` :
   dans `packages/engine/src`.
 - `cd packages/engine && npm run bench` — temps moyen d'un tour et d'un hash
   sur la carte de test.
+- `cd packages/engine && npm run viz:sea` — visualisation pas à pas des zones
+  maritimes, écrite dans `packages/engine/out/sea-zones.html`. Réglages en
+  argument : `npm run viz:sea -- --seed=7 --spacing=50`.
 - `cd worker && npx wrangler dev` — Worker et lobby en local sur
   `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
   (copier `worker/.dev.vars.example` ; fichier ignoré par git).
