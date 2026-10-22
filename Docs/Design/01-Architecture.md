@@ -128,24 +128,23 @@ la même raison. Rien de tout cela n'est consommé pendant une partie.
 
 ## 5. La carte
 
-**Provisoire.** Cette section suppose un territoire possédé case par case,
-comme dans OpenFront. C'est la forme de stockage envisagée, pas une règle du
-jeu : `00-Game.md` la confirme ou la remplace.
-
-`00-Game.md` §3.2 et §12 : le propriétaire d'une case n'est pas conquis case
-par case, il se déduit des villes (rayon de contrôle et partage de Voronoi).
-Le tableau `owner` reste, comme résultat calculé, réécrit quand une ville est
-fondée. La carte gagne un octet de fertilité par case (0 à 10) et un bit par
-ressource naturelle et par case. Elle gagne aussi la liste des points des zones
-maritimes (`00-Game.md` §2.1), calculée à la génération par un module qui ne
-lit que le masque terre / eau : il reste valable si le générateur change.
+Les règles viennent de `00-Game.md` (§2, §3.2, §12). Le territoire n'est pas
+conquis case par case comme dans OpenFront : le propriétaire d'une case se
+déduit des villes (rayon de contrôle, puis ville la plus proche).
 
 - Une case par pixel. L'adresse d'une case est `y × largeur + x`.
-- Terrain : un octet par case (terre, côte, océan, altitude sur 5 bits).
-  Propriétaire : un entier 16 bits par case, 0 = personne. Deux tableaux plats
-  (`Uint8Array`, `Uint16Array`), pas un objet par case.
-- À chaque tour, seules les cases en bordure d'un territoire peuvent changer ;
+- Tableaux plats, un élément par case, pas un objet par case :
+  - `terrain` (`Uint8Array`) : terre, côte, océan, altitude sur 5 bits ;
+  - `owner` (`Uint16Array`, 0 = personne) : **résultat calculé** à partir des
+    villes, jamais modifié directement par un ordre ;
+  - à venir (`00-Game.md` §12) : fertilité, un octet par case (0 à 10) ; un
+    bit par ressource naturelle et par case.
+- `owner` ne change que quand une ville est fondée (ou disparaît) : seules les
+  cases à portée du rayon de contrôle de cette ville sont recalculées, et
   seules les cases modifiées sont transmises à l'affichage.
+- Zones maritimes (`00-Game.md` §2.1) : une liste de points, calculée une fois
+  à la génération par un module qui ne lit que le masque terre / eau ; il
+  reste valable si le générateur de carte change.
 - Pour commencer, une carte de test générée par le code. Les vraies cartes
   (image → fichier binaire, par un script) viendront plus tard.
 

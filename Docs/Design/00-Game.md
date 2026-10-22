@@ -553,6 +553,19 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 
 ## 13. Points ouverts
 
+**Partie**
+- Fin de partie : condition de victoire, et durée visée. Seul acquis : les
+  parties sont courtes.
+- Nombre de joueurs par partie : minimum, maximum. Le lobby a déjà un champ
+  `maxPlayers` (01-Architecture §4), sans valeur de jeu derrière.
+- Rythme : temps continu sans pause (un tour toutes les 100 ms du début à la
+  fin), ou pause et vitesses réglables comme dans Hearts of Iron. Si pause ou
+  vitesse : qui la commande (l'hôte, un vote). L'architecture permet les deux
+  (01-Architecture §3, pause).
+- Joueurs non humains : y en a-t-il (pays joués par une IA, bots) ? Si oui,
+  leur IA fait partie du moteur, doit être déterministe, et chaque client la
+  calcule entièrement.
+
 **Zones maritimes**
 
 Les points suivants ont un choix provisoire dans le prototype (§2.1), à
