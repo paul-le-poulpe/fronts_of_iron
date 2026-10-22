@@ -54,7 +54,8 @@ dans cette même barre :
 - ouvrir le panneau latéral des lignes de production (§8.1).
 
 Prévu : une section maritime, avec le bouton qui interdit des zones maritimes
-aux bateaux du joueur (§3.6). Cette section n'existe pas encore.
+aux bateaux du joueur (§3.6). Cette section n'existe pas encore. Elle pourra
+être séparée de la barre plus tard, selon le nombre de boutons.
 
 **Diplomatie** (envisagée) : le joueur clique sur un autre joueur ; un petit
 menu apparaît à côté de la souris (pas un panneau latéral), avec des options
@@ -62,8 +63,7 @@ comme déclarer la guerre, accorder un droit de passage (§3.5), faire une
 alliance. Inspiration : les jeux Paradox. La liste exacte des options sera
 choisie avec l'auteur.
 
-Elle pourra être séparée plus tard, selon le nombre de boutons. L'interface est
-définie par l'auteur ; elle n'est pas inventée.
+L'interface est définie par l'auteur ; elle n'est pas inventée.
 
 ## 2. La carte
 
