@@ -133,7 +133,9 @@ identifiant), donc deux parties de mêmes réglages envoient les mêmes ordres.
   ville (`tileCity === 0`), et prend celle qui a le plus de cases fertiles libres
   dans son rayon de contrôle.
 - **Expansion** : tous les 15 à 24 tours, si la population est ≥ 400
-  (`EXPAND_MIN_POPULATION`), il tire des cases dans le rayon d'expansion d'une de
+  (`EXPAND_MIN_POPULATION`) et au coût de la ville suivante, et si sa surface
+  cultivée atteint la moitié de sa surface cultivable (`2 × cultivated ≥
+  farmTiles`, valeurs du dernier tour), il tire des cases dans le rayon d'expansion d'une de
   ses villes (ville tirée au hasard à chaque tirage), garde celles qui sont de
   terre fertile et libre, et prend celle qui a le plus de cases fertiles libres.
   Les conditions sont vérifiées chez le bot avant d'envoyer : pas d'ordre perdu.
