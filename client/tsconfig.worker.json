@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2024", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/engine.worker.ts", "src/solo.ts", "src/bots.ts", "src/protocol.ts"],
+  "exclude": []
+}

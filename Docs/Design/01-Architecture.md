@@ -189,10 +189,11 @@ que le passage de l'un à l'autre ne demande aucune modification du code :
    Le workflow ajoute `npm ci` puis le build Vite avant `wrangler deploy`
    (règle 7 du `CLAUDE.md`).
 
-Envisagé, non décidé : un **mode solo contre des bots**, où la page crée
-elle-même un tour toutes les 100 ms avec les ordres du joueur et des bots,
-sans serveur de partie ni lobby. Il n'a besoin que de la page, servie en local
-ou par Cloudflare.
+**Mode solo contre des bots** (construit, `Docs/Design/03-Client.md`) : le
+Web Worker du moteur crée lui-même un tour toutes les 100 ms avec les ordres du
+joueur (champ `player` écrit par le Worker, règle 4) et des bots, sans serveur
+de partie ni lobby. Il n'a besoin que de la page, servie en local ou par
+Cloudflare.
 
 ## 7. Décisions écartées, et pourquoi
 
@@ -253,10 +254,16 @@ Ordre prévu :
    population (croissance), agriculture, usines, routes maritimes.
 4. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
    Ne dépend pas des règles : il relaie des ordres sans les lire.
-5. Client (`client/`). Seul existe `client/public/icons/` : des icônes
+5. Client (`client/`). **Fait : le mode solo** (octobre 2026), workspace npm,
+   Vite, TypeScript : écran de départ, carte (zoom, déplacement), barre de
+   boutons, panneau latéral, bots, moteur dans un Web Worker avec horloge de
+   tour de 100 ms. Interface provisoire, en attendant celle de l'auteur.
+   Détail : `03-Client.md`. Existent aussi `client/public/icons/` : des icônes
    provisoires (carrés gris), que l'auteur remplace par ses dessins sous le
-   même nom (00-Game §11). Pas encore de `package.json` : `client/` n'est pas
-   un workspace npm. Règles à suivre en le créant : §6, Client.
+   même nom (00-Game §11). Les règles de §6, Client, sont suivies (chemins
+   `/api` relatifs, `server.proxy` de Vite, Worker créé par `new URL`) ; le
+   point 4 (`[assets]`, page d'accueil du lobby, étape de build du workflow) et
+   le multijoueur (écran de lobby, WebSocket) ne sont pas faits.
 
 ## 10. Pièges
 

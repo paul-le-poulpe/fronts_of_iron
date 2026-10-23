@@ -13,7 +13,9 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
 - `Docs/Design/00-Game.md` (quand il existe) — ce que le jeu est, et chaque
   action du joueur, qui devient un type d'ordre du moteur ;
 - `Docs/Design/01-Architecture.md` — réseau, lobby, moteur : ce qui existe,
-  pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit.
+  pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit ;
+- `Docs/Design/03-Client.md` — le client : mode solo, messages avec le Worker,
+  affichage, interface provisoire.
 
 ---
 
@@ -31,7 +33,12 @@ worker/      Worker Cloudflare : sert client/ compilé + lobby (Durable Object)
 server/      Node : relais des tours d'une partie, lancé sur le PC de l'hôte
 .github/workflows/deploy.yml   build, puis wrangler deploy dans worker/
 Docs/Design/                   documents de conception
+README.md                      lancer et jouer en local ; héberger une partie
 ```
+
+`README.md` s'adresse à quelqu'un qui veut jouer ou héberger, pas au
+développement. Quand une commande de lancement change, ou quand le serveur de
+partie existe, il est mis à jour dans le même tour (règle 8).
 
 Les dossiers sont créés au fur et à mesure des parties ; ce qui n'existe pas
 encore est listé dans `Docs/Design/01-Architecture.md` §9.
@@ -47,6 +54,11 @@ Depuis la racine du dépôt, après `npm install` :
   (10 000 tours joués dans deux processus séparés → mêmes hashes), ordres
   invalides sans effet, et recherche des fonctions interdites par la règle 2
   dans `packages/engine/src`.
+  Pour le client : partie solo et affichage (copie locale, peinture) sous Node,
+  sans navigateur.
+- `npm run dev -w client` — le client (mode solo contre des bots) sur
+  `http://localhost:5173` ; `npm run build -w client` le compile dans
+  `client/dist/`. Détail : `Docs/Design/03-Client.md`.
 - `cd packages/engine && npm run bench` — temps moyen d'un tour et d'un hash
   sur la carte de test.
 - `cd packages/engine && npm run viz:sea` — visualisation pas à pas des zones

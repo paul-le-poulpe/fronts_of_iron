@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fronts of Iron — solo</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="top">
+        <strong>Fronts of Iron</strong>
+        <span class="muted">mode solo contre des bots</span>
+        <span class="badge" title="Cette interface n'est pas celle du jeu : elle sert à essayer le moteur.">interface provisoire</span>
+      </header>
+
+      <main id="start">
+        <form id="start-form" class="card">
+          <h1>Nouvelle partie solo</h1>
+          <label>
+            Nombre de bots (1 à 7)
+            <input id="bots" type="number" min="1" max="7" step="1" value="3" required />
+          </label>
+          <label>
+            Graine de la carte
+            <input id="seed" type="number" min="0" max="4294967295" step="1" value="12345" required />
+          </label>
+          <button id="play" type="submit">Jouer</button>
+          <p id="start-note" class="muted">
+            La partie tourne entièrement dans cette page : aucun serveur, aucun lobby. Les règles du jeu sont
+            encore en cours d'écriture ; les valeurs utilisées sont des valeurs d'essai.
+          </p>
+        </form>
+      </main>
+
+      <div id="game" hidden>
+        <section id="stage">
+          <canvas id="map"></canvas>
+          <div id="toast" hidden></div>
+        </section>
+
+        <aside id="panel">
+          <section>
+            <h2>Votre pays <span class="muted" id="you-swatch"></span></h2>
+            <dl id="you">
+              <dt>Population</dt><dd id="s-pop">0</dd>
+              <dt>Fermiers</dt><dd id="s-farmers">0</dd>
+              <dt>Pêcheurs</dt><dd id="s-fishers">0</dd>
+              <dt>Inactifs</dt><dd id="s-idle">0</dd>
+              <dt>Nourriture</dt><dd id="s-food">0</dd>
+              <dt>Villes</dt><dd id="s-cities">0</dd>
+              <dt>Cultivé / max</dt><dd id="s-cultivated">0 / 0</dd>
+              <dt>Pêché / max</dt><dd id="s-fished">0 / 0</dd>
+            </dl>
+            <label class="slider">
+              Part de fermiers : <strong id="farm-value">100 %</strong>
+              <input id="farm" type="range" min="0" max="100" step="1" value="100" />
+              <span class="muted" id="farm-note">Le reste de la population part à la pêche.</span>
+            </label>
+          </section>
+
+          <section>
+            <h2>Joueurs</h2>
+            <table id="players">
+              <thead><tr><th></th><th>Joueur</th><th>Population</th><th>Villes</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </section>
+
+          <section>
+            <h2>Case survolée</h2>
+            <dl id="hover">
+              <dt>Case</dt><dd id="h-tile">—</dd>
+              <dt>Terrain</dt><dd id="h-terrain">—</dd>
+              <dt>Fertilité</dt><dd id="h-fertility">—</dd>
+              <dt>Fer</dt><dd id="h-iron">—</dd>
+              <dt>Propriétaire</dt><dd id="h-owner">—</dd>
+              <dt>Ville</dt><dd id="h-city">—</dd>
+            </dl>
+            <label class="check"><input id="show-iron" type="checkbox" checked /> Afficher le fer</label>
+          </section>
+
+          <section class="dev">
+            <h2>Développement</h2>
+            <div id="dev-line" class="muted">tour 0</div>
+            <div class="row">
+              <button id="pause" type="button">Pause (outil de développement)</button>
+              <button id="quit" type="button">Quitter la partie</button>
+            </div>
+            <p class="muted small">
+              Le jeu n'a pas de pause (00-Game §1.1) : ce bouton n'existe que pour développer. Molette : zoom ;
+              glisser : déplacer la carte.
+            </p>
+          </section>
+        </aside>
+
+        <footer id="bar">
+          <button id="found" type="button" aria-pressed="false">Créer une ville</button>
+          <span id="bar-hint" class="muted"></span>
+        </footer>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

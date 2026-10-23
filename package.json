@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "worker",
-    "packages/engine"
+    "packages/engine",
+    "client"
   ],
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",

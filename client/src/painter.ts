@@ -1,0 +1,147 @@
+// Peinture de la carte, une couleur par case, dans un tampon RGBA de
+// largeur × hauteur pixels. Reprend les idées de packages/engine/test/cities-viz.ts
+// (relief, teinte du joueur sur la terre seulement, limites de zones, champs et
+// zone de pêche à textures distinctes de la couleur du joueur : 00-Game §11).
+// Pas d'accès au DOM : la page fabrique l'`ImageData` sur le même tampon.
+//
+// L'ordre de peinture d'une case est celui de la visualisation : relief (ou fer),
+// teinte du territoire sur la terre, texture de champs ou de pêche, puis trait
+// de limite par-dessus.
+
+import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND } from "./mirror.ts";
+
+export type Rgb = readonly [number, number, number];
+
+/** Couleur d'un joueur : teinte à l'angle d'or, comme la visualisation du moteur. */
+export function playerColor(player: number): Rgb {
+  return hsl((player * 137.508) % 360, 0.6, 0.55);
+}
+/** Version foncée, pour les villes et les routes. */
+export function playerDark(player: number): Rgb {
+  return hsl((player * 137.508) % 360, 0.65, 0.3);
+}
+
+function hsl(h: number, s: number, l: number): Rgb {
+  const k = (n: number): number => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number): number => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+export const rgbCss = (c: Rgb): string => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+const WATER: Rgb = [111, 156, 204];
+const IRON: Rgb = [192, 57, 43];
+const FIELD_DARK: Rgb = [96, 152, 52];
+const FIELD_LIGHT: Rgb = [128, 190, 72];
+const FISH_DARK: Rgb = [138, 184, 224];
+const FISH_LIGHT: Rgb = [225, 240, 250];
+const EDGE_SAME: Rgb = [255, 255, 255];
+const EDGE_OTHER: Rgb = [29, 35, 43];
+
+const LAND_LOW = [150, 176, 112] as const;
+const LAND_MID = [181, 160, 118] as const;
+const LAND_HIGH = [236, 232, 224] as const;
+
+function landColor(alt: number): Rgb {
+  const t = alt / 31;
+  const [a, b, u] = t < 0.5 ? [LAND_LOW, LAND_MID, t * 2] : [LAND_MID, LAND_HIGH, (t - 0.5) * 2];
+  const mix = (i: 0 | 1 | 2): number => Math.round(a[i] + (b[i] - a[i]) * u);
+  return [mix(0), mix(1), mix(2)];
+}
+
+export class Painter {
+  readonly buffer: ArrayBuffer;
+  /** Même tampon vu en octets, pour `new ImageData(...)`. */
+  readonly bytes: Uint8ClampedArray<ArrayBuffer>;
+  private readonly pixels: Uint32Array;
+  private readonly land: Rgb[] = Array.from({ length: 32 }, (_, a) => landColor(a));
+  private readonly playerRgb: Rgb[] = [];
+  showIron = true;
+
+  private readonly mirror: Mirror;
+
+  constructor(mirror: Mirror) {
+    this.mirror = mirror;
+    const size = mirror.width * mirror.height;
+    this.buffer = new ArrayBuffer(size * 4);
+    this.bytes = new Uint8ClampedArray(this.buffer);
+    this.pixels = new Uint32Array(this.buffer);
+    for (let p = 0; p <= mirror.playerCount; p++) this.playerRgb.push(playerColor(p));
+  }
+
+  paintAll(): void {
+    for (let t = 0; t < this.pixels.length; t++) this.pixels[t] = this.colorOf(t);
+  }
+
+  paintTiles(tiles: readonly number[]): void {
+    for (const t of tiles) this.pixels[t] = this.colorOf(t);
+  }
+
+  /** Pixel de la case `t` tel qu'il doit être maintenant, d'après la copie locale. */
+  colorOf(t: number): number {
+    const m = this.mirror;
+    const b = m.terrain[t]!;
+    const onLand = (b & TERRAIN_LAND) !== 0;
+    const w = m.width;
+    const id = m.tileCity[t]!;
+    let c: Rgb = onLand ? this.land[b & TERRAIN_ALTITUDE]! : WATER;
+    if (this.showIron && (m.resources[t]! & 1) !== 0) c = IRON;
+    let r = c[0];
+    let g = c[1];
+    let bl = c[2];
+    const x = t % w;
+    const y = (t - x) / w;
+
+    if (id !== 0) {
+      const city = m.cities[id - 1]!;
+      // Le territoire n'est dessiné que sur la terre (00-Game §11) : la zone d'une
+      // ville couvre aussi l'eau dans le moteur, mais pas à l'affichage.
+      if (onLand) {
+        const pc = this.playerRgb[city.player]!;
+        r = Math.round(r * 0.55 + pc[0] * 0.45);
+        g = Math.round(g * 0.55 + pc[1] * 0.45);
+        bl = Math.round(bl * 0.55 + pc[2] * 0.45);
+      }
+      // Champs (terre fertile) et zone de pêche (eau) à moins du rayon d'exploitation du joueur.
+      if (!onLand || m.fertility[t] !== 0) {
+        const ct = city.tile;
+        const dx = x - (ct % w);
+        const dy = y - (((ct - (ct % w)) / w) | 0);
+        const thr = (onLand ? m.farmThreshold : m.seaThreshold)[city.player - 1]!;
+        if (dx * dx + dy * dy <= thr) {
+          const tex = onLand ? (y % 2 === 0 ? FIELD_DARK : FIELD_LIGHT) : (x + 2 * y) % 4 === 0 ? FISH_LIGHT : FISH_DARK;
+          r = tex[0];
+          g = tex[1];
+          bl = tex[2];
+        }
+      }
+      // Limite avec la voisine de droite ou du dessous, si les deux sont de la terre avec une ville.
+      if (onLand) {
+        for (let k = 0; k < 2; k++) {
+          let u: number;
+          if (k === 0) {
+            if (x >= w - 1) continue;
+            u = t + 1;
+          } else {
+            u = t + w;
+            if (u >= this.pixels.length) continue;
+          }
+          const idU = m.tileCity[u]!;
+          if (idU === 0 || idU === id || (m.terrain[u]! & TERRAIN_LAND) === 0) continue;
+          const e = m.cities[idU - 1]!.player === city.player ? EDGE_SAME : EDGE_OTHER;
+          r = e[0];
+          g = e[1];
+          bl = e[2];
+          break;
+        }
+      }
+    }
+    return ((255 << 24) | (bl << 16) | (g << 8) | r) >>> 0;
+  }
+
+  /** Pixel d'une case, pour les tests. */
+  pixel(t: number): number {
+    return this.pixels[t]!;
+  }
+}
