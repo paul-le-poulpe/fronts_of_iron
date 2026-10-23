@@ -4,7 +4,16 @@
 
 import assert from "node:assert/strict";
 
-import { CITY, isLand, RESOURCE_COUNT, RESOURCE_IRON, type GameMap, type GameState } from "../src/index.ts";
+import {
+  CITY,
+  FERTILITY,
+  isLand,
+  RESOURCE_COUNT,
+  RESOURCE_IRON,
+  TERRAIN_LAND,
+  type GameMap,
+  type GameState,
+} from "../src/index.ts";
 
 export const tileAt = (map: GameMap, x: number, y: number): number => y * map.width + x;
 export const xOf = (map: GameMap, tile: number): number => tile % map.width;
@@ -146,14 +155,23 @@ export function checkCityInvariants(state: GameState): void {
   // Compteurs de chaque joueur.
   for (const p of state.players) {
     let tiles = 0;
+    let farmTiles = 0;
+    let fertilitySum = 0;
+    let seaTiles = 0;
     const resources = new Array<number>(RESOURCE_COUNT).fill(0);
     for (let t = 0; t < state.owner.length; t++) {
       if (state.owner[t] !== p.id) continue;
       tiles++;
       for (let i = 0; i < RESOURCE_COUNT; i++) if ((map.resources[t]! >> i) & 1) resources[i]!++;
+      if (map.fertility[t]! > 0) farmTiles++;
+      fertilitySum += map.fertility[t]!;
+      if ((map.terrain[t]! & TERRAIN_LAND) === 0) seaTiles++;
     }
     assert.equal(p.tileCount, tiles, `tileCount du joueur ${p.id}`);
     assert.deepEqual(p.resourceTiles, resources, `resourceTiles du joueur ${p.id}`);
+    assert.equal(p.farmTiles, farmTiles, `farmTiles du joueur ${p.id}`);
+    assert.equal(p.fertilitySum, fertilitySum, `fertilitySum du joueur ${p.id}`);
+    assert.equal(p.seaTiles, seaTiles, `seaTiles du joueur ${p.id}`);
     const ids = cities.filter((c) => c.player === p.id).map((c) => c.id);
     assert.deepEqual(p.cityIds, ids, `cityIds du joueur ${p.id}`);
     assert.equal(p.capital, ids[0] ?? 0, `capitale du joueur ${p.id}`);
@@ -173,23 +191,62 @@ export function checkCityInvariants(state: GameState): void {
 
 /**
  * Petite carte fabriquée à la main : `kind` dit, pour chaque case, terre, océan
- * ou lac (eau sans bit océan) ; `iron` place du fer. Permet de poser les villes
- * à des distances exactes, sans dépendre du relief de la carte de test.
+ * ou lac (eau sans bit océan) ; `iron` place du fer ; `fertility` donne la
+ * fertilité d'une case de terre (par défaut FERTILITY.land partout sur la terre,
+ * 0 sur l'eau). Permet de poser les villes à des distances exactes, sans
+ * dépendre du relief de la carte de test.
  */
 export function customMap(
   width: number,
   height: number,
   kind: (x: number, y: number) => "land" | "ocean" | "lake",
   iron: (x: number, y: number) => boolean = () => false,
+  fertility: (x: number, y: number) => number = () => FERTILITY.land,
 ): GameMap {
   const terrain = new Uint8Array(width * height);
   const resources = new Uint8Array(width * height);
+  const fertile = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const k = kind(x, y);
       terrain[y * width + x] = k === "land" ? 0x80 : k === "ocean" ? 0x20 : 0;
       if (iron(x, y)) resources[y * width + x] = RESOURCE_IRON;
+      if (k === "land") fertile[y * width + x] = fertility(x, y);
     }
   }
-  return { width, height, terrain, resources };
+  return { width, height, terrain, resources, fertility: fertile };
 }
+
+/**
+ * Récolte d'un joueur par la définition de 00-Game §6.2 à §6.5, écrite avec des
+ * rationnels exacts (BigInt) et non avec la formule en entiers de src/economy.ts :
+ * même résultat attendu. `machines` est un nombre de machines (tracteurs ou bateaux).
+ */
+export function bruteHarvest(
+  cfg: { mechanizationBase: number; mechanizationMax: number; maxMachinesPer1000: number; curveExponent: number },
+  available: number,
+  machines: number,
+  surfaceMax: number,
+  fertilitySum: number,
+): { workers: number; area: number; yield: number } {
+  const S = 10_000n;
+  const maxM = BigInt(cfg.maxMachinesPer1000);
+  // x = min(machines / disponibles, m_max) / m_max, ramené sur 0…S par division entière.
+  // m_max est en machines pour 1 000 travailleurs.
+  let X = available === 0 ? 0n : (BigInt(machines) * 1000n * S) / (BigInt(available) * maxM);
+  if (X > S) X = S;
+  let p = S;
+  for (let i = 0; i < cfg.curveExponent; i++) p = (p * (S - X)) / S;
+  const f = S - p;
+  const base = BigInt(cfg.mechanizationBase);
+  const M = base + ((BigInt(cfg.mechanizationMax) - base) * f) / S;
+  const surface = BigInt(surfaceMax);
+  // fermiers_requis = surface_max / M, arrondi vers le haut (surface en cases, M en millièmes).
+  const required = (surface * 1000n + M - 1n) / M;
+  const workers = required < BigInt(available) ? required : BigInt(available);
+  let area = (workers * M) / 1000n;
+  if (area > surface) area = surface;
+  const output = surface === 0n ? 0n : (BigInt(fertilitySum) * area) / surface;
+  return { workers: Number(workers), area: Number(area), yield: Number(output) };
+}
+

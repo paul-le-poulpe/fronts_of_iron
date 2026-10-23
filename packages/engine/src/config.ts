@@ -29,6 +29,12 @@ export const TEST_MAP = {
   seaLevel: 32768,
   /** Altitude (0 à 31) = (élévation − seaLevel) >> altitudeShift, plafonnée à 31. */
   altitudeShift: 11,
+  /**
+   * Altitude à partir de laquelle une case de terre est une montagne : fertilité 0
+   * (00-Game §2) et seuil du fer modifié (RESOURCES.iron.presence). Une seule
+   * définition de « montagne » pour toute la carte.
+   */
+  mountainAltitude: 14,
 } as const;
 
 export type TestMapConfig = typeof TEST_MAP;
@@ -53,8 +59,8 @@ export const RESOURCES = {
       threshold: 50000,
       /** Baisse du seuil par niveau d'altitude (0 à 31). */
       perAltitude: 300,
-      /** Altitude à partir de laquelle une case est une montagne. */
-      mountainAltitude: 14,
+      /** Altitude à partir de laquelle une case est une montagne : la même valeur que pour la fertilité (TEST_MAP). */
+      mountainAltitude: TEST_MAP.mountainAltitude,
       /** Baisse supplémentaire du seuil sur une montagne. */
       mountainBonus: 5000,
     },
@@ -113,8 +119,60 @@ export const CITY = {
   foundingCostPopulation: 100,
 } as const;
 
-/** Population (Docs/Design/00-Game.md §4). Valeur d'essai, pas une valeur fixée. */
+/**
+ * Population (Docs/Design/00-Game.md §4, §4.1). Valeurs d'essai, pas des valeurs
+ * fixées.
+ */
 export const POPULATION = {
   /** Population donnée au joueur par la fondation de sa première ville. */
   initial: 1000,
+  /** `consommation_par_tête` : nourriture consommée par personne et par tour. */
+  foodPerHead: 1,
+  /** `taux_de_croissance`, en millionièmes : personnes gagnées par tour = nourriture restante × growthPerMillion / 1 000 000. */
+  growthPerMillion: 5000,
 } as const;
+
+/** Nourriture (00-Game §6.5). Valeur d'essai, pas une valeur fixée. */
+export const FOOD = {
+  /** Nourriture minimale par tour d'un joueur, même sans fermier ni terre. */
+  minimum: 50,
+} as const;
+
+/** Fertilité sur la carte (00-Game §2), de 0 à 10. Valeur d'essai, pas une valeur fixée. */
+export const FERTILITY = {
+  /** Fertilité d'une case de terre qui n'est pas une montagne. Montagne et eau : 0. */
+  land: 5,
+} as const;
+
+/**
+ * Réglages d'une activité mécanisée (00-Game §6.2, §6.3). Mécanisation en
+ * millièmes de case par travailleur ; machines par millier de travailleurs.
+ */
+export interface MechanizationConfig {
+  /** `M_base` : millièmes de case par travailleur sans machine (≥ 1). */
+  readonly mechanizationBase: number;
+  /** `M_max` : millièmes de case par travailleur à pleine mécanisation (≥ M_base). */
+  readonly mechanizationMax: number;
+  /** `m_max` : machines pour 1 000 travailleurs au-delà desquelles la mécanisation n'augmente plus (≥ 1). */
+  readonly maxMachinesPer1000: number;
+  /** `n` de la courbe f(x) = 1 − (1 − x)ⁿ, entier ≥ 1. */
+  readonly curveExponent: number;
+}
+
+/** Agriculture (00-Game §6.2) : tracteurs. Valeurs d'essai, pas des valeurs fixées. */
+export const FARMING: MechanizationConfig = {
+  mechanizationBase: 300,
+  mechanizationMax: 1500,
+  maxMachinesPer1000: 100,
+  curveExponent: 2,
+};
+
+/** Pêche (00-Game §6.4) : bateaux de pêche. Valeurs d'essai, pas des valeurs fixées. */
+export const FISHING: MechanizationConfig & { readonly tileYield: number } = {
+  mechanizationBase: 300,
+  mechanizationMax: 1500,
+  maxMachinesPer1000: 100,
+  curveExponent: 2,
+  /** Fertilité d'une case de mer : à la pêche, chaque case d'eau de la zone compte pour cette valeur (00-Game §13 : équivalent de la fertilité, choix provisoire). */
+  tileYield: 3,
+};

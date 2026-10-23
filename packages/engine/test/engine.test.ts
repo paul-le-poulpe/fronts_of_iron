@@ -4,10 +4,13 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
+  applyIntent,
   applyTurn,
   CITY,
   createGame,
   createRng,
+  FERTILITY,
+  FOOD,
   forEachNeighbor,
   generateResourcePresence,
   generateTestMap,
@@ -23,6 +26,7 @@ import {
   TERRAIN_LAND,
   TERRAIN_OCEAN,
   TERRAIN_SHORE,
+  TEST_MAP,
   type GameState,
   type Intent,
 } from "../src/index.ts";
@@ -39,7 +43,18 @@ const found = (player: number, x: number, y: number): Intent => ({
   tile: tileAt(MAP, x, y),
 });
 
-/** Partie à 3 joueurs où le joueur 1 a fondé sa première ville au centre de la carte. */
+/**
+ * Un ordre appliqué seul, hors tour : pas d'étape de nourriture, donc la
+ * population reste celle que l'ordre vient de fixer. Sert à vérifier le coût
+ * exact des fondations.
+ */
+const direct = (s: GameState, intent: Intent): boolean => applyIntent(s, intent, []);
+
+/**
+ * Partie à 3 joueurs où le joueur 1 a fondé sa première ville au centre de la
+ * carte (une montagne : pas de terre cultivable, la population y baisse vers la
+ * nourriture minimale).
+ */
 function setup(): GameState {
   const s = createGame({ seed: 5, map: MAP, playerCount: 3 });
   applyTurn(s, { turn: 1, intents: [found(1, CX, CY)] });
@@ -130,6 +145,35 @@ describe("carte de test", () => {
     assert.ok(count > 1000, "le fer doit être présent sur la carte de test");
   });
 
+  it("a de la fertilité : 0 sur l'eau et en montagne, FERTILITY.land sur le reste de la terre", () => {
+    assert.equal(MAP.fertility.length, MAP.terrain.length);
+    assert.equal(RESOURCES.iron.presence.mountainAltitude, TEST_MAP.mountainAltitude, "une seule définition de « montagne »");
+    let mountains = 0, plains = 0;
+    for (let t = 0; t < MAP.terrain.length; t++) {
+      const b = MAP.terrain[t]!;
+      if ((b & TERRAIN_LAND) === 0) assert.equal(MAP.fertility[t], 0, `eau ${t}`);
+      else if ((b & TERRAIN_ALTITUDE) >= TEST_MAP.mountainAltitude) {
+        assert.equal(MAP.fertility[t], 0, `montagne ${t}`);
+        mountains++;
+      } else {
+        assert.equal(MAP.fertility[t], FERTILITY.land, `terre ${t}`);
+        plains++;
+      }
+    }
+    assert.ok(mountains > 1000 && plains > 1000, "la carte de test doit avoir les deux");
+    assert.ok(FERTILITY.land >= 1 && FERTILITY.land <= 10);
+  });
+
+  it("change de hash quand une seule case de fertilité change", () => {
+    const copy = { ...MAP, fertility: MAP.fertility.slice() };
+    assert.equal(hashMap(copy), hashMap(MAP));
+    copy.fertility[copy.fertility.length - 1] ^= 1;
+    assert.notEqual(hashMap(copy), hashMap(MAP));
+    copy.fertility[copy.fertility.length - 1] ^= 1;
+    copy.fertility[1] ^= 1;
+    assert.notEqual(hashMap(copy), hashMap(MAP));
+  });
+
   it("change de hash quand une seule case de ressources change", () => {
     const copy = { ...MAP, resources: MAP.resources.slice() };
     assert.equal(hashMap(copy), hashMap(MAP));
@@ -179,15 +223,20 @@ describe("tour et ordres", () => {
     }
     const p = s.players[0]!;
     assert.equal(p.tileCount, disc.length);
-    assert.equal(p.population, POPULATION.initial);
     assert.equal(p.capital, 1);
     assert.deepEqual(p.cityIds, [1]);
     assert.deepEqual(s.cities, [{ id: 1, player: 1, tile: start, port: false, group: 1 }]);
     assert.deepEqual(s.roads, []);
     assert.equal(s.players[1]!.capital, 0);
-    assert.equal(s.players[1]!.population, 0);
+    // Un joueur sans ville croît quand même (nomades, 00-Game §4) : après un tour, la partie entière du premier gain.
+    assert.equal(s.players[1]!.population, Math.trunc((FOOD.minimum * POPULATION.growthPerMillion) / 1_000_000));
     assert.equal(s.changedMark.indexOf(1), -1, "marqueurs remis à zéro");
     checkCityInvariants(s);
+    // Juste après la fondation, avant l'étape de nourriture du tour : la population de départ.
+    const alone = createGame({ seed: 1, map: MAP, playerCount: 2 });
+    assert.ok(direct(alone, found(1, CX, CY)));
+    assert.equal(alone.players[0]!.population, POPULATION.initial);
+    assert.equal(alone.players[1]!.population, 0);
   });
 
   it("found_city : la deuxième ville coûte la population de fondation, dans le rayon d'expansion seulement", () => {
@@ -196,17 +245,23 @@ describe("tour et ordres", () => {
     const r = CITY.expansionRadius;
     assert.deepEqual(applyTurn(s, { turn: 2, intents: [found(1, CX + r + 1, CY)] }), []);
     assert.equal(s.cities.length, 1);
-    assert.equal(s.players[0]!.population, POPULATION.initial);
 
     const changed = applyTurn(s, { turn: 3, intents: [found(1, CX + r, CY)] });
     assert.ok(changed.length > 0);
     assert.equal(s.cities.length, 2);
-    assert.equal(s.players[0]!.population, POPULATION.initial - CITY.foundingCostPopulation);
     assert.equal(s.players[0]!.capital, 1, "la capitale reste la première ville");
     assert.deepEqual(s.players[0]!.cityIds, [1, 2]);
     assert.deepEqual(s.roads, [[1, 2]]);
     assert.deepEqual([s.cities[0]!.group, s.cities[1]!.group], [1, 1]);
     checkCityInvariants(s);
+
+    // Le coût exact, hors étape de nourriture : refusé sans rien retirer, puis retiré une fois.
+    const d = createGame({ seed: 5, map: MAP, playerCount: 3 });
+    assert.ok(direct(d, found(1, CX, CY)));
+    assert.ok(!direct(d, found(1, CX + r + 1, CY)));
+    assert.equal(d.players[0]!.population, POPULATION.initial);
+    assert.ok(direct(d, found(1, CX + r, CY)));
+    assert.equal(d.players[0]!.population, POPULATION.initial - CITY.foundingCostPopulation);
   });
 
   it("found_city : le rayon d'expansion d'une ville d'un autre joueur ne compte pas", () => {
@@ -236,7 +291,6 @@ describe("tour et ordres", () => {
       [1, tileAt(MAP, CX, CY)],
       [2, tileAt(MAP, CX + 11, CY)],
     ]);
-    assert.equal(s.players[1]!.population, POPULATION.initial);
     // Les cases sont listées dans l'ordre de leur première modification, pas par adresse.
     assert.deepEqual(
       changed.toSorted((x, y) => x - y),
@@ -251,6 +305,11 @@ describe("tour et ordres", () => {
     applyTurn(t, { turn: 1, intents: [found(2, CX, CY), found(1, CX, CY)] });
     assert.deepEqual(t.cities.map((c) => c.player), [2]);
     assert.equal(t.players[0]!.capital, 0);
+
+    // Chaque joueur a reçu la population de départ de sa première ville, une seule fois.
+    const u = createGame({ seed: 1, map: MAP, playerCount: 2 });
+    for (const intent of [found(1, CX, CY), found(2, CX + 5, CY), found(1, CX, CY), found(2, CX + 11, CY)]) direct(u, intent);
+    assert.deepEqual(u.players.map((p) => p.population), [POPULATION.initial, POPULATION.initial]);
   });
 
   it("ignore chaque ordre invalide : même hash qu'un tour vide, aucune case modifiée", () => {
@@ -275,6 +334,19 @@ describe("tour et ordres", () => {
       { type: "found_city", player: 2, tile: 2.5 },
       { type: "found_city", player: 2, tile: NaN },
       { type: "found_city", player: 2, tile: Infinity },
+      { type: "set_farm_share" },
+      { type: "set_farm_share", player: 1 },
+      { type: "set_farm_share", player: 1, percent: -1 },
+      { type: "set_farm_share", player: 1, percent: 101 },
+      { type: "set_farm_share", player: 1, percent: 50.5 },
+      { type: "set_farm_share", player: 1, percent: "50" },
+      { type: "set_farm_share", player: 1, percent: null },
+      { type: "set_farm_share", player: 1, percent: NaN },
+      { type: "set_farm_share", player: 1, percent: Infinity },
+      { type: "set_farm_share", player: 0, percent: 50 },
+      { type: "set_farm_share", player: 4, percent: 50 },
+      { type: "set_farm_share", player: 1.5, percent: 50 },
+      { type: "set_farm_share", player: "1", percent: 50 },
       { type: "found_city", player: 2, tile: firstWaterTile(MAP) }, // eau
       { type: "found_city", player: 2, tile: owned }, // dans le rayon de contrôle d'un autre joueur
       { type: "found_city", player: 1, tile: owned }, // sur sa propre ville
@@ -298,9 +370,9 @@ describe("tour et ordres", () => {
     applyTurn(reference, { turn: 2, intents: [] });
     assert.deepEqual(applyTurn(poor, { turn: 2, intents: [found(1, CX + 20, CY)] }), []);
     assert.equal(hashState(poor), hashState(reference));
-    // Avec exactement le coût, le même ordre est valide.
+    // Avec exactement le coût, le même ordre est valide (hors étape de nourriture : la population tombe à 0).
     poor.players[0]!.population = CITY.foundingCostPopulation;
-    assert.ok(applyTurn(poor, { turn: 3, intents: [found(1, CX + 20, CY)] }).length > 0);
+    assert.ok(direct(poor, found(1, CX + 20, CY)));
     assert.equal(poor.players[0]!.population, 0);
     // Un tour dont `intents` n'est pas un tableau ne fait rien non plus.
     const a = setup();
@@ -318,7 +390,7 @@ describe("tour et ordres", () => {
     assert.notEqual(hashState(a), hashState(b));
   });
 
-  it("hashState couvre chaque champ de l'état des villes", () => {
+  it("hashState couvre chaque champ de l'état des villes et de l'économie", () => {
     const base = (): GameState => {
       const s = setup();
       applyTurn(s, { turn: 2, intents: [found(1, CX + 20, CY), found(1, CX, CY + 20), found(2, CX - 60, CY)] });
@@ -328,6 +400,20 @@ describe("tour et ordres", () => {
     assert.equal(hashState(base()), reference);
     const mutations: [string, (s: GameState) => void][] = [
       ["population", (s) => void s.players[0]!.population++],
+      ["growthRemainder", (s) => void s.players[0]!.growthRemainder++],
+      ["farmPercent", (s) => void s.players[0]!.farmPercent--],
+      ["farmTiles", (s) => void s.players[0]!.farmTiles++],
+      ["fertilitySum", (s) => void s.players[0]!.fertilitySum++],
+      ["seaTiles", (s) => void s.players[0]!.seaTiles++],
+      ["farmers", (s) => void s.players[0]!.farmers++],
+      ["fishers", (s) => void s.players[0]!.fishers++],
+      ["idle", (s) => void s.players[0]!.idle++],
+      ["cultivated", (s) => void s.players[0]!.cultivated++],
+      ["fished", (s) => void s.players[0]!.fished++],
+      ["wheat", (s) => void s.players[0]!.wheat++],
+      ["fish", (s) => void s.players[0]!.fish++],
+      ["food", (s) => void s.players[0]!.food++],
+      ["résultats du joueur 2", (s) => void s.players[1]!.idle++],
       ["capital", (s) => void s.players[0]!.capital++],
       ["cityIds", (s) => void s.players[0]!.cityIds.reverse()],
       ["resourceTiles", (s) => void (s.players[0]!.resourceTiles[0] = s.players[0]!.resourceTiles[0]! + 1)],

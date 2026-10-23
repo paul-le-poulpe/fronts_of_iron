@@ -1,7 +1,9 @@
 // Partie scriptée pour les tests et la mesure : des joueurs simulés envoient des
-// ordres `found_city` tirés au hasard (dont beaucoup sont invalides) et un ordre
-// malformé par tour. Les ordres ne dépendent que de `botSeed` et de l'état, donc
-// deux exécutions avec les mêmes options envoient exactement les mêmes ordres.
+// ordres `found_city` tirés au hasard (dont beaucoup sont invalides), de temps en
+// temps un ordre `set_farm_share`, et un ordre malformé par tour. Les villes sont
+// payées par la croissance de la population (economy.ts). Les ordres ne dépendent
+// que de `botSeed` et de l'état, donc deux exécutions avec les mêmes options
+// envoient exactement les mêmes ordres.
 
 import {
   applyTurn,
@@ -11,6 +13,7 @@ import {
   generateTestMap,
   hashState,
   nextInt,
+  POPULATION,
   type GameMap,
   type GameState,
   type Intent,
@@ -24,6 +27,13 @@ export interface ScenarioOptions {
   turns: number;
   /** Nombre d'ordres `found_city` envoyés par chaque joueur à chaque tour. */
   ordersPerPlayer: number;
+  /**
+   * Un joueur qui a déjà une ville n'envoie d'ordre `found_city` que si sa
+   * population atteint ce nombre : sans cela, il dépense toute sa croissance
+   * dès qu'elle dépasse le coût d'une ville et sa population reste au niveau
+   * du coût. 0 : il en envoie toujours.
+   */
+  foundMinPopulation: number;
   /** Un hash est relevé tous les `checkpointEvery` tours. */
   checkpointEvery: number;
   /** Carte déjà générée, pour ne pas la refaire à chaque partie. */
@@ -40,6 +50,14 @@ export interface ScenarioResult {
   changedTiles: number;
   /** Nombre de villes à la fin. */
   cities: number;
+  /**
+   * Nombre de couples (joueur, tour) où la nourriture produite est inférieure à
+   * la consommation de la population en fin de tour : la population baisse
+   * (surplus négatif, 00-Game §4.1).
+   */
+  starvingPlayerTurns: number;
+  /** Population de tous les joueurs à la fin. */
+  totalPopulation: number;
   /** Temps total passé dans applyTurn, en ms. */
   applyMs: number;
 }
@@ -58,6 +76,15 @@ const GARBAGE: readonly unknown[] = [
   { type: "found_city", player: "1", tile: 0 },
   { type: "found_city", player: 1, tile: "0" },
   { type: "unknown", player: 1, tile: 0 },
+  { type: "set_farm_share" },
+  { type: "set_farm_share", player: 1 },
+  { type: "set_farm_share", player: 0, percent: 50 },
+  { type: "set_farm_share", player: 1, percent: -1 },
+  { type: "set_farm_share", player: 1, percent: 101 },
+  { type: "set_farm_share", player: 1, percent: 50.5 },
+  { type: "set_farm_share", player: 1, percent: "50" },
+  { type: "set_farm_share", player: 1, percent: NaN },
+  { type: "set_farm_share", player: "1", percent: 50 },
 ];
 
 export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
@@ -66,8 +93,12 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   botSeed: 4242,
   players: 8,
   ordersPerPlayer: 4,
+  foundMinPopulation: 600,
   checkpointEvery: 100,
 };
+
+/** Un joueur sur `FARM_SHARE_ONE_IN` envoie un `set_farm_share` à chaque tour, en moyenne. */
+const FARM_SHARE_ONE_IN = 150;
 
 export function runScenario(opts: ScenarioOptions, now: () => number = () => 0): ScenarioResult {
   const map = opts.map ?? generateTestMap(opts.mapSeed);
@@ -77,6 +108,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
   const checkpoints: number[] = [];
   let changedTiles = 0;
   let applyMs = 0;
+  let starvingPlayerTurns = 0;
   // Un joueur sans ville tire une case de toute la carte ; sinon, une case dans
   // un carré autour d'une de ses villes, un peu plus large que le rayon
   // d'expansion : une partie des ordres tombe hors de portée.
@@ -86,7 +118,8 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     const intents: Intent[] = [];
     for (let p = 1; p <= opts.players; p++) {
       const mine = state.players[p - 1]!.cityIds;
-      for (let k = 0; k < opts.ordersPerPlayer; k++) {
+      const canFound = mine.length === 0 || state.players[p - 1]!.population >= opts.foundMinPopulation;
+      for (let k = 0; canFound && k < opts.ordersPerPlayer; k++) {
         let tile: number;
         if (mine.length === 0) {
           tile = nextInt(bot, width * height);
@@ -100,6 +133,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
         }
         intents.push({ type: "found_city", player: p, tile });
       }
+      if (nextInt(bot, FARM_SHARE_ONE_IN) === 0) {
+        intents.push({ type: "set_farm_share", player: p, percent: 50 + nextInt(bot, 51) });
+      }
     }
     intents.push(GARBAGE[turn % GARBAGE.length] as Intent);
 
@@ -108,8 +144,18 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     applyMs += now() - t0;
 
     changedTiles += changed.length;
+    for (const p of state.players) if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));
   }
-  return { state, finalHash: hashState(state), checkpoints, changedTiles, cities: state.cities.length, applyMs };
+  return {
+    state,
+    finalHash: hashState(state),
+    checkpoints,
+    changedTiles,
+    cities: state.cities.length,
+    starvingPlayerTurns,
+    totalPopulation: state.players.reduce((sum, p) => sum + p.population, 0),
+    applyMs,
+  };
 }

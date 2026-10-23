@@ -1,5 +1,6 @@
 // Application d'un tour envoyé par le serveur.
 
+import { stepEconomy } from "./economy.ts";
 import { applyIntent, type Intent } from "./intents.ts";
 import type { GameState } from "./state.ts";
 
@@ -11,7 +12,8 @@ export interface Turn {
 }
 
 /**
- * Applique les ordres du tour dans l'ordre, ignore les ordres invalides, puis
+ * Applique les ordres du tour dans l'ordre, ignore les ordres invalides, calcule
+ * l'étape de population et de nourriture de chaque joueur (economy.ts), puis
  * passe `state.tick` au numéro du tour. Renvoie les cases dont le propriétaire
  * a été écrit pendant le tour, chacune une fois, dans l'ordre de leur première
  * modification.
@@ -26,6 +28,8 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   const changed: number[] = [];
   const intents: readonly unknown[] = Array.isArray(turn.intents) ? turn.intents : [];
   for (const intent of intents) applyIntent(state, intent, changed);
+  // Population, nourriture, croissance : après tous les ordres du tour, pour chaque joueur dans l'ordre des identifiants.
+  stepEconomy(state);
   for (const t of changed) state.changedMark[t] = 0;
   state.tick = turn.turn;
   return changed;

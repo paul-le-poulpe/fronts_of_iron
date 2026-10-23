@@ -1,5 +1,6 @@
-// Mesure : génération de la carte, temps moyen d'un tour, temps d'un hash, et
-// coût d'une fondation de ville quand il y en a déjà beaucoup.
+// Mesure : génération de la carte, temps moyen d'un tour (étape de population et
+// de nourriture comprise), temps d'une étape seule, temps d'un hash, et coût d'une
+// fondation de ville quand il y en a déjà beaucoup.
 // Usage : npm run bench (dans packages/engine).
 
 import { performance } from "node:perf_hooks";
@@ -11,6 +12,7 @@ import {
   createGame,
   generateTestMap,
   hashState,
+  stepEconomy,
   TEST_MAP,
   type GameMap,
   type TestMapConfig,
@@ -36,6 +38,24 @@ console.log(`carte ${map.width}×${map.height} = ${map.width * map.height} cases
 console.log(`${TURNS} tours, ${intentsPerTurn} ordres par tour, ${r.cities} villes fondées, ${r.changedTiles} changements de propriétaire`);
 console.log(`temps moyen d'un tour (applyTurn) : ${((r.applyMs / TURNS) * 1000).toFixed(2)} µs`);
 console.log(`temps d'un hash de l'état complet : ${hashMs.toFixed(2)} ms`);
+
+/** Temps moyen d'une étape de population et de nourriture (stepEconomy, tous les joueurs), en µs. */
+function economyMicros(state: Parameters<typeof stepEconomy>[0]): number {
+  const N = 20_000;
+  for (let i = 0; i < 1000; i++) stepEconomy(state); // échauffement du JIT
+  const start = performance.now();
+  for (let i = 0; i < N; i++) stepEconomy(state);
+  return ((performance.now() - start) / N) * 1000;
+}
+console.log(`étape de nourriture seule (stepEconomy), ${DEFAULT_SCENARIO.players} joueurs : ${economyMicros(r.state).toFixed(2)} µs`);
+
+// 100 joueurs, quelques villes chacun : un ordre par joueur et par tour.
+const BIG_PLAYERS = 100;
+const big100 = runScenario({ ...DEFAULT_SCENARIO, map, players: BIG_PLAYERS, ordersPerPlayer: 1, turns: 3000 }, () => performance.now());
+console.log(
+  `${BIG_PLAYERS} joueurs, 3000 tours, ${BIG_PLAYERS + 1} ordres par tour, ${big100.cities} villes (${(big100.cities / BIG_PLAYERS).toFixed(1)} par joueur) : ` +
+    `tour moyen ${((big100.applyMs / 3000) * 1000).toFixed(2)} µs, étape de nourriture seule ${economyMicros(big100.state).toFixed(2)} µs`,
+);
 
 /**
  * Remplit la carte de villes au plus serré qu'une grille régulière le permet

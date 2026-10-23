@@ -13,6 +13,8 @@ interface RunOutput {
   checkpoints: number[];
   changedTiles: number;
   cities: number;
+  starvingPlayerTurns: number;
+  totalPopulation: number;
 }
 
 /** Joue le scénario par défaut dans un processus Node séparé. */
@@ -29,12 +31,18 @@ describe("déterminisme", () => {
     assert.equal(a.checkpoints.length, TURNS / DEFAULT_SCENARIO.checkpointEvery);
     assert.ok(a.cities >= 50, `seulement ${a.cities} villes fondées : le scénario ne teste rien`);
     assert.ok(a.changedTiles > 10_000, `seulement ${a.changedTiles} cases modifiées : le scénario ne teste rien`);
+    // La croissance et la baisse de population (surplus négatif) sont jouées, pas seulement des fondations.
+    assert.ok(a.totalPopulation > 0, "aucune population à la fin : la croissance n'est pas testée");
+    assert.ok(a.starvingPlayerTurns > 1000, `seulement ${a.starvingPlayerTurns} tours-joueurs de baisse : le surplus négatif n'est pas testé`);
     assert.equal(a.cities, b.cities);
+    assert.equal(b.starvingPlayerTurns, a.starvingPlayerTurns);
+    assert.equal(b.totalPopulation, a.totalPopulation);
     assert.deepEqual(b.checkpoints, a.checkpoints);
     assert.equal(b.finalHash, a.finalHash);
     // Le même scénario dans ce processus-ci donne aussi le même résultat.
     const c = runScenario({ ...DEFAULT_SCENARIO, turns: TURNS });
     assert.equal(c.finalHash, a.finalHash);
+    assert.equal(c.totalPopulation, a.totalPopulation);
   });
 
   it("une graine de partie différente donne un hash différent (même carte, mêmes ordres)", () => {

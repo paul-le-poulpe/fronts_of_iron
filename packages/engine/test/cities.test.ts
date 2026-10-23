@@ -11,6 +11,7 @@ import {
   createRng,
   generateTestMap,
   nextInt,
+  POPULATION,
   RESOURCE_IRON,
   segmentsCross,
   type GameMap,
@@ -359,11 +360,9 @@ describe("parties jouées par des joueurs simulés", () => {
     assert.equal(r.cities, r.state.cities.length);
     assert.ok(r.cities >= 50, `${r.cities} villes`);
     assert.equal(checked.length, 4);
-    // Chaque joueur a fini avec le maximum de villes que sa population permet : 1 + 1000 / 100.
-    for (const p of r.state.players) {
-      assert.ok(p.cityIds.length <= 1 + (1000 / CITY.foundingCostPopulation), `joueur ${p.id}`);
-      assert.ok(p.population >= 0);
-    }
+    // La population grossit avec la nourriture : au moins un joueur a plus de villes que la population de départ n'en paie (1 + 1000 / 100).
+    assert.ok(r.state.players.some((p) => p.cityIds.length > 1 + POPULATION.initial / CITY.foundingCostPopulation));
+    for (const p of r.state.players) assert.ok(p.population >= 0, `joueur ${p.id}`);
   });
 
   it("garde les invariants avec plus de 300 villes (population rechargée à chaque tour)", () => {
@@ -371,6 +370,7 @@ describe("parties jouées par des joueurs simulés", () => {
       ...DEFAULT_SCENARIO,
       players: 6,
       turns: 100,
+      foundMinPopulation: 0,
       onTurn: (state) => {
         for (const p of state.players) if (p.capital !== 0 && p.population < 1000) p.population += 1000;
       },

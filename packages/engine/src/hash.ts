@@ -22,13 +22,16 @@ export function hashMap(map: GameMap): number {
   h = mixWord(h, map.height);
   h = mixBytes(h, map.terrain);
   h = mixBytes(h, map.resources);
+  h = mixBytes(h, map.fertility);
   return fmix32(h ^ map.terrain.length);
 }
 
 /**
  * Couvre : carte (par mapHash), numéro de tour, générateur aléatoire, joueurs
- * (cases, population, capitale, villes, cases de ressources), villes (joueur,
- * case, port, groupe), routes, propriétaires, ville de chaque case.
+ * (cases, population, capitale, villes, cases de ressources, reste de
+ * croissance, répartition fermiers / pêcheurs, totaux de fertilité et résultats
+ * du dernier tour), villes (joueur, case, port, groupe), routes, propriétaires,
+ * ville de chaque case.
  */
 export function hashState(state: GameState): number {
   let h = mixWord(state.mapHash, state.tick);
@@ -47,6 +50,19 @@ export function hashState(state: GameState): number {
     for (const n of p.resourceTiles) h = mixWord(h, n);
     h = mixWord(h, p.cityIds.length);
     for (const id of p.cityIds) h = mixWord(h, id);
+    h = mixWord(h, p.growthRemainder);
+    h = mixWord(h, p.farmPercent);
+    h = mixWord(h, p.farmTiles);
+    h = mixWord(h, p.fertilitySum);
+    h = mixWord(h, p.seaTiles);
+    h = mixWord(h, p.farmers);
+    h = mixWord(h, p.fishers);
+    h = mixWord(h, p.idle);
+    h = mixWord(h, p.cultivated);
+    h = mixWord(h, p.fished);
+    h = mixWord(h, p.wheat);
+    h = mixWord(h, p.fish);
+    h = mixWord(h, p.food);
   }
   h = mixWord(h, state.cities.length);
   for (const c of state.cities) {

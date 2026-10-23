@@ -74,6 +74,10 @@ L'interface est définie par l'auteur ; elle n'est pas inventée.
   rayon`).
 - **Fertilité** : chaque case a une fertilité entière de 0 à 10. **0 = case non
   cultivable** (eau, montagne, et d'autres terrains).
+  **Pour commencer** (décision de l'auteur, 23 octobre 2026) : une montagne a
+  une fertilité de 0, toute autre case de terre a la même fertilité,
+  `FERTILITY.land` (§10). Montagne = altitude ≥ `TEST_MAP.mountainAltitude`,
+  la même limite que pour le fer.
 - **Ressources naturelles** : pour chaque ressource de la liste (fichier de
   configuration), chaque case a un booléen : présente ou absente. La
   répartition est tirée d'un bruit, dont le seuil est modulé case par case
@@ -775,13 +779,15 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `CITY.foundingCostPopulation` | population retirée à la fondation d'une ville (§3.3) |
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
-| `POPULATION.growthRate` | `taux_de_croissance` (§4.1) |
+| `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
 | `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) |
+| `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
+| `TEST_MAP.mountainAltitude` | altitude à partir de laquelle une case est une montagne : fertilité 0, fer plus fréquent (§2) |
 | `FARMING.mechanizationBase` | `M_base` : surface par fermier sans tracteur |
 | `FARMING.mechanizationMax` | `M_max` : surface par fermier à pleine mécanisation |
 | `FARMING.maxTractorsPerFarmer` | `m_max` : tracteurs par fermier au-delà desquels la mécanisation n'augmente plus |
 | `FARMING.mechanizationCurveExponent` | `n` de la courbe §6.3, entier ≥ 1 |
-| `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux |
+| `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux ; plus `FISHING.tileYield`, rendement d'une case d'eau, provisoire (§13) |
 | `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les engins miniers |
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
@@ -931,20 +937,29 @@ valider sur la visualisation.
 - Mineurs pour l'export (§7) : remplis avec les lignes, après elles, ou après
   les champs ?
 - Le format du réglage fermiers / pêcheurs, et son effet tant qu'un joueur n'a
-  pas de cases de mer.
+  pas de cases de mer. Choix provisoire du moteur : un pourcentage entier de
+  fermiers, 100 par défaut ; les pêcheurs sans mer sont inactifs (02-Engine
+  §7).
+- Ordre dans un tour : choix provisoire du moteur, les ordres d'abord, puis la
+  répartition, la nourriture et la croissance de chaque joueur (02-Engine §7).
 - Si la population ne suffit pas à couvrir la demande d'extraction : extraction
   partielle, et rien pour les champs ?
 
 **Agriculture et pêche**
 - Unités : la surface est-elle comptée en cases ? Combien de personnes
-  représente une unité de population ?
+  représente une unité de population ? Choix provisoire du moteur : surface en
+  cases, population en personnes, mécanisation en millièmes de case par
+  travailleur (02-Engine §7).
 - Arrondi de `fermiers_requis` (vers le haut, pour couvrir toute la surface, ou
-  vers le bas).
+  vers le bas). Choix provisoire du moteur : vers le haut.
+- Arrondi d'une baisse de population (§4.1) : choix provisoire du moteur, la
+  partie entière est prise vers zéro, le reste garde son signe.
 - La fertilité change-t-elle en cours de partie ? Les engrais, cités comme
   critère global possible, ne sont pas retenus pour l'instant.
 - Pêche : les cases de mer ont-elles un équivalent de la fertilité ? Les
   cases de mer d'un bassin sans zone maritime (§2.1, lac) comptent-elles ?
-- Fertilité sur la carte de test : comment elle est générée.
+  Choix provisoire du moteur : toute case d'eau de la zone compte, lac
+  compris, avec un rendement fixe `FISHING.tileYield` (02-Engine §7).
 - Fer : choix validés par l'auteur, implémentés (02-Engine §2, `npm run
   viz:iron`). Bruit du générateur de la carte, avec sa propre graine ; seuil
   qui baisse avec l'altitude, plus une baisse supplémentaire sur les

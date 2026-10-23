@@ -1,5 +1,6 @@
 // La carte : un octet de terrain et un octet de ressources par case, adresse =
 // y × largeur + x.
+// La fertilité est un octet par case aussi, 0 à 10.
 // Le propriétaire de chaque case est dans l'état de la partie (state.ts), pas ici :
 // la carte ne change pas pendant une partie.
 
@@ -26,6 +27,8 @@ export interface GameMap {
   readonly terrain: Uint8Array;
   /** width × height octets ; un bit par ressource (RESOURCE_*), 1 = présente sur la case. */
   readonly resources: Uint8Array;
+  /** width × height octets ; fertilité 0 à 10 (00-Game §2). 0 sur l'eau et les montagnes. */
+  readonly fertility: Uint8Array;
 }
 
 export function isLand(map: GameMap, tile: number): boolean {

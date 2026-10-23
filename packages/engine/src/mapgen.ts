@@ -1,9 +1,10 @@
 // Carte de test générée par le code : un continent entouré d'océan, avec du
-// relief et parfois des lacs ou des îles. Calcul entièrement en entiers.
+// relief et parfois des lacs ou des îles, puis présence des ressources et
+// fertilité. Calcul entièrement en entiers.
 
 import { fmix32 } from "./bits.ts";
-import { RESOURCES, TEST_MAP, type TestMapConfig } from "./config.ts";
-import { TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE, type GameMap } from "./map.ts";
+import { FERTILITY, RESOURCES, TEST_MAP, type TestMapConfig } from "./config.ts";
+import { TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE, type GameMap } from "./map.ts";
 import { ONE, valueNoise } from "./noise.ts";
 import { generateResourcePresence } from "./resources.ts";
 
@@ -47,7 +48,13 @@ export function generateTestMap(seed: number, cfg: TestMapConfig = TEST_MAP): Ga
   // Ressources : le bit i de `resources` est la i-ème clé de RESOURCES. La
   // présence se calcule sur le terrain fini, qui ne change plus ensuite.
   const resources = new Uint8Array(size);
-  const map: GameMap = { width, height, terrain, resources };
+  // Fertilité (00-Game §2) : la terre hors montagne a FERTILITY.land, la montagne et l'eau 0.
+  const fertility = new Uint8Array(size);
+  for (let t = 0; t < size; t++) {
+    const b = terrain[t]!;
+    if ((b & TERRAIN_LAND) !== 0 && (b & TERRAIN_ALTITUDE) < cfg.mountainAltitude) fertility[t] = FERTILITY.land;
+  }
+  const map: GameMap = { width, height, terrain, resources, fertility };
   Object.values(RESOURCES).forEach((resource, i) => {
     const present = generateResourcePresence(map, seed, resource.presence);
     for (let t = 0; t < size; t++) if (present[t] !== 0) resources[t] = resources[t]! | (1 << i);

@@ -1,11 +1,16 @@
 export {
   CITY,
+  FARMING,
+  FERTILITY,
+  FISHING,
+  FOOD,
   MAX_CITIES,
   MAX_PLAYERS,
   POPULATION,
   RESOURCES,
   SEA_ZONES,
   TEST_MAP,
+  type MechanizationConfig,
   type ResourcePresenceConfig,
   type SeaZonesConfig,
   type TestMapConfig,
@@ -43,6 +48,15 @@ export {
   type GameState,
   type Player,
 } from "./state.ts";
-export { applyIntent, type FoundCityIntent, type Intent } from "./intents.ts";
+export {
+  CURVE_SCALE,
+  GROWTH_SCALE,
+  harvest,
+  mechanization,
+  mechanizationCurve,
+  stepEconomy,
+  type Harvest,
+} from "./economy.ts";
+export { applyIntent, type FoundCityIntent, type Intent, type SetFarmShareIntent } from "./intents.ts";
 export { applyTurn, type Turn } from "./turn.ts";
 export { hashMap, hashState } from "./hash.ts";

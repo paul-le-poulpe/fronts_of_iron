@@ -194,8 +194,9 @@ function draw() {
     "<tr><td>montagne</td><td>" + count.mountain + "</td><td>" + pct(count.mountainIron, count.mountain) + "</td></tr>" +
     "<tr><th>toute la terre</th><th>" + land + "</th><th>" + pct(iron, land) + " (" + iron + ")</th></tr>";
   document.getElementById("config").textContent =
-    "threshold: " + c.threshold + ",\\nperAltitude: " + c.perAltitude + ",\\nmountainAltitude: " + c.mountainAltitude +
-    ",\\nmountainBonus: " + c.mountainBonus + ",";
+    "threshold: " + c.threshold + ",\\nperAltitude: " + c.perAltitude +
+    ",\\nmountainBonus: " + c.mountainBonus + ",\\n// à recopier dans TEST_MAP (partagé avec la fertilité) :\\nmountainAltitude: " +
+    c.mountainAltitude + ",";
 }
 
 function reset() {

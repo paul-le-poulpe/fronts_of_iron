@@ -6,10 +6,13 @@ Chaque navigateur l'exécute et doit obtenir exactement le même état (règle 2
 
 **Les règles viennent de `00-Game.md`.** Le moteur n'implémente que ce que ce
 document décide. Implémenté : les villes (00-Game §3.1 à §3.6 : fondation,
-zones, routes terrestres, ports, groupes) et leur seul ordre, `found_city` (§4).
-Pas implémenté : population (répartition, croissance), nourriture, extraction,
-usines, armement, routes maritimes, changement de capitale, disparition d'une
-ville, fertilité, commerce, armée, diplomatie.
+zones, routes terrestres, ports, groupes), la fertilité de la carte (§2), la
+population, l'agriculture, la pêche et la nourriture (§4, §4.1, §6.1 à §6.5), et
+leurs deux ordres, `found_city` et `set_farm_share` (§4). Pas implémenté :
+lignes de production et leurs ouvriers (§4 étape 1), machines (tracteurs et
+bateaux de pêche valent 0 : pas d'usine), extraction, usines, armement, routes
+maritimes, changement de capitale, disparition d'une ville, commerce, armée,
+diplomatie.
 
 ---
 
@@ -17,27 +20,29 @@ ville, fertilité, commerce, armée, diplomatie.
 
 | Fichier (`packages/engine/`) | Contenu |
 | --- | --- |
-| `src/config.ts` | tous les nombres réglables (carte de test, nombre maximal de joueurs et de villes, zones maritimes, présence des ressources, rayons des villes, population de départ) |
+| `src/config.ts` | tous les nombres réglables (carte de test, nombre maximal de joueurs et de villes, zones maritimes, présence des ressources, rayons des villes, population, nourriture, fertilité, agriculture, pêche) |
 | `src/bits.ts` | rotation de bits, étapes de MurmurHash3 |
 | `src/rng.ts` | générateur aléatoire xoshiro128** |
 | `src/map.ts` | bits du terrain et des ressources, `GameMap`, parcours des 4 voisins |
 | `src/noise.ts` | `valueNoise` : bruit de valeur en entiers, commun au relief et aux ressources |
-| `src/mapgen.ts` | `generateTestMap(seed)` : terrain, puis présence des ressources |
+| `src/mapgen.ts` | `generateTestMap(seed)` : terrain, puis présence des ressources, puis fertilité |
 | `src/resources.ts` | présence des ressources naturelles (00-Game §2) : `generateResourcePresence`, `resourceNoise`, `presenceThreshold` |
 | `src/seazones.ts` | zones maritimes (00-Game §2.1) : `generateSeaZones`, `computeSeaZones`, `landMask` |
 | `src/state.ts` | `GameState`, `Player`, `City`, `createGame`, `setOwner` |
 | `src/cities.ts` | `foundCity` : validité, zones, ports, groupes (00-Game §3.2 à §3.6) |
 | `src/roads.ts` | réseau de routes terrestres (00-Game §3.5) : `addCityToRoads` (mise à jour à chaque fondation), `computeRoads` (calcul complet, référence des tests), `segmentsCross` |
-| `src/intents.ts` | types d'ordres, vérification des champs, `found_city` |
+| `src/economy.ts` | population, agriculture, pêche, nourriture (00-Game §4, §6) : `stepEconomy` (une étape par tour), `harvest`, `mechanization`, `mechanizationCurve` |
+| `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share` |
 | `src/turn.ts` | `applyTurn(state, { turn, intents })` |
 | `src/hash.ts` | `hashMap`, `hashState` |
 | `test/*.test.ts` | tests (`npm test`) |
-| `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports) et cartes fabriquées à la main, pour les tests de villes |
-| `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` |
+| `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage, récolte en rationnels exacts avec BigInt) et cartes fabriquées à la main, pour les tests de villes et d'économie |
+| `test/economy.test.ts` | tests de la courbe, de la récolte, de l'étape de nourriture, de la croissance avec reste, des totaux de fertilité et de `set_farm_share` |
+| `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population) et de temps en temps `set_farm_share` |
 | `test/bench.ts` | mesure (`npm run bench`) |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
 | `test/iron-viz.ts` | visualisation de la présence du fer, avec des curseurs pour les réglages (`npm run viz:iron`) → `out/iron.html`, ignoré par git |
-| `test/cities-viz.ts` | visualisation d'une partie scriptée, avec un curseur sur les étapes : zones, fer, routes, villes, capitales, ports (`npm run viz:cities`) → `out/cities.html`, ignoré par git |
+| `test/cities-viz.ts` | visualisation d'une partie scriptée, avec un curseur sur les étapes : zones, fer, routes, villes, capitales, ports, tableau par joueur (population, fermiers, pêcheurs, inactifs, nourriture), surface cultivée et surface pêchée (`npm run viz:cities`) → `out/cities.html`, ignoré par git |
 
 Aucune dépendance à l'exécution. `typescript` et `@types/node` sont des
 dépendances de développement ; `@types/node` ne sert qu'aux tests :
@@ -60,7 +65,8 @@ des imports écrits avec l'extension `.ts`.
 - `resources : Uint8Array`, un octet par case, un bit par ressource : le bit i
   est la i-ème clé de `RESOURCES` (`config.ts`). Bit 0 = fer (`RESOURCE_IRON`).
   `RESOURCE_COUNT` est le nombre de ressources. 1 = présente sur la case.
-- Pas de fertilité dans `GameMap` : sa génération n'est pas décidée.
+- `fertility : Uint8Array`, un octet par case : fertilité 0 à 10 (00-Game §2).
+  Montagne et eau : 0. Autre terre : `FERTILITY.land` (§7).
 - `owner : Uint16Array` et `tileCity : Uint16Array` sont dans l'état de la
   partie (§4), 0 = personne. La carte, elle, ne change pas pendant la partie.
 - Voisins : les 4 cases gauche, droite, haut, bas, dans cet ordre ; pas de
@@ -74,16 +80,23 @@ valeurs aux nœuds tirées d'un hash de la graine et des coordonnées, interpol�
 avec une courbe en S calculée en entiers) + un bonus au centre − une baisse qui
 croît avec le carré de la distance au centre d'une ellipse. Au-dessus du niveau
 de la mer : terre, altitude = excédent décalé de 11 bits. Ensuite un parcours en
-largeur depuis le bord marque l'océan, puis la côte est marquée. Enfin la
+largeur depuis le bord marque l'océan, puis la côte est marquée. Ensuite la
 présence de chaque ressource (voir plus bas) est calculée sur ce terrain fini,
-avec la même graine, et écrite dans le bit de la ressource.
+avec la même graine, et écrite dans le bit de la ressource. Enfin la fertilité :
+une case de terre dont l'altitude est ≥ `TEST_MAP.mountainAltitude` (14) est une
+montagne, fertilité 0 ; toute autre terre vaut `FERTILITY.land` ; l'eau vaut 0.
+`RESOURCES.iron.presence.mountainAltitude` est ce même nombre (une seule
+définition de « montagne » : un test vérifie l'égalité).
 
 Le bruit de valeur est dans `noise.ts`, et non dans `mapgen.ts`, parce que
 `mapgen.ts` appelle `resources.ts` qui lui-même a besoin du bruit : sans ce
 fichier, les deux modules s'importeraient l'un l'autre.
 
 Résultat avec les réglages actuels : un continent central, 30 à 40 % de terre
-selon la graine (38,6 % pour la graine 12345), parfois un lac ou un îlot.
+selon la graine (38,6 % pour la graine 12345), parfois un lac ou un îlot. Pour la
+graine 12345, 23,5 % de la terre est montagne (36 378 cases sur 154 484), et le
+centre de la carte, vers (400, 250), est une montagne : une ville fondée là n'a
+aucune case cultivable.
 
 ### Zones maritimes
 
@@ -121,8 +134,8 @@ recalcule la répartition à chaque mouvement de curseur ; la page affiche les
 valeurs à recopier dans `config.ts`.
 
 `generateTestMap` écrit le résultat dans `GameMap.resources`. `hashMap` couvre
-`resources` comme `terrain`. `createGame` lève une erreur si `resources` n'a pas
-une longueur width × height.
+`resources` et `fertility` comme `terrain`. `createGame` lève une erreur si
+`resources` ou `fertility` n'a pas une longueur width × height.
 
 ## 3. Le générateur aléatoire
 
@@ -143,14 +156,16 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
 ## 4. Ordres et tours
 
 - `applyTurn(state, { turn, intents })` applique les ordres dans l'ordre du
-  tableau, passe `state.tick` à `turn`, et renvoie la liste des cases dont le
+  tableau, puis fait l'étape de population et de nourriture de chaque joueur
+  (« Étape de nourriture », plus bas), passe `state.tick` à `turn`, et renvoie la liste des cases dont le
   propriétaire a été écrit, chacune une fois, dans l'ordre de leur première
   modification (pas par adresse croissante). C'est cette liste que l'affichage
   relira. Elle ne contient pas une case qui passe d'une ville à une autre du
   même joueur : son `owner` ne change pas.
 - Toute écriture de `owner` passe par `setOwner`, qui tient à jour le nombre de
   cases de chaque joueur, le nombre de cases de chaque ressource
-  (`Player.resourceTiles`) et la liste des cases modifiées.
+  (`Player.resourceTiles`), les totaux de fertilité (`farmTiles`,
+  `fertilitySum`, `seaTiles`) et la liste des cases modifiées.
 - Un ordre arrive du réseau : chaque champ est vérifié (`typeof`, entier, dans
   les bornes) avant usage. Un ordre invalide ne modifie rien et n'est pas
   signalé. Un `intents` qui n'est pas un tableau compte comme vide.
@@ -171,9 +186,14 @@ Dans `GameState` :
 - `roadNetwork` : toutes les routes candidates, gardées ou non, et leur grille
   (`roads.ts`). Entièrement déduit des villes, il n'entre pas dans le hash ;
   `roads`, qui en sort, y entre.
-- Par joueur : `population`, `capital` (identifiant de ville, 0 = aucune),
-  `cityIds` (dans l'ordre de fondation), `resourceTiles` (nombre de cases du
-  joueur qui portent chaque ressource).
+- Par joueur : `population` (personnes), `growthRemainder` (reste de croissance,
+  millionièmes de personne), `farmPercent` (0 à 100, 100 au départ), `capital`
+  (identifiant de ville, 0 = aucune), `cityIds` (dans l'ordre de fondation),
+  `resourceTiles` (nombre de cases du joueur qui portent chaque ressource),
+  `farmTiles` (cases du joueur de fertilité > 0 : `surface_max`), `fertilitySum`
+  (somme de leurs fertilités : `fertilité_totale`), `seaTiles` (cases d'eau du
+  joueur, mer et lacs), et les résultats du dernier tour : `farmers`, `fishers`,
+  `idle`, `cultivated`, `fished`, `wheat`, `fish`, `food`.
 
 Au plus `MAX_CITIES` = 65 535 villes (`tileCity` est un `Uint16Array`) ; un
 ordre au-delà est ignoré. Aucune règle n'en parle : c'est la limite du type.
@@ -203,6 +223,61 @@ refusé ne modifie rien) :
 2. la ville est ajoutée (`cities`, `cityIds` du joueur ; capitale du joueur si
    c'est sa première) ;
 3. zones, 4. routes, 5. ports, 6. groupes (voir ci-dessous).
+
+### `set_farm_share`
+
+`{ type: "set_farm_share", player, percent }` (00-Game §4, §9 ; format provisoire,
+§7). Valide si `percent` est un entier de 0 à 100. Effet : `farmPercent` du joueur
+prend cette valeur. L'ordre est appliqué avec les autres, avant l'étape du tour : il
+compte tout de suite.
+
+### Étape de nourriture (00-Game §4, §4.1, §6)
+
+`stepEconomy(state)` (`economy.ts`), appelée par `applyTurn` après tous les ordres du
+tour, pour chaque joueur dans l'ordre des identifiants, y compris un joueur sans
+ville. Elle utilise la population de ce moment : le coût d'une fondation de ce tour
+est déjà retiré. Unités : population en personnes, surfaces en cases, mécanisation
+`M` en millièmes de case par travailleur, `m_max` en machines pour 1 000
+travailleurs (§7). `S` = 10 000. Pour un joueur :
+
+```
+fermiers_disponibles = floor(population × farmPercent / 100)
+pêcheurs_disponibles = population − fermiers_disponibles   (pas de ligne de production : §7)
+
+récolte(config, F, machines, surface_max, fertilité_totale) :
+  X        = F == 0 ? 0 : min(S, floor(machines × 1000 × S / (F × m_max)))
+  f        = courbe(X, n)
+  M        = M_base + floor((M_max − M_base) × f / S)
+  requis   = ceil(surface_max × 1000 / M)           arrondi vers le haut (§7)
+  travail  = min(F, requis)                          les autres F sont inactifs
+  surface  = min(surface_max, floor(travail × M / 1000))
+  produit  = surface_max == 0 ? 0 : floor(fertilité_totale × surface / surface_max)
+
+courbe(X, n) : p = S ; n fois : p = floor(p × (S − X) / S) ; f = S − p     (00-Game §6.3)
+
+blé      = récolte(FARMING, fermiers_disponibles, tracteurs = 0, farmTiles, fertilitySum)
+poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux = 0, seaTiles, seaTiles × FISHING.tileYield)
+nourriture = max(blé + poisson, FOOD.minimum)
+
+surplus  = nourriture − population × POPULATION.foodPerHead      (négatif possible)
+reste    = reste + surplus × POPULATION.growthPerMillion
+delta    = trunc(reste / 1 000 000)                               vers zéro
+population = population + delta ; reste = reste − delta × 1 000 000
+si population < 0 : population = 0 et reste = 0
+```
+
+Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
+travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
+`cultivated` et `fished` = les deux surfaces, `wheat`, `fish`, `food`. Ils sont
+calculés sur la population du début de l'étape (avant `delta`) :
+`farmers + fishers + idle` = cette population. La mécanisation est calculée avec les
+travailleurs disponibles, pas ceux qui travaillent (00-Game §6.2). Le rayon
+d'exploitation (§6.6) n'est pas calculé : la visualisation le fait.
+
+`harvest` (récolte) et `mechanization` sont exportées : les usines fourniront
+`tracteurs` et `bateaux` plus tard. Les tests comparent `harvest` à
+`bruteHarvest` (`test/helpers.ts`), écrit avec des rationnels exacts (BigInt), sur
+4 000 cas tirés au hasard.
 
 ### Zones (00-Game §3.2)
 
@@ -293,21 +368,25 @@ sa capitale : `cities[capital - 1].group`.
 
 `hashState(state)` : entier 32 bits, étapes de MurmurHash3 sur, dans l'ordre :
 
-1. le hash de la carte (dimensions, `terrain` puis `resources`, calculé une fois
-   par `createGame`) ;
+1. le hash de la carte (dimensions, `terrain`, `resources` puis `fertility`,
+   calculé une fois par `createGame`) ;
 2. le numéro de tour ;
 3. les 4 mots du générateur aléatoire ;
 4. le nombre de joueurs, puis pour chacun : identifiant, nombre de cases,
    population, capitale, nombre de ressources puis `resourceTiles`, nombre de
-   villes puis `cityIds` ;
+   villes puis `cityIds`, puis `growthRemainder`, `farmPercent`, `farmTiles`,
+   `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`, `fished`,
+   `wheat`, `fish`, `food` ;
 5. le nombre de villes, puis pour chacune : identifiant, joueur, case, port
    (0 ou 1), groupe ;
 6. le nombre de routes, puis pour chacune : a, b ;
 7. `owner`, deux cases par mot ;
 8. `tileCity`, deux cases par mot.
 
-`test/engine.test.ts` change chaque champ des villes l'un après l'autre et
-vérifie que le hash change.
+`test/engine.test.ts` change chaque champ des villes et de l'économie l'un après
+l'autre et vérifie que le hash change. Les résultats du dernier tour sont
+entièrement déterminés par le reste de l'état, mais ils sont dans `GameState` :
+ils sont donc dans le hash (§6).
 
 ## 6. Pièges
 
@@ -332,6 +411,24 @@ vérifie que le hash change.
   `addCityToRoads` (ou l'inverse) fait échouer les tests de comparaison.
 - **Mettre à jour `roads` sans passer par `addCityToRoads`** : `roadNetwork`
   ne le saurait pas, et la fondation suivante partirait d'un état faux.
+- **Déplacer l'étape de nourriture avant les ordres, ou changer `Math.trunc` en
+  `Math.floor`** : tous les clients doivent faire pareil, et les parties déjà
+  jouées se rejoueraient autrement. Avec `floor`, une baisse de 0,25 personne par
+  tour retire une personne dès le premier tour. Les tests de croissance fixent
+  l'arrondi (mutation vérifiée : dernier point de ce chapitre).
+- **Retirer le reste de croissance** : une croissance inférieure à une personne
+  par tour serait arrondie à 0 à chaque tour, et la population s'arrêterait sous
+  son maximum (00-Game §4.1). Les nomades, à 50 de nourriture et 0,005 par
+  personne de surplus, ne partiraient jamais de 0.
+- **Une configuration qui met `M` ou `m_max` à 0** : `harvest` divise par `M` et par
+  `F × m_max`. `MechanizationConfig` demande `mechanizationBase` ≥ 1 et
+  `maxMachinesPer1000` ≥ 1.
+- **Lire la population juste après un ordre dans `applyTurn`** : l'étape du même
+  tour l'a déjà changée. Les tests qui vérifient le coût exact d'une fondation
+  appliquent l'ordre seul (`applyIntent`), sans étape.
+- **Une ville au centre de la carte de test** : c'est une montagne, fertilité 0.
+  Sa population baisse vers `FOOD.minimum`. Les tests de croissance utilisent des
+  cartes fabriquées à la main (`customMap`).
 - **Mettre deux tableaux dans une même fonction de hash** : une fonction
   `mixUint16(h, tableau)` appelée pour `owner` puis `tileCity` a coûté 5 ms par
   hash, contre 0,9 ms avec les deux boucles écrites dans `hashState` (mesuré
@@ -352,9 +449,19 @@ vérifie que le hash change.
   V8). Ils prouvent que le moteur ne dépend ni du hasard, ni de l'heure, ni du
   processus ; ils ne prouvent pas l'égalité entre Chrome, Firefox et Safari.
   C'est la règle 2 (entiers seulement) qui la garantit.
+- Ordres de grandeur de l'économie, tous très en dessous de 2⁵³ (≈ 9 × 10¹⁵) :
+  `machines × 1000 × S` (10⁷ par machine), `fertilité_totale × surface` (≤ 4 × 10⁶ ×
+  4 × 10⁵ sur la carte de test), `surplus × growthPerMillion` (5 × 10¹² pour une
+  population de 10⁹, valeur que `bench.ts` atteint). Les divisions par
+  `Math.floor` et `Math.ceil` sont exactes tant que le numérateur reste sous 2⁵³.
 - Vérifié le 23 octobre 2026 : un `Math.random()` qui fait refuser un ordre
   `found_city` une fois sur vingt fait échouer le test des deux processus, le
   test des sources, et deux tests d'ordres.
+- Vérifié le 23 octobre 2026, une règle cassée à la fois : retirer le reste de
+  croissance fait échouer 8 tests ; arrondir `requis` vers le bas, 5 ; ne pas
+  faire l'étape des joueurs sans ville, 7 ; `Math.floor` à la place de `Math.trunc`,
+  1. Le test de déterminisme ne les voit pas (ils restent déterministes), les
+  tests de l'économie, si.
 
 ## 7. Choix provisoires, à valider
 
@@ -391,6 +498,46 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
 12. Les zones couvrent l'eau et lui donnent un propriétaire (00-Game §3.2 :
     « une case »).
 13. Au plus 65 535 villes (type de `tileCity`) ; pas dans 00-Game.
+14. Fertilité sur la carte (décision de l'auteur, 23 octobre 2026) : montagne =
+    altitude ≥ `TEST_MAP.mountainAltitude` (14, la même valeur pour le fer) →
+    fertilité 0 ; eau → 0 ; toute autre terre → `FERTILITY.land`. Le nombre
+    `FERTILITY.land` (5, sur 0 à 10) est une valeur d'essai.
+15. Cases de pêche : toutes les cases d'eau (océan ou lac, comme pour le port,
+    point 10) des zones du joueur. Chacune compte pour `FISHING.tileYield` (3,
+    valeur d'essai) : 00-Game §13 demande si une case de mer a un équivalent de
+    la fertilité, cette constante est l'attente.
+16. Totaux par joueur tenus à jour dans `setOwner`, comme `resourceTiles` :
+    `farmTiles`, `fertilitySum`, `seaTiles`.
+17. Répartition fermiers / pêcheurs : `farmPercent`, entier 0 à 100, part de la
+    population hors usines qui devient fermiers ; le reste devient pêcheurs. 100
+    au départ. Ordre `set_farm_share { player, percent }`, valide si `percent` est
+    un entier de 0 à 100 (00-Game §9 : format à définir). Un joueur sans case
+    d'eau a ses pêcheurs inactifs (00-Game §13).
+18. Unités : la population est un nombre de personnes ; les surfaces sont des
+    cases ; `M` est en millièmes de case par travailleur ; `m_max` est en machines
+    pour 1 000 travailleurs. Tracteurs et bateaux de pêche valent 0 (pas
+    d'usine) ; la formule complète est écrite, avec `machines` en entrée.
+19. `fermiers_requis` arrondi vers le haut : assez de fermiers pour couvrir toute
+    la surface (00-Game §13 laisse l'arrondi ouvert).
+20. Croissance : un négatif est arrondi vers zéro (`Math.trunc`) ; 00-Game §4.1
+    laisse le sens à la session du moteur. Le reste garde son signe, la hausse
+    et la baisse sont symétriques. Population jamais sous 0 (reste remis à 0).
+21. Ordre dans un tour : tous les ordres, puis l'étape pour chaque joueur dans
+    l'ordre des identifiants. Un joueur sans ville fait aussi l'étape : sans
+    terre ses fermiers sont inactifs et sa nourriture vaut `FOOD.minimum`
+    (nomades, 00-Game §4).
+22. Répartition de la population (00-Game §4) : sans ligne de production, toute
+    la population va à l'étape 2 (fermiers et pêcheurs), puis à l'étape 3 (inactifs).
+23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `fished`,
+    `wheat`, `fish`, `food`) gardés dans le joueur et hachés.
+24. Valeurs d'essai de l'économie : `POPULATION.foodPerHead` 1,
+    `POPULATION.growthPerMillion` 5 000 (0,5 % du surplus par tour ; 1 000 était
+    cinq fois plus lent), `FOOD.minimum` 50, `FARMING` et `FISHING` :
+    `mechanizationBase` 300, `mechanizationMax` 1 500, `maxMachinesPer1000` 100,
+    `curveExponent` 2, `FISHING.tileYield` 3. Avec elles, sur la carte de test, une
+    ville en terre cultivable (317 cases, fertilité 1 585) passe de 1 000 à
+    1 500 personnes en 386 tours et atteint exactement 1 585 en 1 389 tours ;
+    des nomades atteignent exactement 50 en 898 tours. Aucune n'est fixée (00-Game §10).
 
 ## 8. Mesures
 
@@ -400,12 +547,20 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
 - zones maritimes sur cette carte (graine 12345, 50 + 50 itérations, 155
   points) : environ 2,5 s, mesuré par `npm run viz:sea` le 22 octobre 2026.
   Une fois par partie ;
-- tour moyen sur 10 000 tours, 33 ordres `found_city` par tour (8 joueurs × 4,
-  plus un ordre malformé) : 2,4 µs. Chiffre sans valeur pour le vrai jeu : la
-  population de départ limite chaque joueur à 11 villes, donc 88 villes au
-  total, et presque tous les ordres sont refusés ;
+- tour moyen sur 10 000 tours, 8 joueurs, 33 ordres par tour (`found_city`, un
+  `set_farm_share` de temps en temps, un ordre malformé), étape de nourriture
+  comprise : 5,6 à 6,2 µs selon les mesures, 486 villes fondées (les joueurs simulés fondent quand leur
+  population atteint 600). Presque tous les ordres sont refusés, donc ce chiffre
+  mesure peu le vrai jeu. Avant le bloc population il valait 2,4 µs, avec 88
+  villes seulement : la population de départ limitait alors chaque joueur à 11
+  villes ;
+- étape de nourriture seule (`stepEconomy`) : 0,8 µs pour 8 joueurs, 10,6 µs pour
+  100 joueurs, soit environ 0,1 µs par joueur ;
+- 100 joueurs, un ordre par joueur et par tour (101 avec l'ordre malformé),
+  3 000 tours, 1 037 villes (10,4 par joueur) : tour moyen 44 à 45 µs, étape de
+  nourriture comprise ;
 - hash de l'état complet : 0,8 à 0,9 ms (`owner` et `tileCity`, 200 000 mots
-  chacun). Envoyé tous les N tours (§8 de 01-Architecture), c'est un coût
+  chacun ; la fertilité est dans le hash de la carte, calculé une fois). Envoyé tous les N tours (§8 de 01-Architecture), c'est un coût
   négligeable à côté des 100 ms d'un tour ;
 - fondation d'une ville, ordre complet (zones, routes, ports, groupes), avec les
   villes posées au plus serré (lignes tous les 9 cases, villes tous les 11, une
