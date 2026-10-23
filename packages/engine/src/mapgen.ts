@@ -99,7 +99,7 @@ function markShore(terrain: Uint8Array, width: number, height: number): void {
  * Bruit de valeur : une valeur pseudo-aléatoire 0 à 65 535 à chaque nœud d'une
  * grille de pas `cell`, interpolée entre les 4 nœuds qui entourent (x, y).
  */
-function valueNoise(x: number, y: number, cell: number, seed: number): number {
+export function valueNoise(x: number, y: number, cell: number, seed: number): number {
   const ix = Math.floor(x / cell);
   const iy = Math.floor(y / cell);
   const tx = smoothstep(Math.floor(((x - ix * cell) * ONE) / cell));

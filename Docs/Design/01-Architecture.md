@@ -208,8 +208,8 @@ Ordre prévu :
    leurs rayons, population, agriculture et pêche, extraction, usines (en
    partie), zones maritimes (en partie), capitale et routes (en partie). Le
    reste est dans ses points ouverts (§13).
-3. Moteur (`packages/engine`). **Fait, non commité : la partie qui ne dépend
-   pas des règles** — carte (`terrain`, `owner`), carte de test générée,
+3. Moteur (`packages/engine`). **Fait (commit `cff9c88`) : la partie qui ne
+   dépend pas des règles** — carte (`terrain`, `owner`), carte de test générée,
    générateur aléatoire seedé dans l'état, application d'un tour avec
    validation des ordres et liste des cases modifiées, hash de l'état, tests
    de déterminisme. Un seul ordre, `demo_claim`, exemple jetable. Détail :

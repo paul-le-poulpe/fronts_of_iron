@@ -34,6 +34,43 @@ export const TEST_MAP = {
 export type TestMapConfig = typeof TEST_MAP;
 
 /**
+ * Ressources naturelles (Docs/Design/00-Game.md §2). Présence sur une case :
+ * un bruit de valeur (0 à 65 535) au-dessus d'un seuil qui baisse avec
+ * l'altitude. Valeurs d'essai pour la visualisation (`npm run viz:iron`), pas
+ * des valeurs fixées.
+ */
+export const RESOURCES = {
+  iron: {
+    presence: {
+      /** Mélangé à la graine de la carte : le bruit du fer est indépendant de celui du relief. */
+      salt: 0x1f0e,
+      /** Octaves du bruit, comme TEST_MAP.octaves ; des cellules petites donnent des gisements en taches. */
+      octaves: [
+        { cell: 24, weight: 2 },
+        { cell: 8, weight: 1 },
+      ],
+      /** Seuil du bruit à l'altitude 0. */
+      threshold: 50000,
+      /** Baisse du seuil par niveau d'altitude (0 à 31). */
+      perAltitude: 300,
+      /** Altitude à partir de laquelle une case est une montagne. */
+      mountainAltitude: 14,
+      /** Baisse supplémentaire du seuil sur une montagne. */
+      mountainBonus: 5000,
+    },
+  },
+} as const;
+
+export interface ResourcePresenceConfig {
+  readonly salt: number;
+  readonly octaves: readonly { readonly cell: number; readonly weight: number }[];
+  readonly threshold: number;
+  readonly perAltitude: number;
+  readonly mountainAltitude: number;
+  readonly mountainBonus: number;
+}
+
+/**
  * Zones maritimes (Docs/Design/00-Game.md §2.1). `maxLandPercent`, `iterations`
  * et `finalIterations` viennent de l'auteur ; `spacing` et `minBasinArea` sont
  * des valeurs d'essai pour la visualisation, pas des valeurs fixées.

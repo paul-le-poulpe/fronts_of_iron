@@ -1,4 +1,12 @@
-export { MAX_PLAYERS, SEA_ZONES, TEST_MAP, type SeaZonesConfig, type TestMapConfig } from "./config.ts";
+export {
+  MAX_PLAYERS,
+  RESOURCES,
+  SEA_ZONES,
+  TEST_MAP,
+  type ResourcePresenceConfig,
+  type SeaZonesConfig,
+  type TestMapConfig,
+} from "./config.ts";
 export {
   altitude,
   forEachNeighbor,
@@ -10,6 +18,7 @@ export {
   type GameMap,
 } from "./map.ts";
 export { generateTestMap } from "./mapgen.ts";
+export { generateResourcePresence, presenceThreshold, resourceNoise } from "./resources.ts";
 export {
   computeSeaZones,
   generateSeaZones,

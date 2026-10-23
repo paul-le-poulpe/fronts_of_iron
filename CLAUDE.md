@@ -52,6 +52,9 @@ Depuis la racine du dépôt, après `npm install` :
 - `cd packages/engine && npm run viz:sea` — visualisation pas à pas des zones
   maritimes, écrite dans `packages/engine/out/sea-zones.html`. Réglages en
   argument : `npm run viz:sea -- --seed=7 --spacing=50`.
+- `cd packages/engine && npm run viz:iron` — carte de présence du fer, avec
+  des curseurs pour ses réglages, écrite dans `packages/engine/out/iron.html`.
+  Autre graine : `npm run viz:iron -- --seed=7`.
 - `cd worker && npx wrangler dev` — Worker et lobby en local sur
   `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
   (copier `worker/.dev.vars.example` ; fichier ignoré par git).

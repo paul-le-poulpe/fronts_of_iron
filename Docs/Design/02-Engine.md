@@ -15,11 +15,12 @@ tourner et tester la chaîne. Ce n'est pas une règle du jeu.
 
 | Fichier (`packages/engine/`) | Contenu |
 | --- | --- |
-| `src/config.ts` | tous les nombres réglables (carte de test, nombre maximal de joueurs) |
+| `src/config.ts` | tous les nombres réglables (carte de test, nombre maximal de joueurs, zones maritimes, présence des ressources) |
 | `src/bits.ts` | rotation de bits, étapes de MurmurHash3 |
 | `src/rng.ts` | générateur aléatoire xoshiro128** |
 | `src/map.ts` | bits du terrain, `GameMap`, parcours des 4 voisins |
-| `src/mapgen.ts` | `generateTestMap(seed)` |
+| `src/mapgen.ts` | `generateTestMap(seed)`, `valueNoise` |
+| `src/resources.ts` | présence des ressources naturelles (00-Game §2) : `generateResourcePresence`, `resourceNoise`, `presenceThreshold` |
 | `src/seazones.ts` | zones maritimes (00-Game §2.1) : `generateSeaZones`, `computeSeaZones`, `landMask` |
 | `src/state.ts` | `GameState`, `createGame`, `setOwner` |
 | `src/intents.ts` | types d'ordres, validation, `demo_claim` |
@@ -29,6 +30,7 @@ tourner et tester la chaîne. Ce n'est pas une règle du jeu.
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure |
 | `test/bench.ts` | mesure (`npm run bench`) |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
+| `test/iron-viz.ts` | visualisation de la présence du fer, avec des curseurs pour les réglages (`npm run viz:iron`) → `out/iron.html`, ignoré par git |
 
 Aucune dépendance à l'exécution. `typescript` et `@types/node` sont des
 dépendances de développement ; `@types/node` ne sert qu'aux tests :
@@ -82,6 +84,27 @@ point gagne.
 
 Usage prévu : les points sont calculés une fois à la création de la partie,
 après la carte. Ils ne sont pas encore dans `GameState` ni dans le hash.
+
+### Ressources naturelles
+
+`generateResourcePresence(map, seed, cfg)` : 1 si la ressource est sur la case,
+0 sinon ; jamais sur l'eau. Le bruit (`resourceNoise`) est le même bruit de
+valeur que le relief, sur ses propres octaves, avec une graine = graine de la
+carte mélangée à `cfg.salt` : il ne suit pas le relief. Une case de terre porte
+la ressource si son bruit dépasse :
+
+```
+seuil = threshold − altitude × perAltitude − (altitude ≥ mountainAltitude ? mountainBonus : 0)
+```
+
+Réglages du fer : `RESOURCES.iron.presence` dans `config.ts`, valeurs d'essai.
+Avec ces valeurs, graine 12345 : fer sur 8,6 % des cases hors montagne, 21,6 %
+des montagnes, 11,6 % de la terre. `npm run viz:iron` montre la carte et
+recalcule la répartition à chaque mouvement de curseur ; la page affiche les
+valeurs à recopier dans `config.ts`.
+
+Pas encore dans `GameMap` ni dans le hash (00-Game §12 : un bit par ressource
+et par case).
 
 ## 3. Le générateur aléatoire
 

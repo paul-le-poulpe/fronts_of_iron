@@ -580,9 +580,10 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
 
 - Les usines transforment des ressources naturelles en biens ou en armement
   (§8.3). Seuls biens décrits : les machines (§5).
-- Une usine est construite dans une ville. Nombre maximal de types d'usines
-  différents par ville : `FACTORY.maxTypesPerCity` (fichier de configuration),
-  1 pour commencer.
+- Une usine est construite dans une ville, par un ordre du joueur (§9).
+  **Pour l'instant, construire une usine est gratuit.** Nombre maximal de
+  types d'usines différents par ville : `FACTORY.maxTypesPerCity` (fichier de
+  configuration), 1 pour commencer.
 - Chaque type d'usine a un logo, affiché à côté de la ville où elle est
   construite.
 - **Niveau = ligne de production.** Un niveau d'usine est une ligne de
@@ -591,7 +592,8 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
 - Chaque ligne emploie un nombre fixe d'ouvriers (fichier de configuration).
 - Chaque ligne produit, par tour, une quantité propre au bien
   (`GOODS[b].productionPerLine`), et consomme la ressource indiquée pour ce
-  bien.
+  bien. **Pour commencer : chaque ligne remplie consomme 1 unité de fer par
+  tour**, quel que soit son bien ou son type d'armement.
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
   l'auteur, à titre d'illustration : une usine de tracteurs qui débloque les
@@ -608,6 +610,12 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
 ```
 production[b]     = somme, sur les lignes actives et remplies de b, de GOODS[b].productionPerLine
 consommation[r]   = somme, sur les biens b qui utilisent r, de production[b] × ratio de r pour b
+```
+
+Pour commencer, avec 1 fer par ligne :
+
+```
+consommation[fer] = nombre de lignes remplies (biens et armement)
 ```
 
 `consommation[r]` est la part « usines » de la demande d'extraction (§7).
@@ -744,6 +752,7 @@ fusils                       production de base de l'usine
 | --- | --- | --- | --- |
 | Fonder une ville | la case | §3.3 | retire le coût en population ; crée la ville ; recalcule les zones (§3.2) et les totaux (§6.1, §7) des joueurs touchés |
 | Régler la part fermiers / pêcheurs | la proportion | format à définir (§13) | change la répartition du §4 |
+| Construire une usine | la ville, le type d'usine (§8.4) | la ville appartient au joueur ; elle a moins de `FACTORY.maxTypesPerCity` types d'usines. Gratuit pour l'instant | crée une usine de ce type, sans ligne |
 | Créer une ligne de production | la ville (l'usine), le bien | maximum de lignes non atteint ; conditions et coût à définir (§8.2) | ajoute une ligne |
 | Régler les lignes actives | l'usine, le bien, le nombre de lignes actives | entre 0 et le nombre de lignes de ce bien dans cette usine | change les lignes qui reçoivent des ouvriers (§8.1) |
 | Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de remplissage (§4, §8.1) |
@@ -930,7 +939,12 @@ valider sur la visualisation.
   critère global possible, ne sont pas retenus pour l'instant.
 - Pêche : les cases de mer ont-elles un équivalent de la fertilité ? Les
   cases de mer d'un bassin sans zone maritime (§2.1, lac) comptent-elles ?
-- Fertilité et ressources sur la carte de test : comment elles sont générées.
+- Fertilité sur la carte de test : comment elle est générée.
+- Fer : choix validés par l'auteur, implémentés (02-Engine §2, `npm run
+  viz:iron`). Bruit du générateur de la carte, avec sa propre graine ; seuil
+  qui baisse avec l'altitude, plus une baisse supplémentaire sur les
+  montagnes (altitude ≥ un seuil). Réglages : valeurs d'essai, à choisir sur
+  la visualisation.
 
 **Extraction**
 - Mécanisation minière : le nombre d'engins par mineur dépend du nombre de
@@ -938,7 +952,8 @@ valider sur la visualisation.
   par les fermiers disponibles).
 
 **Usines**
-- Construction : coût, durée, ordre du joueur.
+- Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
+  plus tard.
 - Créer une ligne : coût, conditions (durée de fonctionnement d'une ligne du
   même bien ou d'un bien parent), arbre des biens « parents ».
 - Spécialisation : `x` % en moins par ligne, appliqué de façon composée
@@ -989,8 +1004,9 @@ valider sur la visualisation.
 - Ordre dans le tour : production, puis équipement des armées, puis réserve ?
 - Arbre (§8.4) : la ligne « plus haut dans l'arbre » qui débloque une branche
   doit-elle être dans la même usine, ou n'importe où dans la nation ?
-- Usine d'armement d'infanterie (§8.4) : ressource(s) consommée(s) par chaque
-  type ; durée de fonctionnement qui débloque la branche suivante (§8.2).
+- Usine d'armement d'infanterie (§8.4) : durée de fonctionnement qui
+  débloque la branche suivante (§8.2). Ressource consommée : 1 fer par ligne
+  pour commencer (§8).
 - Usage des cinq types d'infanterie par les armées : avec le module armée.
 
 **Taille des villes (affichage)**
