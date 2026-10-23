@@ -193,7 +193,7 @@ export function checkCityInvariants(state: GameState): void {
  * Petite carte fabriquée à la main : `kind` dit, pour chaque case, terre, océan
  * ou lac (eau sans bit océan) ; `iron` place du fer ; `fertility` donne la
  * fertilité d'une case de terre (par défaut FERTILITY.land partout sur la terre,
- * 0 sur l'eau). Permet de poser les villes à des distances exactes, sans
+ * 0 sur l'eau et sur le fer). Permet de poser les villes à des distances exactes, sans
  * dépendre du relief de la carte de test.
  */
 export function customMap(
@@ -211,7 +211,8 @@ export function customMap(
       const k = kind(x, y);
       terrain[y * width + x] = k === "land" ? 0x80 : k === "ocean" ? 0x20 : 0;
       if (iron(x, y)) resources[y * width + x] = RESOURCE_IRON;
-      if (k === "land") fertile[y * width + x] = fertility(x, y);
+      // Une case de fer n'est pas cultivable (00-Game §2).
+      if (k === "land") fertile[y * width + x] = iron(x, y) ? 0 : fertility(x, y);
     }
   }
   return { width, height, terrain, resources, fertility: fertile };

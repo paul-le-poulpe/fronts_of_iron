@@ -7,9 +7,10 @@
 // l'affichage seulement : pour chaque joueur, un seuil de distance au carré
 // commun à toutes ses villes, tel que le nombre de cases fertiles (ou d'eau) de
 // ses zones à moins de ce seuil de leur ville soit le plus proche possible de la
-// surface cultivée (ou pêchée). Les histogrammes sont tenus à jour case par case.
+// surface cultivée (ou pêchée, ou du nombre de cases de fer exploitées). Les
+// histogrammes sont tenus à jour case par case.
 
-import type { InitMessage, PlayerStats, TickMessage } from "./protocol.ts";
+import type { FactoryCatalog, HumanDetail, InitMessage, PlayerStats, TickMessage } from "./protocol.ts";
 
 export const TERRAIN_LAND = 0x80;
 export const TERRAIN_SHORE = 0x40;
@@ -23,6 +24,16 @@ export interface MirrorCity {
   readonly port: boolean;
   readonly group: number;
 }
+
+/** L'usine d'une ville, telle que la carte la dessine. */
+export interface FactoryMark {
+  /** Identifiant du type d'usine (`FactoryCatalog.factoryTypes[i].id`). */
+  readonly type: string;
+  readonly level: number;
+}
+
+/** Ce que comptent les rayons d'exploitation : les cases des champs, de la mer ou du fer. */
+type Kind = "farm" | "sea" | "iron";
 
 export class Mirror {
   readonly width: number;
@@ -47,10 +58,18 @@ export class Mirror {
   readonly farmThreshold: Int32Array;
   /** Même chose pour la pêche. */
   readonly seaThreshold: Int32Array;
+  /** Même chose pour les cases de fer exploitées (la mine). */
+  readonly ironThreshold: Int32Array;
+  readonly catalog: FactoryCatalog;
+  /** Usines de tous les joueurs, par identifiant de ville. */
+  factoryMarks = new Map<number, FactoryMark>();
+  /** Détail des usines du joueur humain, au dernier tour. */
+  detail: HumanDetail | null = null;
   /** Cases de côte la plus proche de chaque ville à port, par identifiant de ville ; la case de la ville si aucune. */
   private readonly portTiles = new Map<number, number>();
   private readonly farmHist: Int32Array[];
   private readonly seaHist: Int32Array[];
+  private readonly ironHist: Int32Array[];
   /** 1 sur les cases déjà dans la liste de repeinture du tour. */
   private readonly repaintMark: Uint8Array;
 
@@ -63,6 +82,7 @@ export class Mirror {
     this.playerCount = init.playerCount;
     this.expansionRadius = init.expansionRadius;
     this.controlRadius = init.controlRadius;
+    this.catalog = init.catalog;
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
     this.repaintMark = new Uint8Array(size);
@@ -70,8 +90,10 @@ export class Mirror {
     this.cityIds = Array.from({ length: init.playerCount }, () => []);
     this.farmHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
     this.seaHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
+    this.ironHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
     this.farmThreshold = new Int32Array(init.playerCount).fill(-1);
     this.seaThreshold = new Int32Array(init.playerCount).fill(-1);
+    this.ironThreshold = new Int32Array(init.playerCount).fill(-1);
   }
 
   /**
@@ -149,6 +171,14 @@ export class Mirror {
       this.portTiles.clear();
     }
     if (msg.roads !== null) this.roads = msg.roads;
+    if (msg.factoryMarks !== null) {
+      const f = msg.factoryMarks;
+      this.factoryMarks = new Map();
+      for (let i = 0; i < f.length; i += 3) {
+        this.factoryMarks.set(f[i]!, { type: this.catalog.factoryTypes[f[i + 1]!]!.id, level: f[i + 2]! });
+      }
+    }
+    this.detail = msg.human;
 
     const tiles = msg.tiles;
     for (let i = 0; i < tiles.length; i += 2) {
@@ -172,13 +202,18 @@ export class Mirror {
       const k = p.id - 1;
       const farm = pickThreshold(this.farmHist[k]!, p.cultivated);
       const sea = pickThreshold(this.seaHist[k]!, p.fished);
+      const iron = pickThreshold(this.ironHist[k]!, p.minedTiles);
       if (farm !== this.farmThreshold[k]) {
-        this.markDiscRing(k, this.farmThreshold[k]!, farm, true, mark);
+        this.markDiscRing(k, this.farmThreshold[k]!, farm, "farm", mark);
         this.farmThreshold[k] = farm;
       }
       if (sea !== this.seaThreshold[k]) {
-        this.markDiscRing(k, this.seaThreshold[k]!, sea, false, mark);
+        this.markDiscRing(k, this.seaThreshold[k]!, sea, "sea", mark);
         this.seaThreshold[k] = sea;
+      }
+      if (iron !== this.ironThreshold[k]) {
+        this.markDiscRing(k, this.ironThreshold[k]!, iron, "iron", mark);
+        this.ironThreshold[k] = iron;
       }
     }
 
@@ -186,23 +221,31 @@ export class Mirror {
     return repaint;
   }
 
+  /** Ce que la case compte pour les rayons d'exploitation : champs (terre fertile), mer, ou fer (terre qui porte du fer). */
+  private kindsOf(tile: number): Record<Kind, boolean> {
+    const land = this.isLand(tile);
+    return { farm: land && this.fertility[tile] !== 0, sea: !land, iron: land && (this.resources[tile]! & 1) !== 0 };
+  }
+
   /** Ajoute (`sign` = +1) ou retire (-1) la case de l'histogramme du joueur de la ville `cityId` (0 : rien). */
   private count(tile: number, cityId: number, sign: number): void {
     if (cityId === 0) return;
-    const land = this.isLand(tile);
-    if (land && this.fertility[tile] === 0) return;
+    const kinds = this.kindsOf(tile);
+    if (!kinds.farm && !kinds.sea && !kinds.iron) return;
     const city = this.cities[cityId - 1]!;
     const w = this.width;
     const dx = (tile % w) - (city.tile % w);
     const dy = Math.floor(tile / w) - Math.floor(city.tile / w);
     const d2 = dx * dx + dy * dy;
-    const hist = land ? this.farmHist : this.seaHist;
-    const bins = hist[0]!.length;
-    if (d2 < bins) hist[city.player - 1]![d2]! += sign;
+    if (d2 >= this.farmHist[0]!.length) return;
+    const player = city.player - 1;
+    if (kinds.farm) this.farmHist[player]![d2]! += sign;
+    if (kinds.sea) this.seaHist[player]![d2]! += sign;
+    if (kinds.iron) this.ironHist[player]![d2]! += sign;
   }
 
   /** Marque les cases des villes du joueur `k` dont la distance au carré est dans ]min(a, b), max(a, b)]. */
-  private markDiscRing(k: number, a: number, b: number, farm: boolean, mark: (t: number) => void): void {
+  private markDiscRing(k: number, a: number, b: number, kind: Kind, mark: (t: number) => void): void {
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
     const w = this.width;
@@ -219,8 +262,7 @@ export class Mirror {
           if (d2 <= lo || d2 > hi) continue;
           const t = y * w + x;
           if (this.tileCity[t] !== id) continue;
-          const land = this.isLand(t);
-          if (land ? !farm || this.fertility[t] === 0 : farm) continue;
+          if (!this.kindsOf(t)[kind]) continue;
           mark(t);
         }
       }
@@ -250,24 +292,25 @@ export class Mirror {
   }
 
   /** Recalcule les seuils depuis zéro à partir de `tileCity` (référence des tests). */
-  referenceThresholds(): { farm: number[]; sea: number[] } {
+  referenceThresholds(): { farm: number[]; sea: number[]; iron: number[] } {
     const bins = this.controlRadius * this.controlRadius + 1;
-    const farm = Array.from({ length: this.playerCount }, () => new Int32Array(bins));
-    const sea = Array.from({ length: this.playerCount }, () => new Int32Array(bins));
+    const make = (): Int32Array[] => Array.from({ length: this.playerCount }, () => new Int32Array(bins));
+    const hist: Record<Kind, Int32Array[]> = { farm: make(), sea: make(), iron: make() };
     const w = this.width;
     for (let t = 0; t < this.tileCity.length; t++) {
       const id = this.tileCity[t]!;
       if (id === 0) continue;
-      const land = this.isLand(t);
-      if (land && this.fertility[t] === 0) continue;
+      const kinds = this.kindsOf(t);
       const city = this.cities[id - 1]!;
       const dx = (t % w) - (city.tile % w);
       const dy = Math.floor(t / w) - Math.floor(city.tile / w);
-      (land ? farm : sea)[city.player - 1]![dx * dx + dy * dy]!++;
+      const d2 = dx * dx + dy * dy;
+      for (const kind of ["farm", "sea", "iron"] as const) if (kinds[kind]) hist[kind][city.player - 1]![d2]!++;
     }
     return {
-      farm: this.stats.map((p, k) => pickThreshold(farm[k]!, p.cultivated)),
-      sea: this.stats.map((p, k) => pickThreshold(sea[k]!, p.fished)),
+      farm: this.stats.map((p, k) => pickThreshold(hist.farm[k]!, p.cultivated)),
+      sea: this.stats.map((p, k) => pickThreshold(hist.sea[k]!, p.fished)),
+      iron: this.stats.map((p, k) => pickThreshold(hist.iron[k]!, p.minedTiles)),
     };
   }
 }

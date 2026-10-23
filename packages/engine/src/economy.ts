@@ -1,12 +1,25 @@
-// Population, agriculture et pêche (Docs/Design/00-Game.md §4, §6) : une étape par
-// tour et par joueur, après les ordres. Tout est en entiers (règle 2 du
+// Population, lignes de production, extraction du fer, agriculture et pêche
+// (Docs/Design/00-Game.md §4, §6, §7, §8) : une étape par tour et par joueur,
+// après les ordres. Tout est en entiers (règle 2 du
 // CLAUDE.md) : divisions par Math.floor, multiplications avant les divisions.
 //
 // Unités : la population est un nombre de personnes ; une surface est un nombre
 // de cases ; la mécanisation M est en millièmes de case par travailleur ; les
 // machines sont comptées pour 1 000 travailleurs (choix provisoires, 02-Engine §7).
 
-import { FARMING, FISHING, FOOD, POPULATION, type MechanizationConfig } from "./config.ts";
+import {
+  ARMAMENT,
+  FACTORY,
+  FACTORY_TYPES,
+  FARMING,
+  FISHING,
+  FOOD,
+  MINING,
+  POPULATION,
+  RESOURCES,
+  type MechanizationConfig,
+} from "./config.ts";
+import { ARMAMENT_IDS, armamentIndex, armamentReserveMax, goodIndex, productConfig } from "./factories.ts";
 import type { GameState, Player } from "./state.ts";
 
 /** Échelle de la courbe de mécanisation (00-Game §6.3) : x = 1 s'écrit S. */
@@ -97,19 +110,118 @@ export function requiredWorkers(cfg: MechanizationConfig, available: number, mac
   return Math.ceil((surfaceMax * MILLI) / mechanization(cfg, available, machines));
 }
 
+/** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
+const IRON = Object.keys(RESOURCES).indexOf("iron");
+const TRACTOR = goodIndex("tractor");
+const FISHING_BOAT = goodIndex("fishingBoat");
+const MINING_MACHINE = goodIndex("miningMachine");
+
+/** Cases de fer à exploiter pour extraire `demand` fer par tour (00-Game §7, `cases_exploitées`). */
+export function ironTilesFor(demand: number): number {
+  return Math.ceil(demand / RESOURCES.iron.capacityPerTile);
+}
+
 /**
- * Étape de nourriture et de population d'un joueur (00-Game §4, §4.1, §6) :
- * répartition, récolte, nourriture, croissance avec reste. Les résultats sont
- * calculés sur la population du début de l'étape, puis la croissance la change.
+ * Mineurs pour extraire `demand` fer par tour avec `machines` engins miniers (00-Game
+ * §7). Engins par mineur : rapportés aux mineurs qu'il faudrait sans engin, à
+ * `MINING.mechanizationBase` (choix provisoire, 02-Engine §7). Ne baisse jamais
+ * quand `demand` monte.
+ */
+export function minersFor(demand: number, machines: number): number {
+  const tiles = ironTilesFor(demand);
+  if (tiles === 0) return 0;
+  const withoutMachines = Math.ceil((tiles * MILLI) / MINING.mechanizationBase);
+  return Math.ceil((tiles * MILLI) / mechanization(MINING, withoutMachines, machines));
+}
+
+interface LineFill {
+  readonly workers: number;
+  readonly miners: number;
+  /** Fer demandé = extrait : celui des lignes remplies. */
+  readonly iron: number;
+}
+
+/**
+ * Remplissage des lignes (00-Game §4, étape 1) : usines dans l'ordre de priorité,
+ * groupes dans l'ordre de leur usine, lignes actives une par une. Une ligne reçoit
+ * `workersPerLine` ouvriers et les mineurs du fer qu'elle ajoute, en entier ou
+ * pas du tout ; la première ligne qui ne peut pas être remplie arrête tout le
+ * remplissage. Écrit `filled` dans les groupes.
+ */
+function fillLines(p: Player, machines: number): LineFill {
+  let workers = 0;
+  let miners = 0;
+  let iron = 0;
+  for (const f of p.factories) for (const g of f.groups) g.filled = 0;
+  const capacity = p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile;
+  scan: for (const f of p.factories) {
+    for (const g of f.groups) {
+      const ironPerLine = productConfig(g.good).ironPerLine;
+      for (let j = 0; j < g.active; j++) {
+        const demand = iron + ironPerLine;
+        if (demand > capacity) break scan;
+        const needed = minersFor(demand, machines);
+        if (workers + FACTORY.workersPerLine + needed > p.population) break scan;
+        workers += FACTORY.workersPerLine;
+        miners = needed;
+        iron = demand;
+        g.filled++;
+      }
+    }
+  }
+  return { workers, miners, iron };
+}
+
+/**
+ * Production des lignes remplies (00-Game §8, §8.3) : les biens vont dans
+ * `p.goods` (les machines du tour suivant), l'armement dans les réserves ; puis
+ * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
+ * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
+ */
+function produce(p: Player): void {
+  p.goods.fill(0);
+  for (const f of p.factories) {
+    for (const g of f.groups) {
+      if (g.filled === 0) continue;
+      const quantity = g.filled * productConfig(g.good).productionPerLine;
+      const a = armamentIndex(g.good);
+      if (a >= 0) p.armamentReserve[a] = p.armamentReserve[a]! + quantity;
+      else p.goods[goodIndex(g.good)] = p.goods[goodIndex(g.good)]! + quantity;
+    }
+    const tree = FACTORY_TYPES[f.type].tree;
+    for (let i = 0; i < tree.length; i++) {
+      if (f.groups.some((g) => g.good === tree[i]!.good && g.filled > 0)) {
+        f.progress[i] = Math.min(FACTORY.unlockTurns, f.progress[i]! + 1);
+      }
+    }
+  }
+  for (let a = 0; a < ARMAMENT_IDS.length; a++) {
+    const excess = Math.max(0, p.armamentReserve[a]! - armamentReserveMax(p, ARMAMENT_IDS[a]!));
+    if (excess === 0) {
+      p.armamentRemainder[a] = 0;
+      continue;
+    }
+    const total = p.armamentRemainder[a]! + excess * ARMAMENT.decayRate;
+    const lost = Math.floor(total / CURVE_SCALE);
+    p.armamentRemainder[a] = total - lost * CURVE_SCALE;
+    p.armamentReserve[a] = p.armamentReserve[a]! - lost;
+  }
+}
+
+/**
+ * Étape d'un joueur (00-Game §4, §4.1, §6, §7, §8) : remplissage des lignes, répartition du reste en fermiers et pêcheurs, récolte,
+ * production, nourriture, croissance avec reste. Les résultats sont calculés sur
+ * la population du début de l'étape, puis la croissance la change. Les machines
+ * utilisées sont celles produites au tour précédent (00-Game §12).
  */
 function stepPlayer(p: Player): void {
-  // Il n'y a pas encore de ligne de production : toute la population passe à
-  // l'étape 2 du §4, fermiers et pêcheurs selon le réglage du joueur.
-  const availableFarmers = Math.floor((p.population * p.farmPercent) / 100);
-  const availableFishers = p.population - availableFarmers;
-  // Pas encore d'usine : ni tracteur ni bateau de pêche. Les usines fourniront ces nombres.
-  const tractors = 0;
-  const fishingBoats = 0;
+  const tractors = p.goods[TRACTOR]!;
+  const fishingBoats = p.goods[FISHING_BOAT]!;
+  const lines = fillLines(p, p.goods[MINING_MACHINE]!);
+  // Ce qui reste après les ouvriers et les mineurs passe à l'étape 2 du §4, fermiers et pêcheurs selon le réglage du joueur.
+  const remaining = p.population - lines.workers - lines.miners;
+  const availableFarmers = Math.floor((remaining * p.farmPercent) / 100);
+  const availableFishers = remaining - availableFarmers;
   // Report (00-Game §4, étape 3) : les disponibles en trop d'un côté vont à l'autre,
   // jusqu'à ce qu'il soit plein. Le réglage ne joue que si la population manque.
   const spareFarmers = Math.max(0, availableFarmers - requiredWorkers(FARMING, availableFarmers, tractors, p.farmTiles));
@@ -121,12 +233,17 @@ function stepPlayer(p: Player): void {
 
   p.farmers = farm.workers;
   p.fishers = sea.workers;
-  p.idle = p.population - farm.workers - sea.workers;
+  p.idle = remaining - farm.workers - sea.workers;
   p.cultivated = farm.area;
   p.fished = sea.area;
   p.wheat = farm.yield;
   p.fish = sea.yield;
   p.food = Math.max(p.wheat + p.fish, FOOD.minimum);
+  p.factoryWorkers = lines.workers;
+  p.miners = lines.miners;
+  p.minedTiles = ironTilesFor(lines.iron);
+  p.ironExtracted = lines.iron;
+  produce(p);
 
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
   // fraction d'un tour à l'autre. Les négatifs sont arrondis vers zéro (Math.trunc).

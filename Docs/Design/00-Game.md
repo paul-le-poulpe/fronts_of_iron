@@ -51,7 +51,13 @@ Modules prévus :
 Le joueur agit par une barre de boutons. Pour l'instant, tous les boutons sont
 dans cette même barre :
 - créer une ville ;
-- ouvrir le panneau latéral des lignes de production (§8.1).
+- **inaugurer une usine** (décrit par l'auteur, 24 octobre 2026) : un clic
+  déplie vers le haut la liste des types d'usine de base (§8.4). Le choix d'un
+  type arme le bouton. Le joueur promène la souris : sur la zone (§3.2) d'une
+  de ses villes sans usine, un clic crée l'usine de ce type dans cette ville,
+  et le bouton est désarmé. Ordre « Construire une usine » (§9) ;
+- **production** : ouvre ou ferme le panneau latéral des lignes de production
+  (§8.1).
 
 Prévu : une section maritime, avec le bouton qui interdit des zones maritimes
 aux bateaux du joueur (§3.6). Cette section n'existe pas encore. Elle pourra
@@ -75,7 +81,8 @@ L'interface est définie par l'auteur ; elle n'est pas inventée.
 - **Fertilité** : chaque case a une fertilité entière de 0 à 10. **0 = case non
   cultivable** (eau, montagne, et d'autres terrains).
   **Pour commencer** (décision de l'auteur, 23 octobre 2026) : une montagne a
-  une fertilité de 0, toute autre case de terre a la même fertilité,
+  une fertilité de 0, une case qui porte du fer aussi (§7, décision du
+  24 octobre 2026), toute autre case de terre a la même fertilité,
   `FERTILITY.land` (§10). Montagne = altitude ≥ `TEST_MAP.mountainAltitude`,
   la même limite que pour le fer.
 - **Ressources naturelles** : pour chaque ressource de la liste (fichier de
@@ -390,7 +397,8 @@ dessinée plus grande, selon le niveau de l'usine (son nombre de lignes).
 - À chaque tour, la population totale est de nouveau répartie, dans cet
   ordre :
   1. les **lignes de production actives** (§8.1), **une par une, dans l'ordre
-     de priorité choisi par le joueur** : pour chaque ligne, d'abord ses
+     de priorité choisi par le joueur** (villes dans leur ordre, puis lignes
+     dans l'ordre de leur ville, §8.1) : pour chaque ligne, d'abord ses
      ouvriers d'usine, puis les mineurs qui extraient la ressource qu'elle
      consomme (§7). Une ligne n'est remplie que si les deux sont possibles en
      entier (assez de population, assez de capacité d'extraction). Sinon elle
@@ -398,8 +406,7 @@ dessinée plus grande, selon le niveau de l'usine (son nombre de lignes).
      le remplissage des lignes s'arrête là** : les lignes situées plus bas ne
      reçoivent personne non plus. Ainsi, on n'a jamais des usines
      pleines sans ressource, ni des ressources extraites sans usine pour les
-     transformer. Exception : une ligne d'armement suspendue (réserve pleine,
-     §8.3) est sautée, sans arrêter le remplissage des lignes suivantes ;
+     transformer ;
   2. le reste devient **fermiers** et **pêcheurs**, dans la proportion choisie
      par le joueur (un réglage ; l'interface sera définie par l'auteur) ;
   3. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
@@ -618,19 +625,37 @@ Pêche : même calcul, sur les cases de mer de la zone des villes à port, avec
 la surface pêchée (§6.4). Le disque est centré sur la ville, pas sur l'icône
 du port (§3.6).
 
+Fer (et toute ressource extraite, §7) : même calcul, sur les cases de fer des
+zones du joueur, avec `cases_exploitées`. Un rayon commun à toutes ses villes,
+agrandi jusqu'à ce que le nombre de cases de fer couvertes égale le nombre de
+cases exploitées.
+
 ## 7. Extraction des ressources naturelles
 
 Pour chaque ressource naturelle r autre que le blé et le poisson (le fer, et
-celles de la liste) :
+celles de la liste). **Même fonctionnement que l'agriculture et la pêche**
+(décision de l'auteur, 24 octobre 2026) : des cases (le gisement), des
+travailleurs (les mineurs) qui en exploitent une partie, et des machines (les
+engins miniers) qui réduisent le nombre de mineurs requis. Le moteur n'a besoin
+que du nombre de cases du gisement couvertes par les villes du joueur : c'est
+sa capacité maximale.
 
 ```
-capacité_max[r] = nombre de cases portant r dans les zones de toutes les
-                  villes du joueur × RESOURCES[r].capacityPerTile
-demande[r]      = consommation de r par les usines du joueur
+gisement[r]     = nombre de cases portant r dans les zones de toutes les
+                  villes du joueur
+rendement[r]    = RESOURCES[r].capacityPerTile     ressource par case et par tour
+capacité_max[r] = gisement[r] × rendement[r]
+demande[r]      = consommation de r par les lignes remplies (§8)
                 + quantité de r demandée à l'export par d'autres joueurs
 extraction[r]   = min(demande[r], capacité_max[r]), limitée par la population
-mineurs[r]      = extraction[r] / Mécanisation_minière
+cases_exploitées[r] = ceil(extraction[r] / rendement[r])
+mineurs[r]      = ceil(cases_exploitées[r] × 1000 / Mécanisation_minière)
 ```
+
+Pour le fer aujourd'hui : chaque ligne remplie consomme 1 fer par tour (§8).
+
+**Une case de fer n'est pas cultivable** (décision de l'auteur) : sa fertilité
+vaut 0 (§2).
 
 - **On n'extrait que ce qui est demandé.** Une ressource sans demande n'occupe
   personne.
@@ -647,7 +672,9 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
 - Les usines transforment des ressources naturelles en biens ou en armement
   (§8.3). Seuls biens décrits : les machines (§5).
 - Une usine est construite dans une ville, par un ordre du joueur (§9).
-  **Pour l'instant, construire une usine est gratuit.** Nombre maximal de
+  **Pour l'instant, construire une usine est gratuit.** **Une usine est créée
+  avec une ligne de son bien de base** (la racine de son arbre, §8.4), active,
+  sans second clic (décision de l'auteur, 24 octobre 2026). Nombre maximal de
   types d'usines différents par ville : `FACTORY.maxTypesPerCity` (fichier de
   configuration), 1 pour commencer.
 - Chaque type d'usine a un logo, affiché à côté de la ville où elle est
@@ -662,8 +689,8 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
   tour**, quel que soit son bien ou son type d'armement.
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
-  l'auteur, à titre d'illustration : une usine de tracteurs qui débloque les
-  engins miniers, ou les chars.
+  l'auteur : une usine d'engins miniers qui débloque les tracteurs, puis les
+  chars (§8.4).
 - **Spécialisation** : plus une usine a de lignes d'un même bien, moins chacune
   demande d'ouvriers. Pour commencer : `x` % d'ouvriers en moins par ligne
   supplémentaire du même bien dans la même usine, `x` =
@@ -695,16 +722,32 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   actives.
 - C'est ainsi que le joueur répartit sa population : en choisissant les lignes
   qui tournent.
-- Une ligne d'armement a un troisième statut, **suspendue**, fixé par le
-  moteur et non par le joueur, quand la réserve de son type est pleine (§8.3).
 - Les lignes identiques d'une usine (même bien) se règlent ensemble : un
   nombre de lignes actives, par exemple avec un curseur.
-- Un panneau latéral, que le joueur ouvre, liste toutes les lignes de son pays.
-  Son interface sera définie par l'auteur.
-- **Priorité** : le joueur fait glisser les lignes vers le haut ou le bas du
-  panneau. Les lignes sont remplies de haut en bas (§4). Inspiration : le
-  panneau de production de Hearts of Iron, sauf qu'on n'y affecte pas des
-  usines : on ouvre et ferme des lignes selon la population disponible.
+- **Panneau latéral** (décrit par l'auteur, 24 octobre 2026), ouvert par le
+  bouton « Production » (§1) :
+  - une section par ville qui a une usine : nom de la ville, type d'usine,
+    niveau (nombre de lignes) ;
+  - dans la section, une sous-section par bien produit : les lignes de ce bien,
+    leur nombre de lignes actives (curseur) ;
+  - les biens encore verrouillés de l'arbre de l'usine (§8.4) apparaissent
+    aussi, avec la progression de leur déblocage : **symbole du parent →
+    flèche qui se remplit → symbole du bien**. Le joueur voit ainsi quelle ligne
+    débloque quel bien. Les symboles n'existent pas encore : un texte
+    provisoire les remplace ;
+  - **une ligne de panneau par bien de l'arbre de l'usine** (précision de
+    l'auteur, 24 octobre 2026), dans l'un de trois états : en production
+    (curseur des lignes actives et bouton **+** qui ajoute une ligne de ce
+    bien), débloqué sans ligne (bouton **+** qui crée la première ligne), ou
+    verrouillé (symbole du parent → flèche → symbole du bien). Il n'y a pas de
+    bouton « Ajouter une ligne » séparé ni de liste de biens à choisir (§8.2).
+- **Priorité** : le joueur fait glisser **des villes entières** (une section
+  monte ou descend avec toutes ses lignes), et **des lignes au sein d'une
+  ville**. Les deux ne se mélangent pas : une ligne ne sort pas de la section
+  de sa ville. Ordre de remplissage (§4) : la première ville, ses lignes de
+  haut en bas, puis la ville suivante. Inspiration : le panneau de production
+  de Hearts of Iron, sauf qu'on n'y affecte pas des usines : on ouvre et ferme
+  des lignes selon la population disponible.
 - Une ligne qui ne peut pas être entièrement alimentée ne produit rien. Le
   joueur est censé le voir avant et ne pas l'activer ; les ouvriers restants
   vont aux champs.
@@ -719,6 +762,14 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   fonctionne depuis au moins `FACTORY.unlockTurns` tours (500 pour commencer,
   valeur donnée par l'auteur). La production de base de l'usine (la racine de
   l'arbre, par exemple les fusils) n'a pas de condition.
+- **Progression** (décision de l'auteur, 24 octobre 2026) : les tours se
+  cumulent. **C'est la production qui fait avancer le déblocage** : quand la
+  ligne du parent ne produit pas (désactivée, ou pas remplie faute de
+  population ou de fer), la progression s'arrête mais n'est pas perdue ; elle
+  reprend quand la ligne produit de nouveau. Lecture retenue : la progression
+  est propre à l'usine, et compte les tours où au moins une ligne du parent de
+  cette usine produit. Le panneau la montre par la flèche entre les deux
+  symboles (§8.1).
 - **Coût** : pas encore décidé. Piste de l'auteur : sacrifier un peu de
   population.
 
@@ -741,43 +792,28 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
 - Les armées prennent leur équipement dans cette réserve. L'équipement
   attribué à une armée sort de la réserve. Quand toutes les armées sont
   entièrement équipées, l'armement produit s'accumule dans la réserve.
-- **Limite théorique** : la réserve que le joueur aurait si toutes ses lignes
-  de ce type étaient actives, multipliée par `ARMAMENT.maxStockTurns` (une
-  seule valeur pour tous les types). Exemple de l'auteur : avec 1 char par
-  tour et 100 tours, la réserve garde au plus 100 chars, en plus de ceux des
-  armées.
+- **La production ne s'arrête jamais** (correction de l'auteur, 24 octobre
+  2026) : une ligne active et remplie produit à chaque tour, et ce qu'elle
+  produit entre dans la réserve. Il n'y a pas de ligne suspendue.
+- **Stock cible** : `ARMAMENT.maxStockTurns` tours de production (une seule
+  valeur pour tous les types). Exemple de l'auteur : avec 1 char par tour et
+  100 tours, le stock cible est de 100 chars, en plus de ceux des armées.
 
   ```
-  réserve_max[a] = nombre de lignes de a × ARMAMENT[a].productionPerLine
+  stock_cible[a] = nombre de lignes de a × ARMAMENT[a].productionPerLine
                    × ARMAMENT.maxStockTurns
   ```
 
-  Elle ne dépend pas des lignes qui produisent à ce tour : suspendre des
-  lignes (ci-dessous) ne la fait pas baisser.
-- **Statuts d'une ligne d'armement** :
-
-  | Statut | Cause | Reçoit des ouvriers (§4) |
-  | --- | --- | --- |
-  | active | réglage du joueur (§8.1) | oui |
-  | désactivée | réglage du joueur (§8.1) | non |
-  | suspendue | la réserve de son type a atteint `réserve_max` | non, et le remplissage continue avec les lignes suivantes |
-
-- **Suspension et reprise** : quand la réserve d'un type atteint
-  `réserve_max`, ses lignes actives sont suspendues. Elles redeviennent
-  actives quand la réserve passe sous `ARMAMENT.resumePercent` % de
-  `réserve_max` (80 pour commencer, valeur donnée par l'auteur). Entre les
-  deux, la réserve ne baisse que par la consommation des armées. L'écart
-  évite que les lignes changent de statut à chaque tour. Risque noté par
-  l'auteur : des sauts de population quand toutes les lignes d'un type
-  reprennent d'un coup. À vérifier au prototype.
-- **Baisse au-dessus de la limite** : seule la part de la réserve au-dessus de
-  `réserve_max` diminue, de `ARMAMENT.decayRate` par tour. Elle existe par
-  exemple quand le tour qui remplit la réserve la fait dépasser, ou quand la
-  limite baisse (lignes supprimées). La réserve n'est jamais ramenée d'un coup
-  à la limite.
+  Calculé sur toutes les lignes de ce type (la limite théorique décidée plus
+  tôt avec l'auteur) : désactiver des lignes ne le fait pas baisser.
+- **Déclin au-dessus du stock cible** : la réserve peut dépasser le stock
+  cible. À chaque tour, `ARMAMENT.decayRate` de la part au-dessus du stock
+  cible est supprimée. La réserve se stabilise donc là où le déclin égale la
+  production.
 
   ```
-  excès   = max(0, réserve − réserve_max)
+  réserve = réserve + production[a]
+  excès   = max(0, réserve − stock_cible)
   réserve = réserve − excès × ARMAMENT.decayRate / S     (reste : §13)
   ```
 - **Consommation** : une armée inactive consomme très peu d'armement ; une
@@ -793,11 +829,18 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   d'abord une ligne qui fonctionne plus haut dans l'arbre. Elle débloque les
   branches suivantes (forme du déblocage : §8.2).
 - La structure des arbres est dans le fichier de configuration.
-- Exemples de l'auteur :
-  - usine de tracteurs → chars ;
-  - usine de bateaux de pêche → navires de transport (§3.6) → navires de
-    guerre.
-- Les autres arbres (dont l'usine de bateaux) viendront plus tard.
+- **Types d'usine de base** (décrits par l'auteur, 24 octobre 2026) : ce sont
+  les choix du menu « Inaugurer une usine » (§1). Chacun commence par la racine
+  de son arbre :
+
+  | Type d'usine | Racine | Branches |
+  | --- | --- | --- |
+  | Armement d'infanterie | fusils | décrites ci-dessous |
+  | Bateaux de pêche | bateaux de pêche | plus tard ; exemple de l'auteur : navires de transport (§3.6), puis navires de guerre |
+  | Engins miniers | engins miniers | tracteurs ; plus tard, différents types de chars à partir des tracteurs |
+
+  Pour l'instant : l'arbre de l'infanterie, les bateaux de pêche seuls, et
+  engins miniers → tracteurs.
 
 **Usine d'armement d'infanterie** (premier arbre décrit) :
 
@@ -823,7 +866,7 @@ fusils                       production de base de l'usine
 | --- | --- | --- | --- |
 | Fonder une ville | la case | §3.3 | retire le coût en population ; crée la ville ; recalcule les zones (§3.2) et les totaux (§6.1, §7) des joueurs touchés |
 | Régler la part fermiers / pêcheurs | la proportion | format à définir (§13) | change la répartition du §4 |
-| Construire une usine | la ville, le type d'usine (§8.4) | la ville appartient au joueur ; elle a moins de `FACTORY.maxTypesPerCity` types d'usines. Gratuit pour l'instant | crée une usine de ce type, sans ligne |
+| Construire une usine | la ville, le type d'usine (§8.4) | la ville appartient au joueur ; elle a moins de `FACTORY.maxTypesPerCity` types d'usines. Gratuit pour l'instant | crée une usine de ce type, avec une ligne active de son bien de base |
 | Créer une ligne de production | la ville (l'usine), le bien | maximum de lignes non atteint ; conditions et coût à définir (§8.2) | ajoute une ligne |
 | Régler les lignes actives | l'usine, le bien, le nombre de lignes actives | entre 0 et le nombre de lignes de ce bien dans cette usine | change les lignes qui reçoivent des ouvriers (§8.1) |
 | Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de remplissage (§4, §8.1) |
@@ -862,7 +905,6 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio, `productionPerLine` (§8), nom du fichier d'icône |
 | `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, icône (§8.3) |
 | `ARMAMENT.maxStockTurns` | nombre de tours de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 100 évoqué par l'auteur, non fixé. Un tour dure 100 ms : 100 tours = 10 s de production |
-| `ARMAMENT.resumePercent` | sous ce pourcentage de `réserve_max`, les lignes suspendues reprennent (§8.3) ; 80 pour commencer, valeur donnée par l'auteur, à confirmer au prototype |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
 | `ARMAMENT` (noms) | noms proposés des cinq types d'infanterie : `rifle`, `machineGun`, `artillery`, `antiAirGun`, `antiTankGun` (§8.4) |
@@ -902,11 +944,30 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Zone d'exploitation : vert, puis texture de champs (§6.6). Zone de pêche :
   même calcul en mer, centré sur la ville (§6.6), dessinée par une texture
   propre à la pêche sur l'eau, comme les champs sur la terre. Elle ne doit pas
-  ressembler au territoire du joueur.
+  ressembler au territoire du joueur. Zone de mine (fer exploité) : même calcul
+  sur les cases de fer (§6.6), avec sa propre texture ; une texture provisoire
+  d'abord, l'auteur dessine la vraie.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
 - Diplomatie : petit menu à côté de la souris, au clic sur un joueur (§1).
+- **Barre d'informations en haut de l'écran** (décrite par l'auteur, 24 octobre
+  2026), compacte, sur une ligne. Quatre sections ; un clic sur une section
+  déplie son détail sous la barre, un second clic le replie :
+  1. **Population** : total, variation par tour, maximum. Détail : la part de
+     la population par occupation (ouvriers d'usine, mineurs, fermiers,
+     pêcheurs, inactifs), en rectangles proportionnels.
+  2. **Nourriture** : production par tour, surplus. Détail : agriculture et
+     pêche séparées ; plus tard importations et exportations.
+  3. **Ressources (flux)** : rien dans la barre, tout dans le détail. Barres
+     **vertes**, pour marquer un flux. Fer : barre pleine = capacité, vert =
+     production du tour, **gros trait noir** = production requise par les
+     lignes actives ; si la production est sous le requis, l'écart est
+     **rouge**. Machines (tracteurs, bateaux de pêche, engins miniers) :
+     valeur actuelle sur le nombre qu'il faudrait pour une mécanisation totale.
+  4. **Armement (stock)** : rien dans la barre, tout dans le détail. Une jauge
+     par type ; au-delà du stock cible (§8.3), la barre est **hachurée de
+     rouge** : c'est la zone où l'excès décline.
 - Logo de chaque usine à côté de sa ville (§8).
 - Taille des villes : la même pour toutes, plus grande pour une ville qui
   porte une usine, selon le niveau de l'usine (§3.7).
@@ -937,9 +998,8 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   avec `owner`, quand une ville est fondée ou disparaît.
 - L'armement est la seule quantité qui passe d'un tour à l'autre (§8.3) : la
   réserve de chaque type, par joueur, et l'équipement de chaque armée sont
-  dans l'état, donc dans le hash. De même le statut de chaque ligne
-  (suspendue ou non, §8.3), le type de chaque usine et les branches
-  débloquées de son arbre (§8.4).
+  dans l'état, donc dans le hash. De même le type de chaque usine, ses lignes
+  et la progression de déblocage de son arbre (§8.4).
 - Le réseau de routes terrestres se déduit des villes (§3.5) : il peut être
   gardé dans l'état ou recalculé, le résultat est le même. Il est recalculé
   quand une ville est fondée ou disparaît.
@@ -1002,7 +1062,8 @@ valider sur la visualisation.
 
 **Population**
 - Priorité d'un groupe de lignes identiques (§8.1) : le groupe a-t-il une seule
-  position dans le panneau ?
+  position dans la section de sa ville ? (Priorité décidée : villes entières,
+  puis lignes au sein d'une ville, §8.1.)
 - Mineurs pour l'export (§7) : remplis avec les lignes, après elles, ou après
   les champs ?
 - Le format du réglage fermiers / pêcheurs, et son effet tant qu'un joueur n'a
@@ -1039,15 +1100,19 @@ valider sur la visualisation.
 **Extraction**
 - Mécanisation minière : le nombre d'engins par mineur dépend du nombre de
   mineurs, qui dépend de la mécanisation (même boucle que celle évitée au §6.2
-  par les fermiers disponibles).
+  par les fermiers disponibles). Choix provisoire du moteur : les engins sont
+  rapportés aux mineurs qu'il faudrait sans engin (02-Engine §7).
+- Machines (tracteurs, bateaux de pêche, engins miniers) : choix provisoire du
+  moteur, celles produites au tour précédent (proposition du §12).
 
 **Usines**
 - Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
   plus tard.
 - Créer une ligne : coût (piste : de la population). Condition décidée :
   `FACTORY.unlockTurns` tours de fonctionnement d'une ligne du parent (§8.2).
-  Restent : tours consécutifs ou cumulés ; ligne du parent dans la même usine
-  ou n'importe où dans la nation ; une ligne suspendue (§8.3) compte-t-elle ?
+  Décidé : tours cumulés de production, la pause ne fait pas perdre la
+  progression (§8.2). Lecture retenue, à confirmer : ligne du parent dans la
+  même usine.
 - Spécialisation (reportée par l'auteur, prévue plus tard) : `x` % en moins
   par ligne, appliqué de façon composée (`(1 − x)ᵏ`) ou linéaire (`1 − k·x`) ;
   plancher éventuel.
@@ -1089,14 +1154,11 @@ valider sur la visualisation.
   mécanisation (même boucle qu'à l'extraction).
 
 **Armement**
-- Limite théorique (§8.3) : les lignes désactivées par le joueur comptent-elles
+- Stock cible (§8.3) : les lignes désactivées par le joueur comptent-elles
   dans « toutes les lignes » ? Écrit pour l'instant : toutes les lignes du
-  type, quel que soit leur statut.
-- Suspension et reprise : toutes les lignes d'un type changent de statut
-  ensemble, ce qui peut déplacer beaucoup de population en un tour. À
-  vérifier au prototype (crainte de l'auteur).
-- Arrondi de la baisse de l'excès en entiers : sans reste gardé d'un tour à
-  l'autre (comme la croissance, §4.1), un petit excès ne baisse jamais.
+  type, quel que soit leur état.
+- Arrondi du déclin de l'excès en entiers : le moteur garde un reste d'un tour
+  à l'autre, comme pour la croissance (§4.1, 02-Engine §7).
 - Ordre dans le tour : production, puis équipement des armées, puis réserve ?
 - Arbre (§8.4) : la ligne « plus haut dans l'arbre » qui débloque une branche
   doit-elle être dans la même usine, ou n'importe où dans la nation ?

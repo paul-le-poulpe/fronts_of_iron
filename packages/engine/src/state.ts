@@ -3,11 +3,36 @@
 // entièrement déduit des villes.
 
 import { isUint32 } from "./bits.ts";
-import { CITY, MAX_PLAYERS } from "./config.ts";
+import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
 import { hashMap } from "./hash.ts";
 import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { createRoadNetwork, type RoadNetwork } from "./roads.ts";
+
+/** Les lignes d'un même bien dans une usine, réglées ensemble (00-Game §8.1). */
+export interface LineGroup {
+  readonly good: ProductId;
+  /** Nombre de lignes de ce bien dans l'usine (≥ 1). */
+  lines: number;
+  /** Lignes activées par le joueur, 0 à `lines`. Les premières du groupe sont les actives. */
+  active: number;
+  /** Lignes remplies au dernier tour (ouvriers et mineurs reçus), 0 à `active`. */
+  filled: number;
+}
+
+/** L'usine d'une ville (00-Game §8). Une seule par ville : voir 02-Engine §7. */
+export interface Factory {
+  readonly city: number;
+  readonly type: FactoryTypeId;
+  /** Groupes de lignes, dans l'ordre de priorité du joueur au sein de la ville (00-Game §8.1). */
+  readonly groups: LineGroup[];
+  /**
+   * Un compteur par nœud de l'arbre du type d'usine (même indice) : tours où au moins
+   * une ligne de ce bien a été remplie dans cette usine, plafonné à `FACTORY.unlockTurns`
+   * (00-Game §8.2).
+   */
+  readonly progress: number[];
+}
 
 export interface Player {
   /** 1 à MAX_PLAYERS ; c'est la valeur écrite dans `owner`. */
@@ -47,6 +72,25 @@ export interface Player {
   fish: number;
   /** Nourriture du tour : max(blé + poisson, FOOD.minimum). */
   food: number;
+  /**
+   * Usines du joueur, une par ville. L'ordre du tableau est l'ordre de priorité des
+   * villes pour le remplissage des lignes (00-Game §4, §8.1).
+   */
+  readonly factories: Factory[];
+  /** Biens produits au dernier tour, dans l'ordre des clés de `GOODS` : les machines du tour suivant (00-Game §12). */
+  readonly goods: number[];
+  /** Réserve de chaque type d'armement, dans l'ordre des clés de `ARMAMENT.types` (00-Game §8.3). */
+  readonly armamentReserve: number[];
+  /** Reste de la baisse de l'excès de chaque réserve, sur l'échelle `CURVE_SCALE` (0 si pas d'excès). */
+  readonly armamentRemainder: number[];
+  /** Ouvriers des lignes remplies au dernier tour. */
+  factoryWorkers: number;
+  /** Mineurs de fer au dernier tour. */
+  miners: number;
+  /** Cases de fer exploitées au dernier tour (00-Game §7, `cases_exploitées`). */
+  minedTiles: number;
+  /** Fer extrait au dernier tour : celui des lignes remplies. */
+  ironExtracted: number;
 }
 
 export interface City {
@@ -125,6 +169,14 @@ export function createGame(setup: GameSetup): GameState {
       wheat: 0,
       fish: 0,
       food: 0,
+      factories: [],
+      goods: new Array<number>(Object.keys(GOODS).length).fill(0),
+      armamentReserve: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
+      armamentRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
+      factoryWorkers: 0,
+      miners: 0,
+      minedTiles: 0,
+      ironExtracted: 0,
     });
   }
   return {

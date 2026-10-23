@@ -7,6 +7,12 @@
   --accent: #2b5fa5;
   --ok: #2f8f46;
   --bad: #b3372c;
+  --stock: #2b6fd6;
+  --occ-factory: #6c5aa6;
+  --occ-mine: #9a5b2e;
+  --occ-farm: #c9a227;
+  --occ-fish: #3b8fc4;
+  --occ-idle: #a8aaa6;
   color-scheme: light;
 }
 
@@ -101,8 +107,9 @@ input[type="number"] {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
+    "info  info"
     "stage panel"
     "bar   panel";
 }
@@ -150,6 +157,61 @@ input[type="number"] {
   background: var(--card);
 }
 #bar button { padding: 8px 20px; font-weight: 600; }
+#bar { position: relative; z-index: 5; }
+
+/* Menu qui se déplie vers le haut : types d'usine (00-Game §1). */
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 260px;
+  padding: 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px #0003;
+}
+.menu button { text-align: left; font-weight: 400; padding: 6px 10px; }
+
+/* ---- panneau de production (00-Game §8.1) ---- */
+
+#prod {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(100%, 380px);
+  overflow-y: auto;
+  padding: 8px 12px 16px;
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  box-shadow: -4px 0 14px #0002;
+}
+#prod h2 { margin: 0 0 6px; font-size: 14px; }
+.prod-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.prod-cities { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
+.prod-reserves { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.fsec { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.fsec.dragging, .grow.dragging { opacity: 0.5; }
+.fsec.drop, .grow.drop { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
+.grow { display: grid; grid-template-columns: auto minmax(0, 7.5em) minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
+.grow .muted { grid-column: 2 / -1; margin-top: -4px; }
+.grow input[type="range"] { width: 100%; min-width: 0; }
+.sym { font-size: 12px; padding: 1px 4px; border: 1px dashed var(--muted); border-radius: 4px; white-space: nowrap; }
+.cnt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.locked { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; opacity: 0.85; }
+.arrow { position: relative; display: inline-block; width: 64px; height: 8px; border: 1px solid var(--muted); border-radius: 4px; overflow: hidden; }
+.arrow i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
+.unlocked { display: flex; align-items: center; gap: 6px; }
+.unlocked .plus { margin-left: auto; }
+button.plus { width: 22px; height: 22px; padding: 0; line-height: 1; font-weight: 600; }
 
 #panel {
   grid-area: panel;
@@ -190,11 +252,103 @@ tr.me td { font-weight: 600; }
 .dev .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .dev p { margin: 6px 0 0; }
 
+/* ---- barre d'informations (00-Game §11) ---- */
+
+#infobar { grid-area: info; position: relative; z-index: 20; }
+.ib-bar {
+  display: flex;
+  height: 30px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.ib-sec {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ib-sec:hover:not(:disabled) { background: #eef1f6; border-color: var(--line); }
+.ib-sec[aria-expanded="true"] { background: #e6ecf5; box-shadow: inset 0 -2px 0 var(--accent); }
+.ib-sec .ib-num, .ib-sec .pos, .ib-sec .neg, .ib-sec .zero { font-variant-numeric: tabular-nums; }
+.ib-name { color: var(--muted); }
+.ib-icon { color: var(--muted); font-size: 14px; }
+.ib-chev::before { content: "\25BE"; color: var(--muted); font-size: 11px; }
+.ib-sec[aria-expanded="true"] .ib-chev::before { content: "\25B4"; }
+.pos { color: var(--ok); font-weight: 600; }
+.neg { color: var(--bad); font-weight: 600; }
+.zero { color: var(--muted); }
+
+.ib-pane {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: min(640px, 100%);
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  padding: 8px 14px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 6px 16px #0003;
+}
+.ib-pane h3 { margin: 0 0 8px; font-size: 13px; }
+.ib-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 190px;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+.ib-row.occ { grid-template-columns: 12px 120px minmax(0, 1fr) 110px; }
+.ib-row.soon { opacity: 0.45; }
+.ib-label { white-space: nowrap; }
+.ib-value { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ib-row.occ .ib-value { min-width: 110px; }
+.ib-note, .ib-legend, .ib-consumption { margin: 10px 0 0; }
+.ib-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.ib-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+
+.ib-stack { display: flex; height: 18px; margin-bottom: 10px; border: 1px solid var(--line); background: #e9e7e1; }
+.ib-stack i { display: block; height: 100%; }
+
+/* Barres : vert = flux, bleu = stock (00-Game §11). */
+.ib-track { position: relative; height: 14px; border: 1px solid var(--line); background: #ece9e2; }
+.ib-track i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
+.ib-track .ib-fill { background: var(--ok); }
+.ib-track.stock .ib-fill { background: var(--stock); }
+.ib-track .ib-gap { background: var(--bad); }
+.ib-track .ib-hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
+.ib-track .ib-mark { top: -3px; bottom: -3px; background: #000; }
+.ib-track .ib-mark.thick { width: 4px; margin-left: -2px; }
+.ib-track .ib-mark.thin { width: 2px; margin-left: -1px; background: var(--fg); }
+.ib-track:not(.flow) .ib-gap, .ib-track.flow .ib-hatch { display: none; }
+.ib-track.stock .ib-gap { display: none; }
+
+.ib-key { display: inline-block; width: 12px; height: 10px; border: 1px solid #0003; }
+.ib-key.flow { background: var(--ok); }
+.ib-key.stock { background: var(--stock); }
+.ib-key.gap { background: var(--bad); }
+.ib-key.req { width: 4px; height: 14px; background: #000; border: 0; }
+.ib-key.target { width: 2px; height: 14px; background: var(--fg); border: 0; }
+.ib-key.hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
+
 @media (max-width: 760px) {
   #game {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto 40vh;
-    grid-template-areas: "stage" "bar" "panel";
+    grid-template-rows: auto minmax(0, 1fr) auto 40vh;
+    grid-template-areas: "info" "stage" "bar" "panel";
   }
   #panel { border-left: 0; border-top: 1px solid var(--line); }
 }

@@ -33,8 +33,11 @@
       </main>
 
       <div id="game" hidden>
+        <nav id="infobar" aria-label="Informations"></nav>
+
         <section id="stage">
           <canvas id="map"></canvas>
+          <aside id="prod" hidden aria-label="Production"></aside>
           <div id="toast" hidden></div>
         </section>
 
@@ -95,6 +98,11 @@
 
         <footer id="bar">
           <button id="found" type="button" aria-pressed="false">Créer une ville</button>
+          <div class="menu-wrap">
+            <button id="factory" type="button" aria-pressed="false" aria-haspopup="true">Inaugurer une usine</button>
+            <div id="factory-menu" class="menu" hidden></div>
+          </div>
+          <button id="production" type="button" aria-pressed="false">Production</button>
           <span id="bar-hint" class="muted"></span>
         </footer>
       </div>

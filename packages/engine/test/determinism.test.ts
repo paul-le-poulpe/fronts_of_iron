@@ -14,6 +14,7 @@ interface RunOutput {
   changedTiles: number;
   cities: number;
   starvingPlayerTurns: number;
+  filledLinePlayerTurns: number;
   totalPopulation: number;
 }
 
@@ -34,6 +35,9 @@ describe("déterminisme", () => {
     // La croissance et la baisse de population (surplus négatif) sont jouées, pas seulement des fondations.
     assert.ok(a.totalPopulation > 0, "aucune population à la fin : la croissance n'est pas testée");
     assert.ok(a.starvingPlayerTurns > 1000, `seulement ${a.starvingPlayerTurns} tours-joueurs de baisse : le surplus négatif n'est pas testé`);
+    // Les usines sont jouées : des lignes remplies, donc des ouvriers, des mineurs et du fer.
+    assert.ok(a.filledLinePlayerTurns > 1000, `seulement ${a.filledLinePlayerTurns} tours-joueurs avec une ligne remplie : les usines ne sont pas testées`);
+    assert.equal(b.filledLinePlayerTurns, a.filledLinePlayerTurns);
     assert.equal(a.cities, b.cities);
     assert.equal(b.starvingPlayerTurns, a.starvingPlayerTurns);
     assert.equal(b.totalPopulation, a.totalPopulation);

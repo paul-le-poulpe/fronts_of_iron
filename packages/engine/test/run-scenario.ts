@@ -1,6 +1,6 @@
 // Lancé dans un processus séparé par determinism.test.ts.
 // Usage : node test/run-scenario.ts <tours>
-// Écrit sur la sortie standard le JSON { finalHash, checkpoints, changedTiles, cities, starvingPlayerTurns, totalPopulation }.
+// Écrit sur la sortie standard le JSON { finalHash, checkpoints, changedTiles, cities, starvingPlayerTurns, filledLinePlayerTurns, totalPopulation }.
 
 import { DEFAULT_SCENARIO, runScenario } from "./scenario.ts";
 
@@ -13,6 +13,7 @@ process.stdout.write(
     changedTiles: r.changedTiles,
     cities: r.cities,
     starvingPlayerTurns: r.starvingPlayerTurns,
+    filledLinePlayerTurns: r.filledLinePlayerTurns,
     totalPopulation: r.totalPopulation,
   }),
 );

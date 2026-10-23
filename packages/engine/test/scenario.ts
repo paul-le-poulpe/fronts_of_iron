@@ -10,13 +10,16 @@ import {
   CITY,
   createGame,
   createRng,
+  FACTORY_TYPE_IDS,
   generateTestMap,
   hashState,
   nextInt,
   POPULATION,
+  PRODUCT_IDS,
   type GameMap,
   type GameState,
   type Intent,
+  type Rng,
 } from "../src/index.ts";
 
 export interface ScenarioOptions {
@@ -62,6 +65,8 @@ export interface ScenarioResult {
   starvingPlayerTurns: number;
   /** Population de tous les joueurs à la fin. */
   totalPopulation: number;
+  /** Nombre de couples (joueur, tour) où au moins une ligne de production était remplie : les usines sont jouées. */
+  filledLinePlayerTurns: number;
   /** Temps total passé dans applyTurn, en ms. */
   applyMs: number;
 }
@@ -91,6 +96,25 @@ const GARBAGE: readonly unknown[] = [
   { type: "set_farm_share", player: "1", percent: 50 },
 ];
 
+/** Un ordre d'usine tiré au hasard sur l'une des villes `mine` du joueur `player` ; beaucoup sont invalides (ville sans usine, bien verrouillé…). */
+function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent {
+  const city = mine[nextInt(bot, mine.length)]!;
+  const good = PRODUCT_IDS[nextInt(bot, PRODUCT_IDS.length)]!;
+  switch (nextInt(bot, 5)) {
+    case 0:
+      return { type: "build_factory", player, city, factoryType: FACTORY_TYPE_IDS[nextInt(bot, FACTORY_TYPE_IDS.length)]! };
+    case 1:
+    case 2:
+      return { type: "create_line", player, city, good };
+    case 3:
+      return { type: "set_active_lines", player, city, good, count: nextInt(bot, 4) };
+    default:
+      return nextInt(bot, 2) === 0
+        ? { type: "set_city_priority", player, city, position: nextInt(bot, 3) }
+        : { type: "set_line_priority", player, city, good, position: nextInt(bot, 3) };
+  }
+}
+
 export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   mapSeed: 12345,
   gameSeed: 777,
@@ -103,6 +127,8 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
 
 /** Un joueur sur `FARM_SHARE_ONE_IN` envoie un `set_farm_share` à chaque tour, en moyenne. */
 const FARM_SHARE_ONE_IN = 150;
+/** Un joueur qui a une ville envoie un ordre d'usine (construire, créer, régler, priorité) à un tour sur `FACTORY_ORDER_ONE_IN`. */
+const FACTORY_ORDER_ONE_IN = 25;
 
 export function runScenario(opts: ScenarioOptions, now: () => number = () => 0): ScenarioResult {
   const map = opts.map ?? generateTestMap(opts.mapSeed);
@@ -113,6 +139,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
   let changedTiles = 0;
   let applyMs = 0;
   let starvingPlayerTurns = 0;
+  let filledLinePlayerTurns = 0;
   // Un joueur sans ville tire une case de toute la carte ; sinon, une case dans
   // un carré autour d'une de ses villes, un peu plus large que le rayon
   // d'expansion : une partie des ordres tombe hors de portée.
@@ -140,6 +167,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
       if (nextInt(bot, FARM_SHARE_ONE_IN) === 0) {
         intents.push({ type: "set_farm_share", player: p, percent: 50 + nextInt(bot, 51) });
       }
+      if (mine.length > 0 && nextInt(bot, FACTORY_ORDER_ONE_IN) === 0) {
+        intents.push(factoryOrder(bot, p, mine));
+      }
     }
     intents.push(GARBAGE[turn % GARBAGE.length] as Intent);
 
@@ -148,7 +178,10 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     applyMs += now() - t0;
 
     changedTiles += changed.length;
-    for (const p of state.players) if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
+    for (const p of state.players) {
+      if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
+      if (p.factories.some((f) => f.groups.some((g) => g.filled > 0))) filledLinePlayerTurns++;
+    }
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));
   }
@@ -159,6 +192,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     changedTiles,
     cities: state.cities.length,
     starvingPlayerTurns,
+    filledLinePlayerTurns,
     totalPopulation: state.players.reduce((sum, p) => sum + p.population, 0),
     applyMs,
   };

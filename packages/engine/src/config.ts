@@ -64,6 +64,11 @@ export const RESOURCES = {
       /** Baisse supplémentaire du seuil sur une montagne. */
       mountainBonus: 5000,
     },
+    /**
+     * Capacité d'extraction d'une case de fer, en fer par tour (00-Game §7). Valeur
+     * d'essai : une case nourrit une ligne de production (1 fer par ligne et par tour).
+     */
+    capacityPerTile: 1,
   },
 } as const;
 
@@ -189,3 +194,105 @@ export const FISHING: MechanizationConfig & { readonly tileYield: number; readon
   /** Rendement d'une case d'eau avec le maximum de bateaux (≥ tileYield). */
   tileYieldMax: 6,
 };
+
+/**
+ * Extraction (00-Game §7) : engins miniers. Les mineurs travaillent des cases de
+ * gisement ; mécanisation en millièmes de case par mineur. Valeurs d'essai, pas
+ * des valeurs fixées. Sans engin, un mineur exploite 0,1 case (10 mineurs par
+ * case) ; à pleine mécanisation, 0,5 case.
+ */
+export const MINING: MechanizationConfig = {
+  mechanizationBase: 100,
+  mechanizationMax: 500,
+  maxMachinesPer1000: 100,
+  curveExponent: 2,
+};
+
+/** Réglages communs à un bien ou à un type d'armement (00-Game §8, §8.3). */
+export interface ProductConfig {
+  /** Quantité produite par tour par une ligne remplie. */
+  readonly productionPerLine: number;
+  /** Fer consommé par tour par une ligne remplie : 1 pour commencer, quel que soit le bien (00-Game §8). */
+  readonly ironPerLine: number;
+}
+
+/**
+ * Biens : des machines, un flux consommé dans le tour suivant (00-Game §5, §12).
+ * L'ordre des clés est l'ordre des cases de `Player.goods`. Valeurs d'essai :
+ * 30 machines par tour et par ligne (à 1 000 fermiers, `FARMING.maxMachinesPer1000`
+ * = 100 demande 100 tracteurs pour la pleine mécanisation).
+ */
+export const GOODS = {
+  tractor: { productionPerLine: 30, ironPerLine: 1 },
+  fishingBoat: { productionPerLine: 30, ironPerLine: 1 },
+  miningMachine: { productionPerLine: 30, ironPerLine: 1 },
+} as const satisfies Record<string, ProductConfig>;
+
+/**
+ * Armement (00-Game §8.3). La production ne s'arrête jamais ; l'excès au-dessus du
+ * stock cible décline. `maxStockTurns` : 100 évoqué par l'auteur ; `decayRate` :
+ * valeur d'essai.
+ * L'ordre des clés de `types` est l'ordre des cases de `Player.armamentReserve`.
+ * `productionPerLine` : valeurs d'essai.
+ */
+export const ARMAMENT = {
+  /** Stock cible : ce nombre de tours de production (même valeur pour tous les types). */
+  maxStockTurns: 100,
+  /** Part de l'excès au-dessus du stock cible supprimée par tour, sur l'échelle S = 10 000 (1 %). */
+  decayRate: 100,
+  types: {
+    rifle: { productionPerLine: 10, ironPerLine: 1 },
+    machineGun: { productionPerLine: 4, ironPerLine: 1 },
+    artillery: { productionPerLine: 2, ironPerLine: 1 },
+    antiAirGun: { productionPerLine: 1, ironPerLine: 1 },
+    antiTankGun: { productionPerLine: 1, ironPerLine: 1 },
+  },
+} as const satisfies { maxStockTurns: number; decayRate: number; types: Record<string, ProductConfig> };
+
+export type GoodId = keyof typeof GOODS;
+export type ArmamentId = keyof typeof ARMAMENT.types;
+/** Ce qu'une ligne produit : un bien ou un type d'armement. */
+export type ProductId = GoodId | ArmamentId;
+
+/** Usines (00-Game §8). `unlockTurns` et `maxTypesPerCity` : valeurs données par l'auteur. `workersPerLine` : valeur d'essai. */
+export const FACTORY = {
+  /** Ouvriers d'une ligne, un seul nombre pour tous les biens (00-Game §13). */
+  workersPerLine: 50,
+  /** Tours de fonctionnement d'une ligne du parent avant de pouvoir créer une ligne de l'enfant (00-Game §8.2). */
+  unlockTurns: 500,
+  /** Types d'usines différents par ville (00-Game §8). */
+  maxTypesPerCity: 1,
+} as const;
+
+/** Un nœud de l'arbre de production d'un type d'usine : le parent doit fonctionner pour débloquer le bien. */
+export interface FactoryNode {
+  readonly good: ProductId;
+  readonly parent: ProductId | null;
+}
+
+export interface FactoryTypeConfig {
+  /** Racine en premier, chaque parent avant ses enfants. L'indice d'un nœud est sa case dans `Factory.progress`. */
+  readonly tree: readonly FactoryNode[];
+}
+
+/** Types d'usine de base et leur arbre (00-Game §8.4). */
+export const FACTORY_TYPES = {
+  infantryArmament: {
+    tree: [
+      { good: "rifle", parent: null },
+      { good: "machineGun", parent: "rifle" },
+      { good: "antiAirGun", parent: "machineGun" },
+      { good: "artillery", parent: "rifle" },
+      { good: "antiTankGun", parent: "artillery" },
+    ],
+  },
+  fishingBoats: { tree: [{ good: "fishingBoat", parent: null }] },
+  miningMachines: {
+    tree: [
+      { good: "miningMachine", parent: null },
+      { good: "tractor", parent: "miningMachine" },
+    ],
+  },
+} as const satisfies Record<string, FactoryTypeConfig>;
+
+export type FactoryTypeId = keyof typeof FACTORY_TYPES;

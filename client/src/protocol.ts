@@ -9,7 +9,12 @@ export const HUMAN = 1;
 /** Ordre du joueur humain. Le champ `player` est écrit par le Worker (règle 4 du CLAUDE.md). */
 export type HumanOrder =
   | { readonly type: "found_city"; readonly tile: number }
-  | { readonly type: "set_farm_share"; readonly percent: number };
+  | { readonly type: "set_farm_share"; readonly percent: number }
+  | { readonly type: "build_factory"; readonly city: number; readonly factoryType: string }
+  | { readonly type: "create_line"; readonly city: number; readonly good: string }
+  | { readonly type: "set_active_lines"; readonly city: number; readonly good: string; readonly count: number }
+  | { readonly type: "set_city_priority"; readonly city: number; readonly position: number }
+  | { readonly type: "set_line_priority"; readonly city: number; readonly good: string; readonly position: number };
 
 // ---- page → Worker ----
 
@@ -41,6 +46,65 @@ export interface InitMessage {
   readonly expansionRadius: number;
   readonly controlRadius: number;
   readonly stepMs: number;
+  readonly catalog: FactoryCatalog;
+}
+
+/** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */
+export interface FactoryCatalog {
+  /** Dans l'ordre du moteur : l'indice d'un type est celui de `factoryMarks`. */
+  readonly factoryTypes: readonly { readonly id: string; readonly tree: readonly { readonly good: string; readonly parent: string | null }[] }[];
+  readonly unlockTurns: number;
+  readonly workersPerLine: number;
+  /** Biens, dans l'ordre de `HumanDetail.goods`. */
+  readonly goodIds: readonly string[];
+  /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
+  readonly armamentIds: readonly string[];
+  readonly productionPerLine: Readonly<Record<string, number>>;
+  /** Réglages que la barre d'informations lit (envoyés une fois). */
+  readonly economy: EconomyInfo;
+}
+
+/** Réglages du moteur dont la barre d'informations tire des rapports (maximum de population, mécanisation totale, déclin du stock). */
+export interface EconomyInfo {
+  /** `POPULATION.foodPerHead`. */
+  readonly foodPerHead: number;
+  /** `FOOD.minimum`. */
+  readonly foodMinimum: number;
+  /** `maxMachinesPer1000` de chaque bien-machine (clé = identifiant du bien). */
+  readonly machinesPer1000: Readonly<Record<string, number>>;
+  /** Part de l'excès d'armement supprimée par tour, en pourcent (`ARMAMENT.decayRate` / 100). */
+  readonly armamentDecayPercent: number;
+}
+
+/** Un groupe de lignes du même bien dans une usine du joueur. */
+export interface LineGroupView {
+  readonly good: string;
+  readonly lines: number;
+  readonly active: number;
+  readonly filled: number;
+}
+
+export interface FactoryView {
+  readonly city: number;
+  readonly type: string;
+  /** Nombre total de lignes. */
+  readonly level: number;
+  readonly groups: readonly LineGroupView[];
+  /** Un compteur de déblocage par nœud de l'arbre du type (même indice que `FactoryCatalog.factoryTypes[...].tree`). */
+  readonly progress: readonly number[];
+}
+
+/** Ce dont le panneau de production a besoin, pour le joueur humain seulement. */
+export interface HumanDetail {
+  /** Dans l'ordre de priorité des villes. */
+  readonly factories: readonly FactoryView[];
+  readonly goods: readonly number[];
+  readonly reserve: readonly number[];
+  readonly reserveMax: readonly number[];
+  /** Capacité d'extraction de fer par tour (cases de fer des zones × capacité par case). */
+  readonly ironCapacity: number;
+  /** Fer demandé par toutes les lignes actives, remplies ou non : Σ (lignes actives × fer par ligne). */
+  readonly ironRequired: number;
 }
 
 export interface PlayerStats {
@@ -63,6 +127,11 @@ export interface PlayerStats {
   readonly cities: number;
   /** Coût en population de la prochaine ville (00-Game §3.3). */
   readonly foundingCost: number;
+  /** Ouvriers des lignes remplies, mineurs, cases de fer exploitées, fer extrait (dernier tour). */
+  readonly factoryWorkers: number;
+  readonly miners: number;
+  readonly minedTiles: number;
+  readonly ironExtracted: number;
 }
 
 export interface OrderResult {
@@ -85,6 +154,13 @@ export interface TickMessage {
   readonly cities: Uint32Array | null;
   /** Routes : paires d'identifiants de villes. Même condition que `cities`. */
   readonly roads: Uint16Array | null;
+  /**
+   * Usines de tous les joueurs, 3 nombres chacune [ville, indice du type, niveau]. Présente
+   * seulement si elle a changé depuis le tour précédent ; sinon `null`.
+   */
+  readonly factoryMarks: Uint32Array | null;
+  /** Le détail des usines du joueur humain, à chaque tour. */
+  readonly human: HumanDetail;
   /** Statistiques des joueurs, dans l'ordre des identifiants. */
   readonly players: readonly PlayerStats[];
   /** Résultat des ordres humains appliqués pendant ce tour. */

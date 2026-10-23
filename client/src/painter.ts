@@ -1,7 +1,7 @@
 // Peinture de la carte, une couleur par case, dans un tampon RGBA de
 // largeur × hauteur pixels. Reprend les idées de packages/engine/test/cities-viz.ts
 // (relief, teinte du joueur sur la terre seulement, limites de zones, champs et
-// zone de pêche à textures distinctes de la couleur du joueur : 00-Game §11).
+// zone de pêche, mine, à textures distinctes de la couleur du joueur : 00-Game §11).
 // Pas d'accès au DOM : la page fabrique l'`ImageData` sur le même tampon.
 //
 // L'ordre de peinture d'une case est celui de la visualisation : relief (ou fer),
@@ -36,6 +36,9 @@ const FIELD_DARK: Rgb = [96, 152, 52];
 const FIELD_LIGHT: Rgb = [128, 190, 72];
 const FISH_DARK: Rgb = [138, 184, 224];
 const FISH_LIGHT: Rgb = [225, 240, 250];
+// Texture provisoire de la mine (fer exploité) : bandes diagonales sombres et orangées.
+const MINE_DARK: Rgb = [58, 52, 48];
+const MINE_LIGHT: Rgb = [214, 126, 46];
 const EDGE_SAME: Rgb = [255, 255, 255];
 const EDGE_OTHER: Rgb = [29, 35, 43];
 
@@ -104,13 +107,19 @@ export class Painter {
         bl = Math.round(bl * 0.55 + pc[2] * 0.45);
       }
       // Champs (terre fertile) et zone de pêche (eau) à moins du rayon d'exploitation du joueur.
-      if (!onLand || m.fertility[t] !== 0) {
+      // Mine : cases de fer à moins du rayon d'exploitation du fer (texture propre, provisoire : 00-Game §11).
+      const mine = onLand && (m.resources[t]! & 1) !== 0;
+      if (!onLand || m.fertility[t] !== 0 || mine) {
         const ct = city.tile;
         const dx = x - (ct % w);
         const dy = y - (((ct - (ct % w)) / w) | 0);
-        const thr = (onLand ? m.farmThreshold : m.seaThreshold)[city.player - 1]!;
+        const thr = (mine ? m.ironThreshold : onLand ? m.farmThreshold : m.seaThreshold)[city.player - 1]!;
         if (dx * dx + dy * dy <= thr) {
-          const tex = onLand ? (y % 2 === 0 ? FIELD_DARK : FIELD_LIGHT) : (x + 2 * y) % 4 === 0 ? FISH_LIGHT : FISH_DARK;
+          const tex = mine
+            ? (x + y) % 4 < 2 ? MINE_DARK : MINE_LIGHT
+            : onLand
+              ? y % 2 === 0 ? FIELD_DARK : FIELD_LIGHT
+              : (x + 2 * y) % 4 === 0 ? FISH_LIGHT : FISH_DARK;
           r = tex[0];
           g = tex[1];
           bl = tex[2];

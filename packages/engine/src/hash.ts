@@ -4,6 +4,7 @@
 // tableaux par une vue Uint32Array, dont l'ordre des octets dépend de la machine.
 
 import { fmix32, mixWord } from "./bits.ts";
+import { factoryTypeIndex, productIndex } from "./factories.ts";
 import type { GameMap } from "./map.ts";
 import type { GameState } from "./state.ts";
 
@@ -29,8 +30,9 @@ export function hashMap(map: GameMap): number {
 /**
  * Couvre : carte (par mapHash), numéro de tour, générateur aléatoire, joueurs
  * (cases, population, capitale, villes, cases de ressources, reste de
- * croissance, répartition fermiers / pêcheurs, totaux de fertilité et résultats
- * du dernier tour), villes (joueur, case, port, groupe), routes, propriétaires,
+ * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
+ * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
+ * déblocage, biens produits, réserves d'armement), villes (joueur, case, port, groupe), routes, propriétaires,
  * ville de chaque case.
  */
 export function hashState(state: GameState): number {
@@ -63,6 +65,32 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.wheat);
     h = mixWord(h, p.fish);
     h = mixWord(h, p.food);
+    h = mixWord(h, p.factoryWorkers);
+    h = mixWord(h, p.miners);
+    h = mixWord(h, p.minedTiles);
+    h = mixWord(h, p.ironExtracted);
+    h = mixWord(h, p.goods.length);
+    for (const n of p.goods) h = mixWord(h, n);
+    h = mixWord(h, p.armamentReserve.length);
+    for (let a = 0; a < p.armamentReserve.length; a++) {
+      h = mixWord(h, p.armamentReserve[a]!);
+      h = mixWord(h, p.armamentRemainder[a]!);
+    }
+    // Usines dans l'ordre de priorité, groupes dans l'ordre de leur usine.
+    h = mixWord(h, p.factories.length);
+    for (const f of p.factories) {
+      h = mixWord(h, f.city);
+      h = mixWord(h, factoryTypeIndex(f.type));
+      h = mixWord(h, f.progress.length);
+      for (const n of f.progress) h = mixWord(h, n);
+      h = mixWord(h, f.groups.length);
+      for (const g of f.groups) {
+        h = mixWord(h, productIndex(g.good));
+        h = mixWord(h, g.lines);
+        h = mixWord(h, g.active);
+        h = mixWord(h, g.filled);
+      }
+    }
   }
   h = mixWord(h, state.cities.length);
   for (const c of state.cities) {

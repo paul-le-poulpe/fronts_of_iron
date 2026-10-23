@@ -7,6 +7,9 @@ import "./style.css";
 import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";
 import { HUMAN, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
+import { factoryName, productSymbol } from "./names.ts";
+import { InfoBar } from "./infobar.ts";
+import { ProductionPanel } from "./production.ts";
 import { MapView } from "./render.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -52,6 +55,8 @@ interface Session {
   mirror: Mirror | null;
   painter: Painter | null;
   view: MapView | null;
+  production: ProductionPanel | null;
+  infobar: InfoBar | null;
   nextOrderId: number;
   paused: boolean;
   ticks: number;
@@ -72,6 +77,8 @@ function startGame(mapSeed: number, bots: number): void {
     mirror: null,
     painter: null,
     view: null,
+    production: null,
+    infobar: null,
     nextOrderId: 1,
     paused: false,
     ticks: 0,
@@ -115,6 +122,13 @@ function onInit(s: Session, init: InitMessage): void {
     onClick: onMapClick,
   });
   s.view.placementCheck = (tile) => foundingProblem(mirror, tile);
+  s.view.factoryCheck = (tile) => factoryTarget(mirror, tile);
+  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder);
+  s.infobar = new InfoBar($("infobar"), init.catalog);
+  buildFactoryMenu(init.catalog);
+  $("prod").hidden = true;
+  $("production").setAttribute("aria-pressed", "false");
+  setFactoryArmed(null);
   buildPlayersTable(mirror);
   $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(HUMAN))}"></span>`;
   $<HTMLInputElement>("show-iron").checked = true;
@@ -129,7 +143,7 @@ function onTick(s: Session, msg: TickMessage): void {
   const repaint = mirror.applyTick(msg);
   painter.paintTiles(repaint);
   view.upload(repaint);
-  if (msg.cities !== null) view.refresh();
+  if (msg.cities !== null || msg.factoryMarks !== null) view.refresh();
   s.ticks++;
   s.perf = {
     bots: lerp(s.perf.bots, msg.perf.bots),
@@ -139,6 +153,8 @@ function onTick(s: Session, msg: TickMessage): void {
   };
 
   updatePanel(msg.players);
+  s.production?.update(msg.human, msg.players[HUMAN - 1]!);
+  s.infobar?.update(msg.human, msg.players[HUMAN - 1]!);
   for (const r of msg.results) {
     if (!r.applied) {
       const what = r.order.type === "found_city" ? "Ville non fondée" : "Réglage non appliqué";
@@ -233,6 +249,7 @@ $("quit").addEventListener("click", () => {
   s.worker.terminate();
   session = null;
   setPlacementFlag(false);
+  setFactoryArmed(null);
   gameScreen.hidden = true;
   startScreen.hidden = false;
 });
@@ -264,6 +281,10 @@ function showHover(tile: number): void {
         ? "aucune zone"
         : `n° ${id}${m.cities[id - 1]!.tile === tile ? " (ici)" : ""}${m.stats[m.cities[id - 1]!.player - 1]?.capital === id ? ", capitale" : ""}`;
   }
+  if (factoryArmed !== null && tile >= 0) {
+    const target = factoryTarget(m, tile);
+    $("bar-hint").textContent = target.problem ?? `Cliquez pour inaugurer l'usine « ${factoryName(factoryArmed)} » dans la ville n° ${target.city}.`;
+  }
   if (placement && tile >= 0) {
     const problem = foundingProblem(m, tile);
     const fertile = m.fertileTilesFor(tile);
@@ -284,6 +305,7 @@ function setPlacementFlag(on: boolean): void {
 }
 
 function setPlacement(on: boolean): void {
+  if (on) setFactoryArmed(null);
   setPlacementFlag(on);
   const view = session?.view;
   if (view) {
@@ -301,7 +323,9 @@ function setPlacement(on: boolean): void {
 
 foundButton.addEventListener("click", () => setPlacement(!placement));
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && placement) setPlacement(false);
+  if (e.key !== "Escape") return;
+  if (placement) setPlacement(false);
+  if (factoryArmed !== null || !factoryMenu.hidden) setFactoryArmed(null);
 });
 
 /**
@@ -331,6 +355,16 @@ function foundingProblem(m: Mirror, tile: number): string | null {
 
 function onMapClick(tile: number): void {
   const m = session?.mirror;
+  if (m && factoryArmed !== null) {
+    const target = factoryTarget(m, tile);
+    if (target.problem !== null) {
+      toast(target.problem);
+      return;
+    }
+    sendOrder({ type: "build_factory", city: target.city, factoryType: factoryArmed });
+    setFactoryArmed(null);
+    return;
+  }
   if (!placement || !m) return;
   const problem = foundingProblem(m, tile);
   if (problem !== null) {
@@ -338,6 +372,68 @@ function onMapClick(tile: number): void {
     return;
   }
   sendOrder({ type: "found_city", tile });
+}
+
+// ---- barre de boutons : Inaugurer une usine, Production (00-Game §1, §8.1) ----
+
+let factoryArmed: string | null = null;
+const factoryButton = $<HTMLButtonElement>("factory");
+const factoryMenu = $("factory-menu");
+
+/** Remplit le menu déplié vers le haut : un choix par type d'usine, avec le symbole provisoire de sa racine. */
+function buildFactoryMenu(catalog: InitMessage["catalog"]): void {
+  factoryMenu.innerHTML = "";
+  for (const type of catalog.factoryTypes) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = `${productSymbol(type.tree[0]!.good)} ${factoryName(type.id)}`;
+    b.addEventListener("click", () => setFactoryArmed(type.id));
+    factoryMenu.appendChild(b);
+  }
+}
+
+/** Arme le bouton avec un type d'usine (ou le désarme : null). Le menu se ferme au choix. */
+function setFactoryArmed(type: string | null): void {
+  factoryArmed = type;
+  factoryMenu.hidden = true;
+  factoryButton.setAttribute("aria-pressed", String(type !== null));
+  if (type !== null) setPlacement(false);
+  const view = session?.view;
+  if (view) {
+    view.factoryMode = type !== null;
+    view.refresh();
+  }
+  $("bar-hint").textContent =
+    type === null ? "" : `Usine « ${factoryName(type)} » : cliquez sur la zone d'une de vos villes qui n'a pas d'usine (Échap : annuler).`;
+}
+
+factoryButton.addEventListener("click", () => {
+  if (factoryArmed !== null) setFactoryArmed(null);
+  else {
+    factoryMenu.hidden = !factoryMenu.hidden;
+    if (!factoryMenu.hidden) setPlacement(false);
+  }
+});
+
+const productionButton = $<HTMLButtonElement>("production");
+productionButton.addEventListener("click", () => {
+  const panel = $("prod");
+  panel.hidden = !panel.hidden;
+  productionButton.setAttribute("aria-pressed", String(!panel.hidden));
+  session?.production?.refresh();
+});
+
+/**
+ * Ville dont la zone contient la case, et ce qui empêche d'y inaugurer une usine (null : possible).
+ * Copie des conditions de 00-Game §8 pour colorer la zone ; le moteur reste l'autorité.
+ */
+function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; problem: string | null } {
+  const city = m.tileCity[tile]!;
+  let problem: string | null = null;
+  if (city === 0) problem = "Cette case n'est dans la zone d'aucune ville.";
+  else if (m.cities[city - 1]!.player !== HUMAN) problem = "Cette zone appartient à un autre joueur.";
+  else if (m.factoryMarks.has(city)) problem = `La ville n° ${city} a déjà une usine.`;
+  return { city, ok: problem === null, problem };
 }
 
 function sendOrder(order: HumanOrder): void {

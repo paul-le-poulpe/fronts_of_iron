@@ -555,10 +555,11 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
           assert.ok(p.population >= 0);
           assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE, `reste ${p.growthRemainder}`);
           assert.ok(p.cultivated <= p.farmTiles && p.fished <= p.seaTiles);
-          assert.ok(p.wheat <= p.fertilitySum && p.fish <= p.seaTiles * FISHING.tileYield);
-          assert.equal(p.fish, p.seaTiles === 0 ? 0 : FISHING.tileYield * p.fished);
+          // Les joueurs simulés construisent aussi des usines (bateaux de pêche) : le rendement d'une case d'eau va de tileYield à tileYieldMax.
+          assert.ok(p.wheat <= p.fertilitySum && p.fish <= p.seaTiles * FISHING.tileYieldMax);
+          assert.ok(p.fish >= FISHING.tileYield * p.fished && p.fish <= FISHING.tileYieldMax * p.fished);
           assert.ok(p.food >= FOOD.minimum && p.food === Math.max(p.wheat + p.fish, FOOD.minimum));
-          assert.ok(p.farmers >= 0 && p.fishers >= 0 && p.idle >= 0);
+          assert.ok(p.farmers >= 0 && p.fishers >= 0 && p.idle >= 0 && p.factoryWorkers >= 0 && p.miners >= 0);
           if (p.farmTiles === 0) assert.equal(p.cultivated, 0);
           if (p.population > maxPopulation) maxPopulation = p.population;
         }

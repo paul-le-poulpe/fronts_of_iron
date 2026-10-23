@@ -3,10 +3,22 @@
 // ordre invalide est ignoré, donc ignoré par tous les clients de la même façon.
 //
 // Les règles viennent de Docs/Design/00-Game.md. Ordres pour l'instant : fonder
-// une ville (§3.3) et régler la part fermiers / pêcheurs (§4, §9). Les autres
-// actions du joueur n'ont pas encore de règle écrite et n'ont donc pas d'ordre.
+// une ville (§3.3), régler la part fermiers / pêcheurs (§4, §9), et les ordres des
+// usines (§8, §9) : construire une usine, créer une ligne, régler les lignes
+// actives, changer les priorités. Les autres actions du joueur n'ont pas encore
+// de règle écrite et n'ont donc pas d'ordre.
 
+import type { FactoryTypeId, ProductId } from "./config.ts";
 import { foundCity } from "./cities.ts";
+import {
+  buildFactory,
+  createLine,
+  isFactoryTypeId,
+  isProductId,
+  setActiveLines,
+  setCityPriority,
+  setLinePriority,
+} from "./factories.ts";
 import { isPlayerId, type GameState } from "./state.ts";
 
 /** Fonder une ville du joueur sur la case `tile` (00-Game §3.3). */
@@ -30,7 +42,59 @@ export interface SetFarmShareIntent {
   readonly percent: number;
 }
 
-export type Intent = FoundCityIntent | SetFarmShareIntent;
+/** Construire l'usine d'un type dans une ville du joueur (00-Game §8, §9). */
+export interface BuildFactoryIntent {
+  readonly type: "build_factory";
+  /** Écrit par le serveur. */
+  readonly player: number;
+  /** Identifiant de la ville. */
+  readonly city: number;
+  readonly factoryType: FactoryTypeId;
+}
+
+/** Créer une ligne d'un bien dans l'usine d'une ville (00-Game §8.2, §9). */
+export interface CreateLineIntent {
+  readonly type: "create_line";
+  readonly player: number;
+  readonly city: number;
+  readonly good: ProductId;
+}
+
+/** Régler le nombre de lignes actives d'un bien dans l'usine d'une ville (00-Game §8.1, §9). */
+export interface SetActiveLinesIntent {
+  readonly type: "set_active_lines";
+  readonly player: number;
+  readonly city: number;
+  readonly good: ProductId;
+  /** Entier de 0 au nombre de lignes de ce bien. */
+  readonly count: number;
+}
+
+/** Changer la priorité d'une ville avec son usine : `position` 0 = remplie en premier (00-Game §8.1). */
+export interface SetCityPriorityIntent {
+  readonly type: "set_city_priority";
+  readonly player: number;
+  readonly city: number;
+  readonly position: number;
+}
+
+/** Changer la priorité d'un groupe de lignes au sein de l'usine de sa ville (00-Game §8.1). */
+export interface SetLinePriorityIntent {
+  readonly type: "set_line_priority";
+  readonly player: number;
+  readonly city: number;
+  readonly good: ProductId;
+  readonly position: number;
+}
+
+export type Intent =
+  | FoundCityIntent
+  | SetFarmShareIntent
+  | BuildFactoryIntent
+  | CreateLineIntent
+  | SetActiveLinesIntent
+  | SetCityPriorityIntent
+  | SetLinePriorityIntent;
 
 /** Applique un ordre s'il est valide. Renvoie false, sans rien modifier, sinon. */
 export function applyIntent(state: GameState, intent: unknown, changed: number[]): boolean {
@@ -43,6 +107,32 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
       return applyFoundCity(state, player, fields["tile"], changed);
     case "set_farm_share":
       return applySetFarmShare(state, player, fields["percent"]);
+    case "build_factory": {
+      const { city, factoryType } = fields;
+      return Number.isInteger(city) && isFactoryTypeId(factoryType) && buildFactory(state, player, city as number, factoryType);
+    }
+    case "create_line": {
+      const { city, good } = fields;
+      return Number.isInteger(city) && isProductId(good) && createLine(state, player, city as number, good);
+    }
+    case "set_active_lines": {
+      const { city, good, count } = fields;
+      return (
+        Number.isInteger(city) && isProductId(good) && Number.isInteger(count) &&
+        setActiveLines(state, player, city as number, good, count as number)
+      );
+    }
+    case "set_city_priority": {
+      const { city, position } = fields;
+      return Number.isInteger(city) && Number.isInteger(position) && setCityPriority(state, player, city as number, position as number);
+    }
+    case "set_line_priority": {
+      const { city, good, position } = fields;
+      return (
+        Number.isInteger(city) && isProductId(good) && Number.isInteger(position) &&
+        setLinePriority(state, player, city as number, good, position as number)
+      );
+    }
     default:
       return false;
   }

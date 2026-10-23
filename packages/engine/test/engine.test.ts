@@ -154,22 +154,25 @@ describe("carte de test", () => {
     assert.ok(count > 1000, "le fer doit être présent sur la carte de test");
   });
 
-  it("a de la fertilité : 0 sur l'eau et en montagne, FERTILITY.land sur le reste de la terre", () => {
+  it("a de la fertilité : 0 sur l'eau, en montagne et sur le fer, FERTILITY.land sur le reste de la terre", () => {
     assert.equal(MAP.fertility.length, MAP.terrain.length);
     assert.equal(RESOURCES.iron.presence.mountainAltitude, TEST_MAP.mountainAltitude, "une seule définition de « montagne »");
-    let mountains = 0, plains = 0;
+    let mountains = 0, plains = 0, ironPlains = 0;
     for (let t = 0; t < MAP.terrain.length; t++) {
       const b = MAP.terrain[t]!;
       if ((b & TERRAIN_LAND) === 0) assert.equal(MAP.fertility[t], 0, `eau ${t}`);
       else if ((b & TERRAIN_ALTITUDE) >= TEST_MAP.mountainAltitude) {
         assert.equal(MAP.fertility[t], 0, `montagne ${t}`);
         mountains++;
+      } else if ((MAP.resources[t]! & RESOURCE_IRON) !== 0) {
+        assert.equal(MAP.fertility[t], 0, `fer ${t} (00-Game §2 : une case de fer n'est pas cultivable)`);
+        ironPlains++;
       } else {
         assert.equal(MAP.fertility[t], FERTILITY.land, `terre ${t}`);
         plains++;
       }
     }
-    assert.ok(mountains > 1000 && plains > 1000, "la carte de test doit avoir les deux");
+    assert.ok(mountains > 1000 && plains > 1000 && ironPlains > 100, "la carte de test doit avoir les trois");
     assert.ok(FERTILITY.land >= 1 && FERTILITY.land <= 10);
   });
 
