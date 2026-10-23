@@ -10,7 +10,8 @@
     "test": "node --test \"test/*.test.ts\"",
     "bench": "node test/bench.ts",
     "viz:sea": "node test/seazones-viz.ts",
-    "viz:iron": "node test/iron-viz.ts"
+    "viz:iron": "node test/iron-viz.ts",
+    "viz:cities": "node test/cities-viz.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

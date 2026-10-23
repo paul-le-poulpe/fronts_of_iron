@@ -1,5 +1,8 @@
 export {
+  CITY,
+  MAX_CITIES,
   MAX_PLAYERS,
+  POPULATION,
   RESOURCES,
   SEA_ZONES,
   TEST_MAP,
@@ -11,6 +14,8 @@ export {
   altitude,
   forEachNeighbor,
   isLand,
+  RESOURCE_COUNT,
+  RESOURCE_IRON,
   TERRAIN_ALTITUDE,
   TERRAIN_LAND,
   TERRAIN_OCEAN,
@@ -27,7 +32,17 @@ export {
   type SeaZonesStep,
 } from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
-export { createGame, isPlayerId, setOwner, type GameSetup, type GameState, type Player } from "./state.ts";
-export { applyIntent, type DemoClaimIntent, type Intent } from "./intents.ts";
+export { foundCity } from "./cities.ts";
+export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
+export {
+  createGame,
+  isPlayerId,
+  setOwner,
+  type City,
+  type GameSetup,
+  type GameState,
+  type Player,
+} from "./state.ts";
+export { applyIntent, type FoundCityIntent, type Intent } from "./intents.ts";
 export { applyTurn, type Turn } from "./turn.ts";
 export { hashMap, hashState } from "./hash.ts";

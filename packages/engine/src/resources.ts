@@ -5,7 +5,7 @@
 import { fmix32 } from "./bits.ts";
 import type { ResourcePresenceConfig } from "./config.ts";
 import { TERRAIN_ALTITUDE, TERRAIN_LAND, type GameMap } from "./map.ts";
-import { valueNoise } from "./mapgen.ts";
+import { valueNoise } from "./noise.ts";
 
 /** Seuil du bruit sur une case d'altitude `alt` : base, baisse par niveau, baisse en montagne. */
 export function presenceThreshold(alt: number, cfg: ResourcePresenceConfig): number {

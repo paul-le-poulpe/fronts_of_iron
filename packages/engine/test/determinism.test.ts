@@ -11,7 +11,8 @@ const TURNS = 10_000;
 interface RunOutput {
   finalHash: number;
   checkpoints: number[];
-  validIntents: number;
+  changedTiles: number;
+  cities: number;
 }
 
 /** Joue le scénario par défaut dans un processus Node séparé. */
@@ -26,7 +27,9 @@ describe("déterminisme", () => {
     const a = runInChildProcess(TURNS);
     const b = runInChildProcess(TURNS);
     assert.equal(a.checkpoints.length, TURNS / DEFAULT_SCENARIO.checkpointEvery);
-    assert.ok(a.validIntents > 1000, `seulement ${a.validIntents} cases prises : le scénario ne teste rien`);
+    assert.ok(a.cities >= 50, `seulement ${a.cities} villes fondées : le scénario ne teste rien`);
+    assert.ok(a.changedTiles > 10_000, `seulement ${a.changedTiles} cases modifiées : le scénario ne teste rien`);
+    assert.equal(a.cities, b.cities);
     assert.deepEqual(b.checkpoints, a.checkpoints);
     assert.equal(b.finalHash, a.finalHash);
     // Le même scénario dans ce processus-ci donne aussi le même résultat.

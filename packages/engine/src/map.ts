@@ -1,6 +1,9 @@
-// La carte : un octet de terrain par case, adresse = y × largeur + x.
+// La carte : un octet de terrain et un octet de ressources par case, adresse =
+// y × largeur + x.
 // Le propriétaire de chaque case est dans l'état de la partie (state.ts), pas ici :
 // la carte ne change pas pendant une partie.
+
+import { RESOURCES } from "./config.ts";
 
 /** Bit 7 : terre. */
 export const TERRAIN_LAND = 0x80;
@@ -11,11 +14,18 @@ export const TERRAIN_OCEAN = 0x20;
 /** Bits 0 à 4 : altitude 0 à 31 (toujours 0 sur l'eau). */
 export const TERRAIN_ALTITUDE = 0x1f;
 
+/** Nombre de ressources naturelles : le bit i de `resources` est la i-ème clé de RESOURCES. */
+export const RESOURCE_COUNT = Object.keys(RESOURCES).length;
+/** Bit 0 de `resources` : fer (première clé de RESOURCES). */
+export const RESOURCE_IRON = 0x01;
+
 export interface GameMap {
   readonly width: number;
   readonly height: number;
   /** width × height octets ; voir les constantes TERRAIN_*. */
   readonly terrain: Uint8Array;
+  /** width × height octets ; un bit par ressource (RESOURCE_*), 1 = présente sur la case. */
+  readonly resources: Uint8Array;
 }
 
 export function isLand(map: GameMap, tile: number): boolean {

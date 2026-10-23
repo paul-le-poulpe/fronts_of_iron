@@ -142,8 +142,11 @@ déduit des villes (rayon de contrôle, puis ville la plus proche).
   - `terrain` (`Uint8Array`) : terre, côte, océan, altitude sur 5 bits ;
   - `owner` (`Uint16Array`, 0 = personne) : **résultat calculé** à partir des
     villes, jamais modifié directement par un ordre ;
-  - à venir (`00-Game.md` §12) : fertilité, un octet par case (0 à 10) ; un
-    bit par ressource naturelle et par case.
+  - `resources` (`Uint8Array`) : un bit par ressource naturelle et par case
+    (bit 0 : fer) ;
+  - `tileCity` (`Uint16Array`, 0 = aucune) : ville dont la zone contient la
+    case, terre et eau ;
+  - à venir (`00-Game.md` §12) : fertilité, un octet par case (0 à 10).
 - `owner` ne change que quand une ville est fondée (ou disparaît) : seules les
   cases à portée du rayon de contrôle de cette ville sont recalculées, et
   seules les cases modifiées sont transmises à l'affichage.
@@ -212,8 +215,12 @@ Ordre prévu :
    dépend pas des règles** — carte (`terrain`, `owner`), carte de test générée,
    générateur aléatoire seedé dans l'état, application d'un tour avec
    validation des ordres et liste des cases modifiées, hash de l'état, tests
-   de déterminisme. Un seul ordre, `demo_claim`, exemple jetable. Détail :
-   `02-Engine.md`. **Les règles du jeu attendent `00-Game.md`.**
+   de déterminisme. Détail : `02-Engine.md`.
+
+   **Fait (octobre 2026) : bloc villes** (00-Game §2, §3) — fer sur la carte,
+   ordre `found_city` (seul ordre ; `demo_claim` supprimé), zones et `owner`,
+   capitale, routes terrestres, ports, groupes. Pas encore : fertilité,
+   population (croissance), agriculture, usines, routes maritimes.
 4. Serveur de partie (`server/`) et formats de messages (`packages/shared`).
    Ne dépend pas des règles : il relaie des ordres sans les lire.
 5. Client (`client/`). Seul existe `client/public/icons/` : des icônes

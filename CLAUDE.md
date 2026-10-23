@@ -55,6 +55,9 @@ Depuis la racine du dépôt, après `npm install` :
 - `cd packages/engine && npm run viz:iron` — carte de présence du fer, avec
   des curseurs pour ses réglages, écrite dans `packages/engine/out/iron.html`.
   Autre graine : `npm run viz:iron -- --seed=7`.
+- `cd packages/engine && npm run viz:cities` — partie scriptée pas à pas :
+  villes, zones, routes, ports, groupes, écrite dans
+  `packages/engine/out/cities.html`.
 - `cd worker && npx wrangler dev` — Worker et lobby en local sur
   `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
   (copier `worker/.dev.vars.example` ; fichier ignoré par git).

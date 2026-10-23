@@ -5,14 +5,20 @@ import { describe, it } from "node:test";
 
 import {
   applyTurn,
+  CITY,
   createGame,
   createRng,
   forEachNeighbor,
+  generateResourcePresence,
   generateTestMap,
   hashMap,
   hashState,
   nextInt,
   nextU32,
+  POPULATION,
+  RESOURCE_COUNT,
+  RESOURCE_IRON,
+  RESOURCES,
   TERRAIN_ALTITUDE,
   TERRAIN_LAND,
   TERRAIN_OCEAN,
@@ -20,28 +26,31 @@ import {
   type GameState,
   type Intent,
 } from "../src/index.ts";
+import { checkCityInvariants, firstWaterTile, isLandDisc, tileAt } from "./helpers.ts";
 
 const MAP = generateTestMap(12345);
 
-function firstLandTile(state: GameState): number {
-  return state.map.terrain.findIndex((b) => (b & TERRAIN_LAND) !== 0);
+/** Centre de la carte de test : un grand disque de terre, où les distances sont exactes. */
+const CX = 400;
+const CY = 250;
+const found = (player: number, x: number, y: number): Intent => ({
+  type: "found_city",
+  player,
+  tile: tileAt(MAP, x, y),
+});
+
+/** Partie à 3 joueurs où le joueur 1 a fondé sa première ville au centre de la carte. */
+function setup(): GameState {
+  const s = createGame({ seed: 5, map: MAP, playerCount: 3 });
+  applyTurn(s, { turn: 1, intents: [found(1, CX, CY)] });
+  return s;
 }
 
-function firstWaterTile(state: GameState): number {
-  return state.map.terrain.findIndex((b) => (b & TERRAIN_LAND) === 0);
-}
-
-/** Une case de terre libre dont aucun voisin n'appartient au joueur 1. */
-function farFreeLand(state: GameState): number {
-  for (let t = state.owner.length - 1; t >= 0; t--) {
-    if ((state.map.terrain[t]! & TERRAIN_LAND) === 0 || state.owner[t] !== 0) continue;
-    let near = false;
-    forEachNeighbor(state.map, t, (n) => {
-      if (state.owner[n] === 1) near = true;
-    });
-    if (!near) return t;
-  }
-  throw new Error("aucune case trouvée");
+/** Les cases dont le propriétaire diffère entre deux copies de `owner`. */
+function diffOwner(before: Uint16Array, after: Uint16Array): number[] {
+  const diff: number[] = [];
+  for (let t = 0; t < after.length; t++) if (after[t] !== before[t]) diff.push(t);
+  return diff;
 }
 
 describe("générateur aléatoire", () => {
@@ -74,6 +83,7 @@ describe("générateur aléatoire", () => {
 describe("carte de test", () => {
   it("a quelques centaines de milliers de cases", () => {
     assert.equal(MAP.terrain.length, MAP.width * MAP.height);
+    assert.equal(MAP.resources.length, MAP.terrain.length);
     assert.ok(MAP.terrain.length >= 200_000);
   });
 
@@ -107,6 +117,28 @@ describe("carte de test", () => {
     const ratio = land / MAP.terrain.length;
     assert.ok(ratio > 0.2 && ratio < 0.7, `part de terre ${ratio}`);
   });
+
+  it("porte la présence du fer dans le bit 0 de resources, et rien dans les autres bits", () => {
+    assert.equal(RESOURCE_COUNT, Object.keys(RESOURCES).length);
+    assert.equal(RESOURCE_IRON, 1);
+    const iron = generateResourcePresence(MAP, 12345, RESOURCES.iron.presence);
+    let count = 0;
+    for (let t = 0; t < iron.length; t++) {
+      assert.equal(MAP.resources[t], iron[t] === 1 ? RESOURCE_IRON : 0, `case ${t}`);
+      count += iron[t]!;
+    }
+    assert.ok(count > 1000, "le fer doit être présent sur la carte de test");
+  });
+
+  it("change de hash quand une seule case de ressources change", () => {
+    const copy = { ...MAP, resources: MAP.resources.slice() };
+    assert.equal(hashMap(copy), hashMap(MAP));
+    copy.resources[copy.resources.length - 1] ^= RESOURCE_IRON;
+    assert.notEqual(hashMap(copy), hashMap(MAP));
+    copy.resources[copy.resources.length - 1] ^= RESOURCE_IRON;
+    copy.resources[1] ^= RESOURCE_IRON;
+    assert.notEqual(hashMap(copy), hashMap(MAP));
+  });
 });
 
 describe("tour et ordres", () => {
@@ -120,63 +152,135 @@ describe("tour et ordres", () => {
     assert.throws(() => applyTurn(s, { turn: 1, intents: [] }));
   });
 
-  it("applique un ordre valide et renvoie exactement les cases modifiées", () => {
-    const s = createGame({ seed: 1, map: MAP, playerCount: 2 });
-    const start = firstLandTile(s);
-    let changed = applyTurn(s, { turn: 1, intents: [{ type: "demo_claim", player: 1, tile: start }] });
-    assert.deepEqual(changed, [start]);
-    assert.equal(s.owner[start], 1);
-    assert.equal(s.players[0]!.tileCount, 1);
+  it("la carte de test a de la terre sur un grand disque autour de (400, 250)", () => {
+    assert.ok(isLandDisc(MAP, CX, CY, 45));
+  });
 
-    // Deux ordres sur la même case dans un tour : le premier gagne, la case est listée une fois.
-    const next = start + 1;
-    assert.ok(s.map.terrain[next]! & TERRAIN_LAND);
+  it("found_city : la première ville est gratuite, donne la population de départ et devient la capitale", () => {
+    const s = createGame({ seed: 1, map: MAP, playerCount: 2 });
     const before = s.owner.slice();
-    changed = applyTurn(s, {
-      turn: 2,
+    const start = tileAt(MAP, CX, CY);
+    const changed = applyTurn(s, { turn: 1, intents: [found(1, CX, CY)] });
+
+    // Le disque de contrôle : toutes les cases à une distance ≤ rayon, comptées à la main.
+    const disc: number[] = [];
+    for (let y = CY - CITY.controlRadius; y <= CY + CITY.controlRadius; y++) {
+      for (let x = CX - CITY.controlRadius; x <= CX + CITY.controlRadius; x++) {
+        const dx = x - CX;
+        const dy = y - CY;
+        if (dx * dx + dy * dy <= CITY.controlRadius * CITY.controlRadius) disc.push(tileAt(MAP, x, y));
+      }
+    }
+    assert.deepEqual(changed, disc);
+    assert.deepEqual(changed, diffOwner(before, s.owner));
+    for (const t of disc) {
+      assert.equal(s.owner[t], 1);
+      assert.equal(s.tileCity[t], 1);
+    }
+    const p = s.players[0]!;
+    assert.equal(p.tileCount, disc.length);
+    assert.equal(p.population, POPULATION.initial);
+    assert.equal(p.capital, 1);
+    assert.deepEqual(p.cityIds, [1]);
+    assert.deepEqual(s.cities, [{ id: 1, player: 1, tile: start, port: false, group: 1 }]);
+    assert.deepEqual(s.roads, []);
+    assert.equal(s.players[1]!.capital, 0);
+    assert.equal(s.players[1]!.population, 0);
+    assert.equal(s.changedMark.indexOf(1), -1, "marqueurs remis à zéro");
+    checkCityInvariants(s);
+  });
+
+  it("found_city : la deuxième ville coûte la population de fondation, dans le rayon d'expansion seulement", () => {
+    const s = setup();
+    // À 25 cases (= rayon d'expansion) : permis. À 26 : refusé, sans rien changer.
+    const r = CITY.expansionRadius;
+    assert.deepEqual(applyTurn(s, { turn: 2, intents: [found(1, CX + r + 1, CY)] }), []);
+    assert.equal(s.cities.length, 1);
+    assert.equal(s.players[0]!.population, POPULATION.initial);
+
+    const changed = applyTurn(s, { turn: 3, intents: [found(1, CX + r, CY)] });
+    assert.ok(changed.length > 0);
+    assert.equal(s.cities.length, 2);
+    assert.equal(s.players[0]!.population, POPULATION.initial - CITY.foundingCostPopulation);
+    assert.equal(s.players[0]!.capital, 1, "la capitale reste la première ville");
+    assert.deepEqual(s.players[0]!.cityIds, [1, 2]);
+    assert.deepEqual(s.roads, [[1, 2]]);
+    assert.deepEqual([s.cities[0]!.group, s.cities[1]!.group], [1, 1]);
+    checkCityInvariants(s);
+  });
+
+  it("found_city : le rayon d'expansion d'une ville d'un autre joueur ne compte pas", () => {
+    const s = setup();
+    applyTurn(s, { turn: 2, intents: [found(2, CX - 60, CY)] });
+    // À 20 cases de la ville du joueur 1, à 60 de la sienne.
+    assert.deepEqual(applyTurn(s, { turn: 3, intents: [found(2, CX + 20, CY)] }), []);
+    assert.equal(s.cities.length, 2);
+    // Même case pour le joueur 1 : permis.
+    assert.ok(applyTurn(s, { turn: 4, intents: [found(1, CX + 20, CY)] }).length > 0);
+    assert.equal(s.cities.length, 3);
+  });
+
+  it("found_city : deux ordres sur des cases en conflit dans le même tour, le premier gagne", () => {
+    const s = createGame({ seed: 1, map: MAP, playerCount: 2 });
+    const before = s.owner.slice();
+    const changed = applyTurn(s, {
+      turn: 1,
       intents: [
-        { type: "demo_claim", player: 1, tile: next },
-        { type: "demo_claim", player: 1, tile: next },
-        { type: "demo_claim", player: 2, tile: next },
+        found(1, CX, CY),
+        found(2, CX + 5, CY), // dans le rayon de contrôle de la ville 1
+        found(1, CX, CY), // même case
+        found(2, CX + 11, CY), // hors rayon : valide, et vole des cases à la ville 1
       ],
     });
-    const diff: number[] = [];
-    for (let t = 0; t < s.owner.length; t++) if (s.owner[t] !== before[t]) diff.push(t);
-    assert.deepEqual(changed, diff);
-    assert.deepEqual(changed, [next]);
-    assert.equal(s.changedMark.indexOf(1), -1, "marqueurs remis à zéro");
+    assert.deepEqual(s.cities.map((c) => [c.player, c.tile]), [
+      [1, tileAt(MAP, CX, CY)],
+      [2, tileAt(MAP, CX + 11, CY)],
+    ]);
+    assert.equal(s.players[1]!.population, POPULATION.initial);
+    // Les cases sont listées dans l'ordre de leur première modification, pas par adresse.
+    assert.deepEqual(
+      changed.toSorted((x, y) => x - y),
+      diffOwner(before, s.owner),
+      "liste des cases = écart réel, chaque case une fois",
+    );
+    assert.equal(new Set(changed).size, changed.length);
+    checkCityInvariants(s);
+
+    // Même case, joueurs différents : le premier ordre gagne.
+    const t = createGame({ seed: 1, map: MAP, playerCount: 2 });
+    applyTurn(t, { turn: 1, intents: [found(2, CX, CY), found(1, CX, CY)] });
+    assert.deepEqual(t.cities.map((c) => c.player), [2]);
+    assert.equal(t.players[0]!.capital, 0);
   });
 
   it("ignore chaque ordre invalide : même hash qu'un tour vide, aucune case modifiée", () => {
-    const setup = (): GameState => {
-      const s = createGame({ seed: 5, map: MAP, playerCount: 3 });
-      applyTurn(s, { turn: 1, intents: [{ type: "demo_claim", player: 1, tile: firstLandTile(s) }] });
-      return s;
-    };
-    const probe = setup();
-    const owned = firstLandTile(probe);
+    const owned = tileAt(MAP, CX, CY);
     const invalid: unknown[] = [
       null,
       undefined,
       7,
-      "demo_claim",
+      "found_city",
       [],
       {},
-      { type: "demo_claim" },
-      { type: "autre", player: 2, tile: owned + 1 },
-      { type: "demo_claim", player: 0, tile: owned + 1 },
-      { type: "demo_claim", player: 4, tile: owned + 1 },
-      { type: "demo_claim", player: 1.5, tile: owned + 1 },
-      { type: "demo_claim", player: "1", tile: owned + 1 },
-      { type: "demo_claim", player: 1, tile: "1" },
-      { type: "demo_claim", player: 1, tile: -1 },
-      { type: "demo_claim", player: 1, tile: probe.owner.length },
-      { type: "demo_claim", player: 1, tile: 2.5 },
-      { type: "demo_claim", player: 1, tile: NaN },
-      { type: "demo_claim", player: 1, tile: firstWaterTile(probe) },
-      { type: "demo_claim", player: 2, tile: owned }, // déjà à quelqu'un
-      { type: "demo_claim", player: 1, tile: owned }, // déjà à lui
-      { type: "demo_claim", player: 1, tile: farFreeLand(probe) }, // pas adjacente
+      { type: "found_city" },
+      { type: "autre", player: 2, tile: owned + 20 },
+      { type: "found_city", player: 0, tile: owned + 20 },
+      { type: "found_city", player: 4, tile: owned + 20 }, // joueur inconnu
+      { type: "found_city", player: 1.5, tile: owned + 20 },
+      { type: "found_city", player: "1", tile: owned + 20 },
+      { type: "found_city", player: 2, tile: "1" },
+      { type: "found_city", player: 2 },
+      { type: "found_city", player: 2, tile: -1 },
+      { type: "found_city", player: 2, tile: MAP.terrain.length },
+      { type: "found_city", player: 2, tile: 2.5 },
+      { type: "found_city", player: 2, tile: NaN },
+      { type: "found_city", player: 2, tile: Infinity },
+      { type: "found_city", player: 2, tile: firstWaterTile(MAP) }, // eau
+      { type: "found_city", player: 2, tile: owned }, // dans le rayon de contrôle d'un autre joueur
+      { type: "found_city", player: 1, tile: owned }, // sur sa propre ville
+      { type: "found_city", player: 1, tile: owned + CITY.controlRadius }, // exactement sur le rayon : dedans
+      { type: "found_city", player: 1, tile: owned + CITY.expansionRadius + 1 }, // hors du rayon d'expansion
+      { type: "found_city", player: 1, tile: tileAt(MAP, CX + 18, CY + 18) }, // 18² + 18² > 25²
     ];
     for (const intent of invalid) {
       const a = setup();
@@ -186,6 +290,18 @@ describe("tour et ordres", () => {
       assert.deepEqual(changed, [], `ordre ${JSON.stringify(intent)}`);
       assert.equal(hashState(b), hashState(a), `ordre ${JSON.stringify(intent)}`);
     }
+    // Population insuffisante : 99 personnes pour un coût de 100, sur une case autrement valide.
+    const poor = setup();
+    poor.players[0]!.population = CITY.foundingCostPopulation - 1;
+    const reference = setup();
+    reference.players[0]!.population = CITY.foundingCostPopulation - 1;
+    applyTurn(reference, { turn: 2, intents: [] });
+    assert.deepEqual(applyTurn(poor, { turn: 2, intents: [found(1, CX + 20, CY)] }), []);
+    assert.equal(hashState(poor), hashState(reference));
+    // Avec exactement le coût, le même ordre est valide.
+    poor.players[0]!.population = CITY.foundingCostPopulation;
+    assert.ok(applyTurn(poor, { turn: 3, intents: [found(1, CX + 20, CY)] }).length > 0);
+    assert.equal(poor.players[0]!.population, 0);
     // Un tour dont `intents` n'est pas un tableau ne fait rien non plus.
     const a = setup();
     const b = setup();
@@ -194,12 +310,41 @@ describe("tour et ordres", () => {
     assert.equal(hashState(b), hashState(a));
   });
 
-  it("change le hash quand une seule case change de propriétaire", () => {
+  it("change le hash quand une seule ville est fondée", () => {
     const a = createGame({ seed: 1, map: MAP, playerCount: 1 });
     const b = createGame({ seed: 1, map: MAP, playerCount: 1 });
     applyTurn(a, { turn: 1, intents: [] });
-    applyTurn(b, { turn: 1, intents: [{ type: "demo_claim", player: 1, tile: firstLandTile(b) }] });
+    applyTurn(b, { turn: 1, intents: [found(1, CX, CY)] });
     assert.notEqual(hashState(a), hashState(b));
+  });
+
+  it("hashState couvre chaque champ de l'état des villes", () => {
+    const base = (): GameState => {
+      const s = setup();
+      applyTurn(s, { turn: 2, intents: [found(1, CX + 20, CY), found(1, CX, CY + 20), found(2, CX - 60, CY)] });
+      return s;
+    };
+    const reference = hashState(base());
+    assert.equal(hashState(base()), reference);
+    const mutations: [string, (s: GameState) => void][] = [
+      ["population", (s) => void s.players[0]!.population++],
+      ["capital", (s) => void s.players[0]!.capital++],
+      ["cityIds", (s) => void s.players[0]!.cityIds.reverse()],
+      ["resourceTiles", (s) => void (s.players[0]!.resourceTiles[0] = s.players[0]!.resourceTiles[0]! + 1)],
+      ["tileCount", (s) => void s.players[0]!.tileCount++],
+      ["port", (s) => void (s.cities[0]!.port = !s.cities[0]!.port)],
+      ["group", (s) => void s.cities[1]!.group++],
+      ["roads", (s) => void s.roads.pop()],
+      ["roads (ordre)", (s) => void s.roads.push(s.roads.shift()!)],
+      ["tileCity", (s) => void (s.tileCity[s.tileCity.length - 1] = 1)],
+      ["owner", (s) => void (s.owner[s.owner.length - 1] = 1)],
+      ["cities", (s) => void s.cities.pop()],
+    ];
+    for (const [name, mutate] of mutations) {
+      const s = base();
+      mutate(s);
+      assert.notEqual(hashState(s), reference, `le champ « ${name} » n'est pas dans le hash`);
+    }
   });
 });
 

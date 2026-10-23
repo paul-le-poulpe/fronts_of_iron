@@ -817,12 +817,17 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 
 - Chaque joueur a une couleur. Deux possibilités : une teinte légère sur tout
   son territoire, ou seulement ses frontières avec un dégradé vers l'intérieur.
+- **Le territoire s'arrête à la côte.** La zone d'une ville couvre aussi l'eau
+  pour les règles (port, pêche : §3.6, §6.4), mais la couleur du joueur et les
+  limites de zones ne sont dessinées que sur la terre.
 - Entre deux villes d'un même joueur, une ligne légère ou en pointillé marque la
   limite de leurs zones. Affichable ou masquable.
 - Options de vue de la carte : par joueur, ressources naturelles, relief, et
   d'autres.
 - Zone d'exploitation : vert, puis texture de champs (§6.6). Zone de pêche :
-  même calcul en mer, centré sur la ville (§6.6).
+  même calcul en mer, centré sur la ville (§6.6), dessinée par une texture
+  propre à la pêche sur l'eau, comme les champs sur la terre. Elle ne doit pas
+  ressembler au territoire du joueur.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
@@ -967,7 +972,10 @@ valider sur la visualisation.
 - Droit de passage (§3.5) : décidé ou non, réciproque ou non, révocable ;
   passe-t-il aussi les routes maritimes d'un joueur par les ports d'un autre ?
 - Une ville posée exactement sur une route candidate (trois villes alignées) :
-  la route compte-t-elle comme croisée ?
+  la route compte-t-elle comme croisée ? Choix provisoire du moteur : non,
+  seul un croisement franc compte (02-Engine §7).
+- Port et lacs : choix provisoire du moteur, toute case d'eau de la zone
+  compte, lac compris (02-Engine §7).
 - **Quantité d'une route maritime (§3.6) : à redemander à l'auteur.** Piste :
   population × villes du groupe / villes du joueur. Écartées : la production
   du groupe, et un ordre d'extraction par groupe (groupe principal d'abord),
