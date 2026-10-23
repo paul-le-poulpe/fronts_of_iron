@@ -31,7 +31,11 @@ export interface ScenarioOptions {
    * Un joueur qui a déjà une ville n'envoie d'ordre `found_city` que si sa
    * population atteint ce nombre : sans cela, il dépense toute sa croissance
    * dès qu'elle dépasse le coût d'une ville et sa population reste au niveau
-   * du coût. 0 : il en envoie toujours.
+   * du coût. 0 : il en envoie toujours. Le scénario par défaut attend 6 000 :
+   * les joueurs fondent alors des villes à population plus grande, souvent
+   * proche du maximum que permet leur nourriture, et les cases prises à un
+   * voisin font baisser sa population (surplus négatif, testé par
+   * determinism.test.ts ; 02-Engine §6).
    */
   foundMinPopulation: number;
   /** Un hash est relevé tous les `checkpointEvery` tours. */
@@ -93,7 +97,7 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   botSeed: 4242,
   players: 8,
   ordersPerPlayer: 4,
-  foundMinPopulation: 600,
+  foundMinPopulation: 6000,
   checkpointEvery: 100,
 };
 

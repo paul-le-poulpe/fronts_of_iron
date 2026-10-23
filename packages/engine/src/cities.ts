@@ -23,13 +23,13 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   const player = state.players[playerId - 1]!;
   const first = player.capital === 0;
   if (!first) {
-    if (player.population < CITY.foundingCostPopulation) return false;
+    if (player.population < foundingCost(player.cityIds.length)) return false;
     if (!inExpansionRadius(state, player.cityIds, tile)) return false;
   }
 
   // Tout est valide : les effets, dans l'ordre de 00-Game §3.3.
   if (first) player.population += POPULATION.initial;
-  else player.population -= CITY.foundingCostPopulation;
+  else player.population -= foundingCost(player.cityIds.length);
   const id = state.cities.length + 1;
   const city: City = { id, player: playerId, tile, port: false, group: id };
   state.cities.push(city);
@@ -45,6 +45,16 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   }
   computeGroups(state);
   return true;
+}
+
+/**
+ * Coût en population d'une ville pour un joueur qui en possède déjà
+ * `cityCount` (00-Game §3.3) : le coût de base plus
+ * `foundingCostIncreasePercent` % de ce coût par ville possédée, arrondi vers
+ * le bas. Ne s'applique pas à la première ville, gratuite.
+ */
+export function foundingCost(cityCount: number): number {
+  return Math.floor((CITY.foundingCostPopulation * (100 + cityCount * CITY.foundingCostIncreasePercent)) / 100);
 }
 
 /** Une des villes `cityIds` est-elle à une distance ≤ rayon d'expansion de `tile` ? */

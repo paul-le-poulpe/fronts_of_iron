@@ -11,6 +11,7 @@ import {
   CITY,
   createRng,
   FARMING,
+  foundingCost,
   isLand,
   nextInt,
   type GameState,
@@ -18,7 +19,7 @@ import {
   type Rng,
 } from "@fronts-of-iron/engine";
 
-/** Population à partir de laquelle un bot tente de fonder une ville (le coût est `CITY.foundingCostPopulation`). */
+/** Population à partir de laquelle un bot tente de fonder une ville, s'il peut aussi en payer le coût (`foundingCost`). */
 export const EXPAND_MIN_POPULATION = 400;
 /** Tours entre deux tentatives d'expansion, plus un délai tiré entre 0 et `EXPAND_JITTER` − 1. */
 export const EXPAND_EVERY_TURNS = 15;
@@ -60,7 +61,7 @@ export function createBot(player: number, botSeed: number): Bot {
         return;
       }
 
-      if (turn >= nextExpandTurn && me.population >= EXPAND_MIN_POPULATION) {
+      if (turn >= nextExpandTurn && me.population >= Math.max(EXPAND_MIN_POPULATION, foundingCost(me.cityIds.length))) {
         nextExpandTurn = turn + EXPAND_EVERY_TURNS + nextInt(rng, EXPAND_JITTER);
         const tile = bestCandidate(state, rng, me.cityIds);
         if (tile >= 0) out.push({ type: "found_city", player, tile });

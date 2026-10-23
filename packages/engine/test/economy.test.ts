@@ -12,6 +12,7 @@ import {
   FERTILITY,
   FISHING,
   FOOD,
+  foundingCost,
   GROWTH_SCALE,
   harvest,
   hashState,
@@ -34,12 +35,15 @@ import { bruteHarvest, checkCityInvariants, customMap, tileAt } from "./helpers.
 const S = CURVE_SCALE;
 const R = CITY.controlRadius;
 
+/** Position de la première ville des tests. Cartes de 10 R × 6 R, R = rayon de contrôle. */
+const CX = 5 * R;
+const CY = 3 * R;
 /** Terre partout, fertilité par défaut. */
-const LAND_MAP = customMap(100, 60, () => "land");
-/** Terre à gauche, océan à droite (x ≥ 55) : une ville en (50, 30) a des cases d'eau dans sa zone. */
-const SEA_MAP = customMap(100, 60, (x) => (x >= 55 ? "ocean" : "land"));
+const LAND_MAP = customMap(10 * R, 6 * R, () => "land");
+/** Terre à gauche, océan à droite, à R / 2 de (CX, CY) : une ville en (CX, CY) a des cases d'eau dans sa zone. */
+const SEA_MAP = customMap(10 * R, 6 * R, (x) => (x >= CX + Math.floor(R / 2) ? "ocean" : "land"));
 /** Fertilités variées de 0 à 10 (un neuvième à peu près de cases à 0). */
-const VARIED_MAP = customMap(100, 60, () => "land", () => false, (x, y) => (x * 7 + y * 3) % 11);
+const VARIED_MAP = customMap(10 * R, 6 * R, () => "land", () => false, (x, y) => (x * 7 + y * 3) % 11);
 
 const found = (map: GameMap, player: number, x: number, y: number): Intent => ({
   type: "found_city",
@@ -47,10 +51,10 @@ const found = (map: GameMap, player: number, x: number, y: number): Intent => ({
   tile: tileAt(map, x, y),
 });
 
-/** Partie dont le joueur 1 a fondé sa première ville en (50, 30), hors tour : population = POPULATION.initial, aucune étape de nourriture jouée. */
+/** Partie dont le joueur 1 a fondé sa première ville en (CX, CY), hors tour : population = POPULATION.initial, aucune étape de nourriture jouée. */
 function withCity(map: GameMap, players = 1): GameState {
   const s = createGame({ seed: 1, map, playerCount: players });
-  assert.ok(applyIntent(s, found(map, 1, 50, 30), []));
+  assert.ok(applyIntent(s, found(map, 1, CX, CY), []));
   return s;
 }
 
@@ -211,7 +215,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("une ville de terre cultivable : fermiers, surface, blé, nourriture, croissance", () => {
     const s = withCity(LAND_MAP);
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, 50, 30);
+    const d = disc(LAND_MAP, CX, CY);
     assert.deepEqual([p.farmTiles, p.fertilitySum, p.seaTiles], [d.farm, d.fertility, 0]);
     const pop = p.population;
     stepEconomy(s);
@@ -231,7 +235,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("fermiers et pêcheurs : la part des fermiers est floor(population × pourcentage / 100), le reste pêche", () => {
     const s = withCity(SEA_MAP);
     const p = s.players[0]!;
-    const d = disc(SEA_MAP, 50, 30);
+    const d = disc(SEA_MAP, CX, CY);
     assert.ok(d.water > 0 && d.farm > 0);
     assert.equal(p.seaTiles, d.water);
     assert.ok(applyIntent(s, { type: "set_farm_share", player: 1, percent: 60 }, []));
@@ -258,7 +262,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     for (const percent of [0, 10, 50, 90, 100]) {
       const s = withCity(SEA_MAP);
       const p = s.players[0]!;
-      const d = disc(SEA_MAP, 50, 30);
+      const d = disc(SEA_MAP, CX, CY);
       p.population = 1_000_000;
       applyIntent(s, { type: "set_farm_share", player: 1, percent }, []);
       stepEconomy(s);
@@ -271,7 +275,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("report : population insuffisante, le réglage décide, sans inactif", () => {
     const s = withCity(SEA_MAP);
     const p = s.players[0]!;
-    const d = disc(SEA_MAP, 50, 30);
+    const d = disc(SEA_MAP, CX, CY);
     const needFarm = bruteHarvest(FARMING, 1_000_000, 0, d.farm, d.fertility).workers;
     const needSea = bruteHarvest(FISHING, 1_000_000, 0, d.water, d.water).workers;
     p.population = Math.floor((needFarm + needSea) / 2);
@@ -287,7 +291,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("sans case de mer, les pêcheurs vont aux champs (report)", () => {
     const s = withCity(LAND_MAP);
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, 50, 30);
+    const d = disc(LAND_MAP, CX, CY);
     applyIntent(s, { type: "set_farm_share", player: 1, percent: 0 }, []);
     const pop = p.population;
     stepEconomy(s);
@@ -319,7 +323,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("la fertilité varie : le blé suit la somme des fertilités des cases de la zone, pas leur nombre", () => {
     const s = withCity(VARIED_MAP);
     const p = s.players[0]!;
-    const d = disc(VARIED_MAP, 50, 30);
+    const d = disc(VARIED_MAP, CX, CY);
     assert.ok(d.farm < d.tiles, "des cases à fertilité 0 ne comptent pas dans la surface");
     assert.deepEqual([p.farmTiles, p.fertilitySum], [d.farm, d.fertility]);
     const pop = p.population;
@@ -342,12 +346,12 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
 
   it("applyTurn : les ordres d'abord (coût de fondation déduit), puis l'étape sur la population qui reste", () => {
     const s = withCity(LAND_MAP);
-    s.players[0]!.population = 150;
-    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, 50 + CITY.expansionRadius, 30)] });
+    s.players[0]!.population = foundingCost(1) + 50;
+    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, CX + CITY.expansionRadius, CY)] });
     const p = s.players[0]!;
     assert.equal(s.cities.length, 2);
-    // Population utilisée par l'étape : 150 − 100 = 50.
-    assert.equal(p.farmers + p.fishers + p.idle, 150 - CITY.foundingCostPopulation);
+    // Population utilisée par l'étape : ce qui reste après le coût de la deuxième ville.
+    assert.equal(p.farmers + p.fishers + p.idle, 50);
     // Le réglage envoyé dans le tour compte tout de suite.
     const t = withCity(LAND_MAP);
     applyTurn(t, { turn: 1, intents: [{ type: "set_farm_share", player: 1, percent: 40 }] });
@@ -382,9 +386,9 @@ describe("croissance avec reste (00-Game §4.1)", () => {
 
   it("avec une ville : rejoint exactement la fertilité totale / consommation, sans s'arrêter en dessous", () => {
     const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, 50, 30)] });
+    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, CX, CY)] });
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, 50, 30);
+    const d = disc(LAND_MAP, CX, CY);
     // Toute la surface est cultivée dès que les fermiers suffisent : nourriture = fertilité totale.
     const max = Math.floor(d.fertility / POPULATION.foodPerHead);
     let previous = 0;
@@ -467,18 +471,21 @@ describe("totaux de fertilité tenus à jour (setOwner)", () => {
     for (const map of [SEA_MAP, VARIED_MAP]) {
       const s = createGame({ seed: 1, map, playerCount: 2 });
       for (const p of s.players) p.population = 1_000_000;
-      // Deux joueurs aux zones qui se recouvrent, du bord de mer vers l'intérieur.
+      // Deux joueurs aux zones qui se recouvrent, du bord de mer vers l'intérieur. Positions en dixièmes de R
+      // (paires : exactes pour R multiple de 5), chaque ville à plus de 10 de toutes les autres et à 20 au plus
+      // (rayon d'expansion) d'une ville de son joueur, sauf (60, 30) : à 10 de la première, refusée.
+      const u = (v: number): number => Math.round((v * R) / 10);
       const orders: [number, number, number][] = [
-        [1, 50, 30], [2, 62 - 11, 40], [1, 60, 30], [2, 40, 40], [1, 40, 20], [2, 52, 20], [1, 52, 52 - 10], [2, 30, 30], [1, 30, 45],
-        [2, 70, 30], [1, 66, 14], [2, 46, 50],
+        [1, 50, 30], [2, 50, 42], [1, 60, 30], [2, 38, 40], [1, 40, 20], [2, 52, 54], [1, 54, 18], [2, 30, 30],
+        [1, 28, 14], [2, 40, 52], [1, 46, 8],
       ];
       orders.forEach(([player, x, y], i) => {
         const before = s.cities.length;
-        applyTurn(s, { turn: i + 1, intents: [found(map, player, x, y)] });
+        applyTurn(s, { turn: i + 1, intents: [found(map, player, u(x), u(y))] });
         checkCityInvariants(s);
         assert.ok(s.cities.length <= before + 1);
       });
-      assert.ok(s.cities.length >= 8, `${s.cities.length} villes`);
+      assert.equal(s.cities.length, orders.length - 1, `${s.cities.length} villes`);
       assert.ok(s.players.some((p) => p.seaTiles > 0) || map !== SEA_MAP);
     }
   });
@@ -487,7 +494,7 @@ describe("totaux de fertilité tenus à jour (setOwner)", () => {
     const s = withCity(LAND_MAP, 2);
     const a = s.players[0]!;
     const before = [a.farmTiles, a.fertilitySum];
-    assert.ok(applyIntent(s, found(LAND_MAP, 2, 61, 30), []));
+    assert.ok(applyIntent(s, found(LAND_MAP, 2, CX + R + 1, CY), []));
     assert.ok(a.farmTiles < before[0]! && a.fertilitySum < before[1]!);
     assert.equal(a.fertilitySum, a.farmTiles * FERTILITY.land);
     assert.equal(s.players[1]!.fertilitySum, s.players[1]!.farmTiles * FERTILITY.land);

@@ -40,7 +40,6 @@ export interface InitMessage {
   readonly playerCount: number;
   readonly expansionRadius: number;
   readonly controlRadius: number;
-  readonly foundingCost: number;
   readonly stepMs: number;
 }
 
@@ -62,6 +61,8 @@ export interface PlayerStats {
   /** Identifiant de la capitale, 0 = aucune. */
   readonly capital: number;
   readonly cities: number;
+  /** Coût en population de la prochaine ville (00-Game §3.3). */
+  readonly foundingCost: number;
 }
 
 export interface OrderResult {

@@ -11,6 +11,7 @@ import {
   applyTurn,
   CITY,
   createGame,
+  foundingCost,
   generateTestMap,
   type GameState,
   type Intent,
@@ -85,7 +86,6 @@ export class SoloGame {
       playerCount: this.state.players.length,
       expansionRadius: CITY.expansionRadius,
       controlRadius: CITY.controlRadius,
-      foundingCost: CITY.foundingCostPopulation,
       stepMs: this.stepMs,
     };
   }
@@ -161,6 +161,7 @@ export class SoloGame {
       farmPercent: p.farmPercent,
       capital: p.capital,
       cities: p.cityIds.length,
+      foundingCost: foundingCost(p.cityIds.length),
     }));
     const t3 = performance.now();
 

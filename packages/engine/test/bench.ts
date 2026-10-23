@@ -59,8 +59,9 @@ console.log(
 
 /**
  * Remplit la carte de villes au plus serré qu'une grille régulière le permet
- * (lignes tous les 9 cases, villes tous les 11, une ligne sur deux décalée de 5 :
- * toutes à plus du rayon de contrôle l'une de l'autre), en fondant chacune par un
+ * (pour un rayon de contrôle R : lignes tous les 0,9 R cases, villes tous les
+ * 1,1 R, une ligne sur deux décalée de 0,5 R, arrondis vers le haut : toutes à
+ * plus de R l'une de l'autre), en fondant chacune par un
  * ordre `found_city`, un ordre par tour. Les joueurs ont une population illimitée
  * et se partagent la carte en bandes verticales. S'arrête à `target` villes ;
  * relève le temps de chaque fondation.
@@ -70,8 +71,10 @@ function fillWithCities(m: GameMap, target: number, players: number): { cities: 
   for (const p of state.players) p.population = 1_000_000_000;
   const times: number[] = [];
   let turn = 0;
-  for (let y = 0, row = 0; y < m.height && state.cities.length < target; y += 9, row++) {
-    for (let x = (row % 2) * 5; x < m.width && state.cities.length < target; x += 11) {
+  const r = CITY.controlRadius;
+  const [rowStep, colStep, shift] = [9, 11, 5].map((n) => Math.ceil((n * r) / 10)) as [number, number, number];
+  for (let y = 0, row = 0; y < m.height && state.cities.length < target; y += rowStep, row++) {
+    for (let x = (row % 2) * shift; x < m.width && state.cities.length < target; x += colStep) {
       const tile = y * m.width + x;
       if ((m.terrain[tile]! & 0x80) === 0) continue;
       const player = 1 + Math.floor((x * players) / m.width);

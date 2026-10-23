@@ -12,6 +12,7 @@ import {
   FERTILITY,
   FOOD,
   forEachNeighbor,
+  foundingCost,
   generateResourcePresence,
   generateTestMap,
   hashMap,
@@ -34,9 +35,17 @@ import { checkCityInvariants, firstWaterTile, isLandDisc, tileAt } from "./helpe
 
 const MAP = generateTestMap(12345);
 
-/** Centre de la carte de test : un grand disque de terre, où les distances sont exactes. */
+/**
+ * Centre de la carte de test : un grand disque de terre, où les distances sont
+ * exactes. Les écarts à ce centre sont écrits à partir des rayons : R =
+ * contrôle, E = expansion.
+ */
 const CX = 400;
 const CY = 250;
+const R = CITY.controlRadius;
+const E = CITY.expansionRadius;
+/** Écart à une ville : hors de son rayon de contrôle, dans son rayon d'expansion. */
+const NEAR = R + 5;
 const found = (player: number, x: number, y: number): Intent => ({
   type: "found_city",
   player,
@@ -197,7 +206,7 @@ describe("tour et ordres", () => {
   });
 
   it("la carte de test a de la terre sur un grand disque autour de (400, 250)", () => {
-    assert.ok(isLandDisc(MAP, CX, CY, 45));
+    assert.ok(isLandDisc(MAP, CX, CY, 2 * E));
   });
 
   it("found_city : la première ville est gratuite, donne la population de départ et devient la capitale", () => {
@@ -241,7 +250,7 @@ describe("tour et ordres", () => {
 
   it("found_city : la deuxième ville coûte la population de fondation, dans le rayon d'expansion seulement", () => {
     const s = setup();
-    // À 25 cases (= rayon d'expansion) : permis. À 26 : refusé, sans rien changer.
+    // À r cases (= rayon d'expansion) : permis. À r + 1 : refusé, sans rien changer.
     const r = CITY.expansionRadius;
     assert.deepEqual(applyTurn(s, { turn: 2, intents: [found(1, CX + r + 1, CY)] }), []);
     assert.equal(s.cities.length, 1);
@@ -261,17 +270,18 @@ describe("tour et ordres", () => {
     assert.ok(!direct(d, found(1, CX + r + 1, CY)));
     assert.equal(d.players[0]!.population, POPULATION.initial);
     assert.ok(direct(d, found(1, CX + r, CY)));
-    assert.equal(d.players[0]!.population, POPULATION.initial - CITY.foundingCostPopulation);
+    assert.equal(d.players[0]!.population, POPULATION.initial - foundingCost(1));
   });
 
   it("found_city : le rayon d'expansion d'une ville d'un autre joueur ne compte pas", () => {
     const s = setup();
-    applyTurn(s, { turn: 2, intents: [found(2, CX - 60, CY)] });
-    // À 20 cases de la ville du joueur 1, à 60 de la sienne.
-    assert.deepEqual(applyTurn(s, { turn: 3, intents: [found(2, CX + 20, CY)] }), []);
+    applyTurn(s, { turn: 2, intents: [found(2, CX - 2 * E, CY)] });
+    // À NEAR de la ville du joueur 1, à 2 E + NEAR de la sienne.
+    assert.deepEqual(applyTurn(s, { turn: 3, intents: [found(2, CX + NEAR, CY)] }), []);
     assert.equal(s.cities.length, 2);
     // Même case pour le joueur 1 : permis.
-    assert.ok(applyTurn(s, { turn: 4, intents: [found(1, CX + 20, CY)] }).length > 0);
+    s.players[0]!.population = foundingCost(1);
+    assert.ok(applyTurn(s, { turn: 4, intents: [found(1, CX + NEAR, CY)] }).length > 0);
     assert.equal(s.cities.length, 3);
   });
 
@@ -282,14 +292,14 @@ describe("tour et ordres", () => {
       turn: 1,
       intents: [
         found(1, CX, CY),
-        found(2, CX + 5, CY), // dans le rayon de contrôle de la ville 1
+        found(2, CX + Math.floor(R / 2), CY), // dans le rayon de contrôle de la ville 1
         found(1, CX, CY), // même case
-        found(2, CX + 11, CY), // hors rayon : valide, et vole des cases à la ville 1
+        found(2, CX + R + 1, CY), // hors rayon : valide, et vole des cases à la ville 1
       ],
     });
     assert.deepEqual(s.cities.map((c) => [c.player, c.tile]), [
       [1, tileAt(MAP, CX, CY)],
-      [2, tileAt(MAP, CX + 11, CY)],
+      [2, tileAt(MAP, CX + R + 1, CY)],
     ]);
     // Les cases sont listées dans l'ordre de leur première modification, pas par adresse.
     assert.deepEqual(
@@ -308,12 +318,15 @@ describe("tour et ordres", () => {
 
     // Chaque joueur a reçu la population de départ de sa première ville, une seule fois.
     const u = createGame({ seed: 1, map: MAP, playerCount: 2 });
-    for (const intent of [found(1, CX, CY), found(2, CX + 5, CY), found(1, CX, CY), found(2, CX + 11, CY)]) direct(u, intent);
+    for (const intent of [found(1, CX, CY), found(2, CX + Math.floor(R / 2), CY), found(1, CX, CY), found(2, CX + R + 1, CY)]) direct(u, intent);
     assert.deepEqual(u.players.map((p) => p.population), [POPULATION.initial, POPULATION.initial]);
   });
 
   it("ignore chaque ordre invalide : même hash qu'un tour vide, aucune case modifiée", () => {
     const owned = tileAt(MAP, CX, CY);
+    // Écart en diagonale : chaque coordonnée est dans le rayon d'expansion, la distance non.
+    const DIAG = Math.ceil((3 * E) / 4);
+    assert.ok(DIAG <= E && 2 * DIAG * DIAG > E * E);
     const invalid: unknown[] = [
       null,
       undefined,
@@ -352,7 +365,7 @@ describe("tour et ordres", () => {
       { type: "found_city", player: 1, tile: owned }, // sur sa propre ville
       { type: "found_city", player: 1, tile: owned + CITY.controlRadius }, // exactement sur le rayon : dedans
       { type: "found_city", player: 1, tile: owned + CITY.expansionRadius + 1 }, // hors du rayon d'expansion
-      { type: "found_city", player: 1, tile: tileAt(MAP, CX + 18, CY + 18) }, // 18² + 18² > 25²
+      { type: "found_city", player: 1, tile: tileAt(MAP, CX + DIAG, CY + DIAG) }, // 2 DIAG² > E² : hors du rayon d'expansion
     ];
     for (const intent of invalid) {
       const a = setup();
@@ -362,17 +375,19 @@ describe("tour et ordres", () => {
       assert.deepEqual(changed, [], `ordre ${JSON.stringify(intent)}`);
       assert.equal(hashState(b), hashState(a), `ordre ${JSON.stringify(intent)}`);
     }
-    // Population insuffisante : 99 personnes pour un coût de 100, sur une case autrement valide.
+    // Population insuffisante : une personne de moins que le coût de la deuxième ville, sur une case autrement valide.
+    const cost = foundingCost(1);
+    assert.ok(cost > CITY.foundingCostPopulation, "le coût de la deuxième ville dépasse le coût de base");
     const poor = setup();
-    poor.players[0]!.population = CITY.foundingCostPopulation - 1;
+    poor.players[0]!.population = cost - 1;
     const reference = setup();
-    reference.players[0]!.population = CITY.foundingCostPopulation - 1;
+    reference.players[0]!.population = cost - 1;
     applyTurn(reference, { turn: 2, intents: [] });
-    assert.deepEqual(applyTurn(poor, { turn: 2, intents: [found(1, CX + 20, CY)] }), []);
+    assert.deepEqual(applyTurn(poor, { turn: 2, intents: [found(1, CX + NEAR, CY)] }), []);
     assert.equal(hashState(poor), hashState(reference));
     // Avec exactement le coût, le même ordre est valide (hors étape de nourriture : la population tombe à 0).
-    poor.players[0]!.population = CITY.foundingCostPopulation;
-    assert.ok(direct(poor, found(1, CX + 20, CY)));
+    poor.players[0]!.population = cost;
+    assert.ok(direct(poor, found(1, CX + NEAR, CY)));
     assert.equal(poor.players[0]!.population, 0);
     // Un tour dont `intents` n'est pas un tableau ne fait rien non plus.
     const a = setup();
@@ -393,7 +408,8 @@ describe("tour et ordres", () => {
   it("hashState couvre chaque champ de l'état des villes et de l'économie", () => {
     const base = (): GameState => {
       const s = setup();
-      applyTurn(s, { turn: 2, intents: [found(1, CX + 20, CY), found(1, CX, CY + 20), found(2, CX - 60, CY)] });
+      s.players[0]!.population = 100_000;
+      applyTurn(s, { turn: 2, intents: [found(1, CX + NEAR, CY), found(1, CX, CY + NEAR), found(2, CX - 2 * E, CY)] });
       return s;
     };
     const reference = hashState(base());

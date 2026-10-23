@@ -175,6 +175,8 @@ Chaque ville a trois rayons, du plus grand au plus petit :
 | Exploitation | zone des terres agricoles cultivées | dépend des fermiers ; **affichage seulement** (§6.6) |
 
 Les rayons d'expansion et de contrôle sont les mêmes pour toutes les villes.
+**Le rayon de contrôle est la moitié du rayon d'expansion** (règle de
+l'auteur) : seul le rayon d'expansion est réglé, le moteur en déduit l'autre.
 D'autres types de villes pourraient venir plus tard ; ce n'est pas prévu.
 
 ### 3.2 Zone d'une ville
@@ -205,9 +207,24 @@ Une ville peut être fondée sur la case `t` si :
 
 La première ville se pose n'importe où, aux deux premières conditions près.
 
-**Coût** : fonder une ville retire `CITY.foundingCostPopulation` personnes à la
-population totale du joueur (§10). Si sa population est inférieure au coût,
-l'ordre est invalide. Le coût est retiré du total avant la répartition du tour
+**Coût** : fonder une ville retire des personnes à la population totale du
+joueur (§10). Le coût augmente avec le nombre `n` de villes que le joueur
+possède déjà, toutes comptées, prises à un autre joueur comprises : chaque ville
+ajoute `CITY.foundingCostIncreasePercent` % du coût de base
+`CITY.foundingCostPopulation`. Le calcul est additif, en entiers, arrondi vers
+le bas :
+
+```
+coût = floor(foundingCostPopulation × (100 + n × foundingCostIncreasePercent) / 100)
+```
+
+Avec un coût de base de 500 et 100 % : la deuxième ville (`n` = 1) coûte
+1 000, la troisième 1 500, la dixième 5 000. Avec les 1 000 personnes de la
+première ville (§4), un joueur paie donc une seule ville de plus avant que sa
+population grandisse. L'auteur a choisi l'additif plutôt qu'un coût composé
+(`× (1 + x)ⁿ`), qui monte plus vite.
+
+Si sa population est inférieure au coût, l'ordre est invalide. Le coût est retiré du total avant la répartition du tour
 (§4) : il n'y a pas à choisir dans quelle part de la population le prendre.
 Provisoire : ce coût sera probablement remplacé par d'autres ressources quand
 elles existeront.
@@ -824,9 +841,10 @@ choisies ensemble plus tard, en essayant des valeurs.
 
 | Nom | Sens |
 | --- | --- |
-| `CITY.expansionRadius` | rayon d'expansion, en cases |
-| `CITY.controlRadius` | rayon de contrôle, en cases |
-| `CITY.foundingCostPopulation` | population retirée à la fondation d'une ville (§3.3) |
+| `CITY.expansionRadius` | rayon d'expansion, en cases ; 50, valeur donnée par l'auteur (25 avant le 23 octobre 2026) |
+| `CITY.controlRadius` | rayon de contrôle, en cases : la moitié du rayon d'expansion, calculée (§3.1) ; 25 (10 avant) |
+| `CITY.foundingCostPopulation` | coût de base, en population, d'une ville autre que la première (§3.3) ; 500, valeur donnée par l'auteur (100 avant) |
+| `CITY.foundingCostIncreasePercent` | pourcentage du coût de base ajouté au coût d'une ville par ville déjà possédée (§3.3) ; 100, valeur donnée par l'auteur |
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |

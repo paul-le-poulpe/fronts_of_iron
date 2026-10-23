@@ -37,7 +37,7 @@ export {
   type SeaZonesStep,
 } from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
-export { foundCity } from "./cities.ts";
+export { foundCity, foundingCost } from "./cities.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
 export {
   createGame,

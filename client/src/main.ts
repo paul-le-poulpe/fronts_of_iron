@@ -291,9 +291,10 @@ function setPlacement(on: boolean): void {
     view.refresh();
   }
   const m = session?.mirror;
+  const me = m?.stats[HUMAN - 1];
   $("bar-hint").textContent = on
-    ? m && m.stats[HUMAN - 1]?.capital
-      ? `Placement : dans le rayon d'expansion d'une de vos villes (${m.expansionRadius} cases), en dehors de toute zone, coût ${num(m.foundingCost)} habitants.`
+    ? m && me?.capital
+      ? `Placement : dans le rayon d'expansion d'une de vos villes (${m.expansionRadius} cases), en dehors de toute zone, coût ${num(me.foundingCost)} habitants.`
       : "Placement de votre première ville : n'importe quelle case de terre libre, gratuit."
     : "";
 }
@@ -314,7 +315,7 @@ function foundingProblem(m: Mirror, tile: number): string | null {
   const me = m.stats[HUMAN - 1];
   const mine = m.cityIds[HUMAN - 1]!;
   if (mine.length === 0) return null;
-  if (me && me.population < m.foundingCost) return `Population insuffisante (${num(m.foundingCost)} habitants nécessaires).`;
+  if (me && me.population < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} habitants nécessaires).`;
   const w = m.width;
   const x = tile % w;
   const y = Math.floor(tile / w);

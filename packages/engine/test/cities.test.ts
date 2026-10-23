@@ -9,6 +9,7 @@ import {
   createGame,
   createRoadNetwork,
   createRng,
+  foundingCost,
   generateTestMap,
   nextInt,
   POPULATION,
@@ -28,12 +29,23 @@ import {
 } from "./helpers.ts";
 
 /**
+ * Positions des tests écrites à partir des rayons, pour rester valides quand
+ * leurs valeurs changent : R = rayon de contrôle, E = rayon d'expansion = 2 R
+ * (00-Game §3.1).
+ */
+const R = CITY.controlRadius;
+const E = CITY.expansionRadius;
+
+/**
  * Joue les ordres [joueur, x, y] un par tour ; chacun doit être valide.
- * La population de départ suffit pour une dizaine de villes par joueur.
+ * Avant chaque ordre, la population du joueur est portée au moins au coût de
+ * sa prochaine ville (00-Game §3.3) : ces tests vérifient la géométrie, pas le coût.
  */
 function play(map: GameMap, players: number, orders: readonly (readonly [number, number, number])[]): GameState {
   const s = createGame({ seed: 1, map, playerCount: players });
   orders.forEach(([player, x, y], i) => {
+    const p = s.players[player - 1]!;
+    if (p.capital !== 0) p.population = Math.max(p.population, foundingCost(p.cityIds.length));
     const before = s.cities.length;
     applyTurn(s, { turn: i + 1, intents: [{ type: "found_city", player, tile: tileAt(map, x, y) }] });
     assert.equal(s.cities.length, before + 1, `ordre ${i + 1} (${player}, ${x}, ${y}) refusé`);
@@ -42,26 +54,38 @@ function play(map: GameMap, players: number, orders: readonly (readonly [number,
 }
 
 const land = (): "land" => "land";
-const LAND_MAP = customMap(100, 60, land);
+/** Terre partout, 8 R × 5 R. */
+const LAND_MAP = customMap(8 * R, 5 * R, land);
+/** Ligne des tests sur LAND_MAP. */
+const Y = 2 * R;
 
 describe("réglages des villes", () => {
-  it("le rayon d'expansion est plus grand que le rayon de contrôle", () => {
-    assert.ok(CITY.expansionRadius > CITY.controlRadius);
+  it("le rayon de contrôle est la moitié du rayon d'expansion (00-Game §3.1)", () => {
+    assert.ok(Number.isInteger(R) && R > 5, `R = ${R}`);
+    assert.equal(E, 2 * R);
+  });
+
+  it("chaque ville possédée ajoute foundingCostIncreasePercent % du coût de base, arrondi vers le bas", () => {
+    const base = CITY.foundingCostPopulation;
+    for (let n = 0; n < 50; n++) {
+      assert.equal(foundingCost(n), Math.floor((base * (100 + n * CITY.foundingCostIncreasePercent)) / 100), `n = ${n}`);
+    }
+    assert.equal(foundingCost(0), base);
   });
 });
 
 describe("zones (00-Game §3.2)", () => {
   it("une case à égale distance de deux villes va à la plus ancienne, quel que soit leur joueur", () => {
-    // Villes en (30, 30) et (50, 30) : la case (40, 30) est à 10 des deux, donc dans le rayon des deux.
-    const a = play(LAND_MAP, 2, [[1, 30, 30], [2, 50, 30]]);
-    const mid = tileAt(LAND_MAP, 40, 30);
+    // Villes à 2 R l'une de l'autre : la case du milieu est à R des deux, donc dans le rayon des deux.
+    const a = play(LAND_MAP, 2, [[1, 2 * R, Y], [2, 4 * R, Y]]);
+    const mid = tileAt(LAND_MAP, 3 * R, Y);
     assert.equal(a.tileCity[mid], 1);
     assert.equal(a.owner[mid], 1);
     // Les cases à côté vont chacune à la plus proche.
-    assert.equal(a.tileCity[tileAt(LAND_MAP, 39, 30)], 1);
-    assert.equal(a.tileCity[tileAt(LAND_MAP, 41, 30)], 2);
+    assert.equal(a.tileCity[mid - 1], 1);
+    assert.equal(a.tileCity[mid + 1], 2);
     // Fondées dans l'autre ordre, la ville du joueur 2 est la plus ancienne et prend la case.
-    const b = play(LAND_MAP, 2, [[2, 50, 30], [1, 30, 30]]);
+    const b = play(LAND_MAP, 2, [[2, 4 * R, Y], [1, 2 * R, Y]]);
     assert.equal(b.tileCity[mid], 1);
     assert.equal(b.owner[mid], 2);
     assert.equal(b.cities[0]!.player, 2);
@@ -70,27 +94,25 @@ describe("zones (00-Game §3.2)", () => {
   });
 
   it("une ville fondée près d'une autre lui prend les cases qui lui sont strictement plus proches, y compris le fer", () => {
-    const ironAt = new Set(["35,30", "36,30", "38,30", "20,30", "45,30"]);
-    const map = customMap(100, 60, land, (x, y) => ironAt.has(`${x},${y}`));
-    const s = play(map, 2, [[1, 30, 30]]);
-    // Avant : la ville du joueur 1 a (35,30), (36,30), (38,30) et (20,30) ; (45,30) est trop loin.
+    // Ville 1 en x = A, ville 2 (joueur 2) en A + R + 1, juste hors du rayon de la ville 1.
+    // Fer, écarts à A : +2 (2 de la ville 1, R − 1 de la ville 2 : reste) ; −R (R contre 2R + 1 : reste) ;
+    // R − 2 (contre 3 : pris) ; R (contre 1 : pris) ; R + 5 (hors du rayon de la ville 1, à 4 de la ville 2).
+    const A = 3 * R;
+    const iron = [A + 2, A - R, A + R - 2, A + R, A + R + 5];
+    const map = customMap(8 * R, 5 * R, land, (x, y) => y === Y && iron.includes(x));
+    const s = play(map, 2, [[1, A, Y]]);
     assert.equal(s.players[0]!.resourceTiles[0], 4);
     assert.equal(s.players[1]!.resourceTiles[0], 0);
 
     const before = s.owner.slice();
     const changed = applyTurn(s, {
       turn: 2,
-      intents: [{ type: "found_city", player: 2, tile: tileAt(map, 41, 30) }],
+      intents: [{ type: "found_city", player: 2, tile: tileAt(map, A + R + 1, Y) }],
     });
     const stolen = changed.filter((t) => before[t] === 1);
     assert.ok(stolen.length > 0);
     for (const t of stolen) assert.equal(s.owner[t], 2);
-    // (36,30) : 6 de la ville 1, 5 de la ville 2 ; (38,30) : 8 contre 3 ; (35,30) : 5 contre 6.
-    assert.equal(s.owner[tileAt(map, 36, 30)], 2);
-    assert.equal(s.owner[tileAt(map, 38, 30)], 2);
-    assert.equal(s.owner[tileAt(map, 35, 30)], 1);
-    assert.equal(s.owner[tileAt(map, 20, 30)], 1);
-    assert.equal(s.owner[tileAt(map, 45, 30)], 2);
+    assert.deepEqual(iron.map((x) => s.owner[tileAt(map, x, Y)]), [1, 1, 2, 2, 2]);
     assert.equal(s.players[0]!.resourceTiles[0], 2);
     assert.equal(s.players[1]!.resourceTiles[0], 3);
     // Toute case de la liste a changé de propriétaire pendant le tour.
@@ -100,22 +122,24 @@ describe("zones (00-Game §3.2)", () => {
   });
 
   it("les cases qui passent d'une ville à une autre du même joueur ne sont pas listées : tileCity change, owner non", () => {
-    // Deux villes du joueur 1 à 12 cases l'une de l'autre : les cases qui passent de l'une à l'autre ne sont pas listées.
-    const s = play(LAND_MAP, 1, [[1, 30, 30]]);
+    // Deux villes du joueur 1 à R + 2 cases l'une de l'autre. La case à R − 3 de la première est à 5 de la seconde.
+    const A = 2 * R;
+    const s = play(LAND_MAP, 1, [[1, A, Y]]);
     const before = s.owner.slice();
-    const changed = applyTurn(s, { turn: 2, intents: [{ type: "found_city", player: 1, tile: tileAt(LAND_MAP, 42, 30) }] });
-    assert.equal(s.tileCity[tileAt(LAND_MAP, 37, 30)], 2);
-    assert.equal(before[tileAt(LAND_MAP, 37, 30)], 1);
-    assert.ok(!changed.includes(tileAt(LAND_MAP, 37, 30)));
+    const changed = applyTurn(s, { turn: 2, intents: [{ type: "found_city", player: 1, tile: tileAt(LAND_MAP, A + R + 2, Y) }] });
+    const moved = tileAt(LAND_MAP, A + R - 3, Y);
+    assert.equal(s.tileCity[moved], 2);
+    assert.equal(before[moved], 1);
+    assert.ok(!changed.includes(moved));
     for (const t of changed) assert.equal(before[t], 0);
     checkCityInvariants(s);
   });
 
   it("couvre l'eau comme la terre, et se coupe au bord de la carte", () => {
-    const map = customMap(40, 30, (x) => (x >= 10 ? "ocean" : "land"));
+    const map = customMap(4 * R, 3 * R, (x) => (x >= R ? "ocean" : "land"));
     const s = play(map, 1, [[1, 3, 2]]);
-    assert.equal(s.tileCity[tileAt(map, 12, 2)], 1, "case d'océan à 9 de la ville");
-    assert.equal(s.tileCity[tileAt(map, 14, 2)], 0, "hors du rayon");
+    assert.equal(s.tileCity[tileAt(map, R + 2, 2)], 1, "case d'océan à R − 1 de la ville");
+    assert.equal(s.tileCity[tileAt(map, R + 4, 2)], 0, "hors du rayon");
     assert.equal(s.tileCity[tileAt(map, 0, 0)], 1, "coin de la carte");
     checkCityInvariants(s);
   });
@@ -158,26 +182,28 @@ describe("routes terrestres (00-Game §3.5)", () => {
   });
 
   it("fonder une ville peut supprimer une route existante, même d'un autre joueur", () => {
-    const cx = 50;
-    const cy = 30;
+    // A et B à 2 R = E l'une de l'autre (reliées) ; M1 et M2 à R − 2 au-dessus et au-dessous du milieu.
+    const cx = 4 * R;
+    const cy = Y;
+    const d = R - 2;
     const s = play(LAND_MAP, 2, [
-      [1, cx - 10, cy],
-      [1, cx + 10, cy],
+      [1, cx - R, cy],
+      [1, cx + R, cy],
     ]);
     assert.deepEqual(s.roads, [[1, 2]]);
     // Le joueur 2 pose deux villes de part et d'autre, plus proches l'une de l'autre que les deux premières.
-    applyTurn(s, { turn: 3, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy - 8) }] });
+    applyTurn(s, { turn: 3, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy - d) }] });
     assert.deepEqual(s.roads, [[1, 3], [2, 3], [1, 2]]);
-    applyTurn(s, { turn: 4, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy + 8) }] });
+    applyTurn(s, { turn: 4, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy + d) }] });
     assert.deepEqual(s.roads, [[1, 3], [1, 4], [2, 3], [2, 4], [3, 4]]);
     checkCityInvariants(s);
   });
 
   it("deux villes à plus que le rayon d'expansion ne sont pas reliées ; à exactement le rayon, elles le sont", () => {
     const r = CITY.expansionRadius;
-    const s = play(LAND_MAP, 1, [[1, 20, 30], [1, 20 + r, 30]]);
+    const s = play(LAND_MAP, 1, [[1, 20, Y], [1, 20 + r, Y]]);
     assert.deepEqual(s.roads, [[1, 2]]);
-    const t = play(LAND_MAP, 1, [[1, 20, 30], [1, 20 + r - 1, 30], [1, 20 + 2 * r - 2, 30]]);
+    const t = play(LAND_MAP, 1, [[1, 20, Y], [1, 20 + r - 1, Y], [1, 20 + 2 * r - 2, Y]]);
     // 1-2 et 2-3 sont à r − 1 ; 1-3 est à 2r − 2 > r.
     assert.deepEqual(t.roads, [[1, 2], [2, 3]]);
   });
@@ -268,18 +294,19 @@ describe("routes terrestres (00-Game §3.5)", () => {
 
 describe("ports (00-Game §3.6)", () => {
   it("une ville n'a de port que si sa zone contient de l'eau", () => {
-    const inland = play(LAND_MAP, 1, [[1, 50, 30]]);
+    const inland = play(LAND_MAP, 1, [[1, 4 * R, Y]]);
     assert.equal(inland.cities[0]!.port, false);
-    const map = customMap(100, 60, (x) => (x >= 55 ? "ocean" : "land"));
-    // À 4 cases de l'eau : port. À 10 cases (la case d'eau est à 10 : dans le rayon) : port ; à 11 : non.
-    assert.equal(play(map, 1, [[1, 51, 30]]).cities[0]!.port, true);
-    assert.equal(play(map, 1, [[1, 45, 30]]).cities[0]!.port, true);
-    assert.equal(play(map, 1, [[1, 44, 30]]).cities[0]!.port, false);
+    const sea = 4 * R;
+    const map = customMap(8 * R, 5 * R, (x) => (x >= sea ? "ocean" : "land"));
+    // À 4 cases de l'eau : port. À R (la case d'eau est à R : dans le rayon) : port ; à R + 1 : non.
+    assert.equal(play(map, 1, [[1, sea - 4, Y]]).cities[0]!.port, true);
+    assert.equal(play(map, 1, [[1, sea - R, Y]]).cities[0]!.port, true);
+    assert.equal(play(map, 1, [[1, sea - R - 1, Y]]).cities[0]!.port, false);
   });
 
   it("un lac compte comme de l'eau (choix provisoire, 02-Engine §7)", () => {
-    const map = customMap(100, 60, (x, y) => (x === 55 && y === 30 ? "lake" : "land"));
-    assert.equal(play(map, 1, [[1, 50, 30]]).cities[0]!.port, true);
+    const map = customMap(8 * R, 5 * R, (x, y) => (x === 4 * R + 5 && y === Y ? "lake" : "land"));
+    assert.equal(play(map, 1, [[1, 4 * R, Y]]).cities[0]!.port, true);
   });
 
   it("sur la carte de test : une ville au bord de la mer a un port, une ville au centre non", () => {
@@ -294,14 +321,15 @@ describe("ports (00-Game §3.6)", () => {
   });
 
   it("une ville qui perd toutes ses cases d'eau à une ville voisine perd son port", () => {
-    // Une seule colonne d'eau, en x = 24, à 10 de la ville (14, 30) : (24, 30) est la seule case d'eau de sa zone.
-    const map = customMap(60, 60, (x) => (x === 24 ? "ocean" : "land"));
-    const s = play(map, 2, [[1, 14, 30]]);
+    // Une seule colonne d'eau, d'une case de large, à R de la ville : sa case (col, Y) est la seule case d'eau de la zone.
+    const col = 2 * R;
+    const map = customMap(4 * R, 4 * R, (x) => (x === col ? "ocean" : "land"));
+    const s = play(map, 2, [[1, col - R, Y]]);
     assert.equal(s.cities[0]!.port, true);
-    assert.equal(s.tileCity[tileAt(map, 24, 30)], 1);
-    // Une ville à 3 de la colonne d'eau, de l'autre côté : (24, 30) lui devient plus proche.
-    applyTurn(s, { turn: 2, intents: [{ type: "found_city", player: 2, tile: tileAt(map, 27, 30) }] });
-    assert.equal(s.tileCity[tileAt(map, 24, 30)], 2);
+    assert.equal(s.tileCity[tileAt(map, col, Y)], 1);
+    // Une ville à 3 de la colonne d'eau, de l'autre côté : (col, Y) lui devient plus proche.
+    applyTurn(s, { turn: 2, intents: [{ type: "found_city", player: 2, tile: tileAt(map, col + 3, Y) }] });
+    assert.equal(s.tileCity[tileAt(map, col, Y)], 2);
     assert.equal(s.cities[0]!.port, false);
     assert.equal(s.cities[1]!.port, true);
     checkCityInvariants(s);
@@ -310,22 +338,26 @@ describe("ports (00-Game §3.6)", () => {
 
 describe("groupes (00-Game §3.5)", () => {
   it("les villes d'un joueur reliées entre elles forment un groupe, nommé par son plus petit identifiant", () => {
-    const s = play(LAND_MAP, 2, [[1, 50, 30], [1, 66, 30], [1, 50, 46], [2, 20, 30]]);
+    // Trois villes du joueur 1 à 3 R / 2 les unes des autres (dans le rayon d'expansion), une du joueur 2 à 3 R.
+    const step = Math.floor((3 * R) / 2);
+    const s = play(LAND_MAP, 2, [[1, 4 * R, Y], [1, 4 * R + step, Y], [1, 4 * R, Y + step], [2, R, Y]]);
     assert.deepEqual(s.cities.map((c) => c.group), [1, 1, 1, 4]);
     assert.equal(s.players[0]!.cityIds.length, 3);
   });
 
   it("les villes d'un joueur séparées par la route d'un autre joueur forment deux groupes", () => {
-    const cx = 50;
-    const cy = 30;
+    // A et B à 2 R = E l'une de l'autre (reliées) ; M1 et M2 à R − 2 au-dessus et au-dessous du milieu.
+    const cx = 4 * R;
+    const cy = Y;
+    const d = R - 2;
     const s = play(LAND_MAP, 2, [
-      [1, cx - 10, cy],
-      [1, cx + 10, cy],
+      [1, cx - R, cy],
+      [1, cx + R, cy],
     ]);
     assert.deepEqual(s.cities.map((c) => c.group), [1, 1]);
     // Le joueur 2 pose M1 et M2 de part et d'autre de la route 1-2, plus près l'une de l'autre que A et B.
-    applyTurn(s, { turn: 3, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy - 8) }] });
-    applyTurn(s, { turn: 4, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy + 8) }] });
+    applyTurn(s, { turn: 3, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy - d) }] });
+    applyTurn(s, { turn: 4, intents: [{ type: "found_city", player: 2, tile: tileAt(LAND_MAP, cx, cy + d) }] });
     assert.ok(!s.roads.some(([a, b]) => a === 1 && b === 2), "la route 1-2 est coupée");
     // Les routes vers les villes de l'autre joueur existent, mais ne relient pas les groupes.
     assert.ok(s.roads.some(([a, b]) => a === 1 && b === 3));
@@ -337,8 +369,8 @@ describe("groupes (00-Game §3.5)", () => {
   });
 
   it("une chaîne de villes reliées de proche en proche est un seul groupe", () => {
-    // 1 et 3 sont à 40 l'une de l'autre, hors de portée : seule la ville 2, au milieu, les relie.
-    const s = play(LAND_MAP, 1, [[1, 30, 30], [1, 50, 30], [1, 70, 30]]);
+    // Villes espacées de E : 1 et 3 sont à 2 E l'une de l'autre, hors de portée ; seule la ville 2, au milieu, les relie.
+    const s = play(LAND_MAP, 1, [[1, R, Y], [1, R + E, Y], [1, R + 2 * E, Y]]);
     assert.deepEqual(s.roads, [[1, 2], [2, 3]]);
     assert.deepEqual(s.cities.map((c) => c.group), [1, 1, 1]);
   });
@@ -360,22 +392,24 @@ describe("parties jouées par des joueurs simulés", () => {
     assert.equal(r.cities, r.state.cities.length);
     assert.ok(r.cities >= 50, `${r.cities} villes`);
     assert.equal(checked.length, 4);
-    // La population grossit avec la nourriture : au moins un joueur a plus de villes que la population de départ n'en paie (1 + 1000 / 100).
-    assert.ok(r.state.players.some((p) => p.cityIds.length > 1 + POPULATION.initial / CITY.foundingCostPopulation));
+    // La population grossit avec la nourriture : au moins un joueur a plus de villes que la population de départ n'en paie.
+    let paid = 1;
+    for (let left = POPULATION.initial; left >= foundingCost(paid); paid++) left -= foundingCost(paid);
+    assert.ok(r.state.players.some((p) => p.cityIds.length > paid), `${paid} villes payées au départ`);
     for (const p of r.state.players) assert.ok(p.population >= 0, `joueur ${p.id}`);
   });
 
-  it("garde les invariants avec plus de 300 villes (population rechargée à chaque tour)", () => {
+  it("garde les invariants avec plus de 140 villes, carte presque pleine (population rechargée à chaque tour)", () => {
     const r = runScenario({
       ...DEFAULT_SCENARIO,
       players: 6,
-      turns: 100,
+      turns: 200,
       foundMinPopulation: 0,
       onTurn: (state) => {
-        for (const p of state.players) if (p.capital !== 0 && p.population < 1000) p.population += 1000;
+        for (const p of state.players) if (p.capital !== 0) p.population = Math.max(p.population, foundingCost(p.cityIds.length));
       },
     });
-    assert.ok(r.cities >= 300, `${r.cities} villes`);
+    assert.ok(r.cities >= 140, `${r.cities} villes`);
     checkCityInvariants(r.state);
     // Les cases à fer sont comptées une fois chez leur propriétaire.
     const total = r.state.players.reduce((sum, p) => sum + p.resourceTiles[0]!, 0);

@@ -33,7 +33,6 @@ export class Mirror {
   readonly playerCount: number;
   readonly expansionRadius: number;
   readonly controlRadius: number;
-  readonly foundingCost: number;
   /** Ville de chaque case, 0 = aucune. Même contenu que `state.tileCity` du moteur. */
   readonly tileCity: Uint16Array;
   tick = 0;
@@ -64,7 +63,6 @@ export class Mirror {
     this.playerCount = init.playerCount;
     this.expansionRadius = init.expansionRadius;
     this.controlRadius = init.controlRadius;
-    this.foundingCost = init.foundingCost;
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
     this.repaintMark = new Uint8Array(size);

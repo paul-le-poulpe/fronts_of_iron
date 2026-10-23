@@ -209,8 +209,8 @@ par `intents.ts` (`tile` entier, 0 ≤ `tile` < nombre de cases), le reste par
    contrôle d'aucune ville » : si une ville est à une distance ≤ rayon, la plus
    proche l'est aussi et possède la case (voir Zones) ; inversement, une case
    possédée est à portée de sa ville ;
-3. si le joueur a déjà une capitale : `population ≥
-   CITY.foundingCostPopulation`, et une de ses villes est à une distance
+3. si le joueur a déjà une capitale : `population ≥ foundingCost(n)`, `n`
+   étant le nombre de ses villes (`cityIds.length`), et une de ses villes est à une distance
    ≤ `CITY.expansionRadius` de `tile` (`dx² + dy² ≤ R²`). Les villes des autres
    joueurs ne comptent pas ;
 4. sinon (première ville) : aucune autre condition. Elle est gratuite.
@@ -219,7 +219,10 @@ Effets, dans cet ordre, une fois toutes les conditions vérifiées (un ordre
 refusé ne modifie rien) :
 
 1. population : première ville, `+ POPULATION.initial` ; sinon
-   `− CITY.foundingCostPopulation` ;
+   `− foundingCost(n)`, calculé avant l'ajout de la ville. `foundingCost`
+   (`cities.ts`, exporté pour le client et les bots) : `floor(
+   CITY.foundingCostPopulation × (100 + n × CITY.foundingCostIncreasePercent) /
+   100)`, en entiers (00-Game §3.3) ;
 2. la ville est ajoutée (`cities`, `cityIds` du joueur ; capitale du joueur si
    c'est sa première) ;
 3. zones, 4. routes, 5. ports, 6. groupes (voir ci-dessous).
@@ -433,6 +436,26 @@ ils sont donc dans le hash (§6).
 - **Une configuration qui met `M` ou `m_max` à 0** : `harvest` divise par `M` et par
   `F × m_max`. `MechanizationConfig` demande `mechanizationBase` ≥ 1 et
   `maxMachinesPer1000` ≥ 1.
+- **Écrire la position d'une ville de test en nombre de cases** : les tests de
+  villes, d'économie et de tour l'écrivent à partir des rayons (`R` = contrôle,
+  `E` = expansion = 2 R), par exemple `A + R + 1` pour « juste hors de la zone
+  de A ». Jusqu'au 23 octobre 2026 elles étaient écrites pour des rayons de 10
+  et 25 : changer les rayons faisait échouer une vingtaine de tests. Les cartes
+  fabriquées font quelques R de côté. Une liste qui n'est valide qu'à l'arrondi
+  près (`economy.test.ts`, totaux de fertilité) donne ses positions en dixièmes
+  de R, paires, donc exactes pour R multiple de 5.
+- **Tester une géométrie avec `play`** (`cities.test.ts`) : `play` porte la
+  population du joueur au coût de sa prochaine ville avant chaque ordre. Sans
+  cela, avec un coût de 500 + 500 par ville, la population de départ ne paie
+  qu'une ville de plus. Les tests du coût lui-même (`engine.test.ts`,
+  `economy.test.ts`) fixent la population à la main.
+- **Le scénario par défaut et le surplus négatif** : la population ne baisse
+  que quand un joueur perd des cases au profit d'une nouvelle ville voisine.
+  Avec des villes chères et de grandes zones, la carte se remplissait avant que
+  les populations atteignent leur maximum, et le test de déterminisme ne voyait
+  plus aucune baisse. `DEFAULT_SCENARIO.foundMinPopulation` vaut donc 6 000
+  (600 avant) : les joueurs simulés fondent plus tard, à population plus grande
+  (environ 4 000 tours-joueurs de baisse sur 10 000 tours).
 - **Lire la population juste après un ordre dans `applyTurn`** : l'étape du même
   tour l'a déjà changée. Les tests qui vérifient le coût exact d'une fondation
   appliquent l'ordre seul (`applyIntent`), sans étape.
@@ -490,9 +513,10 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
 7. Zones maritimes : les choix provisoires du prototype sont listés dans
    00-Game §2.1 ; `SEA_ZONES.spacing` et `minBasinArea` sont des valeurs
    d'essai.
-8. Villes : `CITY.expansionRadius` (25), `CITY.controlRadius` (10),
-   `CITY.foundingCostPopulation` (100) et `POPULATION.initial` (1 000) sont des
-   valeurs d'essai, pas des valeurs fixées. Contrainte des règles : rayon
+8. Villes : `CITY.expansionRadius` (50, le rayon de contrôle en est la moitié :
+   25), `CITY.foundingCostPopulation` (500), `CITY.foundingCostIncreasePercent` (100)
+   et `POPULATION.initial` (1 000) sont des valeurs d'essai, pas des valeurs
+   fixées. Contrainte des règles : rayon
    d'expansion > rayon de contrôle.
 9. Croisement de deux routes (00-Game §13 le laisse ouvert) : seul un croisement
    franc compte. Un contact en bout, ou une ville posée exactement sur le
@@ -561,31 +585,38 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
   Une fois par partie ;
 - tour moyen sur 10 000 tours, 8 joueurs, 33 ordres par tour (`found_city`, un
   `set_farm_share` de temps en temps, un ordre malformé), étape de nourriture
-  comprise : 5,6 à 6,2 µs selon les mesures, 486 villes fondées (les joueurs simulés fondent quand leur
-  population atteint 600). Presque tous les ordres sont refusés, donc ce chiffre
-  mesure peu le vrai jeu. Avant le bloc population il valait 2,4 µs, avec 88
-  villes seulement : la population de départ limitait alors chaque joueur à 11
-  villes ;
-- étape de nourriture seule (`stepEconomy`) : 0,8 µs pour 8 joueurs, 10,6 µs pour
-  100 joueurs, soit environ 0,1 µs par joueur ;
+  comprise : 5,5 µs, 94 villes fondées (rayons 50 et 25, coût 500 + 500 par
+  ville ; les joueurs simulés fondent quand leur population atteint 6 000).
+  Presque tous les ordres sont refusés, donc ce chiffre mesure peu le vrai jeu.
+  Avec les rayons 25 et 10, un coût fixe de 100 et un seuil de 600 : 5,6 à
+  6,2 µs, 486 villes. Avant le bloc population : 2,4 µs, avec 88 villes ;
+- étape de nourriture seule (`stepEconomy`) : 1,8 µs pour 8 joueurs, 24 µs pour
+  100 joueurs, soit environ 0,2 µs par joueur (rayons 25 et 10 : 0,8 µs et
+  10,6 µs : les zones sont plus petites) ;
 - 100 joueurs, un ordre par joueur et par tour (101 avec l'ordre malformé),
-  3 000 tours, 1 037 villes (10,4 par joueur) : tour moyen 44 à 45 µs, étape de
-  nourriture comprise ;
-- hash de l'état complet : 0,8 à 0,9 ms (`owner` et `tileCity`, 200 000 mots
+  3 000 tours, 177 villes (1,8 par joueur) : tour moyen 34 µs, étape de
+  nourriture comprise (rayons 25 et 10, coût fixe : 1 037 villes, 44 à 45 µs) ;
+- hash de l'état complet : 0,7 à 0,9 ms (`owner` et `tileCity`, 200 000 mots
   chacun ; la fertilité est dans le hash de la carte, calculé une fois). Envoyé tous les N tours (§8 de 01-Architecture), c'est un coût
   négligeable à côté des 100 ms d'un tour ;
 - fondation d'une ville, ordre complet (zones, routes, ports, groupes), avec les
-  villes posées au plus serré (lignes tous les 9 cases, villes tous les 11, une
-  ligne sur deux décalée de 5 ; 20 joueurs, population illimitée) :
+  villes posées au plus serré (pour un rayon de contrôle R : lignes tous les
+  0,9 R cases, villes tous les 1,1 R, une ligne sur deux décalée de 0,5 R,
+  arrondis vers le haut ; 20 joueurs, population illimitée). Rayons 50 et 25,
+  23 octobre 2026 :
 
-  | Carte | Villes | Fondation n° 100 | n° 500 | n° 1 000 | n° 2 000 | dernières 50 (moyenne, maximum) | pour comparaison : `computeRoads`, toutes les villes |
-  | --- | --- | --- | --- | --- | --- | --- | --- |
-  | 800 × 500 (carte de test) | 1 555 (limite de la grille) | 0,10 ms | 0,19 ms | 0,25 ms | — | 0,15 ms, 0,18 ms | 11 ms |
-  | 1 600 × 1 000 | 2 100 | 0,09 ms | 0,10 ms | 0,25 ms | 0,32 ms | 0,23 ms, 1,3 ms | 13 ms |
+  | Carte | Villes | Fondation n° 100 | n° 500 | dernières 50 (moyenne, maximum) | pour comparaison : `computeRoads`, toutes les villes |
+  | --- | --- | --- | --- | --- | --- |
+  | 800 × 500 (carte de test) | 241 (limite de la grille) | 0,14 ms | — | 0,13 ms, 0,54 ms | 1,3 ms |
+  | 1 600 × 1 000 | 891 (limite de la grille) | 0,12 ms | 0,15 ms | 0,16 ms, 0,25 ms | 2,5 ms |
+
+  Avec les rayons 25 et 10 (grille plus dense) : 1 555 villes sur la carte de
+  test (fondation n° 1 000 : 0,25 ms ; `computeRoads` : 11 ms), 2 100 sur la
+  grande carte (n° 2 000 : 0,32 ms ; `computeRoads` : 13 ms).
 
   Avant la mise à jour locale des routes, la fondation recalculait tout le
-  réseau : 8,5 ms en moyenne à 1 555 villes, 12,5 ms à 2 100. Ce qui croît
-  encore avec le nombre de villes : les groupes, recalculés pour toutes les
-  villes. La carte de test ne peut pas porter 2 000 villes (deux villes sont à
-  plus de 10 cases l'une de l'autre, et la terre fait 154 000 cases), d'où la
-  carte de 1 600 × 1 000.
+  réseau (rayons 25 et 10) : 8,5 ms en moyenne à 1 555 villes, 12,5 ms à 2 100.
+  Ce qui croît encore avec le nombre de villes : les groupes, recalculés pour
+  toutes les villes. La carte de test porte peu de villes (deux villes sont à
+  plus du rayon de contrôle l'une de l'autre, et la terre fait 154 000 cases),
+  d'où la carte de 1 600 × 1 000.
