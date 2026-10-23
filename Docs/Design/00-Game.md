@@ -524,11 +524,32 @@ Même fonctionnement que l'agriculture (§6.1 à §6.3), avec :
 Plus il y a de bateaux, plus la pêche est mécanisée. Le résultat est le flux de
 **poisson**.
 
+**Différence avec la terre** (décision de l'auteur, 23 octobre 2026) :
+
+- Sur terre, deux choses jouent, séparément : le rendement d'une case vient de
+  sa fertilité (et plus tard des engrais, non décrits) ; les tracteurs ne font
+  que réduire le nombre de fermiers requis.
+- En mer, les bateaux de pêche jouent sur les deux : ils réduisent le nombre de
+  pêcheurs requis (mécanisation, comme les tracteurs) **et** augmentent le
+  rendement d'une case d'eau.
+- Sans bateau, une case d'eau rapporte un peu moins qu'une case de terre :
+  `FISHING.tileYield` (3, pour une fertilité de terre de 5). Avec le maximum de
+  bateaux, son rendement double environ : `FISHING.tileYieldMax` (6 ; l'auteur a
+  évoqué « 7 ou 8 pour 5 »). La pêche mécanisée devient alors plus intéressante
+  que l'agriculture.
+
+```
+rendement_eau = tileYield + (tileYieldMax − tileYield) × f(x)
+```
+
+`f(x)` est la courbe du §6.3, avec le même `x` (bateaux par pêcheur) que la
+mécanisation de la pêche : un seul nombre de bateaux règle les deux effets.
+
 ### 6.5 Nourriture produite
 
 ```
 blé        = fertilité_totale × surface_cultivée / surface_max
-poisson    = même calcul sur les cases de mer (§6.4)
+poisson    = rendement_eau × surface_pêchée                       (§6.4)
 nourriture = max(blé + poisson, FOOD.minimum)                     par tour
 ```
 
@@ -537,9 +558,18 @@ la surface cultivée. Les cases réellement cultivées ne sont pas choisies : se
 le total compte pour le jeu. Multiplier avant de diviser. Si `surface_max` = 0,
 il n'y a rien à cultiver.
 
-**Nourriture minimale** : `FOOD.minimum` (§10). Sans elle, une population
-nulle donnerait zéro fermier, donc zéro nourriture, donc une population
-maximale nulle : la population ne repartirait jamais.
+**Nourriture minimale** : `FOOD.minimum` (§10), **1 500 par tour** (valeur
+donnée par l'auteur, 23 octobre 2026). Sans elle, une population nulle
+donnerait zéro fermier, donc zéro nourriture, donc une population maximale
+nulle : la population ne repartirait jamais. La population tend donc toujours
+au moins vers `FOOD.minimum / consommation_par_tête`. Pour comparer : une
+ville entièrement cultivée en terre fertile (317 cases de fertilité 5) produit
+1 585.
+
+Le minimum n'est pas ajouté à la production : `max`, pas une somme. Une seule
+ville cultivée ajoute donc peu au minimum. Voulu par l'auteur : un joueur aura
+rarement une seule ville, et avec une seule ville il mettra sa population dans
+les usines plutôt que dans les champs.
 
 ### 6.6 Rayon d'exploitation (affichage seulement)
 
@@ -785,14 +815,14 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
-| `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) |
+| `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) ; 1 500, valeur donnée par l'auteur |
 | `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
 | `TEST_MAP.mountainAltitude` | altitude à partir de laquelle une case est une montagne : fertilité 0, fer plus fréquent (§2) |
 | `FARMING.mechanizationBase` | `M_base` : surface par fermier sans tracteur |
 | `FARMING.mechanizationMax` | `M_max` : surface par fermier à pleine mécanisation |
 | `FARMING.maxTractorsPerFarmer` | `m_max` : tracteurs par fermier au-delà desquels la mécanisation n'augmente plus |
 | `FARMING.mechanizationCurveExponent` | `n` de la courbe §6.3, entier ≥ 1 |
-| `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux ; plus `FISHING.tileYield`, rendement d'une case d'eau, provisoire (§13) |
+| `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux ; plus `FISHING.tileYield` (rendement d'une case d'eau sans bateau, 3 pour une terre de 5, ratio donné par l'auteur) et `FISHING.tileYieldMax` (rendement avec le maximum de bateaux, environ le double ; 6 pour commencer) (§6.4) |
 | `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les engins miniers |
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
@@ -960,8 +990,9 @@ valider sur la visualisation.
   vers le bas). Choix provisoire du moteur : vers le haut.
 - Arrondi d'une baisse de population (§4.1) : choix provisoire du moteur, la
   partie entière est prise vers zéro, le reste garde son signe.
-- La fertilité change-t-elle en cours de partie ? Les engrais, cités comme
-  critère global possible, ne sont pas retenus pour l'instant.
+- La fertilité change-t-elle en cours de partie ? Les engrais augmenteront le
+  rendement des cases de terre (§6.4, décision de l'auteur) ; leur forme (un
+  bien ? un flux consommé ?) n'est pas décrite.
 - Pêche : les cases de mer ont-elles un équivalent de la fertilité ? Les
   cases de mer d'un bassin sans zone maritime (§2.1, lac) comptent-elles ?
   Choix provisoire du moteur : toute case d'eau de la zone compte, lac

@@ -76,6 +76,36 @@ export class Mirror {
     this.seaThreshold = new Int32Array(init.playerCount).fill(-1);
   }
 
+  /**
+   * Cases de terre cultivables (fertilité > 0) qu'une ville fondée sur `tile`
+   * prendrait (00-Game §3.2) : dans son rayon de contrôle, sans ville, ou dont la
+   * ville actuelle est strictement plus éloignée. Affichage du mode placement.
+   */
+  fertileTilesFor(tile: number): number {
+    const w = this.width;
+    const r = this.controlRadius;
+    const cx = tile % w;
+    const cy = (tile - cx) / w;
+    let n = 0;
+    for (let y = Math.max(0, cy - r); y <= Math.min(this.height - 1, cy + r); y++) {
+      for (let x = Math.max(0, cx - r); x <= Math.min(w - 1, cx + r); x++) {
+        const d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+        if (d2 > r * r) continue;
+        const t = y * w + x;
+        if (this.fertility[t] === 0) continue;
+        const id = this.tileCity[t]!;
+        if (id !== 0) {
+          const o = this.cities[id - 1]!.tile;
+          const ox = (o % w) - x;
+          const oy = Math.floor(o / w) - y;
+          if (d2 >= ox * ox + oy * oy) continue;
+        }
+        n++;
+      }
+    }
+    return n;
+  }
+
   isLand(tile: number): boolean {
     return (this.terrain[tile]! & TERRAIN_LAND) !== 0;
   }

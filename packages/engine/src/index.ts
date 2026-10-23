@@ -52,9 +52,11 @@ export {
   CURVE_SCALE,
   GROWTH_SCALE,
   harvest,
+  machineCurve,
   mechanization,
   mechanizationCurve,
   stepEconomy,
+  waterYieldMilli,
   type Harvest,
 } from "./economy.ts";
 export { applyIntent, type FoundCityIntent, type Intent, type SetFarmShareIntent } from "./intents.ts";

@@ -31,6 +31,8 @@ export class MapView {
   private readonly base: HTMLCanvasElement;
   private readonly baseCtx: CanvasRenderingContext2D;
   private readonly image: ImageData;
+  /** Calque du mode placement : vert léger sur les cases cultivables (fertilité > 0). */
+  private readonly fertileLayer: HTMLCanvasElement;
   private cssW = 1;
   private cssH = 1;
   private dpr = 1;
@@ -59,6 +61,7 @@ export class MapView {
     if (baseCtx === null) throw new Error("canvas 2D indisponible");
     this.baseCtx = baseCtx;
     this.image = new ImageData(painter.bytes, mirror.width, mirror.height);
+    this.fertileLayer = buildFertileLayer(mirror);
     this.uploadAll();
     this.bindPointer();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -221,12 +224,24 @@ export class MapView {
     ctx.setTransform(k * zoom, 0, 0, k * zoom, k * this.tx, k * this.ty);
     ctx.imageSmoothingEnabled = zoom < 1;
     ctx.drawImage(this.base, 0, 0);
+    // Mode placement : les cases cultivables en vert léger, pour voir où une ville pourra cultiver.
+    if (this.placement) ctx.drawImage(this.fertileLayer, 0, 0);
 
     const w = mirror.width;
     const px = 1 / zoom; // un pixel d'écran, en cases
     const cx = (t: number): number => (t % w) + 0.5;
     const cy = (t: number): number => Math.floor(t / w) + 0.5;
     const cities = mirror.cities;
+
+    // Mode placement : rayon de contrôle qu'aurait une ville sur la case survolée.
+    if (this.placement && this.hoverTile >= 0) {
+      const t = this.hoverTile;
+      ctx.beginPath();
+      ctx.arc(cx(t), cy(t), mirror.controlRadius, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5 * px;
+      ctx.strokeStyle = "rgba(20,112,43,0.9)";
+      ctx.stroke();
+    }
 
     // Rayon d'expansion des villes du joueur, en mode placement (00-Game §3.1, §3.3).
     if (this.placement && mirror.cityIds[HUMAN - 1]!.length > 0) {
@@ -301,6 +316,26 @@ export class MapView {
       ctx.strokeRect(x + 0.5 - side / 2, y + 0.5 - side / 2, side, side);
     }
   }
+}
+
+/** Un pixel par case : vert transparent si la case est cultivable, rien sinon. La fertilité ne change pas pendant la partie. */
+function buildFertileLayer(mirror: Mirror): HTMLCanvasElement {
+  const layer = document.createElement("canvas");
+  layer.width = mirror.width;
+  layer.height = mirror.height;
+  const lctx = layer.getContext("2d");
+  if (lctx === null) throw new Error("canvas 2D indisponible");
+  const img = new ImageData(mirror.width, mirror.height);
+  const d = img.data;
+  for (let t = 0; t < mirror.fertility.length; t++) {
+    if (mirror.fertility[t] === 0) continue;
+    d[t * 4] = 90;
+    d[t * 4 + 1] = 220;
+    d[t * 4 + 2] = 90;
+    d[t * 4 + 3] = 80;
+  }
+  lctx.putImageData(img, 0, 0);
+  return layer;
 }
 
 function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {

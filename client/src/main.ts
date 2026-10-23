@@ -262,7 +262,10 @@ function showHover(tile: number): void {
   }
   if (placement && tile >= 0) {
     const problem = foundingProblem(m, tile);
-    $("bar-hint").textContent = problem === null ? "Cliquez pour fonder une ville ici." : problem;
+    const fertile = m.fertileTilesFor(tile);
+    $("bar-hint").textContent =
+      (problem === null ? "Cliquez pour fonder une ville ici." : problem) +
+      ` Cases cultivables libres dans son rayon de contrôle : ${num(fertile)}.`;
   }
 }
 

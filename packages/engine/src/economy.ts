@@ -35,13 +35,28 @@ export function mechanizationCurve(X: number, n: number): number {
  * disponibles et non ceux qui travaillent réellement.
  */
 export function mechanization(cfg: MechanizationConfig, available: number, machines: number): number {
+  const f = machineCurve(cfg, available, machines);
+  return cfg.mechanizationBase + Math.floor(((cfg.mechanizationMax - cfg.mechanizationBase) * f) / CURVE_SCALE);
+}
+
+/** f(x) sur 0…S pour `machines` machines et `available` travailleurs disponibles (00-Game §6.2, §6.3). */
+export function machineCurve(cfg: MechanizationConfig, available: number, machines: number): number {
   const S = CURVE_SCALE;
   const X =
     available === 0
       ? 0
       : Math.min(S, Math.floor((machines * MILLI * S) / (available * cfg.maxMachinesPer1000)));
-  const f = mechanizationCurve(X, cfg.curveExponent);
-  return cfg.mechanizationBase + Math.floor(((cfg.mechanizationMax - cfg.mechanizationBase) * f) / S);
+  return mechanizationCurve(X, cfg.curveExponent);
+}
+
+/**
+ * Rendement d'une case d'eau, en millièmes (00-Game §6.4) : de `tileYield` sans
+ * bateau à `tileYieldMax` avec le maximum, selon la même courbe que la
+ * mécanisation de la pêche.
+ */
+export function waterYieldMilli(available: number, boats: number): number {
+  const f = machineCurve(FISHING, available, boats);
+  return FISHING.tileYield * MILLI + Math.floor(((FISHING.tileYieldMax - FISHING.tileYield) * MILLI * f) / CURVE_SCALE);
 }
 
 export interface Harvest {
@@ -88,7 +103,9 @@ function stepPlayer(p: Player): void {
   const tractors = 0;
   const fishingBoats = 0;
   const farm = harvest(FARMING, availableFarmers, tractors, p.farmTiles, p.fertilitySum);
-  const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, p.seaTiles * FISHING.tileYield);
+  // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
+  const seaYield = Math.floor((p.seaTiles * waterYieldMilli(availableFishers, fishingBoats)) / MILLI);
+  const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield);
 
   p.farmers = farm.workers;
   p.fishers = sea.workers;

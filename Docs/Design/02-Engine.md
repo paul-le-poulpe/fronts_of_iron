@@ -256,7 +256,8 @@ récolte(config, F, machines, surface_max, fertilité_totale) :
 courbe(X, n) : p = S ; n fois : p = floor(p × (S − X) / S) ; f = S − p     (00-Game §6.3)
 
 blé      = récolte(FARMING, fermiers_disponibles, tracteurs = 0, farmTiles, fertilitySum)
-poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux = 0, seaTiles, seaTiles × FISHING.tileYield)
+rendement_eau = tileYield × 1000 + floor((tileYieldMax − tileYield) × 1000 × f / S)   millièmes, même f que la pêche
+poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux = 0, seaTiles, floor(seaTiles × rendement_eau / 1000))
 nourriture = max(blé + poisson, FOOD.minimum)
 
 surplus  = nourriture − population × POPULATION.foodPerHead      (négatif possible)
@@ -418,8 +419,12 @@ ils sont donc dans le hash (§6).
   l'arrondi (mutation vérifiée : dernier point de ce chapitre).
 - **Retirer le reste de croissance** : une croissance inférieure à une personne
   par tour serait arrondie à 0 à chaque tour, et la population s'arrêterait sous
-  son maximum (00-Game §4.1). Les nomades, à 50 de nourriture et 0,005 par
-  personne de surplus, ne partiraient jamais de 0.
+  son maximum (00-Game §4.1) : avec 0,005 personne par unité de surplus, à
+  200 personnes sous le maximum.
+- **Écrire un test qui suppose une petite `FOOD.minimum`** : la valeur est
+  passée de 50 à 1 500 le 23 octobre 2026, et neuf tests de l'économie
+  l'avaient supposée petite (nomades sous le maximum, blé au-dessus du
+  minimum). Ils partent maintenant du maximum calculé, pas d'un nombre écrit.
 - **Une configuration qui met `M` ou `m_max` à 0** : `harvest` divise par `M` et par
   `F × m_max`. `MechanizationConfig` demande `mechanizationBase` ≥ 1 et
   `maxMachinesPer1000` ≥ 1.
@@ -503,9 +508,11 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     fertilité 0 ; eau → 0 ; toute autre terre → `FERTILITY.land`. Le nombre
     `FERTILITY.land` (5, sur 0 à 10) est une valeur d'essai.
 15. Cases de pêche : toutes les cases d'eau (océan ou lac, comme pour le port,
-    point 10) des zones du joueur. Chacune compte pour `FISHING.tileYield` (3,
-    valeur d'essai) : 00-Game §13 demande si une case de mer a un équivalent de
-    la fertilité, cette constante est l'attente.
+    point 10) des zones du joueur. Le rendement d'une case d'eau va de
+    `FISHING.tileYield` (3 sans bateau, rapport 3 pour 5 donné par l'auteur) à
+    `FISHING.tileYieldMax` (6 avec le maximum de bateaux, « environ le double »
+    selon l'auteur), sur la même courbe que la mécanisation (00-Game §6.4,
+    `waterYieldMilli`). Sans usine, il n'y a pas de bateau : le rendement reste 3.
 16. Totaux par joueur tenus à jour dans `setOwner`, comme `resourceTiles` :
     `farmTiles`, `fertilitySum`, `seaTiles`.
 17. Répartition fermiers / pêcheurs : `farmPercent`, entier 0 à 100, part de la
@@ -532,12 +539,11 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     `wheat`, `fish`, `food`) gardés dans le joueur et hachés.
 24. Valeurs d'essai de l'économie : `POPULATION.foodPerHead` 1,
     `POPULATION.growthPerMillion` 5 000 (0,5 % du surplus par tour ; 1 000 était
-    cinq fois plus lent), `FOOD.minimum` 50, `FARMING` et `FISHING` :
-    `mechanizationBase` 300, `mechanizationMax` 1 500, `maxMachinesPer1000` 100,
-    `curveExponent` 2, `FISHING.tileYield` 3. Avec elles, sur la carte de test, une
-    ville en terre cultivable (317 cases, fertilité 1 585) passe de 1 000 à
-    1 500 personnes en 386 tours et atteint exactement 1 585 en 1 389 tours ;
-    des nomades atteignent exactement 50 en 898 tours. Aucune n'est fixée (00-Game §10).
+    cinq fois plus lent), `FARMING` et `FISHING` : `mechanizationBase` 300,
+    `mechanizationMax` 1 500, `maxMachinesPer1000` 100, `curveExponent` 2.
+    Aucune n'est fixée (00-Game §10). `FOOD.minimum` vaut 1 500, valeur donnée
+    par l'auteur le 23 octobre 2026 (50 avant). Pour comparer : une ville en
+    terre cultivable (317 cases) produit au plus 1 585.
 
 ## 8. Mesures
 

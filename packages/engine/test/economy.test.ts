@@ -15,12 +15,14 @@ import {
   GROWTH_SCALE,
   harvest,
   hashState,
+  machineCurve,
   mechanization,
   mechanizationCurve,
   nextInt,
   POPULATION,
   stepEconomy,
   TERRAIN_LAND,
+  waterYieldMilli,
   type GameMap,
   type GameState,
   type Intent,
@@ -181,6 +183,30 @@ describe("mécanisation et récolte (00-Game §6.2, §6.4, §6.5)", () => {
   });
 });
 
+describe("rendement d'une case d'eau (00-Game §6.4)", () => {
+  it("va de tileYield sans bateau à tileYieldMax avec le maximum de bateaux, en croissant", () => {
+    const fishers = 1000;
+    assert.equal(waterYieldMilli(fishers, 0), FISHING.tileYield * 1000);
+    const full = Math.ceil((fishers * FISHING.maxMachinesPer1000) / 1000);
+    assert.equal(waterYieldMilli(fishers, full), FISHING.tileYieldMax * 1000);
+    assert.equal(waterYieldMilli(fishers, full * 10), FISHING.tileYieldMax * 1000, "au-delà du maximum, plus rien ne change");
+    let previous = 0;
+    for (let boats = 0; boats <= full; boats++) {
+      const y = waterYieldMilli(fishers, boats);
+      assert.ok(y >= previous);
+      previous = y;
+    }
+    assert.equal(waterYieldMilli(0, 50), FISHING.tileYield * 1000, "sans pêcheur, pas de bateau par pêcheur");
+    // Même courbe que la mécanisation : à mi-chemin des bateaux, f vaut la même chose pour les deux.
+    const half = Math.floor(full / 2);
+    const f = machineCurve(FISHING, fishers, half);
+    assert.equal(
+      waterYieldMilli(fishers, half),
+      FISHING.tileYield * 1000 + Math.floor(((FISHING.tileYieldMax - FISHING.tileYield) * 1000 * f) / CURVE_SCALE),
+    );
+  });
+});
+
 describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
   it("une ville de terre cultivable : fermiers, surface, blé, nourriture, croissance", () => {
     const s = withCity(LAND_MAP);
@@ -218,7 +244,7 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     assert.deepEqual([p.farmers, p.cultivated, p.wheat], [farm.workers, farm.area, farm.yield]);
     assert.deepEqual([p.fishers, p.fished, p.fish], [sea.workers, sea.area, sea.yield]);
     assert.equal(p.fish, FISHING.tileYield * p.fished, "chaque case de mer pêchée vaut FISHING.tileYield");
-    assert.equal(p.food, farm.yield + sea.yield);
+    assert.equal(p.food, Math.max(farm.yield + sea.yield, FOOD.minimum));
     assert.equal(p.idle, farmers - farm.workers + (fishers - sea.workers));
     assert.equal(p.farmers + p.fishers + p.idle, pop);
     assert.ok(p.fished > 0 && p.fished <= d.water);
@@ -245,10 +271,12 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     assert.equal(p.wheat, FERTILITY.land * 3);
     assert.ok(p.wheat + p.fish < FOOD.minimum);
     assert.equal(p.food, FOOD.minimum);
-    // Au-dessus du minimum, la nourriture est blé + poisson.
-    p.population = 1000;
+    // Au-dessus du minimum, la nourriture est blé + poisson : toute la zone est
+    // cultivée (assez de fermiers), et sa fertilité totale dépasse le minimum.
+    p.population = 1_000_000;
     stepEconomy(s);
-    assert.ok(p.wheat > FOOD.minimum);
+    assert.equal(p.cultivated, p.farmTiles);
+    assert.ok(p.wheat > FOOD.minimum, `${p.wheat} ≤ ${FOOD.minimum} : la carte de test doit être assez fertile`);
     assert.equal(p.food, p.wheat + p.fish);
   });
 
@@ -269,8 +297,10 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     p.population = 30;
     stepEconomy(s);
     assert.deepEqual([p.farmers, p.fishers, p.idle, p.cultivated, p.fished, p.wheat, p.fish, p.food], [0, 0, 30, 0, 0, 0, 0, FOOD.minimum]);
-    // Le joueur 2, à 0, a aussi son reste : l'étape tourne pour tous les joueurs.
-    assert.equal(s.players[1]!.growthRemainder, FOOD.minimum * POPULATION.growthPerMillion);
+    // Le joueur 2, à 0, a aussi sa croissance : l'étape tourne pour tous les joueurs.
+    const rem = FOOD.minimum * POPULATION.growthPerMillion;
+    assert.equal(s.players[1]!.population, Math.trunc(rem / GROWTH_SCALE));
+    assert.equal(s.players[1]!.growthRemainder, rem % GROWTH_SCALE);
     assert.equal(s.players[1]!.food, FOOD.minimum);
   });
 
@@ -305,8 +335,10 @@ describe("croissance avec reste (00-Game §4.1)", () => {
       previous = pop;
     }
     assert.equal(previous, max);
-    // Sans reste, trunc(surplus × taux / 1 000 000) vaut 0 tant que le surplus est sous 1 000 000 / taux : la population resterait à 0.
-    assert.ok(FOOD.minimum * POPULATION.growthPerMillion < GROWTH_SCALE);
+    // Sans reste, trunc(surplus × taux / 1 000 000) vaut 0 dès que le surplus est
+    // sous 1 000 000 / taux : la population s'arrêterait à autant de personnes sous
+    // le maximum. Le test ne prouve quelque chose que si cet écart est d'au moins 2.
+    assert.ok(GROWTH_SCALE / (POPULATION.growthPerMillion * POPULATION.foodPerHead) >= 2);
   });
 
   it("avec une ville : rejoint exactement la fertilité totale / consommation, sans s'arrêter en dessous", () => {
@@ -333,17 +365,19 @@ describe("croissance avec reste (00-Game §4.1)", () => {
   it("une population au-dessus du maximum baisse, par arrondi vers zéro (Math.trunc) : le premier départ arrive quand le reste atteint −1 000 000", () => {
     const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
     const p = s.players[0]!;
-    p.population = 100; // nomades : nourriture 50, surplus −50 par tour
-    const perTick = (FOOD.minimum - 100 * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
-    assert.ok(perTick < 0);
+    // Nomades, 10 personnes au-dessus du maximum : surplus −10 par tour.
+    const start = Math.floor(FOOD.minimum / POPULATION.foodPerHead) + 10;
+    p.population = start;
+    const perTick = (FOOD.minimum - start * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
+    assert.ok(perTick < 0 && -perTick < GROWTH_SCALE);
     const T = Math.ceil(GROWTH_SCALE / -perTick);
     for (let k = 1; k < T; k++) {
       stepEconomy(s);
-      assert.equal(p.population, 100, `tour ${k} : floor aurait déjà retiré une personne`);
+      assert.equal(p.population, start, `tour ${k} : floor aurait déjà retiré une personne`);
       assert.equal(p.growthRemainder, k * perTick);
     }
     stepEconomy(s);
-    assert.equal(p.population, 99);
+    assert.equal(p.population, start - 1);
     assert.equal(p.growthRemainder, T * perTick + GROWTH_SCALE, "le reste garde la fraction de personne");
     assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE);
   });
@@ -351,8 +385,8 @@ describe("croissance avec reste (00-Game §4.1)", () => {
   it("la baisse s'arrête sur la population maximale, sans la dépasser par le bas", () => {
     const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
     const p = s.players[0]!;
-    p.population = 100;
     const max = Math.floor(FOOD.minimum / POPULATION.foodPerHead);
+    p.population = max + 500;
     for (let k = 0; k < 20_000; k++) {
       stepEconomy(s);
       assert.ok(p.population >= max, `tour ${k} : ${p.population}`);
@@ -363,21 +397,26 @@ describe("croissance avec reste (00-Game §4.1)", () => {
   it("la hausse est symétrique : la première personne arrive quand le reste atteint +1 000 000", () => {
     const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
     const p = s.players[0]!;
-    const perTick = FOOD.minimum * POPULATION.growthPerMillion;
+    // Nomades, 10 personnes sous le maximum : surplus +10 par tour.
+    const start = Math.floor(FOOD.minimum / POPULATION.foodPerHead) - 10;
+    p.population = start;
+    const perTick = (FOOD.minimum - start * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
+    assert.ok(perTick > 0 && perTick < GROWTH_SCALE);
     const T = Math.ceil(GROWTH_SCALE / perTick);
     for (let k = 1; k < T; k++) {
       stepEconomy(s);
-      assert.equal(p.population, 0);
+      assert.equal(p.population, start);
     }
     stepEconomy(s);
-    assert.equal(p.population, 1);
+    assert.equal(p.population, start + 1);
   });
 
   it("la population ne passe jamais sous 0 : le reste est alors remis à 0", () => {
     const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
     const p = s.players[0]!;
     p.population = 2;
-    p.growthRemainder = -9 * GROWTH_SCALE + 1; // état artificiel : une baisse de 9 personnes d'un coup
+    // État artificiel : un reste négatif plus grand que la population et que la croissance du tour.
+    p.growthRemainder = -(FOOD.minimum * POPULATION.growthPerMillion) - 3 * GROWTH_SCALE + 1;
     stepEconomy(s);
     assert.equal(p.population, 0);
     assert.equal(p.growthRemainder, 0);
@@ -456,7 +495,11 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
     const r = runScenario({
       ...DEFAULT_SCENARIO,
       turns: 3000,
-      onTurn: (state) => {
+      onTurn: (state, turn) => {
+        // Avec FOOD.minimum à 1 500, les joueurs simulés restent sous leur
+        // nourriture : on force un surplus négatif (état artificiel) pour que la
+        // baisse soit aussi exercée.
+        if (turn === 1500) for (const p of state.players) p.population += 3 * FOOD.minimum;
         for (const p of state.players) {
           assert.ok(p.population >= 0);
           assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE, `reste ${p.growthRemainder}`);

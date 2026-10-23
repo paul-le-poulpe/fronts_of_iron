@@ -194,7 +194,13 @@ chose a changé (`requestAnimationFrame`).
   est valide. Avec des villes : le rayon d'expansion de chacune est dessiné ; la
   case survolée est verte si la fondation respecte 00-Game §3.3 (terre,
   `tileCity === 0`, dans le rayon d'expansion d'une ville du joueur, population ≥
-  coût) et rouge sinon, avec la raison dans la barre. Le clic sur une case rouge
+  coût) et rouge sinon, avec la raison dans la barre. En mode placement, les
+  cases cultivables (fertilité > 0) sont couvertes d'un vert léger
+  (`buildFertileLayer`, `render.ts`, calculé une fois : la fertilité ne change
+  pas), le rayon de contrôle qu'aurait la ville est dessiné autour de la case
+  survolée, et la barre donne le nombre de cases cultivables que cette ville
+  prendrait (`Mirror.fertileTilesFor` : libres, ou plus proches d'elle que de
+  leur ville actuelle, 00-Game §3.2). Le clic sur une case rouge
   n'envoie rien. Le clic sur une case verte envoie `found_city` ; si le moteur ne
   l'applique pas (`results`), la page affiche « Ville non fondée : le moteur a
   refusé l'ordre ». La page copie les conditions pour colorer la case ; **le

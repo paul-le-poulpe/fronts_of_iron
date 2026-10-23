@@ -132,10 +132,10 @@ export const POPULATION = {
   growthPerMillion: 5000,
 } as const;
 
-/** Nourriture (00-Game §6.5). Valeur d'essai, pas une valeur fixée. */
+/** Nourriture (00-Game §6.5). */
 export const FOOD = {
-  /** Nourriture minimale par tour d'un joueur, même sans fermier ni terre. */
-  minimum: 50,
+  /** Nourriture minimale par tour d'un joueur, même sans fermier ni terre. 1 500 : valeur donnée par l'auteur. */
+  minimum: 1500,
 } as const;
 
 /** Fertilité sur la carte (00-Game §2), de 0 à 10. Valeur d'essai, pas une valeur fixée. */
@@ -167,12 +167,20 @@ export const FARMING: MechanizationConfig = {
   curveExponent: 2,
 };
 
-/** Pêche (00-Game §6.4) : bateaux de pêche. Valeurs d'essai, pas des valeurs fixées. */
-export const FISHING: MechanizationConfig & { readonly tileYield: number } = {
+/**
+ * Pêche (00-Game §6.4) : bateaux de pêche. Les bateaux réduisent les pêcheurs
+ * requis (mécanisation) et augmentent le rendement d'une case d'eau, avec la
+ * même courbe f(x). Valeurs d'essai, sauf le rapport 3 pour 5 de `tileYield`
+ * (donné par l'auteur) et le doublement de `tileYieldMax` (ordre de grandeur
+ * donné par l'auteur).
+ */
+export const FISHING: MechanizationConfig & { readonly tileYield: number; readonly tileYieldMax: number } = {
   mechanizationBase: 300,
   mechanizationMax: 1500,
   maxMachinesPer1000: 100,
   curveExponent: 2,
-  /** Fertilité d'une case de mer : à la pêche, chaque case d'eau de la zone compte pour cette valeur (00-Game §13 : équivalent de la fertilité, choix provisoire). */
+  /** Rendement d'une case d'eau sans bateau (fertilité d'une terre : FERTILITY.land). */
   tileYield: 3,
+  /** Rendement d'une case d'eau avec le maximum de bateaux (≥ tileYield). */
+  tileYieldMax: 6,
 };
