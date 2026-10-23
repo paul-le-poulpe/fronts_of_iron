@@ -55,6 +55,7 @@ export {
   machineCurve,
   mechanization,
   mechanizationCurve,
+  requiredWorkers,
   stepEconomy,
   waterYieldMilli,
   type Harvest,

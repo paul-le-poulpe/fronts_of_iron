@@ -80,13 +80,21 @@ export function harvest(
   machines: number,
   surfaceMax: number,
   fertilitySum: number,
+  extra = 0,
 ): Harvest {
   const M = mechanization(cfg, available, machines);
   const required = Math.ceil((surfaceMax * MILLI) / M);
-  const workers = Math.min(available, required);
+  // `extra` : travailleurs en trop de l'autre activité (report, 00-Game §4). Ils
+  // ne changent pas M, calculé une fois avec les disponibles (00-Game §6.2).
+  const workers = Math.min(available + extra, required);
   const area = Math.min(surfaceMax, Math.floor((workers * M) / MILLI));
   const output = surfaceMax === 0 ? 0 : Math.floor((fertilitySum * area) / surfaceMax);
   return { workers, area, yield: output };
+}
+
+/** Travailleurs requis pour couvrir `surfaceMax` cases (00-Game §6.2), arrondi vers le haut. */
+export function requiredWorkers(cfg: MechanizationConfig, available: number, machines: number, surfaceMax: number): number {
+  return Math.ceil((surfaceMax * MILLI) / mechanization(cfg, available, machines));
 }
 
 /**
@@ -102,14 +110,18 @@ function stepPlayer(p: Player): void {
   // Pas encore d'usine : ni tracteur ni bateau de pêche. Les usines fourniront ces nombres.
   const tractors = 0;
   const fishingBoats = 0;
-  const farm = harvest(FARMING, availableFarmers, tractors, p.farmTiles, p.fertilitySum);
+  // Report (00-Game §4, étape 3) : les disponibles en trop d'un côté vont à l'autre,
+  // jusqu'à ce qu'il soit plein. Le réglage ne joue que si la population manque.
+  const spareFarmers = Math.max(0, availableFarmers - requiredWorkers(FARMING, availableFarmers, tractors, p.farmTiles));
+  const spareFishers = Math.max(0, availableFishers - requiredWorkers(FISHING, availableFishers, fishingBoats, p.seaTiles));
+  const farm = harvest(FARMING, availableFarmers, tractors, p.farmTiles, p.fertilitySum, spareFishers);
   // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
   const seaYield = Math.floor((p.seaTiles * waterYieldMilli(availableFishers, fishingBoats)) / MILLI);
-  const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield);
+  const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
 
   p.farmers = farm.workers;
   p.fishers = sea.workers;
-  p.idle = availableFarmers - farm.workers + (availableFishers - sea.workers);
+  p.idle = p.population - farm.workers - sea.workers;
   p.cultivated = farm.area;
   p.fished = sea.area;
   p.wheat = farm.yield;

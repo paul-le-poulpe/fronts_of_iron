@@ -239,24 +239,60 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     stepEconomy(s);
     const farmers = Math.floor((pop * 60) / 100);
     const fishers = pop - farmers;
-    const farm = bruteHarvest(FARMING, farmers, 0, d.farm, d.fertility);
-    const sea = bruteHarvest(FISHING, fishers, 0, d.water, d.water * FISHING.tileYield);
+    // Sans machine, M ne dépend pas du nombre de travailleurs : le report revient
+    // à ajouter aux disponibles d'un côté le surplus de l'autre (00-Game §4, étape 3).
+    const farmAlone = bruteHarvest(FARMING, farmers, 0, d.farm, d.fertility);
+    const seaAlone = bruteHarvest(FISHING, fishers, 0, d.water, d.water * FISHING.tileYield);
+    const farm = bruteHarvest(FARMING, farmers + (fishers - seaAlone.workers), 0, d.farm, d.fertility);
+    const sea = bruteHarvest(FISHING, fishers + (farmers - farmAlone.workers), 0, d.water, d.water * FISHING.tileYield);
     assert.deepEqual([p.farmers, p.cultivated, p.wheat], [farm.workers, farm.area, farm.yield]);
     assert.deepEqual([p.fishers, p.fished, p.fish], [sea.workers, sea.area, sea.yield]);
     assert.equal(p.fish, FISHING.tileYield * p.fished, "chaque case de mer pêchée vaut FISHING.tileYield");
     assert.equal(p.food, Math.max(farm.yield + sea.yield, FOOD.minimum));
-    assert.equal(p.idle, farmers - farm.workers + (fishers - sea.workers));
+    assert.equal(p.idle, pop - farm.workers - sea.workers);
     assert.equal(p.farmers + p.fishers + p.idle, pop);
     assert.ok(p.fished > 0 && p.fished <= d.water);
   });
 
-  it("sans case de mer, les pêcheurs n'ont rien à travailler : population inactive (choix provisoire, 02-Engine §7)", () => {
+  it("report : assez de monde pour tout travailler, les deux côtés sont pleins quel que soit le réglage", () => {
+    for (const percent of [0, 10, 50, 90, 100]) {
+      const s = withCity(SEA_MAP);
+      const p = s.players[0]!;
+      const d = disc(SEA_MAP, 50, 30);
+      p.population = 1_000_000;
+      applyIntent(s, { type: "set_farm_share", player: 1, percent }, []);
+      stepEconomy(s);
+      assert.equal(p.cultivated, d.farm, `${percent} % : tous les champs`);
+      assert.equal(p.fished, d.water, `${percent} % : toute la mer`);
+      assert.equal(p.farmers + p.fishers + p.idle, 1_000_000);
+    }
+  });
+
+  it("report : population insuffisante, le réglage décide, sans inactif", () => {
+    const s = withCity(SEA_MAP);
+    const p = s.players[0]!;
+    const d = disc(SEA_MAP, 50, 30);
+    const needFarm = bruteHarvest(FARMING, 1_000_000, 0, d.farm, d.fertility).workers;
+    const needSea = bruteHarvest(FISHING, 1_000_000, 0, d.water, d.water).workers;
+    p.population = Math.floor((needFarm + needSea) / 2);
+    applyIntent(s, { type: "set_farm_share", player: 1, percent: 30 }, []);
+    stepEconomy(s);
+    // 30 % de fermiers : moins que les champs n'en demandent ; les 70 % de pêcheurs dépassent la mer,
+    // leur surplus va aux champs. Tout le monde travaille.
+    assert.equal(p.idle, 0);
+    assert.equal(p.fishers, Math.min(needSea, p.farmers + p.fishers));
+    assert.ok(p.farmers > Math.floor((p.farmers + p.fishers) * 30 / 100));
+  });
+
+  it("sans case de mer, les pêcheurs vont aux champs (report)", () => {
     const s = withCity(LAND_MAP);
     const p = s.players[0]!;
+    const d = disc(LAND_MAP, 50, 30);
     applyIntent(s, { type: "set_farm_share", player: 1, percent: 0 }, []);
     const pop = p.population;
     stepEconomy(s);
-    assert.deepEqual([p.farmers, p.fishers, p.idle, p.food], [0, 0, pop, FOOD.minimum]);
+    const farm = bruteHarvest(FARMING, pop, 0, d.farm, d.fertility);
+    assert.deepEqual([p.farmers, p.fishers, p.idle], [farm.workers, 0, pop - farm.workers]);
     applyIntent(s, { type: "set_farm_share", player: 1, percent: 100 }, []);
     stepEconomy(s);
     assert.equal(p.fishers, 0);
@@ -316,7 +352,10 @@ describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
     const t = withCity(LAND_MAP);
     applyTurn(t, { turn: 1, intents: [{ type: "set_farm_share", player: 1, percent: 40 }] });
     assert.equal(t.players[0]!.farmPercent, 40);
-    assert.equal(t.players[0]!.farmers, Math.floor((POPULATION.initial * 40) / 100));
+    // Pas de mer sur cette carte : les 60 % de pêcheurs vont aux champs (report).
+    const all = withCity(LAND_MAP);
+    applyTurn(all, { turn: 1, intents: [] });
+    assert.equal(t.players[0]!.farmers, all.players[0]!.farmers);
     assert.equal(t.players[0]!.farmers + t.players[0]!.idle, POPULATION.initial);
   });
 });
@@ -499,7 +538,12 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
         // Avec FOOD.minimum à 1 500, les joueurs simulés restent sous leur
         // nourriture : on force un surplus négatif (état artificiel) pour que la
         // baisse soit aussi exercée.
-        if (turn === 1500) for (const p of state.players) p.population += 3 * FOOD.minimum;
+        // Plus que toute la nourriture que ses terres et sa mer peuvent donner.
+        if (turn === 1500) {
+          for (const p of state.players) {
+            p.population = 2 * (p.fertilitySum + p.seaTiles * FISHING.tileYieldMax + FOOD.minimum);
+          }
+        }
         for (const p of state.players) {
           assert.ok(p.population >= 0);
           assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE, `reste ${p.growthRemainder}`);

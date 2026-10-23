@@ -244,20 +244,25 @@ travailleurs (§7). `S` = 10 000. Pour un joueur :
 fermiers_disponibles = floor(population × farmPercent / 100)
 pêcheurs_disponibles = population − fermiers_disponibles   (pas de ligne de production : §7)
 
-récolte(config, F, machines, surface_max, fertilité_totale) :
+récolte(config, F, machines, surface_max, fertilité_totale, report) :
   X        = F == 0 ? 0 : min(S, floor(machines × 1000 × S / (F × m_max)))
   f        = courbe(X, n)
-  M        = M_base + floor((M_max − M_base) × f / S)
+  M        = M_base + floor((M_max − M_base) × f / S)    calculé avec F seul, pas F + report
   requis   = ceil(surface_max × 1000 / M)           arrondi vers le haut (§7)
-  travail  = min(F, requis)                          les autres F sont inactifs
+  travail  = min(F + report, requis)
   surface  = min(surface_max, floor(travail × M / 1000))
   produit  = surface_max == 0 ? 0 : floor(fertilité_totale × surface / surface_max)
 
 courbe(X, n) : p = S ; n fois : p = floor(p × (S − X) / S) ; f = S − p     (00-Game §6.3)
 
-blé      = récolte(FARMING, fermiers_disponibles, tracteurs = 0, farmTiles, fertilitySum)
+report (00-Game §4, étape 3) : les disponibles en trop d'un côté vont à l'autre
+surplus_fermiers = max(0, fermiers_disponibles − requis_champs)
+surplus_pêcheurs = max(0, pêcheurs_disponibles − requis_mer)
+
+blé      = récolte(FARMING, fermiers_disponibles, tracteurs = 0, farmTiles, fertilitySum, surplus_pêcheurs)
 rendement_eau = tileYield × 1000 + floor((tileYieldMax − tileYield) × 1000 × f / S)   millièmes, même f que la pêche
-poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux = 0, seaTiles, floor(seaTiles × rendement_eau / 1000))
+poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux = 0, seaTiles, floor(seaTiles × rendement_eau / 1000), surplus_fermiers)
+inactifs = population − fermiers − pêcheurs
 nourriture = max(blé + poisson, FOOD.minimum)
 
 surplus  = nourriture − population × POPULATION.foodPerHead      (négatif possible)
@@ -518,8 +523,9 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
 17. Répartition fermiers / pêcheurs : `farmPercent`, entier 0 à 100, part de la
     population hors usines qui devient fermiers ; le reste devient pêcheurs. 100
     au départ. Ordre `set_farm_share { player, percent }`, valide si `percent` est
-    un entier de 0 à 100 (00-Game §9 : format à définir). Un joueur sans case
-    d'eau a ses pêcheurs inactifs (00-Game §13).
+    un entier de 0 à 100 (00-Game §9 : format à définir). Le report (00-Game §4,
+    étape 3, règle de l'auteur) envoie le surplus d'un côté vers l'autre : un
+    joueur sans case d'eau a tous ses travailleurs aux champs.
 18. Unités : la population est un nombre de personnes ; les surfaces sont des
     cases ; `M` est en millièmes de case par travailleur ; `m_max` est en machines
     pour 1 000 travailleurs. Tracteurs et bateaux de pêche valent 0 (pas

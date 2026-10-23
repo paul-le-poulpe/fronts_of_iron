@@ -207,7 +207,9 @@ chose a changé (`requestAnimationFrame`).
   moteur reste l'autorité** et vérifie à nouveau.
 - **Panneau latéral** : population, fermiers, pêcheurs, inactifs, nourriture,
   villes, cultivé / max, pêché / max du joueur ; curseur de la part de fermiers
-  (0 à 100 %), l'ordre `set_farm_share` part au relâchement ; tableau de tous les
+  (0 à 100 %), l'ordre `set_farm_share` part au relâchement ; la note sous le
+  curseur rappelle le report (00-Game §4) : le réglage ne compte que si la
+  population ne suffit pas à travailler champs et mer ; tableau de tous les
   joueurs (couleur, population, villes) ; case survolée (coordonnées, terrain et
   altitude, fertilité, fer, propriétaire, ville) ; case à cocher du fer ; bloc
   développement (durées mesurées, pause, quitter).

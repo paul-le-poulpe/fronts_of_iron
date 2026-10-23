@@ -385,8 +385,23 @@ dessinée plus grande, selon le niveau de l'usine (son nombre de lignes).
      §8.3) est sautée, sans arrêter le remplissage des lignes suivantes ;
   2. le reste devient **fermiers** et **pêcheurs**, dans la proportion choisie
      par le joueur (un réglage ; l'interface sera définie par l'auteur) ;
-  3. les fermiers et pêcheurs qui n'ont pas de surface à travailler (§6)
-     forment la **population inactive**.
+  3. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
+     a plus de travailleurs que sa surface n'en demande (§6.2, §6.4), le
+     surplus passe à l'autre côté, jusqu'à ce que celui-ci soit plein. Le
+     réglage ne joue donc que quand la population ne suffit pas à travailler
+     à la fois tous les champs et toute la mer ; sinon, les deux sont remplis
+     à 100 % ;
+  4. ceux qui n'ont toujours pas de surface à travailler forment la
+     **population inactive**.
+
+  ```
+  F, P              = fermiers et pêcheurs disponibles, selon le réglage
+  F_requis, P_requis = travailleurs requis (§6.2, §6.4 ; mécanisation calculée
+                       avec F et P, une fois)
+  fermiers = min(F_requis, F + max(0, P − P_requis))
+  pêcheurs = min(P_requis, P + max(0, F − F_requis))
+  inactifs = population − fermiers − pêcheurs
+  ```
 
 ### 4.1 Population maximale et croissance
 
@@ -974,8 +989,8 @@ valider sur la visualisation.
   les champs ?
 - Le format du réglage fermiers / pêcheurs, et son effet tant qu'un joueur n'a
   pas de cases de mer. Choix provisoire du moteur : un pourcentage entier de
-  fermiers, 100 par défaut ; les pêcheurs sans mer sont inactifs (02-Engine
-  §7).
+  fermiers, 100 par défaut (02-Engine §7). Sans mer, les pêcheurs vont aux
+  champs par le report du §4.
 - Ordre dans un tour : choix provisoire du moteur, les ordres d'abord, puis la
   répartition, la nourriture et la croissance de chaque joueur (02-Engine §7).
 - Si la population ne suffit pas à couvrir la demande d'extraction : extraction

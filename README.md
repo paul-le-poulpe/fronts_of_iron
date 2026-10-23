@@ -54,8 +54,10 @@ partie, aucun lobby, aucune connexion réseau pendant la partie.
   - Les suivantes coûtent de la population et doivent être dans le rayon
     d'expansion d'une de tes villes (cercle affiché), hors de la zone de toute
     ville.
-- **Fermiers et pêcheurs** : le curseur du panneau de droite règle la part de ta
-  population qui cultive ; le reste pêche, si tes villes touchent l'eau.
+- **Fermiers et pêcheurs** : si ta population suffit à travailler tous tes
+  champs et toute ta mer, les deux sont remplis. Sinon, le curseur du panneau
+  de droite décide de la part qui cultive ; le reste pêche, si tes villes
+  touchent l'eau.
 - **Carte** : molette pour zoomer, glisser pour déplacer. Le panneau de droite
   décrit la case survolée.
 - **Outils de développement** : bouton pause (pas une règle du jeu), et `?step=20`

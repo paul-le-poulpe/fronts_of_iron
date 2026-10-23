@@ -172,8 +172,12 @@ function updatePanel(players: readonly PlayerStats[]): void {
     slider.value = String(me.farmPercent);
     $("farm-value").textContent = `${me.farmPercent} %`;
   }
+  // Report (00-Game §4) : le réglage ne joue que si la population ne suffit pas à tout travailler.
   $("farm-note").textContent =
-    `Pêcheurs : ${100 - me.farmPercent} %` + (me.seaTiles === 0 ? " (aucune case d'eau dans vos zones : inactifs)" : "");
+    `Pêcheurs : ${100 - me.farmPercent} %. ` +
+    (me.seaTiles === 0
+      ? "Aucune case d'eau dans vos zones : tout le monde va aux champs."
+      : "Si un côté a assez de monde, le surplus va à l'autre ; le réglage ne compte que si la population manque.");
 
   const rows = $("players").querySelectorAll("tbody tr");
   players.forEach((p, i) => {
