@@ -607,7 +607,9 @@ mineurs[r]      = extraction[r] / Mécanisation_minière
   supplémentaire du même bien dans la même usine, `x` =
   `FACTORY.specializationPercent`. Formule exacte à définir (§13). But : un
   joueur spécialisé produit plus efficacement et échange pour obtenir le
-  reste.
+  reste. **Pas implémentée pour l'instant** : prévue plus tard (décision de
+  l'auteur, 23 octobre 2026). D'ici là, chaque ligne emploie
+  `FACTORY.workersPerLine` ouvriers.
 - Pas de stock : la production d'une usine à un tour est le flux disponible à
   ce tour.
 
@@ -650,10 +652,13 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
 - Le joueur crée les lignes (ordre).
 - **Nombre maximal de lignes** par joueur : fonction de sa population, définie
   dans le fichier de configuration.
-- **Coût et conditions** : pas encore décidés. Piste de l'auteur : avoir une
-  ligne du même bien, ou d'un bien « parent », qui tourne depuis un certain
-  temps, et sacrifier un peu de population. C'est la forme envisagée du
-  déblocage décrit plus haut.
+- **Condition (déblocage)** : une ligne d'un bien qui a un parent dans l'arbre
+  de l'usine (§8.4) ne peut être créée que si une ligne de ce parent
+  fonctionne depuis au moins `FACTORY.unlockTurns` tours (500 pour commencer,
+  valeur donnée par l'auteur). La production de base de l'usine (la racine de
+  l'arbre, par exemple les fusils) n'a pas de condition.
+- **Coût** : pas encore décidé. Piste de l'auteur : sacrifier un peu de
+  population.
 
 ### 8.3 Armement
 
@@ -799,7 +804,8 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
 | `ARMAMENT` (noms) | noms proposés des cinq types d'infanterie : `rifle`, `machineGun`, `artillery`, `antiAirGun`, `antiTankGun` (§8.4) |
 | `FACTORY.workersPerLine` | ouvriers employés par une ligne de production (§8) |
-| `FACTORY.specializationPercent` | `x` : ouvriers en moins, en %, par ligne supplémentaire du même bien dans une usine (§8) |
+| `FACTORY.specializationPercent` | `x` : ouvriers en moins, en %, par ligne supplémentaire du même bien dans une usine (§8) ; pas encore utilisé |
+| `FACTORY.unlockTurns` | nombre de tours de fonctionnement d'une ligne du bien parent avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; assez fort, selon l'auteur |
@@ -974,10 +980,13 @@ valider sur la visualisation.
 **Usines**
 - Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
   plus tard.
-- Créer une ligne : coût, conditions (durée de fonctionnement d'une ligne du
-  même bien ou d'un bien parent), arbre des biens « parents ».
-- Spécialisation : `x` % en moins par ligne, appliqué de façon composée
-  (`(1 − x)ᵏ`) ou linéaire (`1 − k·x`) ; plancher éventuel.
+- Créer une ligne : coût (piste : de la population). Condition décidée :
+  `FACTORY.unlockTurns` tours de fonctionnement d'une ligne du parent (§8.2).
+  Restent : tours consécutifs ou cumulés ; ligne du parent dans la même usine
+  ou n'importe où dans la nation ; une ligne suspendue (§8.3) compte-t-elle ?
+- Spécialisation (reportée par l'auteur, prévue plus tard) : `x` % en moins
+  par ligne, appliqué de façon composée (`(1 − x)ᵏ`) ou linéaire (`1 − k·x`) ;
+  plancher éventuel.
 - `FACTORY.workersPerLine` : une valeur commune, ou une par bien ?
 - Forme du nombre maximal de lignes en fonction de la population.
 
@@ -1027,8 +1036,8 @@ valider sur la visualisation.
 - Ordre dans le tour : production, puis équipement des armées, puis réserve ?
 - Arbre (§8.4) : la ligne « plus haut dans l'arbre » qui débloque une branche
   doit-elle être dans la même usine, ou n'importe où dans la nation ?
-- Usine d'armement d'infanterie (§8.4) : durée de fonctionnement qui
-  débloque la branche suivante (§8.2). Ressource consommée : 1 fer par ligne
+- Usine d'armement d'infanterie (§8.4) : la branche suivante se débloque après
+  `FACTORY.unlockTurns` tours (§8.2). Ressource consommée : 1 fer par ligne
   pour commencer (§8).
 - Usage des cinq types d'infanterie par les armées : avec le module armée.
 

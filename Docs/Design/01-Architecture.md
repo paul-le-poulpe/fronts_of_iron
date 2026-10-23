@@ -164,6 +164,36 @@ déduit des villes (rayon de contrôle, puis ville la plus proche).
 - **Plus tard** : le même `server/` sur une vraie machine. La règle 5 du
   `CLAUDE.md` existe pour ça.
 
+### Client : développé en local, servi par Cloudflare
+
+Le client est développé sur le PC (`npm run dev`, Vite, `http://localhost`),
+puis servi par le Worker. C'est le même code : Vite le compile en fichiers
+statiques, que le Worker sert par `[assets]` (`worker/wrangler.toml`). Pour
+que le passage de l'un à l'autre ne demande aucune modification du code :
+
+1. **Le lobby est appelé par un chemin relatif** (`/api/games`), jamais par une
+   adresse complète. En développement, Vite redirige `/api/*` vers
+   `wrangler dev` (`http://127.0.0.1:8787`, réglage `server.proxy` de Vite).
+   Sur Cloudflare, le Worker traite `/api/*` avant les fichiers statiques
+   (`run_worker_first`).
+2. **L'adresse du serveur de partie n'est jamais écrite dans le code.** Elle
+   vient du lobby (`address`, une adresse `https://` du tunnel), et le client
+   remplace `https://` par `wss://` pour ouvrir le WebSocket (§10). Seul un
+   essai direct sans tunnel utilise `ws://localhost`.
+3. **Le moteur tourne dans un Web Worker créé par
+   `new Worker(new URL("…", import.meta.url), { type: "module" })`** : Vite
+   compile ce Worker de la même façon en développement et au build.
+4. **Au premier build du client**, `[assets] directory` passe de `public` au
+   dossier compilé du client, et la page d'accueil actuelle
+   (`worker/public/index.html`, liste des parties) devient un écran du client.
+   Le workflow ajoute `npm ci` puis le build Vite avant `wrangler deploy`
+   (règle 7 du `CLAUDE.md`).
+
+Envisagé, non décidé : un **mode solo contre des bots**, où la page crée
+elle-même un tour toutes les 100 ms avec les ordres du joueur et des bots,
+sans serveur de partie ni lobby. Il n'a besoin que de la page, servie en local
+ou par Cloudflare.
+
 ## 7. Décisions écartées, et pourquoi
 
 | Écarté | Raison |
@@ -226,7 +256,7 @@ Ordre prévu :
 5. Client (`client/`). Seul existe `client/public/icons/` : des icônes
    provisoires (carrés gris), que l'auteur remplace par ses dessins sous le
    même nom (00-Game §11). Pas encore de `package.json` : `client/` n'est pas
-   un workspace npm.
+   un workspace npm. Règles à suivre en le créant : §6, Client.
 
 ## 10. Pièges
 
@@ -239,3 +269,7 @@ Ordre prévu :
   `02-Engine.md` §6.
 - Une page servie en `https` ne peut pas ouvrir un WebSocket `ws://` : l'hôte
   doit être joint en `wss://`, ce que fournit le tunnel.
+- Une adresse complète écrite dans le client (`http://localhost:8787/api/…`,
+  `ws://localhost:…`) fonctionne en développement et casse une fois la page
+  servie par Cloudflare. Chemins relatifs pour le lobby, adresse du lobby pour
+  le serveur de partie (§6, Client).
