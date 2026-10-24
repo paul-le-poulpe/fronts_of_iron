@@ -506,7 +506,9 @@ villes voisines.
 ### 6.2 Fermiers et mécanisation
 
 ```
-x               = min(tracteurs / fermiers_disponibles, m_max) / m_max
+fermiers_base   = surface_max / M_base        fermiers qu'il faudrait sans tracteur
+référence       = min(fermiers_disponibles, fermiers_base)
+x               = min(tracteurs / référence, m_max) / m_max
 Mécanisation    = M_base + (M_max − M_base) × f(x)          surface par fermier
 fermiers_requis = surface_max / Mécanisation
 fermiers        = min(fermiers_disponibles, fermiers_requis)
@@ -520,6 +522,22 @@ surface_cultivée = fermiers × Mécanisation                    (≤ surface_ma
   disponibles. Il n'est pas recalculé avec les fermiers qui travaillent
   réellement : cela ferait dépendre la mécanisation d'elle-même, et ne
   changerait que le nombre d'inactifs (la surface est alors déjà au maximum).
+- **Les fermiers disponibles sont plafonnés à `fermiers_base`** (décision de
+  l'auteur, 24 octobre 2026). Un disponible au-delà de `fermiers_base`
+  n'aurait jamais de travail, même sans tracteur : sans plafond, il comptait
+  quand même dans le partage des tracteurs, et une population qui grandit
+  faisait baisser l'effet des mêmes tracteurs alors que la surface était déjà
+  entièrement travaillée. Quand la population manque (disponibles sous
+  `fermiers_base`), rien ne change. Tracteurs d'une mécanisation totale :
+  `référence × m_max`.
+- **Les travailleurs reçus par le report (§4) comptent parmi les
+  disponibles** : à 0 % de fermiers, les pêcheurs en trop qui vont aux champs
+  utilisent les tracteurs (constat de l'auteur, 24 octobre 2026 : sans cela,
+  ils cultivaient sans tracteur).
+- Même règle pour la pêche (bateaux, pêcheurs, cases d'eau, §6.4 ; le
+  rendement de l'eau utilise la même référence). Pour les mines, la surface
+  est le nombre de cases **exploitées** pour la demande, pas tout le gisement
+  (§7).
 - `M_base`, `M_max`, `m_max` et l'exposant `n` de la courbe sont fixes, dans le
   fichier de configuration. Seul le nombre de tracteurs par fermier varie.
 
@@ -737,10 +755,13 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
     provisoire les remplace ;
   - **une ligne de panneau par bien de l'arbre de l'usine** (précision de
     l'auteur, 24 octobre 2026), dans l'un de trois états : en production
-    (curseur des lignes actives et bouton **+** qui ajoute une ligne de ce
-    bien), débloqué sans ligne (bouton **+** qui crée la première ligne), ou
-    verrouillé (symbole du parent → flèche → symbole du bien). Il n'y a pas de
-    bouton « Ajouter une ligne » séparé ni de liste de biens à choisir (§8.2).
+    (curseur des lignes actives avec un trait rouge aux lignes utiles, §8.2,
+    bouton **+** pour une ligne à la main, et
+    dessous, pour une machine, une jauge de croissance qui se remplit jusqu'à
+    la ligne suivante, §8.2), débloqué sans
+    ligne (bouton **+** qui crée la première ligne), ou verrouillé (symbole du
+    parent → flèche → symbole du bien). Il n'y a pas de bouton « Ajouter une
+    ligne » séparé ni de liste de biens à choisir (§8.2).
 - **Priorité** : le joueur fait glisser **des villes entières** (une section
   monte ou descend avec toutes ses lignes), et **des lignes au sein d'une
   ville**. Les deux ne se mélangent pas : une ligne ne sort pas de la section
@@ -772,6 +793,59 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   symboles (§8.1).
 - **Coût** : pas encore décidé. Piste de l'auteur : sacrifier un peu de
   population.
+
+**Croissance automatique des lignes** (décision de l'auteur, 24 octobre 2026).
+
+- Un groupe de lignes de **machine** (tracteurs, bateaux de pêche, engins
+  miniers) **grandit tout seul** : après avoir tourné `FACTORY.growthTurns`
+  tours, il gagne une ligne, puis la progression repart de zéro pour la ligne
+  suivante.
+- Même principe que le déblocage : une jauge sous la ligne du panneau se
+  remplit avec les tours, comme la flèche de déblocage.
+- **Arrêt à la demande** : un groupe cesse de grandir quand la production du
+  joueur pour ce bien couvre sa demande. Pour une machine, la demande est le
+  nombre de machines d'une mécanisation totale (§6.2 : référence × `m_max`),
+  c'est-à-dire quand la jauge de cette machine est pleine dans la barre
+  « Ressources » (§11).
+- **Le bouton + reste** sur chaque bien en production (précision de l'auteur) :
+  le joueur peut ajouter une ligne à la main, y compris au-delà de la demande.
+  Il est gardé pour le développement, où il est pratique. **Problème connu**
+  (noté par l'auteur, 24 octobre 2026) : tel quel, le joueur n'a aucune raison
+  d'attendre la croissance automatique, trop lente à côté d'un clic. Pour la
+  version finale : soit le bouton disparaît, soit ajouter une ligne a un
+  **coût**, qui donne une raison d'attendre. Le jeu n'a pas d'argent (choix de
+  conception) : ce qui serait dépensé reste à trouver (§13).
+- **La production d'un bien ne dépasse jamais sa demande** (décision de
+  l'auteur, 24 octobre 2026). Un flux de machines au-delà de la demande ne
+  sert à rien. Au remplissage (§4), les lignes d'un bien ne sont remplies que
+  tant que la production déjà remplie pour ce bien (toutes usines, dans l'ordre
+  de priorité) est sous la demande ; les lignes suivantes de ce bien ne
+  reçoivent personne, et leurs ouvriers vont ailleurs (autres lignes, champs,
+  pêche). Le remplissage continue avec les autres biens. Même si le joueur a
+  mis le curseur plus haut, la production s'arrête à cette limite ; quand la
+  demande baisse, la production baisse d'elle-même. Exemple de l'auteur : ne
+  pas produire des milliers de bateaux de pêche quand les pêcheurs sont partis
+  dans les usines.
+- Sur le curseur des lignes actives (§8.1), un **trait rouge** marque le
+  nombre de lignes utiles de ce groupe : tout à droite si toutes ses lignes ne
+  suffisent pas à la demande, au milieu sinon. Ne concerne pas l'armement.
+- **Curseur et barre bleue sont deux informations distinctes** (précision de
+  l'auteur, 24 octobre 2026) : le **curseur** reste là où le joueur l'a placé,
+  c'est le maximum de lignes qu'il autorise ; la **barre bleue** sous le
+  curseur montre les lignes en service, ce maximum ramené au pas juste
+  au-dessus du trait rouge (lignes utiles arrondies vers le haut). La vraie
+  production est celle de la barre bleue. Quand la demande remonte, la barre
+  remonte jusqu'au curseur.
+- **Armement : pas de croissance automatique pour l'instant.** Une mécanique
+  semblable n'aura de sens qu'avec les armées, qui feront la demande
+  d'armement (§13, à traiter plus tard). Aujourd'hui, une ligne d'armement ne
+  grandit que par le bouton +.
+- **Avec le commerce** (non décrit) : la production maximale d'une usine sera
+  la consommation du joueur **plus ce qu'il exporte** en flux.
+- Choix provisoires du moteur (02-Engine §7), à valider : un tour compte quand
+  **toutes** les lignes du groupe produisent ; la capacité qui se compare à la
+  demande compte toutes les lignes du joueur pour ce bien, toutes usines
+  confondues ; un groupe ne perd pas de ligne si la demande baisse.
 
 ### 8.3 Armement
 
@@ -911,6 +985,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.workersPerLine` | ouvriers employés par une ligne de production (§8) |
 | `FACTORY.specializationPercent` | `x` : ouvriers en moins, en %, par ligne supplémentaire du même bien dans une usine (§8) ; pas encore utilisé |
 | `FACTORY.unlockTurns` | nombre de tours de fonctionnement d'une ligne du bien parent avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
+| `FACTORY.growthTurns` | nombre de tours de fonctionnement d'un groupe de lignes avant qu'il gagne une ligne (§8.2, croissance automatique) ; à fixer |
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; assez fort, selon l'auteur |
@@ -957,12 +1032,18 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   1. **Population** : total, variation par tour, maximum. Détail : la part de
      la population par occupation (ouvriers d'usine, mineurs, fermiers,
      pêcheurs, inactifs), en rectangles proportionnels.
-  2. **Nourriture** : production par tour, surplus. Détail : agriculture et
-     pêche séparées ; plus tard importations et exportations.
+  2. **Nourriture** : production par tour, surplus. Détail : en haut, une jauge
+     de population en trois sections (précision de l'auteur, 24 octobre
+     2026) : population actuelle (**vert**), population maximale avec la
+     nourriture du tour (**vert hachuré**), population maximale si toutes les
+     terres agricoles et toutes les zones de pêche étaient exploitées
+     (**gris plein, très clair**). Puis agriculture (barre couleur **blé**) et pêche
+     (barre **bleue**) séparées ; plus tard importations et exportations.
   3. **Ressources (flux)** : rien dans la barre, tout dans le détail. Barres
      **vertes**, pour marquer un flux. Fer : barre pleine = capacité, vert =
      production du tour, **gros trait noir** = production requise par les
-     lignes actives ; si la production est sous le requis, l'écart est
+     lignes en service (le réglage du joueur ramené à la demande, §8.2) ; si
+     la production est sous le requis, l'écart est
      **rouge**. Machines (tracteurs, bateaux de pêche, engins miniers) :
      valeur actuelle sur le nombre qu'il faudrait pour une mécanisation totale.
   4. **Armement (stock)** : rien dans la barre, tout dans le détail. Une jauge
@@ -1108,6 +1189,19 @@ valider sur la visualisation.
 **Usines**
 - Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
   plus tard.
+- Croissance automatique des lignes (§8.2) :
+  - **Version finale : bouton + retiré ou payant.** Aujourd'hui, cliquer + est
+    toujours plus rapide qu'attendre. Il faut retirer le bouton ou lui donner
+    un coût ; pas d'argent dans le jeu, donc trouver autre chose à dépenser.
+    À décider avec l'auteur ;
+  - **À traiter avec les armées** : croissance automatique de l'armement,
+    selon une demande venue des armées (décision de l'auteur : même mécanique
+    que les machines, plus tard) ;
+  - tours qui comptent (provisoire : toutes les lignes du groupe produisent) ;
+  - quand la demande baisse (provisoire : le groupe garde ses lignes) ;
+  - `FACTORY.growthTurns` : 500 pour l'essai, comme `unlockTurns`, à fixer ;
+  - commerce : demande = consommation + exportations (§8.2), quand le
+    commerce sera décrit.
 - Créer une ligne : coût (piste : de la population). Condition décidée :
   `FACTORY.unlockTurns` tours de fonctionnement d'une ligne du parent (§8.2).
   Décidé : tours cumulés de production, la pause ne fait pas perdre la

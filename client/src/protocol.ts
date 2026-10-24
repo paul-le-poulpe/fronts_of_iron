@@ -28,7 +28,9 @@ export type ToWorker =
       readonly stepMs?: number;
     }
   | { readonly type: "order"; readonly id: number; readonly order: HumanOrder }
-  | { readonly type: "pause"; readonly paused: boolean };
+  | { readonly type: "pause"; readonly paused: boolean }
+  /** Outil de développement, mode solo seulement : modifie l'état directement, hors des règles et des ordres. */
+  | { readonly type: "debug"; readonly action: "addPopulation"; readonly amount: number };
 
 // ---- Worker → page ----
 
@@ -54,6 +56,8 @@ export interface FactoryCatalog {
   /** Dans l'ordre du moteur : l'indice d'un type est celui de `factoryMarks`. */
   readonly factoryTypes: readonly { readonly id: string; readonly tree: readonly { readonly good: string; readonly parent: string | null }[] }[];
   readonly unlockTurns: number;
+  /** `FACTORY.growthTurns` : tours avant une ligne automatique (00-Game §8.2). */
+  readonly growthTurns: number;
   readonly workersPerLine: number;
   /** Biens, dans l'ordre de `HumanDetail.goods`. */
   readonly goodIds: readonly string[];
@@ -82,6 +86,12 @@ export interface LineGroupView {
   readonly lines: number;
   readonly active: number;
   readonly filled: number;
+  /** Tours comptés vers la prochaine ligne automatique (biens seulement, 00-Game §8.2). */
+  readonly growth: number;
+  /** La capacité du joueur pour ce bien couvre la demande : plus de croissance automatique. */
+  readonly demandMet: boolean;
+  /** Lignes de ce groupe dont la production reste sous la demande (biens) ; `lines` pour l'armement. Trait rouge du curseur. */
+  readonly usefulLines: number;
 }
 
 export interface FactoryView {
@@ -132,6 +142,14 @@ export interface PlayerStats {
   readonly miners: number;
   readonly minedTiles: number;
   readonly ironExtracted: number;
+  /** Nourriture si toutes les terres et toutes les eaux étaient travaillées (au moins FOOD.minimum). */
+  readonly foodPotential: number;
+  /**
+   * Machines d'une mécanisation totale (00-Game §6.2) : la référence (disponibles
+   * plafonnés aux travailleurs qu'il faudrait sans machine) × machines pour 1 000
+   * ÷ 1 000. Clé = bien-machine.
+   */
+  readonly fullMachines: Readonly<Record<string, number>>;
 }
 
 export interface OrderResult {

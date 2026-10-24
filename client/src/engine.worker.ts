@@ -61,5 +61,8 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
       paused = msg.paused;
       post({ type: "paused", paused });
       break;
+    case "debug":
+      if (game !== null) game.debug(msg.action, msg.amount);
+      break;
   }
 };

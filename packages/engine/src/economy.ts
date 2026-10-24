@@ -42,10 +42,20 @@ export function mechanizationCurve(X: number, n: number): number {
 }
 
 /**
+ * Référence du nombre de machines par travailleur (00-Game §6.2) : les
+ * travailleurs disponibles, plafonnés à ceux qu'il faudrait sans machine pour
+ * couvrir `surface` cases. Un disponible au-delà n'aurait jamais de travail : il
+ * ne dilue pas les machines.
+ */
+export function machineReference(cfg: MechanizationConfig, available: number, surface: number): number {
+  return Math.min(available, Math.ceil((surface * MILLI) / cfg.mechanizationBase));
+}
+
+/**
  * Mécanisation M, en millièmes de case par travailleur (00-Game §6.2) :
- * `available` travailleurs disponibles, `machines` machines (tracteurs ou
- * bateaux). La part de machines est calculée une fois, avec les travailleurs
- * disponibles et non ceux qui travaillent réellement.
+ * `machines` machines (tracteurs ou bateaux) rapportées à `available`
+ * travailleurs (la référence, `machineReference`). Calculée une fois, avec les
+ * travailleurs disponibles et non ceux qui travaillent réellement.
  */
 export function mechanization(cfg: MechanizationConfig, available: number, machines: number): number {
   const f = machineCurve(cfg, available, machines);
@@ -95,10 +105,11 @@ export function harvest(
   fertilitySum: number,
   extra = 0,
 ): Harvest {
-  const M = mechanization(cfg, available, machines);
-  const required = Math.ceil((surfaceMax * MILLI) / M);
   // `extra` : travailleurs en trop de l'autre activité (report, 00-Game §4). Ils
-  // ne changent pas M, calculé une fois avec les disponibles (00-Game §6.2).
+  // comptent parmi les disponibles de la référence : à 0 % de fermiers, les
+  // pêcheurs reportés aux champs utilisent les tracteurs (00-Game §6.2).
+  const M = mechanization(cfg, machineReference(cfg, available + extra, surfaceMax), machines);
+  const required = Math.ceil((surfaceMax * MILLI) / M);
   const workers = Math.min(available + extra, required);
   const area = Math.min(surfaceMax, Math.floor((workers * M) / MILLI));
   const output = surfaceMax === 0 ? 0 : Math.floor((fertilitySum * area) / surfaceMax);
@@ -107,7 +118,7 @@ export function harvest(
 
 /** Travailleurs requis pour couvrir `surfaceMax` cases (00-Game §6.2), arrondi vers le haut. */
 export function requiredWorkers(cfg: MechanizationConfig, available: number, machines: number, surfaceMax: number): number {
-  return Math.ceil((surfaceMax * MILLI) / mechanization(cfg, available, machines));
+  return Math.ceil((surfaceMax * MILLI) / mechanization(cfg, machineReference(cfg, available, surfaceMax), machines));
 }
 
 /** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
@@ -146,7 +157,10 @@ interface LineFill {
  * groupes dans l'ordre de leur usine, lignes actives une par une. Une ligne reçoit
  * `workersPerLine` ouvriers et les mineurs du fer qu'elle ajoute, en entier ou
  * pas du tout ; la première ligne qui ne peut pas être remplie arrête tout le
- * remplissage. Écrit `filled` dans les groupes.
+ * remplissage. Une ligne de bien n'est pas remplie quand la production déjà
+ * remplie pour ce bien atteint sa demande du tour précédent (`goodsDemand`,
+ * 00-Game §8.2) : ses ouvriers vont ailleurs, et le remplissage continue avec les
+ * groupes suivants. Écrit `filled` dans les groupes.
  */
 function fillLines(p: Player, machines: number): LineFill {
   let workers = 0;
@@ -154,10 +168,13 @@ function fillLines(p: Player, machines: number): LineFill {
   let iron = 0;
   for (const f of p.factories) for (const g of f.groups) g.filled = 0;
   const capacity = p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile;
+  const produced = new Array<number>(p.goods.length).fill(0);
   scan: for (const f of p.factories) {
     for (const g of f.groups) {
       const ironPerLine = productConfig(g.good).ironPerLine;
+      const b = armamentIndex(g.good) < 0 ? goodIndex(g.good) : -1;
       for (let j = 0; j < g.active; j++) {
+        if (b >= 0 && produced[b]! >= p.goodsDemand[b]!) break;
         const demand = iron + ironPerLine;
         if (demand > capacity) break scan;
         const needed = minersFor(demand, machines);
@@ -166,6 +183,7 @@ function fillLines(p: Player, machines: number): LineFill {
         miners = needed;
         iron = demand;
         g.filled++;
+        if (b >= 0) produced[b] = produced[b]! + productConfig(g.good).productionPerLine;
       }
     }
   }
@@ -195,6 +213,7 @@ function produce(p: Player): void {
       }
     }
   }
+  growLines(p);
   for (let a = 0; a < ARMAMENT_IDS.length; a++) {
     const excess = Math.max(0, p.armamentReserve[a]! - armamentReserveMax(p, ARMAMENT_IDS[a]!));
     if (excess === 0) {
@@ -205,6 +224,36 @@ function produce(p: Player): void {
     const lost = Math.floor(total / CURVE_SCALE);
     p.armamentRemainder[a] = total - lost * CURVE_SCALE;
     p.armamentReserve[a] = p.armamentReserve[a]! - lost;
+  }
+}
+
+/**
+ * Croissance automatique des lignes de biens (00-Game §8.2) : un groupe dont toutes
+ * les lignes ont produit ce tour avance d'un tour ; après `FACTORY.growthTurns`
+ * tours, il gagne une ligne active et le compteur repart de 0. Il n'avance pas
+ * quand la capacité du joueur pour ce bien (toutes ses lignes × production par
+ * ligne) couvre déjà la demande (`goodsDemand`). L'armement ne grandit pas tout
+ * seul : sa demande attend les armées.
+ */
+function growLines(p: Player): void {
+  const capacity = new Array<number>(p.goods.length).fill(0);
+  for (const f of p.factories) {
+    for (const g of f.groups) {
+      if (armamentIndex(g.good) < 0) capacity[goodIndex(g.good)] += g.lines * productConfig(g.good).productionPerLine;
+    }
+  }
+  for (const f of p.factories) {
+    for (const g of f.groups) {
+      if (armamentIndex(g.good) >= 0) continue;
+      const b = goodIndex(g.good);
+      if (capacity[b]! >= p.goodsDemand[b]! || g.filled < g.lines) continue;
+      g.growth++;
+      if (g.growth < FACTORY.growthTurns) continue;
+      g.growth = 0;
+      g.lines++;
+      g.active++;
+      capacity[b] = capacity[b]! + productConfig(g.good).productionPerLine;
+    }
   }
 }
 
@@ -228,7 +277,7 @@ function stepPlayer(p: Player): void {
   const spareFishers = Math.max(0, availableFishers - requiredWorkers(FISHING, availableFishers, fishingBoats, p.seaTiles));
   const farm = harvest(FARMING, availableFarmers, tractors, p.farmTiles, p.fertilitySum, spareFishers);
   // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
-  const seaYield = Math.floor((p.seaTiles * waterYieldMilli(availableFishers, fishingBoats)) / MILLI);
+  const seaYield = Math.floor((p.seaTiles * waterYieldMilli(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), fishingBoats)) / MILLI);
   const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
 
   p.farmers = farm.workers;
@@ -243,6 +292,19 @@ function stepPlayer(p: Player): void {
   p.miners = lines.miners;
   p.minedTiles = ironTilesFor(lines.iron);
   p.ironExtracted = lines.iron;
+  // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2).
+  const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);
+  p.goodsDemand[TRACTOR] = full(machineReference(FARMING, availableFarmers + spareFishers, p.farmTiles), FARMING.maxMachinesPer1000);
+  p.goodsDemand[FISHING_BOAT] = full(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), FISHING.maxMachinesPer1000);
+  // Engins : sur le fer demandé par toutes les lignes actives, pas sur le fer extrait.
+  // Sinon une usine d'engins seule, plafonnée à une demande nulle, n'extrairait
+  // jamais de fer et sa demande resterait nulle.
+  let requiredIron = 0;
+  for (const f of p.factories) for (const g of f.groups) requiredIron += g.active * productConfig(g.good).ironPerLine;
+  p.goodsDemand[MINING_MACHINE] = full(
+    Math.ceil((ironTilesFor(Math.min(requiredIron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile)) * MILLI) / MINING.mechanizationBase),
+    MINING.maxMachinesPer1000,
+  );
   produce(p);
 
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la

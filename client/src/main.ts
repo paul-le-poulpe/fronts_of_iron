@@ -243,6 +243,11 @@ $("pause").addEventListener("click", () => {
   if (session !== null) post({ type: "pause", paused: !session.paused });
 });
 
+// Barre de debug (outils de développement, 03-Client) : hors des règles du jeu.
+$("dbg-pop").addEventListener("click", () => {
+  if (session !== null) post({ type: "debug", action: "addPopulation", amount: 1000 });
+});
+
 $("quit").addEventListener("click", () => {
   const s = session;
   if (s === null) return;

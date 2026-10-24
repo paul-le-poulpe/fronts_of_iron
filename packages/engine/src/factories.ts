@@ -117,7 +117,7 @@ export function buildFactory(state: GameState, playerId: number, city: number, t
   player.factories.push({
     city,
     type,
-    groups: [{ good: treeOf(type)[0]!.good, lines: 1, active: 1, filled: 0 }],
+    groups: [{ good: treeOf(type)[0]!.good, lines: 1, active: 1, filled: 0, growth: 0 }],
     progress: new Array<number>(treeOf(type).length).fill(0),
   });
   return true;
@@ -132,7 +132,7 @@ export function createLine(state: GameState, playerId: number, city: number, goo
   const factory = factoryOf(state.players[playerId - 1]!, city);
   if (factory === undefined || !isUnlocked(factory, good)) return false;
   const group = factory.groups.find((g) => g.good === good);
-  if (group === undefined) factory.groups.push({ good, lines: 1, active: 1, filled: 0 });
+  if (group === undefined) factory.groups.push({ good, lines: 1, active: 1, filled: 0, growth: 0 });
   else {
     group.lines++;
     group.active++;

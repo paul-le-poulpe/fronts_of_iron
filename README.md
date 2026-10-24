@@ -37,6 +37,13 @@ npm run dev -w client
 et affiche son adresse, `http://localhost:5173`. Ouvrir cette adresse dans un
 navigateur. `Ctrl + C` dans le terminal arrête le serveur.
 
+**La page affiche une erreur de connexion** (« connexion refusée », « site
+inaccessible ») : le serveur de développement n'est plus lancé, par exemple
+parce que son terminal a été fermé. Relancer `npm run dev -w client` depuis la
+racine du dépôt, puis recharger la page. Une partie déjà ouverte continue de
+tourner sans le serveur, mais recharger la page la perd : elle n'existe que
+dans la page.
+
 Ce serveur ne fait que livrer la page. La partie elle-même se calcule dans le
 navigateur : le moteur du jeu tourne dans un Web Worker de la page, qui joue un
 tour toutes les 100 ms avec tes ordres et ceux des bots. Aucun serveur de
@@ -60,8 +67,10 @@ partie, aucun lobby, aucune connexion réseau pendant la partie.
   touchent l'eau.
 - **Carte** : molette pour zoomer, glisser pour déplacer. Le panneau de droite
   décrit la case survolée.
-- **Outils de développement** : bouton pause (pas une règle du jeu), et `?step=20`
-  à la fin de l'adresse pour un tour toutes les 20 ms au lieu de 100.
+- **Outils de développement** : bouton pause (pas une règle du jeu), `?step=20`
+  à la fin de l'adresse pour un tour toutes les 20 ms au lieu de 100, et la
+  barre « Debug » en bas à droite (« +1 000 population »), qui modifie la
+  partie hors des règles.
 
 L'interface est provisoire. Détail du client : `Docs/Design/03-Client.md`.
 

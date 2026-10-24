@@ -260,6 +260,11 @@ export const FACTORY = {
   workersPerLine: 50,
   /** Tours de fonctionnement d'une ligne du parent avant de pouvoir créer une ligne de l'enfant (00-Game §8.2). */
   unlockTurns: 500,
+  /**
+   * Tours où toutes les lignes d'un groupe de biens produisent, avant qu'il gagne
+   * une ligne automatiquement (00-Game §8.2). Valeur d'essai, pas une valeur fixée.
+   */
+  growthTurns: 500,
   /** Types d'usines différents par ville (00-Game §8). */
   maxTypesPerCity: 1,
 } as const;

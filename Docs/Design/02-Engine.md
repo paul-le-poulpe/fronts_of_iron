@@ -290,14 +290,19 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 1. remplissage des lignes (00-Game §4, étape 1) :
      capacité = cases de fer du joueur × RESOURCES.iron.capacityPerTile
      travailleurs = 0 ; mineurs = 0 ; fer = 0 ; filled = 0 pour tous les groupes
+     produit[b] = 0 pour chaque bien
      pour chaque usine dans l'ordre de factories,
        pour chaque groupe dans l'ordre de l'usine,
          pour j de 1 à active :
+           si le groupe est un bien b et produit[b] ≥ goodsDemand[b] :
+             groupe suivant (pas un ARRÊT : 00-Game §8.2, la production d'un
+             bien ne dépasse pas sa demande du tour précédent)
            demande = fer + ironPerLine
            si demande > capacité : ARRÊT (de tout le remplissage)
            m = mineurs(demande, engins)
            si travailleurs + workersPerLine + m > population : ARRÊT
            travailleurs += workersPerLine ; mineurs = m ; fer = demande ; filled++
+           si bien : produit[b] += productionPerLine
 
    cases_exploitées(d) = ceil(d / capacityPerTile)
    mineurs(d, engins)  = ceil(cases_exploitées(d) × 1000 / M)
@@ -310,9 +315,10 @@ fermiers_disponibles = floor(reste × farmPercent / 100)
 pêcheurs_disponibles = reste − fermiers_disponibles
 
 récolte(config, F, machines, surface_max, fertilité_totale, report) :
-  X        = F == 0 ? 0 : min(S, floor(machines × 1000 × S / (F × m_max)))
+  R        = min(F + report, ceil(surface_max × 1000 / M_base))   référence : disponibles et report, plafonnés (machineReference, 00-Game §6.2)
+  X        = R == 0 ? 0 : min(S, floor(machines × 1000 × S / (R × m_max)))
   f        = courbe(X, n)
-  M        = M_base + floor((M_max − M_base) × f / S)    calculé avec F seul, pas F + report
+  M        = M_base + floor((M_max − M_base) × f / S)    calculé avec R, pas F + report
   requis   = ceil(surface_max × 1000 / M)           arrondi vers le haut (§7)
   travail  = min(F + report, requis)
   surface  = min(surface_max, floor(travail × M / 1000))
@@ -699,6 +705,22 @@ points 31 et 32 sont des choix de plus.
     à 0 quand il n'y a plus d'excès.
 31. **Une ligne créée est active** : `create_line` augmente `active` en même
     temps que `lines` (00-Game ne dit pas dans quel état naît une ligne).
+    **Croissance automatique** (00-Game §8.2) : `growLines`, après la production.
+    Biens seulement. Un groupe dont `filled == lines` avance `growth` de 1 ;
+    à `FACTORY.growthTurns` (500, valeur d'essai), `lines` et `active`
+    augmentent de 1 et `growth` repart de 0. Pas d'avance quand la capacité du
+    joueur pour ce bien (somme, toutes usines, de `lines × productionPerLine`)
+    est ≥ `goodsDemand` du bien. `goodsDemand` (dans l'état, haché) = machines
+    d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
+    la référence étant `machineReference(cfg, disponibles + report, surface)`
+    pour les tracteurs et les bateaux. Pour les engins, la référence est les
+    mineurs sans engin des cases qu'il faudrait pour le fer de **toutes les
+    lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
+    une usine d'engins seule, plafonnée à une demande nulle (§4, remplissage),
+    n'extrairait jamais de fer et sa demande resterait nulle. Un groupe ne perd
+    jamais de ligne ; ses lignes au-delà de la demande ne sont simplement pas
+    remplies. Choix provisoires : « toutes les lignes produisent » et « jamais
+    de perte ».
 32. Valeurs d'essai (aucune n'est fixée, 00-Game §10), choisies pour qu'une partie
     sur la carte de test soit jouable : `FACTORY.workersPerLine` 50 ;
     `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne) ;

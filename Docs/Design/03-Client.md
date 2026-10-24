@@ -79,6 +79,17 @@ Les ordres humains passent avant ceux des bots : à case égale, l'humain gagne.
 tours, sans arrêter la minuterie ; les ordres reçus attendent. Le jeu n'a pas de
 pause (00-Game §1.1) : ce n'est pas un ordre, et le bouton est étiqueté ainsi.
 
+**Barre de debug** (demandée par l'auteur, 24 octobre 2026) : à droite de la
+barre de boutons, encadrée en pointillé orange, étiquetée « Debug ». Ses
+boutons modifient l'état du joueur humain directement, entre deux tours, hors
+des règles et sans ordre : message `{ type: "debug", action, amount }` →
+`SoloGame.debug`. Mode solo seulement ; en multijoueur, l'état ne change que
+par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
+
+| Bouton | Action |
+| --- | --- |
+| « +1 000 population » | `population += 1000` (jamais sous 0) |
+
 ## 4. Messages
 
 Page → Worker (`ToWorker`) :
@@ -268,9 +279,20 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
     `unlockTurns` tours) : `[parent]` → barre qui se remplit avec le compteur du
     parent → `[bien]`, avec « compteur / unlockTurns » ;
   - une ligne par bien de l'arbre : en production, un bouton + à côté du curseur
-    envoie `create_line` (une ligne de plus) ; débloqué sans ligne, un bouton +
-    crée la première ; verrouillé, la flèche de progression. Plus de bouton
-    « Ajouter une ligne » ni de liste ;
+    envoie `create_line` (une ligne de plus, à la main) et, pour une machine,
+    une jauge de croissance automatique dessous (`growth / growthTurns`, ou
+    « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait rouge sur
+    le curseur à `usefulLines / lines` : lignes utiles, calculées par
+    `SoloGame.humanDetail` dans l'ordre de remplissage du moteur
+    (`ceil((goodsDemand − production des groupes d'avant) / productionPerLine)`,
+    borné à `lines`). Le curseur (`input.lines-slider`, piste native
+    transparente) est à `active`, le maximum réglé par le joueur ; dessous, une
+    piste grise et une barre bleue (`.slider-fill`) de longueur `min(active,
+    usefulLines)` : les lignes en service, que le moteur remplit. Barre et trait
+    sont placés entre les centres extrêmes du pouce (7 px de chaque côté). Le
+    compte affiche « en service · max réglé / lignes ». Débloqué sans
+    ligne, un bouton + crée la première ; verrouillé, la flèche de
+    progression. Plus de bouton « Ajouter une ligne » ni de liste ;
   - en bas, les réserves d'armement (réserve et stock cible).
   Le panneau n'est reconstruit que quand sa structure change (usines, groupes,
   lignes, biens débloqués), et jamais pendant un glisser ou un réglage de curseur
@@ -295,18 +317,29 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
      occupation : couleur, nom, rectangle proportionnel, « n · x % ». Les parts
      sont rapportées à la somme des occupations.
   2. **Nourriture** : « Nourriture f /tour  s », `s` = nourriture − population ×
-     `foodPerHead`, coloré. Détail : Agriculture (blé · cultivé / cases
-     cultivables) et Pêche (poisson · pêché / cases d'eau), barres vertes à
-     l'échelle de la nourriture totale ; Importations et Exportations grisées
+     `foodPerHead`, coloré. Détail : une jauge Population en trois sections,
+     « actuelle / max / tout exploité » : population (vert), `food /
+     foodPerHead` (vert hachuré), `foodPotential / foodPerHead` (gris plein très clair),
+     à l'échelle du plus grand des trois. `foodPotential` est calculé par
+     `SoloGame` : `max(FOOD.minimum, fertilitySum + floor(seaTiles ×
+     waterYieldMilli(pêcheurs, bateaux) / 1000))`. Puis Agriculture (blé ·
+     cultivé / cases cultivables, barre couleur blé) et Pêche (poisson · pêché /
+     cases d'eau, barre bleue), à l'échelle de la nourriture totale ;
+     Importations et Exportations grisées
      (« à venir ») ; une ligne Consommation : minimum garanti et surplus.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
      *Fer* : barre pleine = capacité (`ironCapacity`), vert = fer extrait au
-     dernier tour, trait noir épais = fer requis (`ironRequired`) ; si l'extrait
-     est sous le requis, l'écart est rouge. *Tracteurs*, *bateaux de pêche*,
+     dernier tour, trait noir épais = fer requis (`ironRequired`, compté sur
+     les lignes en service, `min(active, usefulLines)`, pas sur toutes les
+     lignes actives : une ligne arrêtée parce que la demande est atteinte ne
+     demande pas de fer) ; si l'extrait est sous le requis, l'écart est rouge,
+     ce qui veut dire population ou capacité de fer insuffisante. *Tracteurs*, *bateaux de pêche*,
      *engins miniers* : vert = machines disponibles (`goods`, produites au tour
-     précédent), barre pleine = machines d'une mécanisation totale, `ceil(
-     travailleurs × maxMachinesPer1000 / 1000)` (fermiers, pêcheurs, mineurs ;
-     0 : barre vide). Une ligne de légende.
+     précédent), barre pleine = machines d'une mécanisation totale,
+     `stats.fullMachines`, recopié de `Player.goodsDemand` du moteur (la
+     demande qui arrête aussi la croissance automatique des lignes, 00-Game
+     §8.2). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
+     ligne de légende.
   4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
      type d'armement qui a des lignes ou un stock non nul, barre bleue = stock,
      trait fin = stock cible (`reserveMax`), zone au-delà de la cible **hachurée
@@ -357,6 +390,13 @@ La section maritime de la barre (00-Game §1) et la diplomatie n'existent pas.
   n'existe pas.
 
 ## 9. Pièges
+
+- **Compter le fer requis sur toutes les lignes actives** : depuis que la
+  production d'un bien s'arrête à sa demande (00-Game §8.2), des lignes actives
+  ne tournent pas volontairement. Comptées dans le requis, elles faisaient
+  apparaître du rouge (« manque ») dans la barre du fer alors que rien ne
+  manquait. `ironRequired` compte les lignes en service. Corrigé le 24 octobre
+  2026.
 
 - **Un curseur du panneau de production cliqué sans être déplacé** : le
   navigateur n'envoie pas `change`. Si seul `change` remet `sliderActive` à faux,

@@ -165,11 +165,24 @@ export class ProductionPanel {
     slider.min = "0";
     slider.max = String(g.lines);
     slider.step = "1";
+    // Le curseur montre les lignes en service : le réglage du joueur, ramené aux
+    // lignes utiles (pas du dessus de la demande, 00-Game §8.2). Le réglage reste
+    // dans le moteur et revient quand la demande remonte.
+    // Deux informations distinctes (00-Game §8.1) : le curseur est le maximum réglé
+    // par le joueur (`active`) ; la barre bleue, les lignes en service, ce réglage
+    // ramené aux lignes utiles (trait rouge, 00-Game §8.2). La production est
+    // celle de la barre bleue.
     slider.value = String(g.active);
+    slider.className = "lines-slider";
+    const inService = Math.min(g.active, g.usefulLines);
     const count = el("span", "cnt");
     const act = el("b");
-    act.textContent = String(g.active);
-    count.append(act, document.createTextNode(` / ${g.lines}`));
+    act.dataset["inService"] = `${f.city}:${g.good}`;
+    act.textContent = String(inService);
+    const max = el("span", "muted");
+    max.textContent = ` · max ${g.active} / ${g.lines}`;
+    count.append(act, max);
+    count.title = "En service (barre bleue) · maximum réglé (curseur) / lignes de l'usine";
     const filled = el("span", "muted small");
     filled.dataset["filled"] = `${f.city}:${g.good}`;
     slider.addEventListener("pointerdown", () => (this.sliderActive = true));
@@ -181,7 +194,7 @@ export class ProductionPanel {
     slider.addEventListener("blur", () => (this.sliderActive = false));
     slider.addEventListener("input", () => {
       this.sliderActive = true;
-      act.textContent = slider.value;
+      max.textContent = ` · max ${slider.value} / ${g.lines}`;
     });
     // L'ordre part au relâchement (événement `change`), pas à chaque mouvement du curseur.
     slider.addEventListener("change", () => {
@@ -189,7 +202,34 @@ export class ProductionPanel {
       this.holdUntil = performance.now() + HOLD_MS;
       this.send({ type: "set_active_lines", city: f.city, good: g.good, count: Number(slider.value) });
     });
-    row.append(grip, sym, slider, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
+    // Trait rouge sur le curseur : lignes utiles, au-delà desquelles la production
+    // dépasserait la demande et n'est pas remplie (00-Game §8.2). Biens seulement.
+    const wrap = el("span", "slider-wrap");
+    const track = el("i", "slider-track");
+    const fill = el("i", "slider-fill");
+    fill.dataset["fill"] = `${f.city}:${g.good}`;
+    fill.style.width = onTrack(inService, g.lines);
+    wrap.append(track, fill, slider);
+    if (!this.catalog.armamentIds.includes(g.good)) {
+      const mark = el("i", "useful-mark");
+      mark.dataset["useful"] = `${f.city}:${g.good}`;
+      mark.title = "Lignes utiles : au-delà, la production dépasserait la demande et les ouvriers vont ailleurs.";
+      wrap.append(mark);
+    }
+    row.append(grip, sym, wrap, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
+    // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
+    if (!this.catalog.armamentIds.includes(g.good)) {
+      const growth = el("div", "growth");
+      const bar = el("span", "arrow");
+      const fill = el("i");
+      fill.dataset["growth"] = `${f.city}:${g.good}`;
+      bar.append(fill);
+      const text = el("span", "muted small");
+      text.dataset["growthText"] = `${f.city}:${g.good}`;
+      growth.append(bar, text);
+      growth.title = `Une ligne de plus tous les ${num(this.catalog.growthTurns)} tours où toutes les lignes produisent, tant que la production ne couvre pas la demande.`;
+      row.append(growth);
+    }
     this.bindLineDrop(row, f.city);
     return row;
   }
@@ -275,7 +315,21 @@ export class ProductionPanel {
         active += g.active;
         filled += g.filled;
         const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
-        if (cell) cell.textContent = `remplies : ${g.filled}${g.filled < g.active ? " (population ou fer manquant)" : ""}`;
+        if (cell) {
+          const wanted = Math.min(g.active, g.usefulLines);
+          cell.textContent = `remplies : ${g.filled}${g.filled < wanted ? " (population ou fer manquant)" : g.filled < g.active ? " (demande atteinte)" : ""}`;
+        }
+        const inService = Math.min(g.active, g.usefulLines);
+        const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);
+        if (fill) fill.style.width = onTrack(inService, g.lines);
+        const act = this.cities.querySelector<HTMLElement>(`[data-in-service="${f.city}:${g.good}"]`);
+        if (act) act.textContent = String(inService);
+        const mark = this.cities.querySelector<HTMLElement>(`[data-useful="${f.city}:${g.good}"]`);
+        if (mark) mark.style.left = `calc(7px + ${onTrack(g.usefulLines, g.lines)})`;
+        const gbar = this.cities.querySelector<HTMLElement>(`[data-growth="${f.city}:${g.good}"]`);
+        if (gbar) gbar.style.width = g.demandMet ? "0%" : `${Math.min(100, Math.floor((g.growth * 100) / this.catalog.growthTurns))}%`;
+        const gtext = this.cities.querySelector<HTMLElement>(`[data-growth-text="${f.city}:${g.good}"]`);
+        if (gtext) gtext.textContent = g.demandMet ? "demande couverte" : `${num(g.growth)} / ${num(this.catalog.growthTurns)} → ligne suivante`;
       }
       f.progress.forEach((p, i) => {
         const bar = this.cities.querySelector<HTMLElement>(`[data-prog="${f.city}:${i}"]`);
@@ -314,4 +368,10 @@ function el(tag: string, className?: string): HTMLElement {
 
 function span(text: string): HTMLElement {
   return Object.assign(el("span", "sym"), { textContent: text });
+}
+
+/** Longueur sur la piste du curseur (entre les centres extrêmes du pouce, 14 px) pour `n` lignes sur `lines`. */
+function onTrack(n: number, lines: number): string {
+  const ratio = lines > 0 ? Math.min(1, n / lines) : 0;
+  return `calc((100% - 14px) * ${ratio})`;
 }

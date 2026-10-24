@@ -227,9 +227,19 @@ export class InfoBar {
     surplus.title = "Surplus : nourriture du tour − population × consommation par tête";
     const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus]);
 
+    // Jauge de population : actuelle (vert), maximum avec la nourriture du tour (vert
+    // hachuré), maximum si toutes les terres et eaux étaient travaillées (gris hachuré).
+    const capRoot = el("div", "ib-track ib-cap");
+    const capNow = el("i", "cap-now");
+    const capFood = el("i", "cap-food");
+    const capLand = el("i", "cap-land");
+    capRoot.append(capLand, capFood, capNow);
+    const capValue = el("span", "ib-value");
     const wheat = track("flow");
+    wheat.root.classList.add("wheat");
     const wheatValue = el("span", "ib-value");
     const fish = track("flow");
+    fish.root.classList.add("fish");
     const fishValue = el("span", "ib-value");
     const imports = row("Importations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const exports_ = row("Exportations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
@@ -240,6 +250,7 @@ export class InfoBar {
     const pane = this.pane(
       "food",
       el("h3", undefined, "Nourriture produite par tour"),
+      row("Population", capRoot, capValue),
       row("Agriculture", wheat.root, wheatValue),
       row("Pêche", fish.root, fishValue),
       imports,
@@ -256,6 +267,15 @@ export class InfoBar {
         setSigned(surplus, surplusOf(s));
       },
       body: (_d, s) => {
+        const perHead = this.info.foodPerHead > 0 ? this.info.foodPerHead : 1;
+        const maxNow = Math.floor(s.food / perHead);
+        const maxLand = Math.max(maxNow, Math.floor(s.foodPotential / perHead));
+        const scale = Math.max(maxLand, s.population, 1);
+        span(capNow, 0, pct(s.population, scale));
+        span(capFood, 0, pct(maxNow, scale));
+        span(capLand, 0, pct(maxLand, scale));
+        capValue.textContent = `${num(s.population)} / ${num(maxNow)} / ${num(maxLand)}`;
+        capValue.title = "Population actuelle / maximum avec la nourriture du tour / maximum si toutes les terres et les eaux étaient exploitées";
         span(wheat.fill, 0, pct(s.wheat, s.food));
         wheatValue.textContent = `${num(s.wheat)} · ${num(s.cultivated)} / ${num(s.farmTiles)} cases`;
         span(fish.fill, 0, pct(s.fish, s.food));
@@ -277,9 +297,9 @@ export class InfoBar {
     ironRow.querySelector(".ib-label")!.append(" Fer");
 
     const machines = [
-      { good: "tractor", label: "Tracteurs", per1000: () => this.info.machinesPer1000["tractor"] ?? 0, workers: (s: PlayerStats) => s.farmers },
-      { good: "fishingBoat", label: "Bateaux de pêche", per1000: () => this.info.machinesPer1000["fishingBoat"] ?? 0, workers: (s: PlayerStats) => s.fishers },
-      { good: "miningMachine", label: "Engins miniers", per1000: () => this.info.machinesPer1000["miningMachine"] ?? 0, workers: (s: PlayerStats) => s.miners },
+      { good: "tractor", label: "Tracteurs" },
+      { good: "fishingBoat", label: "Bateaux de pêche" },
+      { good: "miningMachine", label: "Engins miniers" },
     ].map((m) => {
       const t = track("flow");
       const value = el("span", "ib-value");
@@ -318,10 +338,12 @@ export class InfoBar {
         ironValue.textContent = `${num(got)} / ${num(need)} · capacité ${num(cap)}`;
         for (const m of machines) {
           const have = m.index >= 0 ? (d.goods[m.index] ?? 0) : 0;
-          // Machines d'une mécanisation totale : travailleurs × machines pour 1 000 travailleurs ÷ 1 000, arrondi vers le haut.
-          const max = Math.ceil((m.workers(s) * m.per1000()) / 1000);
-          span(m.t.fill, 0, pct(have, max));
-          m.value.textContent = `${num(have)} / ${num(max)}`;
+          // Machines d'une mécanisation totale : référence × machines pour 1 000 ÷ 1 000 (00-Game §6.2), calculé par SoloGame.
+          const max = s.fullMachines[m.good] ?? 0;
+          // Sans travailleur pour s'en servir, les machines produites ne servent à rien :
+          // la barre reste vide, mais le nombre produit est affiché.
+          span(m.t.fill, 0, max === 0 ? 0 : pct(have, max));
+          m.value.textContent = max === 0 && have > 0 ? `${num(have)} produits · inutilisés` : `${num(have)} / ${num(max)}`;
         }
       },
     };

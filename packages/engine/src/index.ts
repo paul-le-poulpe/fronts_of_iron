@@ -88,6 +88,7 @@ export {
   harvest,
   ironTilesFor,
   machineCurve,
+  machineReference,
   mechanization,
   mechanizationCurve,
   minersFor,

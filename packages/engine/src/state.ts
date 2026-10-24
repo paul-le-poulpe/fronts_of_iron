@@ -18,6 +18,8 @@ export interface LineGroup {
   active: number;
   /** Lignes remplies au dernier tour (ouvriers et mineurs reçus), 0 à `active`. */
   filled: number;
+  /** Tours comptés vers la prochaine ligne automatique (00-Game §8.2, biens seulement), 0 à `FACTORY.growthTurns`. */
+  growth: number;
 }
 
 /** L'usine d'une ville (00-Game §8). Une seule par ville : voir 02-Engine §7. */
@@ -79,6 +81,12 @@ export interface Player {
   readonly factories: Factory[];
   /** Biens produits au dernier tour, dans l'ordre des clés de `GOODS` : les machines du tour suivant (00-Game §12). */
   readonly goods: number[];
+  /**
+   * Demande de chaque bien au dernier tour, dans l'ordre des clés de `GOODS` : les
+   * machines d'une mécanisation totale (00-Game §6.2, §8.2). La croissance
+   * automatique des lignes s'arrête quand la production la couvre.
+   */
+  readonly goodsDemand: number[];
   /** Réserve de chaque type d'armement, dans l'ordre des clés de `ARMAMENT.types` (00-Game §8.3). */
   readonly armamentReserve: number[];
   /** Reste de la baisse de l'excès de chaque réserve, sur l'échelle `CURVE_SCALE` (0 si pas d'excès). */
@@ -171,6 +179,7 @@ export function createGame(setup: GameSetup): GameState {
       food: 0,
       factories: [],
       goods: new Array<number>(Object.keys(GOODS).length).fill(0),
+      goodsDemand: new Array<number>(Object.keys(GOODS).length).fill(0),
       armamentReserve: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       armamentRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       factoryWorkers: 0,

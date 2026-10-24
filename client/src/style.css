@@ -158,6 +158,11 @@ input[type="number"] {
 }
 #bar button { padding: 8px 20px; font-weight: 600; }
 #bar { position: relative; z-index: 5; }
+/* Barre de debug : à droite de la barre de boutons, bordure pointillée orange pour
+   la distinguer de l'interface du jeu. */
+.debug-bar { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 3px 6px; border: 1px dashed #c46a1b; border-radius: 6px; }
+.debug-label { font-size: 11px; font-weight: 600; color: #c46a1b; text-transform: uppercase; letter-spacing: 0.04em; }
+#bar .debug-bar button { padding: 4px 10px; font-weight: 500; font-size: 12px; }
 
 /* Menu qui se déplie vers le haut : types d'usine (00-Game §1). */
 .menu-wrap { position: relative; }
@@ -202,13 +207,27 @@ input[type="number"] {
 .fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
 .grow { display: grid; grid-template-columns: auto minmax(0, 7.5em) minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
-.grow .muted { grid-column: 2 / -1; margin-top: -4px; }
+.grow > .muted { grid-column: 2 / -1; margin-top: -4px; }
 .grow input[type="range"] { width: 100%; min-width: 0; }
+/* Curseur des lignes : la piste native est transparente ; dessous, une piste grise
+   et la barre bleue des lignes en service, posées entre les centres extrêmes du
+   pouce (7 px de chaque côté), pour que 100 % tombe sous le pouce au maximum. */
+.slider-wrap { position: relative; display: block; min-width: 0; height: 18px; }
+.slider-track, .slider-fill { position: absolute; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; pointer-events: none; }
+.slider-track { left: 7px; right: 7px; background: #d8d4cc; }
+.slider-fill { left: 7px; width: 0; background: var(--accent); }
+input.lines-slider { -webkit-appearance: none; appearance: none; position: relative; display: block; width: 100%; height: 18px; margin: 0; background: transparent; }
+input.lines-slider::-webkit-slider-runnable-track { height: 18px; background: transparent; }
+input.lines-slider::-moz-range-track { background: transparent; }
+input.lines-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
+input.lines-slider::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
+.useful-mark { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: #c0392b; pointer-events: none; }
 .sym { font-size: 12px; padding: 1px 4px; border: 1px dashed var(--muted); border-radius: 4px; white-space: nowrap; }
 .cnt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .locked { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; opacity: 0.85; }
 .arrow { position: relative; display: inline-block; width: 64px; height: 8px; border: 1px solid var(--muted); border-radius: 4px; overflow: hidden; }
 .arrow i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
+.grow .growth { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; margin-top: -2px; }
 .unlocked { display: flex; align-items: center; gap: 6px; }
 .unlocked .plus { margin-left: auto; }
 button.plus { width: 22px; height: 22px; padding: 0; line-height: 1; font-weight: 600; }
@@ -327,6 +346,11 @@ tr.me td { font-weight: 600; }
 .ib-track { position: relative; height: 14px; border: 1px solid var(--line); background: #ece9e2; }
 .ib-track i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
 .ib-track .ib-fill { background: var(--ok); }
+.ib-track.wheat .ib-fill { background: #e3c766; }
+.ib-track.fish .ib-fill { background: #3a7fc4; }
+.ib-cap .cap-now { background: var(--ok); }
+.ib-cap .cap-food { background: repeating-linear-gradient(45deg, var(--ok) 0 2px, transparent 2px 5px); }
+.ib-cap .cap-land { background: #dcdcdc; }
 .ib-track.stock .ib-fill { background: var(--stock); }
 .ib-track .ib-gap { background: var(--bad); }
 .ib-track .ib-hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }

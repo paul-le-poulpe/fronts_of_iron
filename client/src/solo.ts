@@ -30,9 +30,15 @@ import {
   PRODUCT_IDS,
   productConfig,
   RESOURCES,
+  waterYieldMilli,
+  machineReference,
   type GameState,
+  type ProductId,
   type Intent,
 } from "@fronts-of-iron/engine";
+
+/** Case de `Player.goods` des bateaux de pêche. */
+const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
 
 import { createBot, type Bot } from "./bots.ts";
 import {
@@ -66,6 +72,7 @@ export function factoryCatalog(): FactoryCatalog {
       tree: FACTORY_TYPES[id].tree.map((n) => ({ good: n.good, parent: n.parent })),
     })),
     unlockTurns: FACTORY.unlockTurns,
+    growthTurns: FACTORY.growthTurns,
     workersPerLine: FACTORY.workersPerLine,
     goodIds: GOOD_IDS,
     armamentIds: ARMAMENT_IDS,
@@ -204,7 +211,11 @@ export class SoloGame {
     const factoryMarks = marksKey !== this.sentMarks ? Uint32Array.from(marks) : null;
     this.sentMarks = marksKey;
 
-    const players: PlayerStats[] = state.players.map((p) => ({
+    const players: PlayerStats[] = state.players.map((p) => {
+      // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
+      // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
+      const fishRef = machineReference(FISHING, p.farmers + p.fishers + p.idle, p.seaTiles);
+      return {
       id: p.id,
       population: p.population,
       farmers: p.farmers,
@@ -225,7 +236,16 @@ export class SoloGame {
       miners: p.miners,
       minedTiles: p.minedTiles,
       ironExtracted: p.ironExtracted,
-    }));
+      // Nourriture si toutes les cases fertiles et toutes les cases d'eau étaient travaillées,
+      // avec le rendement de l'eau des bateaux actuels (00-Game §6.4, §6.5).
+      foodPotential: Math.max(
+        FOOD.minimum,
+        p.fertilitySum + Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000),
+      ),
+      // Demande calculée par le moteur (goodsDemand) : la même que celle qui arrête la croissance des lignes.
+      fullMachines: Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsDemand[i]!])),
+      };
+    });
     const t3 = performance.now();
 
     return {
@@ -243,23 +263,66 @@ export class SoloGame {
     };
   }
 
+  /**
+   * Outils de développement (barre de debug, 03-Client) : modifient l'état du joueur
+   * humain directement, entre deux tours, hors des règles et sans ordre. N'existent
+   * qu'en solo : en multijoueur, l'état ne se modifie que par les tours (règle 3).
+   */
+  debug(action: "addPopulation", amount: number): void {
+    if (action === "addPopulation" && Number.isInteger(amount)) {
+      const p = this.state.players[HUMAN - 1]!;
+      p.population = Math.max(0, p.population + amount);
+    }
+  }
+
   /** Le détail des usines du joueur humain (panneau de production). */
   humanDetail(): HumanDetail {
     const p = this.state.players[HUMAN - 1]!;
-    return {
-      factories: p.factories.map((f) => ({
+    // Lignes utiles de chaque groupe de biens (00-Game §8.2) : dans l'ordre de
+    // remplissage du moteur, celles dont la production reste sous la demande.
+    const before = new Array<number>(GOOD_IDS.length).fill(0);
+    const useful = (good: string, lines: number, active: number): number => {
+      const b = GOOD_IDS.indexOf(good as (typeof GOOD_IDS)[number]);
+      if (b < 0) return lines;
+      const per = productConfig(good as (typeof GOOD_IDS)[number]).productionPerLine;
+      const n = Math.min(lines, Math.ceil(Math.max(0, p.goodsDemand[b]! - before[b]!) / per));
+      before[b] = before[b]! + Math.min(active, n) * per;
+      return n;
+    };
+    const factories = p.factories.map((f) => ({
         city: f.city,
         type: f.type,
         level: factoryLevel(f),
-        groups: f.groups.map((g) => ({ good: g.good, lines: g.lines, active: g.active, filled: g.filled })),
+        groups: f.groups.map((g) => {
+          const b = GOOD_IDS.indexOf(g.good as (typeof GOOD_IDS)[number]);
+          const usefulLines = useful(g.good, g.lines, g.active);
+          // Capacité du joueur pour ce bien : toutes ses lignes, toutes usines (00-Game §8.2).
+          let capacity = 0;
+          for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productConfig(h.good).productionPerLine;
+          return {
+            good: g.good,
+            lines: g.lines,
+            active: g.active,
+            filled: g.filled,
+            growth: g.growth,
+            demandMet: b < 0 || capacity >= p.goodsDemand[b]!,
+            usefulLines,
+          };
+        }),
         progress: f.progress.slice(),
-      })),
+      }));
+    return {
+      factories,
       goods: p.goods.slice(),
       reserve: p.armamentReserve.slice(),
       reserveMax: ARMAMENT_IDS.map((id) => armamentReserveMax(p, id)),
       ironCapacity: p.resourceTiles[Object.keys(RESOURCES).indexOf("iron")]! * RESOURCES.iron.capacityPerTile,
-      ironRequired: p.factories.reduce(
-        (sum, f) => sum + f.groups.reduce((s, g) => s + g.active * productConfig(g.good).ironPerLine, 0),
+      // Fer requis : celui des lignes en service (réglage du joueur ramené aux lignes
+      // utiles, 00-Game §8.2). Les lignes arrêtées parce que la demande est atteinte
+      // ne demandent pas de fer : le rouge de la barre ne montre qu'un vrai manque.
+      ironRequired: factories.reduce(
+        (sum, f) =>
+          sum + f.groups.reduce((s, g) => s + Math.min(g.active, g.usefulLines) * productConfig(g.good as ProductId).ironPerLine, 0),
         0,
       ),
     };
