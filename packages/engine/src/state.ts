@@ -18,7 +18,7 @@ export interface LineGroup {
   active: number;
   /** Lignes remplies au dernier tour (ouvriers et mineurs reçus), 0 à `active`. */
   filled: number;
-  /** Tours comptés vers la prochaine ligne automatique (00-Game §8.2, biens seulement), 0 à `FACTORY.growthTurns`. */
+  /** Tours-lignes comptés vers la prochaine ligne automatique (00-Game §8.2, biens seulement), de 0 à `FACTORY.growthTurns` exclu. */
   growth: number;
 }
 
@@ -29,9 +29,9 @@ export interface Factory {
   /** Groupes de lignes, dans l'ordre de priorité du joueur au sein de la ville (00-Game §8.1). */
   readonly groups: LineGroup[];
   /**
-   * Un compteur par nœud de l'arbre du type d'usine (même indice) : tours où au moins
-   * une ligne de ce bien a été remplie dans cette usine, plafonné à `FACTORY.unlockTurns`
-   * (00-Game §8.2).
+   * Un compteur par nœud de l'arbre du type d'usine (même indice) : somme, sur les
+   * tours, du nombre de lignes de ce bien remplies dans cette usine, plafonnée à
+   * `FACTORY.unlockTurns` (00-Game §8.2).
    */
   readonly progress: number[];
 }
@@ -68,6 +68,8 @@ export interface Player {
   idle: number;
   /** Surface cultivée, en cases (≤ farmTiles). */
   cultivated: number;
+  /** Mécanisation de l'agriculture (00-Game §6.2) : surface par fermier, en millièmes de case. */
+  farmMechanization: number;
   /** Surface pêchée, en cases (≤ seaTiles). */
   fished: number;
   wheat: number;
@@ -173,6 +175,7 @@ export function createGame(setup: GameSetup): GameState {
       fishers: 0,
       idle: 0,
       cultivated: 0,
+      farmMechanization: 0,
       fished: 0,
       wheat: 0,
       fish: 0,

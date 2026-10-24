@@ -317,7 +317,13 @@ certaines dispositions, ses routes diffèrent de celles de la règle retenue.
 A* sur les cases entre ses deux villes. Le coût d'une case augmente avec son
 altitude, selon `ROADS.heightCostFactor` (§10), choisi assez fort pour que les
 routes passent par les vallées. Ce tracé ne sert qu'à l'affichage ; le moteur
-ne le calcule pas.
+ne le calcule pas. Choix de l'auteur : le chemin ne passe que par des cases de
+terre ; il se déplace sur 8 voisins, un pas en diagonale coûtant `√2` fois le
+coût de la case d'arrivée. S'il n'existe aucun chemin de terre entre les deux
+villes, la route est dessinée en segment droit. Une case déjà traversée par une
+autre route coûte la moitié (valeur choisie avec l'auteur, constante
+`ROAD_REUSE_COST_FACTOR` de `client/src/roadpaths.ts`) : deux routes vers une
+même ville se superposent au lieu de longer l'une l'autre côte à côte.
 
 ### 3.6 Ports et routes maritimes
 
@@ -506,8 +512,8 @@ villes voisines.
 ### 6.2 Fermiers et mécanisation
 
 ```
-fermiers_base   = surface_max / M_base        fermiers qu'il faudrait sans tracteur
-référence       = min(fermiers_disponibles, fermiers_base)
+fermiers_plein  = surface_max / M_max         fermiers qu'il faut à pleine mécanisation
+référence       = min(fermiers_disponibles, fermiers_plein)
 x               = min(tracteurs / référence, m_max) / m_max
 Mécanisation    = M_base + (M_max − M_base) × f(x)          surface par fermier
 fermiers_requis = surface_max / Mécanisation
@@ -522,14 +528,20 @@ surface_cultivée = fermiers × Mécanisation                    (≤ surface_ma
   disponibles. Il n'est pas recalculé avec les fermiers qui travaillent
   réellement : cela ferait dépendre la mécanisation d'elle-même, et ne
   changerait que le nombre d'inactifs (la surface est alors déjà au maximum).
-- **Les fermiers disponibles sont plafonnés à `fermiers_base`** (décision de
-  l'auteur, 24 octobre 2026). Un disponible au-delà de `fermiers_base`
-  n'aurait jamais de travail, même sans tracteur : sans plafond, il comptait
-  quand même dans le partage des tracteurs, et une population qui grandit
-  faisait baisser l'effet des mêmes tracteurs alors que la surface était déjà
-  entièrement travaillée. Quand la population manque (disponibles sous
-  `fermiers_base`), rien ne change. Tracteurs d'une mécanisation totale :
-  `référence × m_max`.
+- **Les fermiers disponibles sont plafonnés à `fermiers_plein`** (décision de
+  l'auteur, 24 octobre 2026). Les tracteurs changent la surface que cultive
+  chaque fermier ; le nombre de tracteurs d'une mécanisation totale est celui
+  qu'il faut pour cultiver toute la surface à `M_max` : `référence × m_max`.
+  Les fermiers inactifs n'en demandent pas. Exemple : 793 cases, 1 030 fermiers
+  disponibles → `fermiers_plein` = 529, 53 tracteurs pour la mécanisation
+  totale (et non 103). Quand la population manque (disponibles sous
+  `fermiers_plein`), la référence est les disponibles : 300 fermiers → 30
+  tracteurs.
+  Historique : le plafond était d'abord `surface_max / M_base` (les fermiers
+  qu'il faudrait sans tracteur), qui comptait encore dans le partage des
+  disponibles qui deviennent inactifs à pleine mécanisation ; avant cela, il n'y
+  avait pas de plafond, et une population qui grandit faisait baisser l'effet
+  des mêmes tracteurs. Revenir à l'un ou l'autre réintroduit ces écarts.
 - **Les travailleurs reçus par le report (§4) comptent parmi les
   disponibles** : à 0 % de fermiers, les pêcheurs en trop qui vont aux champs
   utilisent les tracteurs (constat de l'auteur, 24 octobre 2026 : sans cela,
@@ -537,7 +549,10 @@ surface_cultivée = fermiers × Mécanisation                    (≤ surface_ma
 - Même règle pour la pêche (bateaux, pêcheurs, cases d'eau, §6.4 ; le
   rendement de l'eau utilise la même référence). Pour les mines, la surface
   est le nombre de cases **exploitées** pour la demande, pas tout le gisement
-  (§7).
+  (§7), et la référence est les mineurs qui exploitent ces cases à pleine
+  mécanisation (les mineurs sont embauchés à la demande : pas de disponibles).
+  Les trois machines suivent la règle de `fermiers_plein` (décision de
+  l'auteur, 24 octobre 2026).
 - `M_base`, `M_max`, `m_max` et l'exposant `n` de la courbe sont fixes, dans le
   fichier de configuration. Seul le nombre de tracteurs par fermier varie.
 
@@ -700,7 +715,10 @@ vaut 0 (§2).
 - **Niveau = ligne de production.** Un niveau d'usine est une ligne de
   production élémentaire d'un bien. Exemple : 3 lignes de tracteurs et 1 ligne
   d'engins miniers dans la même usine font une usine de niveau 4.
-- Chaque ligne emploie un nombre fixe d'ouvriers (fichier de configuration).
+- Chaque ligne emploie un nombre fixe d'ouvriers, propre à son bien
+  (`GOODS[b].workersPerLine`, `ARMAMENT.types[a].workersPerLine`), réglé comme
+  sa production et sa consommation de fer. Le panneau de production indique,
+  pour chaque groupe de lignes, les ouvriers et le fer qu'il utilise.
 - Chaque ligne produit, par tour, une quantité propre au bien
   (`GOODS[b].productionPerLine`), et consomme la ressource indiquée pour ce
   bien. **Pour commencer : chaque ligne remplie consomme 1 unité de fer par
@@ -709,14 +727,27 @@ vaut 0 (§2).
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
   l'auteur : une usine d'engins miniers qui débloque les tracteurs, puis les
   chars (§8.4).
-- **Spécialisation** : plus une usine a de lignes d'un même bien, moins chacune
-  demande d'ouvriers. Pour commencer : `x` % d'ouvriers en moins par ligne
-  supplémentaire du même bien dans la même usine, `x` =
-  `FACTORY.specializationPercent`. Formule exacte à définir (§13). But : un
-  joueur spécialisé produit plus efficacement et échange pour obtenir le
-  reste. **Pas implémentée pour l'instant** : prévue plus tard (décision de
-  l'auteur, 23 octobre 2026). D'ici là, chaque ligne emploie
-  `FACTORY.workersPerLine` ouvriers.
+- **Spécialisation** (décision de l'auteur, 24 octobre 2026) : le coût en
+  ouvriers d'une ligne baisse avec son **rang** dans le groupe (même bien ou
+  même type d'armement, dans la même usine). Ce n'est pas la ligne qui en
+  rend d'autres moins chères : chaque nouvelle ligne est moins chère que la
+  précédente, les lignes déjà là gardent leur coût. But : un joueur spécialisé
+  produit plus efficacement et échange pour obtenir le reste.
+
+  ```
+  coût(k) = W × ( f + (1 − f) × a / (a + d × (k − 1)) )      a = 1 − d − f
+  ```
+
+  `W` = `workersPerLine` du bien, `k` = rang de la ligne (1 pour la première),
+  `d` = `FACTORY.specialization.decayPercent` (5 %), `f` =
+  `FACTORY.specialization.floorPercent` (10 %). La 1re ligne coûte `W`, la 2e
+  `W × (1 − d)` (190 pour `W` = 200), et le coût tend vers `W × f` (20)
+  sans jamais l'atteindre : hyperbolique avec plancher, continue, sans seuil.
+  Le total des ouvriers pour `n` lignes croît donc de plus en plus lentement
+  mais n'est jamais borné, et aucune ligne n'est gratuite. Arrondi vers le
+  bas à l'entier. Les lignes remplies sont toujours les premières rangs du
+  groupe, donc les ouvriers d'un groupe sont la somme des coûts des rangs 1 à
+  `filled`.
 - Pas de stock : la production d'une usine à un tour est le flux disponible à
   ce tour.
 
@@ -780,7 +811,7 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   dans le fichier de configuration.
 - **Condition (déblocage)** : une ligne d'un bien qui a un parent dans l'arbre
   de l'usine (§8.4) ne peut être créée que si une ligne de ce parent
-  fonctionne depuis au moins `FACTORY.unlockTurns` tours (500 pour commencer,
+  a produit au moins `FACTORY.unlockTurns` tours-lignes (500 pour commencer,
   valeur donnée par l'auteur). La production de base de l'usine (la racine de
   l'arbre, par exemple les fusils) n'a pas de condition.
 - **Progression** (décision de l'auteur, 24 octobre 2026) : les tours se
@@ -788,8 +819,11 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
   ligne du parent ne produit pas (désactivée, ou pas remplie faute de
   population ou de fer), la progression s'arrête mais n'est pas perdue ; elle
   reprend quand la ligne produit de nouveau. Lecture retenue : la progression
-  est propre à l'usine, et compte les tours où au moins une ligne du parent de
-  cette usine produit. Le panneau la montre par la flèche entre les deux
+  est propre à l'usine.
+- **Vitesse du déblocage** (décision de l'auteur, 24 octobre 2026) :
+  proportionnelle à la production du parent. Chaque tour, la progression gagne
+  le nombre de lignes du parent remplies dans l'usine : une ligne débloque en
+  500 tours, vingt lignes en 25. Le panneau la montre par la flèche entre les deux
   symboles (§8.1).
 - **Coût** : pas encore décidé. Piste de l'auteur : sacrifier un peu de
   population.
@@ -797,11 +831,15 @@ consommation[fer] = nombre de lignes remplies (biens et armement)
 **Croissance automatique des lignes** (décision de l'auteur, 24 octobre 2026).
 
 - Un groupe de lignes de **machine** (tracteurs, bateaux de pêche, engins
-  miniers) **grandit tout seul** : après avoir tourné `FACTORY.growthTurns`
-  tours, il gagne une ligne, puis la progression repart de zéro pour la ligne
-  suivante.
-- Même principe que le déblocage : une jauge sous la ligne du panneau se
-  remplit avec les tours, comme la flèche de déblocage.
+  miniers) **grandit tout seul** : après `FACTORY.growthTurns` tours-lignes,
+  il gagne une ligne, puis la jauge repart pour la ligne suivante (le
+  dépassement éventuel est gardé).
+- **Même principe que le déblocage : proportionnel à la production, pas au
+  temps** (décision de l'auteur, 24 octobre 2026). Chaque tour où toutes les
+  lignes du groupe produisent, la jauge gagne le nombre de lignes du groupe :
+  passer de 1 à 2 lignes prend 500 tours, de 10 à 11 lignes 50 tours. Une
+  jauge sous la ligne du panneau se remplit ainsi, comme la flèche de
+  déblocage.
 - **Arrêt à la demande** : un groupe cesse de grandir quand la production du
   joueur pour ce bien couvre sa demande. Pour une machine, la demande est le
   nombre de machines d'une mécanisation totale (§6.2 : référence × `m_max`),
@@ -976,19 +1014,18 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les engins miniers |
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
-| `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio, `productionPerLine` (§8), nom du fichier d'icône |
-| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, icône (§8.3) |
+| `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
+| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, `workersPerLine`, icône (§8.3) |
 | `ARMAMENT.maxStockTurns` | nombre de tours de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 100 évoqué par l'auteur, non fixé. Un tour dure 100 ms : 100 tours = 10 s de production |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
 | `ARMAMENT` (noms) | noms proposés des cinq types d'infanterie : `rifle`, `machineGun`, `artillery`, `antiAirGun`, `antiTankGun` (§8.4) |
-| `FACTORY.workersPerLine` | ouvriers employés par une ligne de production (§8) |
-| `FACTORY.specializationPercent` | `x` : ouvriers en moins, en %, par ligne supplémentaire du même bien dans une usine (§8) ; pas encore utilisé |
-| `FACTORY.unlockTurns` | nombre de tours de fonctionnement d'une ligne du bien parent avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
-| `FACTORY.growthTurns` | nombre de tours de fonctionnement d'un groupe de lignes avant qu'il gagne une ligne (§8.2, croissance automatique) ; à fixer |
+| `FACTORY.specialization` | `decayPercent` (5) : baisse de la 2e ligne en % du coût initial ; `floorPercent` (10) : coût minimal d'une ligne en % du coût initial (§8) |
+| `FACTORY.unlockTurns` | tours-lignes de production du bien parent (somme, par tour, de ses lignes remplies dans l'usine) avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
+| `FACTORY.growthTurns` | tours-lignes de fonctionnement d'un groupe avant qu'il gagne une ligne (§8.2, croissance automatique ; chaque tour ajoute son nombre de lignes) ; à fixer |
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
-| `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; assez fort, selon l'auteur |
+| `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; **1**, choisi avec l'auteur : une case coûte `1 + altitude` (de 1 à 32). Constante `ROAD_HEIGHT_COST_FACTOR` de `client/src/roadpaths.ts` |
 | `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
 | `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
 | `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |
@@ -1007,15 +1044,33 @@ s'applique à toute carte.
 
 Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 
-- Chaque joueur a une couleur. Deux possibilités : une teinte légère sur tout
-  son territoire, ou seulement ses frontières avec un dégradé vers l'intérieur.
+- **Couleur des joueurs** (décidé par l'auteur, 24 octobre 2026) : une teinte
+  légère sur tout le territoire, masquable. La **frontière** d'un joueur (contre
+  un autre joueur ou une terre sans propriétaire) est une case de sa couleur un
+  peu plus sombre, de chaque côté : entre deux joueurs, cela fait une double
+  ligne. La **limite** entre deux villes d'un même joueur est une case de sa
+  couleur un peu plus claire.
 - **Le territoire s'arrête à la côte.** La zone d'une ville couvre aussi l'eau
   pour les règles (port, pêche : §3.6, §6.4), mais la couleur du joueur et les
-  limites de zones ne sont dessinées que sur la terre.
-- Entre deux villes d'un même joueur, une ligne légère ou en pointillé marque la
-  limite de leurs zones. Affichable ou masquable.
-- Options de vue de la carte : par joueur, ressources naturelles, relief, et
-  d'autres.
+  frontières et limites ne sont dessinées que sur la terre.
+- **Menu « Carte »** dans la barre d'informations, à gauche du panneau latéral
+  et collé à lui, texte plus gros que les sections (une icône de carte à
+  terme), avec des cases à cocher : « Ressources naturelles » (hachures rouge
+  foncé sur le fer, décochée en début de partie), « Couleur des joueurs »
+  (cochée) et « Fertilité » (hachures vertes épaisses sur les terres
+  cultivables, décochée). D'autres vues pourront s'y ajouter (relief, par
+  exemple).
+  Pendant le mode « Créer une ville » (§3.3), une liste de vues est affichée
+  d'office, même décochées (précision de l'auteur, 24 octobre 2026) : pour
+  l'instant les trois. C'est temporaire : à la sortie du mode, la carte revient
+  aux vues cochées.
+- **Terres cultivables** (fertilité > 0) : un vert léger sur le relief, dans la
+  carte de base, toujours affiché (auteur, 24 octobre 2026 ; avant, seulement
+  pendant le placement d'une ville).
+- **Fer** : un aplat gris clair tirant sur le brun-rouge sur les cases de fer,
+  dans la carte de base, toujours affiché (auteur, 24 octobre 2026). Il
+  remplace le rouge plein ; le rouge foncé ne sert plus qu'aux hachures de la
+  vue « Ressources naturelles ».
 - Zone d'exploitation : vert, puis texture de champs (§6.6). Zone de pêche :
   même calcul en mer, centré sur la ville (§6.6), dessinée par une texture
   propre à la pêche sur l'eau, comme les champs sur la terre. Elle ne doit pas
@@ -1056,11 +1111,20 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   lignes identiques (§8.1).
 - Une icône par ressource, par bien et par type d'armement, nommée dans le
   fichier de configuration. Des icônes provisoires d'abord ; l'auteur dessine
-  et importe les vraies. Existent déjà, en provisoire (un carré gris) : les
-  cinq types d'infanterie, dans `client/public/icons/armament/`
-  (`rifle.svg`, `machine-gun.svg`, `artillery.svg`, `anti-air-gun.svg`,
-  `anti-tank-gun.svg`). Remplacer un fichier par le vrai dessin, sous le même
-  nom, suffit.
+  et importe les vraies, sous le même nom de fichier.
+- Les icônes ont un style par famille, pour qu'un coup d'œil dise ce qu'on
+  regarde : un style pour les machines (tracteur, bateau de pêche, engin minier),
+  un autre pour l'armement, etc. Styles à dessiner par l'auteur.
+- Population : un personnage en pixel art de 16 × 16, dessiné par l'auteur,
+  une variante par rôle, dans `client/public/icons/population/` :
+  `pop-default` (sans attribut : l'onglet Population de la barre),
+  `pop-worker` (ouvriers d'usine), `pop-miner` (mineurs), `pop-farmer`
+  (fermiers), `pop-fisherman` (pêcheurs), `pop-inactive` (inactifs) ;
+  `pop-sailor` (marins) et `pop-soldier` (soldats) existent, sans rôle dans le
+  jeu pour l'instant.
+- Infobulle sur chaque nombre affiché : le nom de chaque valeur, un mot
+  chacune, dans l'ordre et avec les séparateurs de l'affichage (« Actuelle /
+  nourrie / potentielle »).
 
 ## 12. Conséquences pour le moteur
 
@@ -1181,8 +1245,9 @@ valider sur la visualisation.
 **Extraction**
 - Mécanisation minière : le nombre d'engins par mineur dépend du nombre de
   mineurs, qui dépend de la mécanisation (même boucle que celle évitée au §6.2
-  par les fermiers disponibles). Choix provisoire du moteur : les engins sont
-  rapportés aux mineurs qu'il faudrait sans engin (02-Engine §7).
+  par les fermiers disponibles). Les engins sont rapportés aux mineurs qui
+  exploitent les cases à pleine mécanisation (§6.2, décision de l'auteur du
+  24 octobre 2026 ; avant : aux mineurs sans engin, choix provisoire du moteur).
 - Machines (tracteurs, bateaux de pêche, engins miniers) : choix provisoire du
   moteur, celles produites au tour précédent (proposition du §12).
 
@@ -1203,14 +1268,17 @@ valider sur la visualisation.
   - commerce : demande = consommation + exportations (§8.2), quand le
     commerce sera décrit.
 - Créer une ligne : coût (piste : de la population). Condition décidée :
-  `FACTORY.unlockTurns` tours de fonctionnement d'une ligne du parent (§8.2).
+  `FACTORY.unlockTurns` tours-lignes de production du parent (§8.2).
   Décidé : tours cumulés de production, la pause ne fait pas perdre la
   progression (§8.2). Lecture retenue, à confirmer : ligne du parent dans la
   même usine.
-- Spécialisation (reportée par l'auteur, prévue plus tard) : `x` % en moins
-  par ligne, appliqué de façon composée (`(1 − x)ᵏ`) ou linéaire (`1 − k·x`) ;
-  plancher éventuel.
-- `FACTORY.workersPerLine` : une valeur commune, ou une par bien ?
+- Spécialisation (§8.1) : formule hyperbolique avec plancher, rang compté
+  dans le groupe, `decayPercent` 5 et `floorPercent` 10 (décidés le 24 octobre
+  2026). Rien d'ouvert, sauf si le rang doit un jour se compter sur tout le
+  joueur pour un bien présent dans plusieurs usines.
+- `workersPerLine` : une valeur par bien (décidé le 24 octobre 2026) ; les
+  valeurs elles-mêmes restent à fixer, 200 partout pour l'instant (multipliées
+  par 4 sur décision de l'auteur, 24 octobre 2026 ; c'était 50).
 - Forme du nombre maximal de lignes en fonction de la population.
 
 **Capitale et routes**

@@ -12,8 +12,7 @@ usines, leurs lignes de production et leurs ouvriers (§4 étape 1, §8), les
 machines (tracteurs, bateaux de pêche, engins miniers), l'extraction du fer (§7),
 l'armement et ses réserves (§8.3), et leurs ordres : `found_city`,
 `set_farm_share`, `build_factory`, `create_line`, `set_active_lines`,
-`set_city_priority`, `set_line_priority`. Pas implémenté : spécialisation des
-usines (§8), coût de création d'une usine ou d'une ligne, nombre maximal de
+`set_city_priority`, `set_line_priority`. Pas implémenté : coût de création d'une usine ou d'une ligne, nombre maximal de
 lignes, armées (donc consommation de l'armement), routes maritimes, changement
 de capitale, disparition d'une ville, commerce, diplomatie.
 
@@ -43,6 +42,7 @@ de capitale, disparition d'une ville, commerce, diplomatie.
 | `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage, récolte en rationnels exacts avec BigInt) et cartes fabriquées à la main, pour les tests de villes et d'économie |
 | `test/economy.test.ts` | tests de la courbe, de la récolte, de l'étape de nourriture, de la croissance avec reste, des totaux de fertilité et de `set_farm_share` |
 | `test/factories.test.ts` | tests des usines : remplissage tout ou rien dans l'ordre de priorité, capacité de fer, machines du tour précédent, déblocage, réserve d'armement, ordres, hash |
+| `test/specialization.test.ts` | ouvriers d'une ligne selon son rang (`workersForRank`, `workersForLines`), remplissage avec ces coûts, jauge de croissance automatique proportionnelle au nombre de lignes |
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population), de temps en temps `set_farm_share`, et des ordres d'usine tirés au hasard (dont beaucoup sont invalides) |
 | `test/bench.ts` | mesure (`npm run bench`) |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
@@ -202,7 +202,8 @@ Dans `GameState` :
   `farmTiles` (cases du joueur de fertilité > 0 : `surface_max`), `fertilitySum`
   (somme de leurs fertilités : `fertilité_totale`), `seaTiles` (cases d'eau du
   joueur, mer et lacs), et les résultats du dernier tour : `farmers`, `fishers`,
-  `idle`, `cultivated`, `fished`, `wheat`, `fish`, `food`, `factoryWorkers`,
+  `idle`, `cultivated`, `farmMechanization` (mécanisation M de l'agriculture,
+  millièmes de case par fermier), `fished`, `wheat`, `fish`, `food`, `factoryWorkers`,
   `miners`, `minedTiles`, `ironExtracted`.
 - Usines et armement, par joueur :
   - `factories : Factory[]`, une usine par ville. **L'ordre du tableau est la
@@ -297,17 +298,17 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
            si le groupe est un bien b et produit[b] ≥ goodsDemand[b] :
              groupe suivant (pas un ARRÊT : 00-Game §8.2, la production d'un
              bien ne dépasse pas sa demande du tour précédent)
-           demande = fer + ironPerLine
+           demande = fer + ironPerLine(bien)
            si demande > capacité : ARRÊT (de tout le remplissage)
            m = mineurs(demande, engins)
-           si travailleurs + workersPerLine + m > population : ARRÊT
-           travailleurs += workersPerLine ; mineurs = m ; fer = demande ; filled++
+           si travailleurs + workersForRank(bien, j + 1) + m > population : ARRÊT
+           travailleurs += workersForRank(bien, j + 1) ; mineurs = m ; fer = demande ; filled++
            si bien : produit[b] += productionPerLine
 
    cases_exploitées(d) = ceil(d / capacityPerTile)
    mineurs(d, engins)  = ceil(cases_exploitées(d) × 1000 / M)
-     M = mechanization(MINING, ceil(cases_exploitées(d) × 1000 / M_base), engins)
-     (les engins sont rapportés aux mineurs qu'il faudrait sans engin, §7)
+     M = mechanization(MINING, ceil(cases_exploitées(d) × 1000 / M_max), engins)
+     (les engins sont rapportés aux mineurs à pleine mécanisation, §7)
 
 2. reste = population − travailleurs − mineurs
 
@@ -315,7 +316,7 @@ fermiers_disponibles = floor(reste × farmPercent / 100)
 pêcheurs_disponibles = reste − fermiers_disponibles
 
 récolte(config, F, machines, surface_max, fertilité_totale, report) :
-  R        = min(F + report, ceil(surface_max × 1000 / M_base))   référence : disponibles et report, plafonnés (machineReference, 00-Game §6.2)
+  R        = min(F + report, ceil(surface_max × 1000 / M_max))    référence : disponibles et report, plafonnés à la pleine mécanisation (machineReference, 00-Game §6.2)
   X        = R == 0 ? 0 : min(S, floor(machines × 1000 × S / (R × m_max)))
   f        = courbe(X, n)
   M        = M_base + floor((M_max − M_base) × f / S)    calculé avec R, pas F + report
@@ -339,8 +340,8 @@ nourriture = max(blé + poisson, FOOD.minimum)
 3. production : pour chaque groupe, quantité = filled × productionPerLine
      un bien s'ajoute à goods[b] (remis à 0 avant : c'est la production de ce tour) ;
      un armement s'ajoute à armamentReserve[a] ; la production ne s'arrête jamais
-   progression : pour chaque usine et chaque nœud de son arbre, si un groupe de ce
-     bien a filled > 0 : progress = min(unlockTurns, progress + 1)
+   progression : pour chaque usine et chaque nœud de son arbre, n = somme des filled
+     des groupes de ce bien : progress = min(unlockTurns, progress + n)
    déclin de l'excès, pour chaque type d'armement :
      stock_cible = lignes de a (toutes les usines, tout état) × productionPerLine × maxStockTurns
      excès = max(0, réserve − stock_cible)
@@ -357,7 +358,8 @@ si population < 0 : population = 0 et reste = 0
 
 Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
 travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
-`cultivated` et `fished` = les deux surfaces, `wheat`, `fish`, `food`,
+`cultivated` et `fished` = les deux surfaces, `farmMechanization` = M de
+l'agriculture, `wheat`, `fish`, `food`,
 `factoryWorkers` = travailleurs, `miners` = mineurs, `minedTiles` =
 `cases_exploitées(fer)`, `ironExtracted` = fer. Ils sont calculés sur la
 population du début de l'étape (avant `delta`) : `farmers + fishers + idle +
@@ -465,7 +467,8 @@ sa capitale : `cities[capital - 1].group`.
 4. le nombre de joueurs, puis pour chacun : identifiant, nombre de cases,
    population, capitale, nombre de ressources puis `resourceTiles`, nombre de
    villes puis `cityIds`, puis `growthRemainder`, `farmPercent`, `farmTiles`,
-   `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`, `fished`,
+   `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`,
+   `farmMechanization`, `fished`,
    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
    `ironExtracted`, puis `goods` (nombre, valeurs), puis pour chaque type
    d'armement : réserve, reste, puis le nombre d'usines et pour
@@ -663,7 +666,7 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
 22. Répartition de la population (00-Game §4) : les lignes d'abord, puis le reste
     à l'étape 2 (fermiers et pêcheurs), puis à l'étape 3 (inactifs). Sans ligne
     remplie, toute la population va à l'étape 2.
-23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `fished`,
+23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `farmMechanization`, `fished`,
     `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
     `ironExtracted`) gardés dans le joueur et hachés.
 24. Valeurs d'essai de l'économie : `POPULATION.foodPerHead` 1,
@@ -687,34 +690,49 @@ points 31 et 32 sont des choix de plus.
     tour t utilisent `Player.goods` tel que produit au tour t − 1 ; `goods` est
     remis à 0 puis recalculé à la fin de l'étape. Un joueur qui n'a pas de ligne
     de machines a donc 0 machine, comme avant.
-27. **Mécanisation minière** (00-Game §13) : engins par mineur = engins ÷ mineurs
-    qu'il faudrait sans engin (à `MINING.mechanizationBase`). Le calcul des
+27. **Mécanisation minière** (00-Game §6.2, §13) : engins par mineur = engins ÷
+    mineurs qui exploitent les cases à pleine mécanisation
+    (`fullMechanizationWorkers(MINING, cases)`, à `MINING.mechanizationMax` ;
+    jusqu'au 24 octobre 2026 : mineurs sans engin, à `mechanizationBase`). Le calcul des
     mineurs d'une ligne en plus se fait donc sur la demande totale de fer
     (`minersFor(demande, engins)`), pas ligne par ligne ; les mineurs d'une ligne
     sont la différence avec ceux de la ligne d'avant, jamais négative.
 28. **Priorité d'un groupe** (00-Game §13) : un groupe de lignes d'un même bien a
     une seule position dans la section de sa ville.
 29. **Déblocage** (00-Game §8.2, lecture retenue) : un compteur par usine et par
-    bien de son arbre, qui augmente de 1 à chaque tour où au moins une ligne de
-    ce bien, dans cette usine, est remplie. Le bien enfant est créable quand le
+    bien de son arbre, qui augmente à chaque tour du nombre de lignes de ce bien
+    remplies dans cette usine (vitesse proportionnelle à la production, décision
+    de l'auteur du 24 octobre 2026 ; avant : + 1 quel que soit le nombre de
+    lignes). Le bien enfant est créable quand le
     compteur du parent atteint `FACTORY.unlockTurns`. Une ligne désactivée ou
     non remplie ne le fait pas avancer, sans le faire reculer.
-30. **`workersPerLine`** (00-Game §13) : une seule valeur pour tous les produits.
+30. **`workersPerLine`** (00-Game §13) : une valeur par produit, dans
+    `ProductConfig` à côté de `productionPerLine` et `ironPerLine`
+    (`GOODS`, `ARMAMENT.types`). `FACTORY.workersPerLine` n'existe plus.
+    **Spécialisation** (00-Game §8.1) : `workersPerLine` est le coût de la
+    première ligne d'un groupe ; la ligne de rang `k` (`j + 1` dans la boucle
+    de `fillLines`) coûte `workersForRank(bien, k)`, calculé en entiers
+    (`Math.floor`, multiplications avant la division, pas de puissance) avec
+    `FACTORY.specialization` (5 % et 10 %). `workersForLines(bien, n)` somme
+    les rangs 1 à `n` (le client s'en sert pour les ouvriers d'un groupe). Le
+    rang se compte dans le groupe : le même bien dans deux usines recommence à
+    1 dans chacune.
     **Reste de la baisse de l'excès** de la réserve d'armement : gardé comme le
     reste de croissance (`armamentRemainder`, sur l'échelle `CURVE_SCALE`), remis
     à 0 quand il n'y a plus d'excès.
 31. **Une ligne créée est active** : `create_line` augmente `active` en même
     temps que `lines` (00-Game ne dit pas dans quel état naît une ligne).
     **Croissance automatique** (00-Game §8.2) : `growLines`, après la production.
-    Biens seulement. Un groupe dont `filled == lines` avance `growth` de 1 ;
-    à `FACTORY.growthTurns` (500, valeur d'essai), `lines` et `active`
-    augmentent de 1 et `growth` repart de 0. Pas d'avance quand la capacité du
+    Biens seulement. Un groupe dont `filled == lines` avance `growth` de `lines`
+    (proportionnel à la production, comme `progress`) ; à
+    `FACTORY.growthTurns` (500, valeur d'essai), `lines` et `active`
+    augmentent de 1 et `growth` perd `growthTurns` (le dépassement reste). Pas d'avance quand la capacité du
     joueur pour ce bien (somme, toutes usines, de `lines × productionPerLine`)
     est ≥ `goodsDemand` du bien. `goodsDemand` (dans l'état, haché) = machines
     d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
     la référence étant `machineReference(cfg, disponibles + report, surface)`
     pour les tracteurs et les bateaux. Pour les engins, la référence est les
-    mineurs sans engin des cases qu'il faudrait pour le fer de **toutes les
+    mineurs à pleine mécanisation des cases qu'il faudrait pour le fer de **toutes les
     lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
     une usine d'engins seule, plafonnée à une demande nulle (§4, remplissage),
     n'extrairait jamais de fer et sa demande resterait nulle. Un groupe ne perd
@@ -722,12 +740,12 @@ points 31 et 32 sont des choix de plus.
     remplies. Choix provisoires : « toutes les lignes produisent » et « jamais
     de perte ».
 32. Valeurs d'essai (aucune n'est fixée, 00-Game §10), choisies pour qu'une partie
-    sur la carte de test soit jouable : `FACTORY.workersPerLine` 50 ;
+    sur la carte de test soit jouable : `workersPerLine` 200 pour chaque produit (4 × 50) ;
     `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne) ;
     `MINING` : `mechanizationBase` 100, `mechanizationMax` 500,
     `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans engin,
     2 avec le maximum) ; `GOODS.*.productionPerLine` 30 machines par tour et par
-    ligne (avec 1 000 fermiers disponibles, 30 tracteurs donnent x = 0,3 et font
+    ligne (avec une référence de 1 000 fermiers, 30 tracteurs donnent x = 0,3 et font
     passer la surface par fermier de 0,3 à 0,912 case) ;
     `ARMAMENT.types` : fusil 10, mitrailleuse 4, artillerie 2, canon anti-aérien 1,
     canon anti-char 1 par ligne et par tour ; `ARMAMENT.decayRate` 100 (1 % de
@@ -794,3 +812,40 @@ d'avant les usines :
   toutes les villes. La carte de test porte peu de villes (deux villes sont à
   plus du rayon de contrôle l'une de l'autre, et la terre fait 154 000 cases),
   d'où la carte de 1 600 × 1 000.
+
+## 9. Tests à reprendre
+
+**Décidé le 24 octobre 2026.** Les règles changent encore beaucoup : les tests
+sont mis de côté jusqu'à ce qu'elles se stabilisent. Ce qui doit rester clair
+entre-temps, ce sont les exigences (00-Game, §8 de ce document), sur lesquelles
+les tests seront écrits ensuite. Cette section liste l'état des tests, pour la
+passe finale.
+
+**Échouent aujourd'hui, avant les changements de spécialisation :**
+
+- `test/factories.test.ts` : 7 tests supposent qu'une usine naît sans ligne
+  (elle naît avec une ligne active de son bien racine) et utilisent
+  `armamentSuspended` et `ARMAMENT.resumePercent`, supprimés avec la règle du
+  24 octobre (§7). Le fichier n'a plus de typecheck valide.
+- `test/economy.test.ts` : le test qui compare `harvest` à `bruteHarvest`
+  (BigInt) échoue, avec ou sans les changements de spécialisation. Cause non
+  cherchée.
+- `client/test/solo.test.ts`, « usine du joueur » : attend le niveau 1 de
+  l'usine, le moteur donne 2 (même cause que `factories.test.ts`).
+
+**Écrits trop tôt, à relire :**
+
+- `test/specialization.test.ts` (7 tests) : coût par rang, remplissage tout ou
+  rien avec ces coûts, jauge de croissance automatique. Ils fixent `decayPercent`
+  5, `floorPercent` 10 et `growthTurns` 500 par leurs valeurs actuelles
+  (125 tours pour 4 lignes, plancher 20). Ils dépendent aussi de la demande de
+  bateaux de pêche sur leur carte (270), qui change avec les réglages
+  d'économie.
+- `client/test/solo.test.ts`, « ouvriers d'un groupe de lignes » : compare le
+  panneau à `workersForLines` ; il force la population à 100 000.
+
+**Exigences que ces tests devront couvrir** (déjà écrites dans 00-Game) :
+rang calculé par groupe (un bien dans une usine) ; coût du rang 1 = `workersPerLine`,
+rang 2 = −`decayPercent` %, jamais sous le plancher ni nul ; remplissage dans
+l'ordre, tout ou rien ; jauge de croissance +lignes remplies par tour, reste
+conservé ; jauge de déblocage proportionnelle aux lignes remplies.

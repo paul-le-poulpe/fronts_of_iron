@@ -8,9 +8,11 @@ import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } 
 import { Painter, playerColor, rgbCss } from "./painter.ts";
 import { HUMAN, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
 import { factoryName, productSymbol } from "./names.ts";
-import { InfoBar } from "./infobar.ts";
+import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView } from "./render.ts";
+import { setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
+import { installTooltips, refreshTip } from "./tooltip.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -20,6 +22,8 @@ const $ = <T extends HTMLElement>(id: string): T => {
 
 const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
+
+installTooltips();
 
 // ---- écran de départ ----
 
@@ -123,15 +127,17 @@ function onInit(s: Session, init: InitMessage): void {
   });
   s.view.placementCheck = (tile) => foundingProblem(mirror, tile);
   s.view.factoryCheck = (tile) => factoryTarget(mirror, tile);
+  setGoodTipEconomy(init.catalog.economy);
   s.production = new ProductionPanel($("prod"), init.catalog, sendOrder);
-  s.infobar = new InfoBar($("infobar"), init.catalog);
+  // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
+  for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
+  s.infobar = new InfoBar($("infobar"), init.catalog, setMapOption);
   buildFactoryMenu(init.catalog);
   $("prod").hidden = true;
   $("production").setAttribute("aria-pressed", "false");
   setFactoryArmed(null);
   buildPlayersTable(mirror);
   $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(HUMAN))}"></span>`;
-  $<HTMLInputElement>("show-iron").checked = true;
   setPlacement(false);
   $("dev-line").textContent = "tour 0";
 }
@@ -155,6 +161,8 @@ function onTick(s: Session, msg: TickMessage): void {
   updatePanel(msg.players);
   s.production?.update(msg.human, msg.players[HUMAN - 1]!);
   s.infobar?.update(msg.human, msg.players[HUMAN - 1]!);
+  setGoodTipStats(msg.players[HUMAN - 1]!);
+  refreshTip();
   for (const r of msg.results) {
     if (!r.applied) {
       const what = r.order.type === "found_city" ? "Ville non fondée" : "Réglage non appliqué";
@@ -231,12 +239,45 @@ farmSlider.addEventListener("change", () => {
   sendOrder({ type: "set_farm_share", percent: Number(farmSlider.value) });
 });
 
-$("show-iron").addEventListener("change", (e) => {
+/** Cases du menu « Carte » telles que le joueur les a laissées. */
+const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false };
+/** Vues de la carte affichées d'office pendant le mode placement, sans toucher aux cases (00-Game §11). */
+const PLACEMENT_MAP_OPTIONS: readonly MapOption[] = ["iron", "playerColor", "fertility"];
+
+/** Case du menu « Carte » (barre d'informations) cochée ou décochée. */
+function setMapOption(option: MapOption, checked: boolean): void {
+  mapChecked[option] = checked;
+  applyMapOptions();
+}
+
+/**
+ * Règle le painter et la vue : une vue est affichée si sa case est cochée, ou si
+ * le mode placement est actif et qu'elle est dans PLACEMENT_MAP_OPTIONS. Les
+ * hachures de fertilité et de fer sont dessinées à chaque image ; la couleur des
+ * joueurs est dans le tampon, repeint en entier seulement si elle change.
+ */
+function applyMapOptions(): void {
   const s = session;
   if (s?.painter == null || s.view === null) return;
-  s.painter.showIron = (e.target as HTMLInputElement).checked;
+  const shown = (o: MapOption): boolean => mapChecked[o] || (placement && PLACEMENT_MAP_OPTIONS.includes(o));
+  const fertility = shown("fertility");
+  const iron = shown("iron");
+  if (s.view.showFertility !== fertility || s.view.showIron !== iron) {
+    s.view.showFertility = fertility;
+    s.view.showIron = iron;
+    s.view.requestDraw();
+  }
+  const playerColor = shown("playerColor");
+  if (s.painter.showPlayerColor === playerColor) return;
+  s.painter.showPlayerColor = playerColor;
   s.painter.paintAll();
   s.view.uploadAll();
+}
+
+// Le menu « Carte » se ferme au clic en dehors de lui.
+document.addEventListener("pointerdown", (e) => {
+  const bar = session?.infobar;
+  if (bar && !bar.inMenu(e.target)) bar.closeMenu();
 });
 
 $("pause").addEventListener("click", () => {
@@ -312,6 +353,7 @@ function setPlacementFlag(on: boolean): void {
 function setPlacement(on: boolean): void {
   if (on) setFactoryArmed(null);
   setPlacementFlag(on);
+  applyMapOptions();
   const view = session?.view;
   if (view) {
     view.placement = on;
@@ -329,6 +371,7 @@ function setPlacement(on: boolean): void {
 foundButton.addEventListener("click", () => setPlacement(!placement));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  session?.infobar?.closeMenu();
   if (placement) setPlacement(false);
   if (factoryArmed !== null || !factoryMenu.hidden) setFactoryArmed(null);
 });

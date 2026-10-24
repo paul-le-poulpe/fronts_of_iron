@@ -27,7 +27,7 @@ import { customMap, tileAt } from "./helpers.ts";
 const R = CITY.controlRadius;
 const CX = 5 * R;
 const CY = 3 * R;
-const W = FACTORY.workersPerLine;
+const W = ARMAMENT.types.rifle.workersPerLine;
 const IRON_RANK = 0;
 
 /** Fer sur une case sur dix : beaucoup plus que ce que les lignes des tests consomment. */

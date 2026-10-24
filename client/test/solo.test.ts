@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITY, hashState } from "@fronts-of-iron/engine";
+import { CITY, hashState, productConfig, workersForLines } from "@fronts-of-iron/engine";
 
 import { farmShareTarget } from "../src/bots.ts";
 import { Mirror } from "../src/mirror.ts";
@@ -132,6 +132,45 @@ test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et mar
   const full = new Painter(mirror);
   full.paintAll();
   assert.ok(Buffer.from(full.buffer).equals(Buffer.from(painter.buffer)));
+});
+
+test("ouvriers d'un groupe de lignes : la somme des coûts par rang, la même que celle du moteur", () => {
+  const { game, mirror, apply } = setup(12345, 1);
+  const { map } = game.state;
+  // Une case fertile dont le rayon de contrôle porte au moins 20 cases de fer.
+  const R = CITY.controlRadius;
+  let land = -1;
+  for (let t = 0; t < map.terrain.length && land < 0; t += 7) {
+    if (map.fertility[t]! === 0 || (t % map.width) < 300) continue;
+    let iron = 0;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const u = t + dy * map.width + dx;
+        if (dx * dx + dy * dy <= R * R && u >= 0 && u < map.terrain.length && (map.resources[u]! & 1) !== 0) iron++;
+      }
+    }
+    if (iron >= 20) land = t;
+  }
+  assert.ok(land >= 0);
+  apply(game.step([{ id: 1, order: { type: "found_city", tile: land } }]));
+  const city = mirror.cities.find((c) => c.player === HUMAN)!.id;
+  apply(
+    game.step([
+      { id: 2, order: { type: "build_factory", city, factoryType: "infantryArmament" } },
+      { id: 3, order: { type: "create_line", city, good: "rifle" } },
+      { id: 4, order: { type: "create_line", city, good: "rifle" } },
+    ]),
+  );
+  // Population assez grande pour remplir les trois lignes : le moteur compte alors les rangs 1, 2 et 3.
+  for (let i = 0; i < 5; i++) {
+    game.state.players[HUMAN - 1]!.population = 100_000;
+    apply(game.step([]));
+  }
+  const group = mirror.detail!.factories[0]!.groups[0]!;
+  assert.equal(group.filled, 3);
+  assert.equal(group.workers, workersForLines("rifle", 3));
+  assert.equal(group.workers, mirror.stats[HUMAN - 1]!.factoryWorkers);
+  assert.ok(group.workers < 3 * productConfig("rifle").workersPerLine, "les lignes suivantes coûtent moins que la première");
 });
 
 test("un ordre humain ne peut pas parler au nom d'un autre joueur", () => {

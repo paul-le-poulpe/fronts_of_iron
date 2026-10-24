@@ -232,9 +232,12 @@ export function bruteHarvest(
 ): { workers: number; area: number; yield: number } {
   const S = 10_000n;
   const maxM = BigInt(cfg.maxMachinesPer1000);
-  // x = min(machines / disponibles, m_max) / m_max, ramené sur 0…S par division entière.
+  // référence = min(disponibles, surface_max / M_max arrondi vers le haut) (00-Game §6.2).
+  const atFull = (BigInt(surfaceMax) * 1000n + BigInt(cfg.mechanizationMax) - 1n) / BigInt(cfg.mechanizationMax);
+  const reference = BigInt(available) < atFull ? BigInt(available) : atFull;
+  // x = min(machines / référence, m_max) / m_max, ramené sur 0…S par division entière.
   // m_max est en machines pour 1 000 travailleurs.
-  let X = available === 0 ? 0n : (BigInt(machines) * 1000n * S) / (BigInt(available) * maxM);
+  let X = reference === 0n ? 0n : (BigInt(machines) * 1000n * S) / (reference * maxM);
   if (X > S) X = S;
   let p = S;
   for (let i = 0; i < cfg.curveExponent; i++) p = (p * (S - X)) / S;

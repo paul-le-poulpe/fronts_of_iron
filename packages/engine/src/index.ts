@@ -85,6 +85,7 @@ export {
 export {
   CURVE_SCALE,
   GROWTH_SCALE,
+  fullMechanizationWorkers,
   harvest,
   ironTilesFor,
   machineCurve,
@@ -95,6 +96,8 @@ export {
   requiredWorkers,
   stepEconomy,
   waterYieldMilli,
+  workersForLines,
+  workersForRank,
   type Harvest,
 } from "./economy.ts";
 export {

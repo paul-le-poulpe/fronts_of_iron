@@ -1,9 +1,10 @@
 // Le canvas de la carte : caméra (molette = zoom, glisser = déplacer), tampon de
-// pixels de la carte (painter.ts), puis par-dessus, à chaque image : routes,
-// villes, capitales, ports, et en mode placement le rayon d'expansion et la case
-// survolée. Le tampon n'est renvoyé au canvas que pour la partie repeinte.
+// pixels de la carte (painter.ts), puis par-dessus, à chaque image : hachures de
+// fertilité (vue « Fertilité ») et de fer (vue « Ressources naturelles »), routes, villes, capitales, ports, et en mode
+// placement le rayon d'expansion et la case survolée. Le tampon n'est renvoyé au
+// canvas que pour la partie repeinte.
 
-import type { Mirror } from "./mirror.ts";
+import { type Mirror, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter, playerDark, rgbCss } from "./painter.ts";
 import { factoryInitial } from "./names.ts";
 import { HUMAN } from "./protocol.ts";
@@ -17,6 +18,23 @@ export interface MapViewHooks {
 
 const MAX_ZOOM = 48;
 const DRAG_THRESHOLD_PX = 4;
+/** Hachures des vues : période et épaisseur des bandes, en pixels CSS (constantes à l'écran, quel que soit le zoom). */
+const HATCH_PERIOD_PX = 10;
+const HATCH_WIDTH_PX = 4;
+
+type Rgba = readonly [number, number, number, number];
+
+/** Hachures d'une vue du menu Carte : un masque de cases, une couleur, un sens des bandes. */
+interface Hatching {
+  /** Un pixel opaque par case hachurée. */
+  readonly mask: HTMLCanvasElement;
+  readonly rgba: Rgba;
+  /** Bandes « / » (1) ou « \ » (-1) : la fertilité et le fer se croisent quand les deux sont affichés. */
+  readonly slope: 1 | -1;
+  /** Motif, refait quand la densité de pixels change. */
+  pattern: CanvasPattern | null;
+  patternDpr: number;
+}
 
 export class MapView {
   /** Mode « Créer une ville » actif. */
@@ -27,6 +45,10 @@ export class MapView {
   factoryMode = false;
   /** Ville dont la zone contient la case, et `ok` si on peut y inaugurer l'usine ; ville 0 : aucune zone. */
   factoryCheck: (tile: number) => { city: number; ok: boolean } = () => ({ city: 0, ok: false });
+  /** Vue « Fertilité » du menu Carte : hachures vertes sur les cases cultivables. */
+  showFertility = false;
+  /** Vue « Ressources naturelles » du menu Carte : hachures rouge foncé sur les cases de fer. */
+  showIron = false;
 
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -36,8 +58,13 @@ export class MapView {
   private readonly base: HTMLCanvasElement;
   private readonly baseCtx: CanvasRenderingContext2D;
   private readonly image: ImageData;
-  /** Calque du mode placement : vert léger sur les cases cultivables (fertilité > 0). */
-  private readonly fertileLayer: HTMLCanvasElement;
+  /** Hachures vertes des cases cultivables (fertilité > 0). */
+  private readonly fertileHatch: Hatching;
+  /** Hachures rouge foncé des cases de fer. */
+  private readonly ironHatch: Hatching;
+  /** Calque des hachures, à la taille du canvas : un masque à la caméra, rempli du motif. */
+  private readonly hatch: HTMLCanvasElement;
+  private readonly hatchCtx: CanvasRenderingContext2D;
   /** Zones de ville colorées pour le mode usine, par « ville:ok » ; vidé quand les zones changent. */
   private readonly zoneLayers = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number }>();
   private cssW = 1;
@@ -68,7 +95,16 @@ export class MapView {
     if (baseCtx === null) throw new Error("canvas 2D indisponible");
     this.baseCtx = baseCtx;
     this.image = new ImageData(painter.bytes, mirror.width, mirror.height);
-    this.fertileLayer = buildFertileLayer(mirror);
+    this.fertileHatch = hatching(buildMask(mirror, (t) => mirror.fertility[t] !== 0), [70, 160, 80, 120], 1);
+    this.ironHatch = hatching(
+      buildMask(mirror, (t) => (mirror.resources[t]! & 1) !== 0 && (mirror.terrain[t]! & TERRAIN_LAND) !== 0),
+      [130, 30, 22, 190],
+      -1,
+    );
+    this.hatch = document.createElement("canvas");
+    const hatchCtx = this.hatch.getContext("2d");
+    if (hatchCtx === null) throw new Error("canvas 2D indisponible");
+    this.hatchCtx = hatchCtx;
     this.uploadAll();
     this.bindPointer();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -118,6 +154,8 @@ export class MapView {
     this.cssH = Math.max(1, rect.height);
     this.canvas.width = Math.round(this.cssW * this.dpr);
     this.canvas.height = Math.round(this.cssH * this.dpr);
+    this.hatch.width = this.canvas.width;
+    this.hatch.height = this.canvas.height;
     this.minZoom = Math.min(this.cssW / this.mirror.width, this.cssH / this.mirror.height) * 0.9;
     if (!this.fitted && rect.width > 1) this.fit();
     else this.clampPan();
@@ -259,6 +297,41 @@ export class MapView {
     return layer;
   }
 
+  /**
+   * Hachures d'une vue : son masque de cases est dessiné à la caméra dans le calque
+   * `hatch`, puis seul ce qu'il couvre est rempli du motif (`source-in`). Le motif
+   * est décalé avec la carte, pour ne pas glisser quand on la déplace ; ses bandes
+   * gardent la même épaisseur à l'écran à tout zoom.
+   */
+  private drawHatch(hatch: Hatching): void {
+    const k = this.dpr;
+    const h = this.hatchCtx;
+    if (hatch.pattern === null || hatch.patternDpr !== k) {
+      hatch.pattern = h.createPattern(buildHatchTile(k, hatch.rgba, hatch.slope), "repeat");
+      hatch.patternDpr = k;
+    }
+    const pattern = hatch.pattern;
+    if (pattern === null) return;
+    const W = this.hatch.width;
+    const H = this.hatch.height;
+    h.globalCompositeOperation = "source-over";
+    h.setTransform(1, 0, 0, 1, 0, 0);
+    h.clearRect(0, 0, W, H);
+    h.setTransform(k * this.zoom, 0, 0, k * this.zoom, k * this.tx, k * this.ty);
+    h.imageSmoothingEnabled = this.zoom < 1;
+    h.drawImage(hatch.mask, 0, 0);
+    h.setTransform(1, 0, 0, 1, 0, 0);
+    h.globalCompositeOperation = "source-in";
+    pattern.setTransform(new DOMMatrix([1, 0, 0, 1, k * this.tx, k * this.ty]));
+    h.fillStyle = pattern;
+    h.fillRect(0, 0, W, H);
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.hatch, 0, 0);
+    ctx.restore();
+  }
+
   private draw(): void {
     const { ctx, mirror, zoom } = this;
     const k = this.dpr;
@@ -268,8 +341,8 @@ export class MapView {
     ctx.setTransform(k * zoom, 0, 0, k * zoom, k * this.tx, k * this.ty);
     ctx.imageSmoothingEnabled = zoom < 1;
     ctx.drawImage(this.base, 0, 0);
-    // Mode placement : les cases cultivables en vert léger, pour voir où une ville pourra cultiver.
-    if (this.placement) ctx.drawImage(this.fertileLayer, 0, 0);
+    if (this.showFertility) this.drawHatch(this.fertileHatch);
+    if (this.showIron) this.drawHatch(this.ironHatch);
 
     const w = mirror.width;
     const px = 1 / zoom; // un pixel d'écran, en cases
@@ -317,17 +390,20 @@ export class MapView {
     }
 
     // Routes : trait plein foncé entre deux villes d'un même joueur, pointillé gris sinon.
+    // Chaque route suit son chemin de cases (00-Game §3.5), calculé quand la liste des routes change.
     const roads = mirror.roads;
+    ctx.lineJoin = "round";
     for (let i = 0; i < roads.length; i += 2) {
       const a = cities[roads[i]! - 1]!;
       const b = cities[roads[i + 1]! - 1]!;
       const same = a.player === b.player;
+      const path = mirror.roadTiles[i / 2]!;
       ctx.beginPath();
       ctx.setLineDash(same ? [] : [4 * px, 3 * px]);
       ctx.strokeStyle = same ? rgbCss(playerDark(a.player)) : "rgba(60,60,60,0.8)";
       ctx.lineWidth = (same ? 2 : 1.5) * px;
-      ctx.moveTo(cx(a.tile), cy(a.tile));
-      ctx.lineTo(cx(b.tile), cy(b.tile));
+      ctx.moveTo(cx(path[0]!), cy(path[0]!));
+      for (let k = 1; k < path.length; k++) ctx.lineTo(cx(path[k]!), cy(path[k]!));
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -390,8 +466,15 @@ export class MapView {
   }
 }
 
-/** Un pixel par case : vert transparent si la case est cultivable, rien sinon. La fertilité ne change pas pendant la partie. */
-function buildFertileLayer(mirror: Mirror): HTMLCanvasElement {
+function hatching(mask: HTMLCanvasElement, rgba: Rgba, slope: 1 | -1): Hatching {
+  return { mask, rgba, slope, pattern: null, patternDpr: 0 };
+}
+
+/**
+ * Un pixel par case : blanc opaque si `inside(t)`, transparent sinon. Calculé une
+ * fois : la fertilité et le fer ne changent pas pendant la partie.
+ */
+function buildMask(mirror: Mirror, inside: (t: number) => boolean): HTMLCanvasElement {
   const layer = document.createElement("canvas");
   layer.width = mirror.width;
   layer.height = mirror.height;
@@ -399,15 +482,32 @@ function buildFertileLayer(mirror: Mirror): HTMLCanvasElement {
   if (lctx === null) throw new Error("canvas 2D indisponible");
   const img = new ImageData(mirror.width, mirror.height);
   const d = img.data;
-  for (let t = 0; t < mirror.fertility.length; t++) {
-    if (mirror.fertility[t] === 0) continue;
-    d[t * 4] = 90;
-    d[t * 4 + 1] = 220;
-    d[t * 4 + 2] = 90;
-    d[t * 4 + 3] = 80;
+  for (let t = 0; t < mirror.width * mirror.height; t++) {
+    if (inside(t)) d.fill(255, t * 4, t * 4 + 4);
   }
   lctx.putImageData(img, 0, 0);
   return layer;
+}
+
+/** Tuile du motif de hachures : bandes diagonales de `HATCH_WIDTH_PX` sur une période de `HATCH_PERIOD_PX`, en pixels d'écran. */
+function buildHatchTile(dpr: number, rgba: Rgba, slope: 1 | -1): HTMLCanvasElement {
+  const p = Math.max(2, Math.round(HATCH_PERIOD_PX * dpr));
+  const width = Math.max(1, Math.round(HATCH_WIDTH_PX * dpr));
+  const tile = document.createElement("canvas");
+  tile.width = p;
+  tile.height = p;
+  const tctx = tile.getContext("2d");
+  if (tctx === null) throw new Error("canvas 2D indisponible");
+  const img = new ImageData(p, p);
+  for (let y = 0; y < p; y++) {
+    for (let x = 0; x < p; x++) {
+      const d = slope === 1 ? (x + y) % p : (x - y + p) % p;
+      if (d >= width) continue;
+      img.data.set(rgba, (y * p + x) * 4);
+    }
+  }
+  tctx.putImageData(img, 0, 0);
+  return tile;
 }
 
 function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {

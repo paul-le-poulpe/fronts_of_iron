@@ -31,6 +31,7 @@ import {
   productConfig,
   RESOURCES,
   waterYieldMilli,
+  workersForLines,
   machineReference,
   type GameState,
   type ProductId,
@@ -39,6 +40,8 @@ import {
 
 /** Case de `Player.goods` des bateaux de pêche. */
 const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
+/** Case de `Player.goods` des tracteurs. */
+const TRACTOR = GOOD_IDS.indexOf("tractor");
 
 import { createBot, type Bot } from "./bots.ts";
 import {
@@ -73,10 +76,14 @@ export function factoryCatalog(): FactoryCatalog {
     })),
     unlockTurns: FACTORY.unlockTurns,
     growthTurns: FACTORY.growthTurns,
-    workersPerLine: FACTORY.workersPerLine,
     goodIds: GOOD_IDS,
     armamentIds: ARMAMENT_IDS,
     productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).productionPerLine])),
+    workersPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).workersPerLine])),
+    workersFloor: Object.fromEntries(
+      PRODUCT_IDS.map((id) => [id, Math.floor((productConfig(id).workersPerLine * FACTORY.specialization.floorPercent) / 100)]),
+    ),
+    ironPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).ironPerLine])),
     economy: {
       foodPerHead: POPULATION.foodPerHead,
       foodMinimum: FOOD.minimum,
@@ -86,6 +93,8 @@ export function factoryCatalog(): FactoryCatalog {
         miningMachine: MINING.maxMachinesPer1000,
       },
       armamentDecayPercent: ARMAMENT.decayRate / 100,
+      farmMechanizationBase: FARMING.mechanizationBase,
+      farmMechanizationMax: FARMING.mechanizationMax,
     },
   };
 }
@@ -160,6 +169,8 @@ export class SoloGame {
     const citiesBefore = state.cities.length;
     // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
     const linesBefore = human.length > 0 ? this.lineCounts() : null;
+    // Les tracteurs que l'étape va utiliser : ceux produits au tour d'avant, remplacés par `applyTurn`.
+    const tractorsUsed = state.players.map((p) => p.goods[TRACTOR]!);
     applyTurn(state, { turn: state.tick + 1, intents });
     const t2 = performance.now();
 
@@ -225,6 +236,8 @@ export class SoloGame {
       wheat: p.wheat,
       fish: p.fish,
       cultivated: p.cultivated,
+      farmMechanization: p.farmMechanization,
+      tractorsUsed: tractorsUsed[p.id - 1]!,
       farmTiles: p.farmTiles,
       fished: p.fished,
       seaTiles: p.seaTiles,
@@ -304,6 +317,7 @@ export class SoloGame {
             lines: g.lines,
             active: g.active,
             filled: g.filled,
+            workers: workersForLines(g.good as ProductId, g.filled),
             growth: g.growth,
             demandMet: b < 0 || capacity >= p.goodsDemand[b]!,
             usefulLines,

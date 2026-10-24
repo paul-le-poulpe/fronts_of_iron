@@ -58,12 +58,17 @@ export interface FactoryCatalog {
   readonly unlockTurns: number;
   /** `FACTORY.growthTurns` : tours avant une ligne automatique (00-Game §8.2). */
   readonly growthTurns: number;
-  readonly workersPerLine: number;
   /** Biens, dans l'ordre de `HumanDetail.goods`. */
   readonly goodIds: readonly string[];
   /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
   readonly armamentIds: readonly string[];
   readonly productionPerLine: Readonly<Record<string, number>>;
+  /** Ouvriers de la première ligne d'un groupe, par bien ou type d'armement. */
+  readonly workersPerLine: Readonly<Record<string, number>>;
+  /** Ouvriers minimaux d'une ligne (plancher de la spécialisation, 00-Game §8.1), par bien ou type d'armement. */
+  readonly workersFloor: Readonly<Record<string, number>>;
+  /** Fer consommé par une ligne remplie, par bien ou type d'armement. */
+  readonly ironPerLine: Readonly<Record<string, number>>;
   /** Réglages que la barre d'informations lit (envoyés une fois). */
   readonly economy: EconomyInfo;
 }
@@ -78,6 +83,9 @@ export interface EconomyInfo {
   readonly machinesPer1000: Readonly<Record<string, number>>;
   /** Part de l'excès d'armement supprimée par tour, en pourcent (`ARMAMENT.decayRate` / 100). */
   readonly armamentDecayPercent: number;
+  /** `FARMING.mechanizationBase` et `FARMING.mechanizationMax` : surface par fermier sans tracteur et à pleine mécanisation, en millièmes de case. */
+  readonly farmMechanizationBase: number;
+  readonly farmMechanizationMax: number;
 }
 
 /** Un groupe de lignes du même bien dans une usine du joueur. */
@@ -86,6 +94,8 @@ export interface LineGroupView {
   readonly lines: number;
   readonly active: number;
   readonly filled: number;
+  /** Ouvriers des lignes remplies (somme selon le rang de chaque ligne, 00-Game §8.1). */
+  readonly workers: number;
   /** Tours comptés vers la prochaine ligne automatique (biens seulement, 00-Game §8.2). */
   readonly growth: number;
   /** La capacité du joueur pour ce bien couvre la demande : plus de croissance automatique. */
@@ -127,6 +137,10 @@ export interface PlayerStats {
   readonly wheat: number;
   readonly fish: number;
   readonly cultivated: number;
+  /** Surface par fermier du dernier tour, en millièmes de case (`Player.farmMechanization`). */
+  readonly farmMechanization: number;
+  /** Tracteurs utilisés par l'agriculture au dernier tour (ceux produits au tour d'avant, 00-Game §12). */
+  readonly tractorsUsed: number;
   /** `surface_max` : cases fertiles du joueur. */
   readonly farmTiles: number;
   readonly fished: number;
@@ -146,7 +160,7 @@ export interface PlayerStats {
   readonly foodPotential: number;
   /**
    * Machines d'une mécanisation totale (00-Game §6.2) : la référence (disponibles
-   * plafonnés aux travailleurs qu'il faudrait sans machine) × machines pour 1 000
+   * plafonnés aux travailleurs qui couvrent la surface à pleine mécanisation) × machines pour 1 000
    * ÷ 1 000. Clé = bien-machine.
    */
   readonly fullMachines: Readonly<Record<string, number>>;

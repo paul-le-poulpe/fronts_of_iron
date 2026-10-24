@@ -11,6 +11,7 @@
 // histogrammes sont tenus à jour case par case.
 
 import type { FactoryCatalog, HumanDetail, InitMessage, PlayerStats, TickMessage } from "./protocol.ts";
+import { RoadPaths } from "./roadpaths.ts";
 
 export const TERRAIN_LAND = 0x80;
 export const TERRAIN_SHORE = 0x40;
@@ -50,6 +51,9 @@ export class Mirror {
   cities: MirrorCity[] = [];
   /** Routes : paires d'identifiants de villes. */
   roads: Uint16Array = new Uint16Array(0);
+  /** Tracé d'affichage de chaque route (00-Game §3.5) : `roadTiles[i]` est la suite de cases de `roads[2i]`–`roads[2i+1]`. */
+  roadTiles: Int32Array[] = [];
+  private readonly roadPaths: RoadPaths;
   /** Statistiques du dernier tour, `stats[id - 1]`. */
   stats: PlayerStats[] = [];
   /** Identifiants des villes de chaque joueur, `cityIds[id - 1]`. */
@@ -83,6 +87,7 @@ export class Mirror {
     this.expansionRadius = init.expansionRadius;
     this.controlRadius = init.controlRadius;
     this.catalog = init.catalog;
+    this.roadPaths = new RoadPaths(init.width, init.height, init.terrain, Math.floor(init.expansionRadius / 2));
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
     this.repaintMark = new Uint8Array(size);
@@ -143,9 +148,9 @@ export class Mirror {
 
   /**
    * Applique un tour. Renvoie les cases à repeindre : celles dont la ville a
-   * changé, leur voisine de gauche et celle du dessus (le trait de limite d'une
-   * case dépend de ses voisines de droite et du dessous), et les cases dont
-   * l'appartenance au champ ou à la zone de pêche a changé avec le rayon.
+   * changé et leurs quatre voisines (la couleur d'une case, trait de frontière ou
+   * de limite compris, dépend de ses voisines de gauche, droite, haut et bas), et
+   * les cases dont l'appartenance au champ ou à la zone de pêche a changé avec le rayon.
    */
   applyTick(msg: TickMessage): number[] {
     this.tick = msg.tick;
@@ -171,6 +176,7 @@ export class Mirror {
       this.portTiles.clear();
     }
     if (msg.roads !== null) this.roads = msg.roads;
+    if (msg.cities !== null || msg.roads !== null) this.roadTiles = this.roadPaths.sync(this.cities, this.roads);
     if (msg.factoryMarks !== null) {
       const f = msg.factoryMarks;
       this.factoryMarks = new Map();
@@ -190,7 +196,9 @@ export class Mirror {
       this.tileCity[t] = next;
       mark(t);
       if (t % w > 0) mark(t - 1);
+      if (t % w < w - 1) mark(t + 1);
       if (t >= w) mark(t - w);
+      if (t + w < this.terrain.length) mark(t + w);
     }
     if (msg.cities !== null) {
       this.portTiles.clear();

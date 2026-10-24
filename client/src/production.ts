@@ -10,6 +10,7 @@
 // nombres (lignes remplies, progression, fer, réserves) sont mis à jour : un
 // curseur ou un glisser en cours n'est pas détruit par le tour suivant.
 
+import { attachGoodTip } from "./goodtips.ts";
 import { factoryName, factorySymbol, productName, productSymbol } from "./names.ts";
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
 
@@ -119,7 +120,7 @@ export class ProductionPanel {
         const row = el("div", "unlocked");
         const text = el("span", "muted small");
         text.textContent = "aucune ligne";
-        row.append(span(productSymbol(node.good)), text, this.plus(f.city, node.good, "Créer la première ligne"));
+        row.append(goodSpan(node.good), text, this.plus(f.city, node.good, "Créer la première ligne"));
         section.append(row);
         return;
       }
@@ -130,8 +131,9 @@ export class ProductionPanel {
       bar.append(fill);
       const text = el("span", "muted small");
       text.dataset["progText"] = `${f.city}:${parentIndex}`;
-      row.append(span(productSymbol(node.parent!)), bar, span(productSymbol(node.good)), text);
-      row.title = `Verrouillé : il faut ${num(this.catalog.unlockTurns)} tours de production d'une ligne de ${productName(node.parent!)}.`;
+      text.title = "Tours-lignes produits / requis";
+      row.append(goodSpan(node.parent!), bar, goodSpan(node.good), text);
+      row.title = `Verrouillé : il faut ${num(this.catalog.unlockTurns)} tours-lignes de production de ${productName(node.parent!)} (une ligne : ${num(this.catalog.unlockTurns)} tours ; dix lignes : dix fois moins).`;
       section.append(row);
     });
 
@@ -159,7 +161,7 @@ export class ProductionPanel {
     const grip = this.grip({ kind: "line", city: f.city, good: g.good }, row);
     const sym = el("span", "sym");
     sym.textContent = productSymbol(g.good);
-    sym.title = productName(g.good);
+    if (!attachGoodTip(sym, g.good)) sym.title = productName(g.good);
     const slider = el("input") as HTMLInputElement;
     slider.type = "range";
     slider.min = "0";
@@ -182,9 +184,10 @@ export class ProductionPanel {
     const max = el("span", "muted");
     max.textContent = ` · max ${g.active} / ${g.lines}`;
     count.append(act, max);
-    count.title = "En service (barre bleue) · maximum réglé (curseur) / lignes de l'usine";
+    count.title = "En service · réglé / lignes";
     const filled = el("span", "muted small");
     filled.dataset["filled"] = `${f.city}:${g.good}`;
+    filled.title = `Par ligne remplie : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${num(this.catalog.productionPerLine[g.good] ?? 0)} produits. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
     slider.addEventListener("pointerdown", () => (this.sliderActive = true));
     // Un clic sans déplacement ne déclenche pas `change` : sans ceci, `sliderActive`
     // resterait vrai et le panneau ne serait plus jamais reconstruit (nouvelle usine
@@ -226,8 +229,9 @@ export class ProductionPanel {
       bar.append(fill);
       const text = el("span", "muted small");
       text.dataset["growthText"] = `${f.city}:${g.good}`;
+      text.title = "Tours / requis";
       growth.append(bar, text);
-      growth.title = `Une ligne de plus tous les ${num(this.catalog.growthTurns)} tours où toutes les lignes produisent, tant que la production ne couvre pas la demande.`;
+      growth.title = `Une ligne de plus tous les ${num(this.catalog.growthTurns)} tours-lignes (chaque tour où toutes les lignes produisent en ajoute autant que de lignes), tant que la production ne couvre pas la demande.`;
       row.append(growth);
     }
     this.bindLineDrop(row, f.city);
@@ -317,7 +321,9 @@ export class ProductionPanel {
         const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
         if (cell) {
           const wanted = Math.min(g.active, g.usefulLines);
-          cell.textContent = `remplies : ${g.filled}${g.filled < wanted ? " (population ou fer manquant)" : g.filled < g.active ? " (demande atteinte)" : ""}`;
+          const workers = g.workers;
+          const iron = g.filled * (this.catalog.ironPerLine[g.good] ?? 0);
+          cell.textContent = `remplies : ${g.filled} · ouvriers : ${num(workers)} · fer : ${num(iron)}${g.filled < wanted ? " (population ou fer manquant)" : g.filled < g.active ? " (demande atteinte)" : ""}`;
         }
         const inService = Math.min(g.active, g.usefulLines);
         const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);
@@ -368,6 +374,13 @@ function el(tag: string, className?: string): HTMLElement {
 
 function span(text: string): HTMLElement {
   return Object.assign(el("span", "sym"), { textContent: text });
+}
+
+/** Symbole d'un bien, avec son infobulle construite s'il en a une. */
+function goodSpan(good: string): HTMLElement {
+  const s = span(productSymbol(good));
+  attachGoodTip(s, good);
+  return s;
 }
 
 /** Longueur sur la piste du curseur (entre les centres extrêmes du pouce, 14 px) pour `n` lignes sur `lines`. */

@@ -212,6 +212,8 @@ export const MINING: MechanizationConfig = {
 export interface ProductConfig {
   /** Quantité produite par tour par une ligne remplie. */
   readonly productionPerLine: number;
+  /** Ouvriers employés par une ligne remplie : 200 pour commencer (4 × 50, décision de l'auteur, 24 octobre 2026), quel que soit le bien (00-Game §8, §13). */
+  readonly workersPerLine: number;
   /** Fer consommé par tour par une ligne remplie : 1 pour commencer, quel que soit le bien (00-Game §8). */
   readonly ironPerLine: number;
 }
@@ -223,9 +225,9 @@ export interface ProductConfig {
  * = 100 demande 100 tracteurs pour la pleine mécanisation).
  */
 export const GOODS = {
-  tractor: { productionPerLine: 30, ironPerLine: 1 },
-  fishingBoat: { productionPerLine: 30, ironPerLine: 1 },
-  miningMachine: { productionPerLine: 30, ironPerLine: 1 },
+  tractor: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
+  fishingBoat: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
+  miningMachine: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
 } as const satisfies Record<string, ProductConfig>;
 
 /**
@@ -233,7 +235,7 @@ export const GOODS = {
  * stock cible décline. `maxStockTurns` : 100 évoqué par l'auteur ; `decayRate` :
  * valeur d'essai.
  * L'ordre des clés de `types` est l'ordre des cases de `Player.armamentReserve`.
- * `productionPerLine` : valeurs d'essai.
+ * `productionPerLine` et `workersPerLine` : valeurs d'essai.
  */
 export const ARMAMENT = {
   /** Stock cible : ce nombre de tours de production (même valeur pour tous les types). */
@@ -241,11 +243,11 @@ export const ARMAMENT = {
   /** Part de l'excès au-dessus du stock cible supprimée par tour, sur l'échelle S = 10 000 (1 %). */
   decayRate: 100,
   types: {
-    rifle: { productionPerLine: 10, ironPerLine: 1 },
-    machineGun: { productionPerLine: 4, ironPerLine: 1 },
-    artillery: { productionPerLine: 2, ironPerLine: 1 },
-    antiAirGun: { productionPerLine: 1, ironPerLine: 1 },
-    antiTankGun: { productionPerLine: 1, ironPerLine: 1 },
+    rifle: { productionPerLine: 10, workersPerLine: 200, ironPerLine: 1 },
+    machineGun: { productionPerLine: 4, workersPerLine: 200, ironPerLine: 1 },
+    artillery: { productionPerLine: 2, workersPerLine: 200, ironPerLine: 1 },
+    antiAirGun: { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
+    antiTankGun: { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
   },
 } as const satisfies { maxStockTurns: number; decayRate: number; types: Record<string, ProductConfig> };
 
@@ -254,17 +256,28 @@ export type ArmamentId = keyof typeof ARMAMENT.types;
 /** Ce qu'une ligne produit : un bien ou un type d'armement. */
 export type ProductId = GoodId | ArmamentId;
 
-/** Usines (00-Game §8). `unlockTurns` et `maxTypesPerCity` : valeurs données par l'auteur. `workersPerLine` : valeur d'essai. */
+/** Usines (00-Game §8). `unlockTurns` et `maxTypesPerCity` : valeurs données par l'auteur. */
 export const FACTORY = {
-  /** Ouvriers d'une ligne, un seul nombre pour tous les biens (00-Game §13). */
-  workersPerLine: 50,
-  /** Tours de fonctionnement d'une ligne du parent avant de pouvoir créer une ligne de l'enfant (00-Game §8.2). */
+  /**
+   * Tours-lignes de production du parent avant de pouvoir créer une ligne de l'enfant
+   * (00-Game §8.2) : chaque tour ajoute le nombre de lignes du parent remplies. Une ligne :
+   * `unlockTurns` tours ; vingt lignes : vingt fois moins.
+   */
   unlockTurns: 500,
   /**
-   * Tours où toutes les lignes d'un groupe de biens produisent, avant qu'il gagne
-   * une ligne automatiquement (00-Game §8.2). Valeur d'essai, pas une valeur fixée.
+   * Tours-lignes où toutes les lignes d'un groupe de biens produisent, avant qu'il
+   * gagne une ligne automatiquement (00-Game §8.2) : chaque tour ajoute le nombre de
+   * lignes du groupe. Valeur d'essai, pas une valeur fixée.
    */
   growthTurns: 500,
+  /**
+   * Spécialisation (00-Game §8.1), décision de l'auteur du 24 octobre 2026 : les
+   * ouvriers d'une ligne baissent avec son rang dans le groupe (même bien, même
+   * usine). `decayPercent` : baisse de la 2e ligne par rapport à la 1re, en % du
+   * coût initial ; `floorPercent` : coût minimal d'une ligne, en % du coût initial.
+   * `decayPercent + floorPercent` doit rester sous 100.
+   */
+  specialization: { decayPercent: 5, floorPercent: 10 },
   /** Types d'usines différents par ville (00-Game §8). */
   maxTypesPerCity: 1,
 } as const;

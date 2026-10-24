@@ -7,7 +7,16 @@
 // écrit seulement des textes et des largeurs : rien n'est détruit entre deux tours.
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
+//
+// Le dernier élément de la barre, contre le bord droit, est le bouton « Carte » : il
+// ouvre un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
+// racine, comme les détails (la barre a `overflow` et le couperait). Les cases ne
+// changent rien ici : elles appellent le rappel `onMapOption`.
+//
+// Chaque nombre a une infobulle (`title`) qui nomme ses valeurs dans l'ordre où
+// elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par tour ».
 
+import { attachGoodTip } from "./goodtips.ts";
 import { productName, productSymbol } from "./names.ts";
 import type { FactoryCatalog, HumanDetail, PlayerStats } from "./protocol.ts";
 
@@ -74,6 +83,14 @@ function row(label: HTMLElement | string, bar: HTMLElement, value: HTMLElement, 
   return r;
 }
 
+/** Icône dessinée (`public/icons/`), à la taille du texte. */
+function icon(path: string): HTMLImageElement {
+  const img = el("img", "ib-img");
+  img.src = `icons/${path}`;
+  img.alt = "";
+  return img;
+}
+
 function symbol(text: string): HTMLElement {
   return el("span", "sym", text);
 }
@@ -83,6 +100,16 @@ function legendItem(className: string, text: string): HTMLElement {
   item.append(el("span", `ib-key ${className}`), document.createTextNode(text));
   return item;
 }
+
+/** Options de vue de la carte du menu « Carte » (00-Game §11). */
+export type MapOption = "iron" | "playerColor" | "fertility";
+
+/** Options du menu, dans l'ordre d'affichage, avec l'état de leur case en début de partie. */
+export const MAP_OPTIONS: readonly { readonly id: MapOption; readonly label: string; readonly initial: boolean }[] = [
+  { id: "iron", label: "Ressources naturelles", initial: false },
+  { id: "playerColor", label: "Couleur des joueurs", initial: true },
+  { id: "fertility", label: "Fertilité", initial: false },
+];
 
 interface Section {
   readonly button: HTMLButtonElement;
@@ -99,9 +126,12 @@ export class InfoBar {
   private readonly bar: HTMLElement;
   private readonly sections: Section[];
   private open = -1;
+  private readonly mapButton: HTMLButtonElement;
+  private readonly mapMenu: HTMLElement;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
 
-  constructor(root: HTMLElement, catalog: FactoryCatalog) {
+  /** `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée. */
+  constructor(root: HTMLElement, catalog: FactoryCatalog, onMapOption: (option: MapOption, checked: boolean) => void) {
     this.root = root;
     this.catalog = catalog;
     this.bar = el("div", "ib-bar");
@@ -113,6 +143,55 @@ export class InfoBar {
       this.bar.append(s.button);
       root.append(s.pane);
     });
+
+    // Menu « Carte » : bouton poussé contre le bord droit de la barre, menu sous le bouton.
+    this.mapButton = el("button", "ib-sec ib-map");
+    this.mapButton.type = "button";
+    this.mapButton.id = "ib-map";
+    this.mapButton.setAttribute("aria-expanded", "false");
+    this.mapButton.setAttribute("aria-controls", "ib-map-menu");
+    this.mapButton.append(el("span", "ib-name", "Carte"), el("span", "ib-chev"));
+    this.mapMenu = el("div", "menu ib-menu");
+    this.mapMenu.id = "ib-map-menu";
+    this.mapMenu.hidden = true;
+    for (const o of MAP_OPTIONS) {
+      const label = el("label", "ib-check");
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = o.initial;
+      box.addEventListener("change", () => onMapOption(o.id, box.checked));
+      label.append(box, document.createTextNode(` ${o.label}`));
+      this.mapMenu.append(label);
+    }
+    this.mapButton.addEventListener("click", () => (this.mapMenu.hidden ? this.openMenu() : this.closeMenu()));
+    this.bar.append(this.mapButton);
+    root.append(this.mapMenu);
+  }
+
+  /** Ferme le menu « Carte » (sans effet s'il est fermé). */
+  closeMenu(): void {
+    this.mapMenu.hidden = true;
+    this.mapButton.setAttribute("aria-expanded", "false");
+  }
+
+  /** Vrai si la cible d'un clic est le bouton « Carte » ou son menu. */
+  inMenu(target: EventTarget | null): boolean {
+    return target instanceof Node && (this.mapButton.contains(target) || this.mapMenu.contains(target));
+  }
+
+  private openMenu(): void {
+    this.collapse();
+    this.mapMenu.hidden = false;
+    this.mapButton.setAttribute("aria-expanded", "true");
+  }
+
+  /** Replie le détail ouvert, s'il y en a un. */
+  private collapse(): void {
+    this.open = -1;
+    this.sections.forEach((s) => {
+      s.pane.hidden = true;
+      s.button.setAttribute("aria-expanded", "false");
+    });
   }
 
   /** À appeler à chaque tour. */
@@ -123,14 +202,14 @@ export class InfoBar {
   }
 
   private toggle(index: number): void {
+    this.closeMenu();
     const previous = this.open;
-    this.open = index === previous ? -1 : index;
-    this.sections.forEach((s, i) => {
-      const on = i === this.open;
-      s.pane.hidden = !on;
-      s.button.setAttribute("aria-expanded", String(on));
-    });
-    if (this.open < 0) return;
+    this.collapse();
+    if (index === previous) return;
+    this.open = index;
+    const section = this.sections[index]!;
+    section.pane.hidden = false;
+    section.button.setAttribute("aria-expanded", "true");
     // Le détail s'aligne sur le bord gauche de sa section, sans dépasser de la barre.
     const pane = this.sections[this.open]!.pane;
     const button = this.sections[this.open]!.button;
@@ -163,17 +242,16 @@ export class InfoBar {
   private population(): Section {
     const total = el("strong", "ib-num");
     const delta = el("span", "zero");
-    delta.title = "Variation de la population pendant le dernier tour (croissance, 00-Game §4.1)";
     const max = el("span", "muted");
-    max.title = "Population maximale : nourriture du tour ÷ consommation par tête (00-Game §4.1)";
-    const button = this.button("pop", [el("span", "ib-name", "Population"), total, delta, max]);
+    const button = this.button("pop", [icon("population/pop-default.png"), el("span", "ib-name", "Population"), total, delta, max]);
+    button.title = "Population · variation / maximum";
 
     const occupations = [
-      { label: "Ouvriers d'usine", color: "var(--occ-factory)", read: (s: PlayerStats) => s.factoryWorkers },
-      { label: "Mineurs", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners },
-      { label: "Fermiers", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers },
-      { label: "Pêcheurs", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers },
-      { label: "Inactifs", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
+      { label: "Ouvriers d'usine", icon: "pop-worker", color: "var(--occ-factory)", read: (s: PlayerStats) => s.factoryWorkers },
+      { label: "Mineurs", icon: "pop-miner", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners },
+      { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers },
+      { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers },
+      { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
     ];
     const stacked = el("div", "ib-stack");
     const parts = occupations.map((o) => {
@@ -189,7 +267,10 @@ export class InfoBar {
       const t = track("flow");
       t.fill.style.background = o.color;
       const value = el("span", "ib-value");
-      r.append(sw, el("span", "ib-label", o.label), t.root, value);
+      value.title = "Personnes · part";
+      const label = el("span", "ib-label");
+      label.append(icon(`population/${o.icon}.png`), o.label);
+      r.append(sw, label, t.root, value);
       return { r, fill: t.fill, value };
     });
     const note = el("p", "muted small ib-note", "Répartition de la population au début du dernier tour.");
@@ -224,8 +305,8 @@ export class InfoBar {
   private food(): Section {
     const total = el("strong", "ib-num");
     const surplus = el("span", "zero");
-    surplus.title = "Surplus : nourriture du tour − population × consommation par tête";
     const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus]);
+    button.title = "Production / tour · surplus";
 
     // Jauge de population : actuelle (vert), maximum avec la nourriture du tour (vert
     // hachuré), maximum si toutes les terres et eaux étaient travaillées (gris hachuré).
@@ -235,12 +316,16 @@ export class InfoBar {
     const capLand = el("i", "cap-land");
     capRoot.append(capLand, capFood, capNow);
     const capValue = el("span", "ib-value");
+    capValue.title = "Actuelle / nourrie / potentielle";
+    capRoot.title = "Vert : actuelle · hachuré : nourrie · gris : potentielle (toutes cases exploitées)";
     const wheat = track("flow");
     wheat.root.classList.add("wheat");
     const wheatValue = el("span", "ib-value");
+    wheatValue.title = "Blé · cultivées / cultivables";
     const fish = track("flow");
     fish.root.classList.add("fish");
     const fishValue = el("span", "ib-value");
+    fishValue.title = "Poisson · pêchées / pêchables";
     const imports = row("Importations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const exports_ = row("Exportations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const consumption = el("p", "ib-consumption");
@@ -275,7 +360,6 @@ export class InfoBar {
         span(capFood, 0, pct(maxNow, scale));
         span(capLand, 0, pct(maxLand, scale));
         capValue.textContent = `${num(s.population)} / ${num(maxNow)} / ${num(maxLand)}`;
-        capValue.title = "Population actuelle / maximum avec la nourriture du tour / maximum si toutes les terres et les eaux étaient exploitées";
         span(wheat.fill, 0, pct(s.wheat, s.food));
         wheatValue.textContent = `${num(s.wheat)} · ${num(s.cultivated)} / ${num(s.farmTiles)} cases`;
         span(fish.fill, 0, pct(s.fish, s.food));
@@ -293,6 +377,7 @@ export class InfoBar {
 
     const iron = track("flow");
     const ironValue = el("span", "ib-value");
+    ironValue.title = "Extrait / demandé · capacité";
     const ironRow = row(symbol("[fer]"), iron.root, ironValue);
     ironRow.querySelector(".ib-label")!.append(" Fer");
 
@@ -303,8 +388,11 @@ export class InfoBar {
     ].map((m) => {
       const t = track("flow");
       const value = el("span", "ib-value");
+      value.title = "Possédés / utiles";
       const label = el("span");
-      label.append(symbol(productSymbol(m.good)), ` ${m.label}`);
+      const sym = symbol(productSymbol(m.good));
+      attachGoodTip(sym, m.good);
+      label.append(sym, ` ${m.label}`);
       return { ...m, index: catalog.goodIds.indexOf(m.good), t, value, r: row(label, t.root, value) };
     });
 
@@ -321,7 +409,7 @@ export class InfoBar {
       ...machines.map((m) => m.r),
       legend,
     );
-    ironRow.title = "Barre pleine : capacité d'extraction (cases de fer × capacité par case). Trait noir : fer demandé par toutes les lignes actives.";
+    iron.root.title = "Barre pleine : capacité · trait noir : demandé";
 
     return {
       button,
@@ -358,6 +446,7 @@ export class InfoBar {
       const t = track("stock");
       t.mark.hidden = false;
       const value = el("span", "ib-value");
+      value.title = "Stock / cible · par tour";
       const label = el("span");
       label.append(symbol(productSymbol(id)), ` ${capitalize(productName(id))}`);
       return { id, index, t, value, r: row(label, t.root, value) };

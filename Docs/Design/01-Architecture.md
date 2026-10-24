@@ -258,7 +258,7 @@ Ordre prévu :
    Vite, TypeScript : écran de départ, carte (zoom, déplacement), barre de
    boutons, panneau latéral, bots, moteur dans un Web Worker avec horloge de
    tour de 100 ms. Interface provisoire, en attendant celle de l'auteur.
-   Détail : `03-Client.md`. Existent aussi `client/public/icons/` : des icônes
+   Détail : `03-Client.md`. Existe aussi `client/public/icons/` : des icônes
    provisoires (carrés gris), que l'auteur remplace par ses dessins sous le
    même nom (00-Game §11). Les règles de §6, Client, sont suivies (chemins
    `/api` relatifs, `server.proxy` de Vite, Worker créé par `new URL`) ; le

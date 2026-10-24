@@ -33,11 +33,13 @@ Depuis la racine du dépôt, après `npm install` :
 | --- | --- |
 | `index.html`, `src/style.css` | page : écran de départ, barre d'informations, carte, barre de boutons, panneau latéral, panneau de production |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker |
+| `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
 | `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock) ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
 | `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine |
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, logos d'usine, modes placement et usine |
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
+| `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines (sans DOM) |
 | `src/protocol.ts` | types des messages page ↔ Worker |
 | `src/engine.worker.ts` | Web Worker : reçoit les messages, tient l'horloge de tour |
@@ -110,8 +112,8 @@ Worker → page (`FromWorker`) :
   (copies, transférées : le moteur garde les siennes), nombre de joueurs, rayons
   d'expansion et de contrôle, coût d'une ville, `stepMs`, et `catalog` : la
   configuration des usines que la page affiche (types d'usine et leur arbre,
-  `unlockTurns`, `workersPerLine`, identifiants des biens et des armements,
-  production par ligne), lue dans le moteur par `factoryCatalog()` (`solo.ts`) ;
+  `unlockTurns`, identifiants des biens et des armements, production,
+  ouvriers et fer par ligne, par produit), lue dans le moteur par `factoryCatalog()` (`solo.ts`) ;
   `catalog.economy` : les réglages que la barre d'informations utilise
   (consommation par tête, nourriture minimale, `maxMachinesPer1000` de chaque
   machine, déclin de l'armement en pourcent).
@@ -197,14 +199,21 @@ les messages `tick`. `Mirror.applyTick` renvoie la liste des cases à repeindre.
 case. Ordre de peinture d'une case, comme `packages/engine/test/cities-viz.ts` :
 relief (ou fer) → teinte du joueur **sur la terre seulement** (00-Game §11) →
 texture de champs (terre fertile), de pêche (eau) ou de mine (case de fer
-exploitée) → trait de limite de zone
-(blanc entre deux villes d'un même joueur, sombre entre deux joueurs, tracé sur
-la terre). Les trois textures sont différentes de la couleur du joueur : champs en
+exploitée) → trait, tracé sur la terre seulement. Pour une case de terre de la
+ville d'un joueur P : si une de ses quatre voisines (dans la carte) est de la
+terre sans ville ou à un autre joueur, **frontière** de P (`playerBorder`, sa
+teinte plus sombre) ; sinon, si sa voisine de droite ou du dessous est de la
+terre d'une autre ville du même joueur, **limite** (`playerLimit`, sa teinte plus
+claire). L'eau et le bord de la carte ne déclenchent rien. Entre deux joueurs,
+chaque côté est peint de sa couleur : double ligne. Le trait ne dépend pas des
+cases du menu « Carte » (`showPlayerColor` : mélange à 45 % de la couleur du
+joueur sur la terre). Le relief d'une case de fer est toujours recouvert d'un gris
+brun-rouge (`landIron`, `IRON_TINT` à 55 %) ; sinon, celui d'une case cultivable
+(fertilité > 0) d'un vert léger (`landFertile`, 80/255 d'opacité). Les trois textures sont différentes de la couleur du joueur : champs en
 bandes vertes, pêche en points blancs sur l'eau bleue, mine en bandes diagonales
 sombres et orangées (provisoire, 00-Game §11). À chaque tour, seules sont
-repeintes : les cases dont la ville a changé, leur voisine de gauche et celle du
-dessus (le trait de limite d'une case dépend de ses voisines de droite et du
-dessous), et les cases dont l'appartenance au champ, à la zone de pêche ou à la
+repeintes : les cases dont la ville a changé et leurs quatre voisines (la couleur
+d'une case dépend de ses voisines de gauche, droite, haut et bas), et les cases dont l'appartenance au champ, à la zone de pêche ou à la
 mine a changé. Le rectangle englobant est renvoyé au canvas par `putImageData` avec
 rectangle sale.
 
@@ -218,10 +227,33 @@ carré à sa ville est ≤ au seuil. Quand un seuil change, seules les cases de
 l'anneau entre l'ancien et le nouveau seuil sont repeintes. Un test compare
 histogrammes incrémentaux, seuils et pixels à un recalcul complet.
 
+**Tracé des routes** (`roadpaths.ts`, 00-Game §3.5, affichage seulement). Le moteur
+ne connaît qu'une paire de villes par route. `Mirror` garde en plus `roadTiles` :
+pour chaque route, la suite de cases qui la dessine. `RoadPaths.sync` le
+recalcule quand un message `tick` apporte une liste de villes ou de routes (donc
+à la fondation d'une ville, pas à chaque tour). Le chemin est un A* sur les
+cases de terre (`TERRAIN_LAND`), 8 voisins ; le coût d'une case d'arrivée est
+`1 + ROAD_HEIGHT_COST_FACTOR × altitude` (bits `TERRAIN_ALTITUDE` de
+`mirror.terrain`, de 0 à 31), multiplié par `√2` pour un pas en diagonale ;
+une case déjà traversée par le chemin d'une autre route coûte `ROAD_REUSE_COST_FACTOR`
+(0,5) fois ce coût : deux routes qui arrivent à une même ville finissent ensemble
+au lieu de longer l'une l'autre côte à côte. Les chemins conservés du cache
+marquent leurs cases (`used`) avant que les nouveaux soient calculés, et chaque
+nouveau chemin marque les siennes pour le suivant ; une route tracée plus tôt
+n'est jamais modifiée par une route tracée plus tard.
+L'heuristique est la distance octile × 0,5 (coût minimal d'une case), donc le
+chemin est optimal pour ces coûts. La recherche reste dans le rectangle des deux villes agrandi de
+`expansionRadius / 2` cases. Le cache est une `Map` dont la clé est la paire des
+deux cases de villes (et non des identifiants, qui peuvent changer) : une route
+déjà tracée est reprise telle quelle, une route absente de la nouvelle liste
+(coupée par une nouvelle ville) est oubliée. Sans chemin de terre dans le
+rectangle, le chemin est les deux cases de villes : un segment droit. Les calculs
+sont en flottants : ils ne touchent jamais l'état de la partie.
+
 **Canvas** (`render.ts`). Molette : zoom centré sur la souris ; glisser : déplacer
 (sous 4 pixels de mouvement, c'est un clic). À chaque image : le tampon de la
-carte, puis routes (trait plein foncé entre deux villes d'un même joueur,
-pointillé gris sinon), villes (point ; étoile pour la capitale ; carré bleu de
+carte, puis routes (ligne brisée le long de `mirror.roadTiles`, trait plein foncé
+entre deux villes d'un même joueur, pointillé gris sinon), villes (point ; étoile pour la capitale ; carré bleu de
 port sur la case de côte de la zone la plus proche de la ville, ou à côté de la
 ville si c'est la sienne), puis, en mode placement, le rayon d'expansion des
 villes du joueur et la case survolée. Une ville qui porte une usine est dessinée
@@ -243,9 +275,8 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
   case survolée est verte si la fondation respecte 00-Game §3.3 (terre,
   `tileCity === 0`, dans le rayon d'expansion d'une ville du joueur, population ≥
   coût) et rouge sinon, avec la raison dans la barre. En mode placement, les
-  cases cultivables (fertilité > 0) sont couvertes d'un vert léger
-  (`buildFertileLayer`, `render.ts`, calculé une fois : la fertilité ne change
-  pas), le rayon de contrôle qu'aurait la ville est dessiné autour de la case
+  vues de `PLACEMENT_MAP_OPTIONS` sont affichées (dont les hachures de
+  fertilité, voir le menu « Carte »), le rayon de contrôle qu'aurait la ville est dessiné autour de la case
   survolée, et la barre donne le nombre de cases cultivables que cette ville
   prendrait (`Mirror.fertileTilesFor` : libres, ou plus proches d'elle que de
   leur ville actuelle, 00-Game §3.2). Le clic sur une case rouge
@@ -273,14 +304,18 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
     = indice de la section sur laquelle on dépose) ;
   - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
     la section seulement), symbole, curseur de 0 à `lines`, « actives / total »,
-    nombre de lignes remplies au dernier tour. L'ordre `set_active_lines` part au
+    nombre de lignes remplies au dernier tour, suivi des ouvriers et du fer
+    qu'elles utilisent (`workers` du groupe, somme des coûts par rang calculée par le moteur,
+    00-Game §8.1 ; lignes remplies × `ironPerLine` du catalogue pour le fer) ;
+    l'infobulle donne le coût d'une ligne : ouvriers de la 1re ligne et
+    minimum (`workersPerLine`, `workersFloor`), fer, produits. L'ordre `set_active_lines` part au
     relâchement du curseur ;
   - un bien verrouillé de l'arbre (pas encore créé et dont le parent n'a pas
-    `unlockTurns` tours) : `[parent]` → barre qui se remplit avec le compteur du
+    `unlockTurns` tours-lignes) : `[parent]` → barre qui se remplit avec le compteur du
     parent → `[bien]`, avec « compteur / unlockTurns » ;
   - une ligne par bien de l'arbre : en production, un bouton + à côté du curseur
     envoie `create_line` (une ligne de plus, à la main) et, pour une machine,
-    une jauge de croissance automatique dessous (`growth / growthTurns`, ou
+    une jauge de croissance automatique dessous (`growth / growthTurns` en tours-lignes, ou
     « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait rouge sur
     le curseur à `usefulLines / lines` : lignes utiles, calculées par
     `SoloGame.humanDetail` dans l'ordre de remplissage du moteur
@@ -307,7 +342,69 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
   détail ouvert ; un détail replié est mis à jour à l'ouverture). Les barres
   **vertes** sont des flux (production du tour), les barres **bleues** des stocks.
   Les icônes sont des textes provisoires entre crochets (`[fer]`, `[tracteur]`…),
-  `⇄` pour les flux, `▣` pour le stock.
+  `⇄` pour les flux, `▣` pour le stock, sauf la population : images 16 × 16 de
+  `public/icons/population/` (00-Game §11), affichées à 16 px sans lissage
+  (`image-rendering: pixelated`) ; `pop-default` sur l'onglet, une icône par
+  occupation dans son détail.
+  **Menu « Carte »** : dernier élément de la barre (bouton `Carte ▾`, texte plus
+  gros que les sections ; une icône de carte le remplacera). Son bord droit est
+  contre le bord gauche du panneau latéral : `margin-right: var(--panel-w)`, la
+  variable qui donne aussi sa largeur à la colonne du panneau ; sous 760 px, le
+  panneau passe sous la carte et le bouton revient contre le bord droit. Il ouvre
+  sous le bouton, aligné sur son bord droit, un menu de cases à cocher
+  (`MAP_OPTIONS`, `infobar.ts`, avec l'état de chaque case en début de partie :
+  « Ressources naturelles » → `view.showIron`, décochée ; « Couleur des
+  joueurs » → `painter.showPlayerColor`, cochée ; « Fertilité » →
+  `view.showFertility`, décochée) ; chaque changement appelle le rappel
+  `onMapOption` de `InfoBar`, que `main.ts` branche sur le painter et la vue de la
+  partie. La couleur des joueurs est dans le tampon : la changer repeint tout
+  (`paintAll` puis `uploadAll`). Les hachures des deux autres vues sont dessinées
+  par `render.ts` à chaque image (`drawHatch`, une `Hatching` par vue) : le masque
+  des cases concernées (`buildMask`, calculé une fois, la fertilité et le fer ne
+  changent pas) est posé à la caméra dans un calque à la taille du canvas, puis
+  rempli d'un motif de bandes diagonales (`source-in`) de 4 px sur une période de
+  10 px d'écran, à tout zoom ; le motif est décalé avec la carte pour ne pas
+  glisser quand on la déplace. Fertilité : vert doux, bandes « / ». Fer : rouge
+  foncé, bandes « \ », pour que les deux se croisent au lieu de se confondre
+  quand elles sont affichées ensemble (placement d'une ville). Le menu est un enfant de `#infobar`, comme les détails, parce que
+  `.ib-bar` a `overflow` et le couperait. Il reste ouvert quand on coche ; il se
+  ferme au reclic sur le bouton, au clic en dehors (`pointerdown` sur le document),
+  à Échap, ou à l'ouverture d'un détail, et l'ouvrir replie le détail ouvert. Les
+  cases reprennent leur état de début de partie à chaque nouvelle partie (rien
+  n'est mémorisé). `main.ts`
+  garde l'état des cases dans `mapChecked` ; `applyMapOptions` affiche une vue si
+  sa case est cochée, ou si le mode placement est actif et qu'elle est dans
+  `PLACEMENT_MAP_OPTIONS`. Il est appelé à chaque case changée et à chaque entrée
+  ou sortie du mode placement, et ne repeint que si une vue change. Les cases ne
+  sont pas modifiées : à la sortie du mode, la carte revient aux vues cochées.
+  **Infobulles** (`tooltip.ts`, encadré en 14 px, pas l'infobulle du
+  navigateur, trop lente) : chaque nombre a un `title` qui nomme ses valeurs dans l'ordre
+  d'écriture, avec les mêmes séparateurs, en un mot chacune : « Actuelle /
+  nourrie / potentielle », « Stock / cible · par tour ». Sur la barre, l'infobulle
+  est celle du bouton entier. Même règle dans le panneau latéral (« Cultivées /
+  cultivables ») et le panneau de production (« En service · réglé / lignes »).
+  **Infobulles construites** (`setTip(el, build)` de `tooltip.ts`) : `build`
+  renvoie un contenu (titre, sections, barres) au lieu d'un texte ; il est appelé
+  à l'affichage, puis à chaque tour tant que l'encadré est affiché (`refreshTip`,
+  appelé par `main.ts` après la barre d'informations). Encadré de 340 px, en 13 px.
+  Les contenus des biens sont dans `goodtips.ts` (`attachGoodTip(el, bien)`, posé
+  sur chaque `[bien]` de la barre d'informations et du panneau de production) ;
+  seul le **tracteur** en a un pour l'instant :
+  titre ; une phrase (les tracteurs augmentent la surface que cultive chaque
+  fermier, donc moins de fermiers pour la même surface) ; « Surface par fermier »
+  sans tracteur (`farmMechanizationBase`) et à pleine mécanisation
+  (`farmMechanizationMax`, avec le rapport tiré de `machinesPer1000.tractor`) ;
+  « Votre nation · fermiers · tracteurs utilisés / tracteurs d'une mécanisation
+  totale », une jauge verte de la surface par fermier du dernier tour
+  (`stats.farmMechanization`, copié de `Player.farmMechanization`), de la valeur
+  sans tracteur (vide) à la valeur maximale (pleine), la valeur écrite au bout ;
+  puis une barre jaune (`--occ-farm`, la couleur des fermiers) « Surface cultivée
+  cultivées / cultivables ». La jauge montre un effet commun à tous les fermiers
+  (00-Game §6.2 : une seule mécanisation pour tous), pas une part de fermiers
+  équipés. `stats.tractorsUsed` est lu par `SoloGame` dans `goods` **avant**
+  `applyTurn` : ce sont les tracteurs que l'étape a utilisés, ceux qui donnent la
+  jauge, pas ceux produits pendant le tour (qui servent au tour suivant et que la
+  ligne *Tracteurs* du détail Ressources affiche).
   1. **Population** : « Population n  ±v  / max ». `v` est la croissance du
      tour (population − somme des occupations, qui est la population au début du
      tour : une fondation de ville, qui retire des habitants avant l'étape, n'y
@@ -359,7 +456,7 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
   curseur rappelle le report (00-Game §4) : le réglage ne compte que si la
   population ne suffit pas à travailler champs et mer ; tableau de tous les
   joueurs (couleur, population, villes) ; case survolée (coordonnées, terrain et
-  altitude, fertilité, fer, propriétaire, ville) ; case à cocher du fer ; bloc
+  altitude, fertilité, fer, propriétaire, ville) ; bloc
   développement (durées mesurées, pause, quitter).
 - Tout le texte est en français.
 
@@ -377,14 +474,12 @@ La section maritime de la barre (00-Game §1) et la diplomatie n'existent pas.
 - Bots et usines : les bots ne construisent pas d'usine (rien ne les y oblige ; une
   usine retire des travailleurs aux champs). Seul l'humain en a.
 - Icônes : les biens, l'armement et les types d'usine sont désignés par un texte
-  entre crochets (`names.ts`) ; les vraies icônes de `public/icons/` ne sont pas
-  encore utilisées. Les noms de ville (« Ville n° N ») sont leur identifiant.
+  entre crochets (`names.ts`) ; seule la population a des icônes
+  (`public/icons/population/`). Les noms de ville (« Ville n° N ») sont leur identifiant.
 - Build pour Cloudflare : `[assets] directory` de `worker/wrangler.toml` pointe
   toujours sur `worker/public`, la page d'accueil du lobby n'est pas reprise, et
   `.github/workflows/deploy.yml` n'a pas l'étape `npm ci` + build du client
   (01-Architecture §6, Client, point 4). Aucun des trois n'est fait.
-- Chemin des routes par A* selon l'altitude (00-Game §3.5) : les routes sont des
-  segments droits.
 - Couleurs de joueur, textures et tailles : provisoires, choisies à la main.
 - Rendu mobile / tactile : la mise en page s'adapte, mais le zoom au pincement
   n'existe pas.

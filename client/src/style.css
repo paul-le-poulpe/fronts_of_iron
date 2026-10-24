@@ -13,6 +13,8 @@
   --occ-farm: #c9a227;
   --occ-fish: #3b8fc4;
   --occ-idle: #a8aaa6;
+  /* Largeur du panneau latéral : le bouton « Carte » s'arrête à son bord gauche. */
+  --panel-w: 320px;
   color-scheme: light;
 }
 
@@ -106,7 +108,7 @@ input[type="number"] {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "info  info"
@@ -302,11 +304,56 @@ tr.me td { font-weight: 600; }
 .ib-sec .ib-num, .ib-sec .pos, .ib-sec .neg, .ib-sec .zero { font-variant-numeric: tabular-nums; }
 .ib-name { color: var(--muted); }
 .ib-icon { color: var(--muted); font-size: 14px; }
+/* Pixel art 16 × 16 : agrandi sans lissage sur un écran haute densité. */
+.ib-img { width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
+
+/* ---- infobulles (tooltip.ts) ---- */
+
+/* Flèche, pas le curseur de texte, sur un élément à infobulle et ses enfants (cursor est hérité).
+   :where() ne pèse rien : un bouton (pointer) ou une poignée (grab) garde son curseur. */
+:where([title], [data-tip]) { cursor: default; }
+
+#tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 320px;
+  padding: 4px 9px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 3px 10px #0002;
+  font-size: 14px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+/* Infobulle construite (setTip, goodtips.ts) : largeur fixe pour les barres, sections séparées par un trait. */
+#tip.rich { width: 340px; max-width: calc(100vw - 8px); padding: 8px 10px; font-size: 13px; }
+#tip h4 { margin: 0 0 4px; font-size: 14px; }
+#tip p { margin: 0 0 6px; }
+.tip-sec { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; }
+.tip-lbl { color: var(--muted); font-size: 12px; }
+.tip-kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-variant-numeric: tabular-nums; }
+.tip-kv > :nth-child(even) { text-align: right; }
+/* Jauge de la surface par fermier : la valeur est écrite au-dessus du bout du remplissage. */
+.tip-gauge { margin: 16px 0 2px; }
+.tip-gauge-val { position: absolute; top: -16px; transform: translateX(-50%); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tip-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tip-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 8px; font-variant-numeric: tabular-nums; }
 .ib-chev::before { content: "\25BE"; color: var(--muted); font-size: 11px; }
 .ib-sec[aria-expanded="true"] .ib-chev::before { content: "\25B4"; }
 .pos { color: var(--ok); font-weight: 600; }
 .neg { color: var(--bad); font-weight: 600; }
 .zero { color: var(--muted); }
+
+/* Bouton « Carte » : dernier de la barre, contre le bord droit ; son menu est un enfant
+   de #infobar (la barre a overflow) et se déplie vers le bas, aligné à droite. */
+.ib-map { margin-left: auto; margin-right: var(--panel-w); padding: 0 20px; border-left: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+.ib-map .ib-name { color: var(--fg); }
+.ib-map .ib-chev::before { font-size: 13px; }
+.menu.ib-menu { top: 100%; bottom: auto; left: auto; right: var(--panel-w); min-width: 210px; border-top: 0; border-radius: 0 0 8px 8px; }
+.ib-check { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.ib-check:hover { background: #eef1f6; }
 
 .ib-pane {
   position: absolute;
@@ -330,7 +377,8 @@ tr.me td { font-weight: 600; }
   gap: 10px;
   margin: 6px 0;
 }
-.ib-row.occ { grid-template-columns: 12px 120px minmax(0, 1fr) 110px; }
+.ib-row.occ { grid-template-columns: 12px 142px minmax(0, 1fr) 110px; }
+.ib-row.occ .ib-label { display: flex; align-items: center; gap: 6px; }
 .ib-row.soon { opacity: 0.45; }
 .ib-label { white-space: nowrap; }
 .ib-value { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -375,4 +423,7 @@ tr.me td { font-weight: 600; }
     grid-template-areas: "info" "stage" "bar" "panel";
   }
   #panel { border-left: 0; border-top: 1px solid var(--line); }
+  /* Le panneau passe sous la carte : le bouton « Carte » revient contre le bord droit. */
+  .ib-map { margin-right: 0; }
+  .menu.ib-menu { right: 0; }
 }
