@@ -28,6 +28,9 @@ const signed = (n: number): string => (n > 0 ? "+" : "") + num(n);
 /** Part de `x` dans `total`, en pourcentage de largeur, bornée à 0…100. */
 const pct = (x: number, total: number): number => (total > 0 ? Math.min(100, Math.max(0, (100 * x) / total)) : 0);
 
+/** Nourriture par travailleur : deux décimales au plus. */
+const perHeadFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+
 /** Pourcentage affiché, une décimale au plus. */
 const share = (x: number, total: number): string =>
   total > 0 ? `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format((100 * x) / total)} %` : "0 %";
@@ -99,12 +102,27 @@ function iconLabel(path: string, text: string, ...after: HTMLElement[]): HTMLEle
   return l;
 }
 
+/** Rendement par travailleur : « 0,9 [nourriture] / [métier] », en remplacement de l'icône seule du métier. */
+function yieldLabel(job: string): { readonly root: HTMLElement; readonly value: HTMLElement } {
+  const root = el("span", "ib-yield");
+  const value = el("span", "ib-yield-num");
+  root.append(value, icon("miscellaneous/misc-food-ham.png"), document.createTextNode("/"), icon(`population/${job}.png`));
+  return { root, value };
+}
+
 /** Engrenage : l'infobulle de la machine qui mécanise un métier (goodtips.ts). */
 function gearIcon(machine: string): HTMLImageElement {
   const gear = icon("miscellaneous/misc-gear-stolen.png");
   gear.classList.add("ib-gear");
   attachGoodTip(gear, machine);
   return gear;
+}
+
+/** Libellé précédé d'un élément déjà construit (ici le rendement par travailleur). */
+function labelWith(before: HTMLElement, text: string, ...after: HTMLElement[]): HTMLElement {
+  const l = el("span", "ib-iconlabel");
+  l.append(before, text, ...after);
+  return l;
 }
 
 function legendItem(className: string, text: string): HTMLElement {
@@ -142,11 +160,23 @@ export class InfoBar {
   private readonly mapButton: HTMLButtonElement;
   private readonly mapMenu: HTMLElement;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
+  private readonly onFarmShare: (percent: number) => void;
+  /** Vrai pendant que le joueur tient le curseur de la part de fermiers : les tours n'y touchent pas. */
+  private farmSliderActive = false;
 
-  /** `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée. */
-  constructor(root: HTMLElement, catalog: FactoryCatalog, onMapOption: (option: MapOption, checked: boolean) => void) {
+  /**
+   * `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée ;
+   * `onFarmShare`, au relâchement du curseur de la part de fermiers.
+   */
+  constructor(
+    root: HTMLElement,
+    catalog: FactoryCatalog,
+    onMapOption: (option: MapOption, checked: boolean) => void,
+    onFarmShare: (percent: number) => void,
+  ) {
     this.root = root;
     this.catalog = catalog;
+    this.onFarmShare = onFarmShare;
     this.bar = el("div", "ib-bar");
     this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog)];
     root.replaceChildren(this.bar);
@@ -340,6 +370,9 @@ export class InfoBar {
     wheat.root.prepend(wheatMax);
     const wheatValue = el("span", "ib-value");
     wheatValue.title = "Blé · cultivées / cultivables · maximum";
+    // Nourriture par travailleur, pour comparer champs et mer selon les machines possédées.
+    const wheatPerWorker = yieldLabel("pop-farmer");
+    const fishPerWorker = yieldLabel("pop-fisherman");
     const fish = track("flow");
     fish.root.classList.add("fish");
     const fishMax = el("i", "ib-max");
@@ -349,6 +382,31 @@ export class InfoBar {
     // Icônes : le métier qui produit la nourriture ; le marin pour le commerce, en attendant une icône à lui.
     const imports = row(iconLabel("population/pop-sailor.png", "Importations"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const exports_ = row(iconLabel("population/pop-sailor.png", "Exportations"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
+    // Curseur de la part de fermiers (00-Game §4). L'ordre part au relâchement (`change`), pas à chaque mouvement.
+    const farmValue = el("span", "ib-value");
+    const farmSlider = el("input", "ib-farm-slider");
+    farmSlider.type = "range";
+    farmSlider.min = "0";
+    farmSlider.max = "100";
+    farmSlider.step = "1";
+    farmSlider.value = "100";
+    farmSlider.title = "Part de la population disponible qui va aux champs ; le reste va à la pêche";
+    farmSlider.addEventListener("pointerdown", () => (this.farmSliderActive = true));
+    // Un clic sans déplacement n'envoie pas `change` : sans ceci, le curseur resterait gelé.
+    farmSlider.addEventListener("pointerup", () => (this.farmSliderActive = false));
+    farmSlider.addEventListener("pointercancel", () => (this.farmSliderActive = false));
+    farmSlider.addEventListener("blur", () => (this.farmSliderActive = false));
+    farmSlider.addEventListener("input", () => {
+      this.farmSliderActive = true;
+      farmSlider.style.setProperty("--p", farmSlider.value);
+      farmValue.textContent = `${farmSlider.value} %`;
+    });
+    farmSlider.addEventListener("change", () => {
+      this.farmSliderActive = false;
+      this.onFarmShare(Number(farmSlider.value));
+    });
+    const farmRow = row("Agriculture versus pêche", farmSlider, farmValue, "farm-share");
+    const farmNote = el("p", "muted small ib-note");
     const consumption = el("p", "ib-consumption");
     const minimum = el("span");
     const surplusLine = el("span");
@@ -357,8 +415,10 @@ export class InfoBar {
       "food",
       el("h3", undefined, "Nourriture produite par tour"),
       row("Population", capRoot, capValue),
-      row(iconLabel("population/pop-farmer.png", "Agriculture", gearIcon("tractor")), wheat.root, wheatValue),
-      row(iconLabel("population/pop-fisherman.png", "Pêche", gearIcon("fishingBoat")), fish.root, fishValue),
+      row(labelWith(wheatPerWorker.root, "Agriculture", gearIcon("tractor")), wheat.root, wheatValue),
+      row(labelWith(fishPerWorker.root, "Pêche", gearIcon("fishingBoat")), fish.root, fishValue),
+      farmRow,
+      farmNote,
       imports,
       exports_,
       consumption,
@@ -389,6 +449,28 @@ export class InfoBar {
         span(fish.fill, 0, pct(s.fish, foodScale));
         span(fishMax, 0, pct(Math.max(s.fish, s.fishMax), foodScale));
         fishValue.textContent = `${num(s.fish)} / ${num(s.fishMax)} · ${num(s.fished)} / ${num(s.seaTiles)} cases`;
+        // Rendement par travailleur : mécanisation du dernier tour (millièmes de case par travailleur) × production moyenne d'une case.
+        const perWorker = (milli: number, max: number, tiles: number): string => (tiles > 0 ? perHeadFmt.format((milli * max) / (1000 * tiles)) : "0");
+        wheatPerWorker.value.textContent = perWorker(s.mechanization.tractor ?? 0, s.wheatMax, s.farmTiles);
+        fishPerWorker.value.textContent = perWorker(s.mechanization.fishingBoat ?? 0, s.fishMax, s.seaTiles);
+        // Infobulle : les deux facteurs du produit, avec leurs valeurs du dernier tour.
+        const tip = (job: string, machines: string, milli: number, max: number, tiles: number, perTile: string): string =>
+          `Nourriture par ${job} = mécanisation × ${perTile}.\n` +
+          `Mécanisation : ${perHeadFmt.format(milli / 1000)} case par ${job} (selon vos ${machines}).\n` +
+          `${perTile[0]!.toUpperCase()}${perTile.slice(1)} : ${tiles > 0 ? perHeadFmt.format(max / tiles) : "0"}.`;
+        wheatPerWorker.root.title = tip("fermier", "tracteurs", s.mechanization.tractor ?? 0, s.wheatMax, s.farmTiles, "fertilité moyenne d'une case");
+        fishPerWorker.root.title = tip("pêcheur", "bateaux de pêche", s.mechanization.fishingBoat ?? 0, s.fishMax, s.seaTiles, "rendement moyen d'une case d'eau");
+        if (!this.farmSliderActive) {
+          farmSlider.value = String(s.farmPercent);
+          farmSlider.style.setProperty("--p", String(s.farmPercent));
+          farmValue.textContent = `${s.farmPercent} %`;
+        }
+        // Report (00-Game §4) : le réglage ne joue que si la population ne suffit pas à tout travailler.
+        farmNote.textContent =
+          `Pêcheurs : ${100 - s.farmPercent} %. ` +
+          (s.seaTiles === 0
+            ? "Aucune case d'eau dans vos zones : tout le monde va aux champs."
+            : "Si un côté a assez de monde, le surplus va à l'autre ; le réglage ne compte que si la population manque.");
         minimum.textContent = `minimum garanti ${num(this.info.foodMinimum)}`;
         setSigned(surplusLine, surplusOf(s));
       },

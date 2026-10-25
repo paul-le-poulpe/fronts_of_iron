@@ -10,6 +10,7 @@ const PRODUCT_NAMES: Readonly<Record<string, string>> = {
   artillery: "artillerie",
   antiAirGun: "canon anti-aérien",
   antiTankGun: "canon anti-char",
+  tankette: "chenillette",
   tractor: "tracteur",
   fishingBoat: "bateau de pêche",
   miningMachine: "pompe à vapeur",

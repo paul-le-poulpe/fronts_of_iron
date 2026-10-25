@@ -12,11 +12,38 @@ export const ARMAMENT = {
   decayRate: 100,
   types: {
     //             productionPerLine  workersPerLine  ironPerLine
-    rifle:       { productionPerLine: 10, workersPerLine: 200, ironPerLine: 1 },
-    machineGun:  { productionPerLine: 4, workersPerLine: 200, ironPerLine: 1 },
-    artillery:   { productionPerLine: 2, workersPerLine: 200, ironPerLine: 10 },
-    antiAirGun:  { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
-    antiTankGun: { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
+    rifle: {
+      productionPerLine: 10, workersPerLine: 200, ironPerLine: 1,
+      icon: "armament/armament-gun.png",
+      description: "Le strict minimum pour envoyer un soldat sur le front. N'espérez pas qu'ils accomplissent grand-chose armés uniquement de ceci.",
+    },
+    machineGun: {
+      productionPerLine: 4, workersPerLine: 200, ironPerLine: 1,
+      icon: "armament/armament-machine-gun.png",
+      description: "Indispensable pour vous défendre contre l'infanterie. Moins utile en attaque.",
+    },
+    artillery: {
+      productionPerLine: 2, workersPerLine: 200, ironPerLine: 10,
+      icon: "armament/armament-artillery.png",
+      description: "Indispensable pour causer du tort à l'échelle industrielle.",
+    },
+    antiAirGun: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 1,
+      icon: "armament/armament-AA-gun.png",
+      description: "Utile si vous n'avez pas le contrôle du ciel. Peut occasionnellement être pointé vers le sol.",
+    },
+    antiTankGun: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 1,
+      icon: "armament/armament-AT-gun.png",
+      description: "La réponse de base aux blindés adverses.",
+    },
+    // Produite par l'usine mécanique, débloquée par le tracteur (factories.ts).
+    // Mêmes valeurs que la ligne de tracteurs, sauf la production (auteur).
+    tankette: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 5,
+      icon: "miscellaneous/misc-dev-icon.png",
+      description: "Aucune chance face à un char d'assaut. Mais redoutable contre l'infanterie s'il n'y a pas de réponse appropriée.",
+    },
   },
 } as const satisfies { maxStockTurns: number; decayRate: number; types: Record<string, ProductConfig> };
 

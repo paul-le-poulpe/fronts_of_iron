@@ -233,11 +233,11 @@ joueur sur la terre). Le relief d'une case de fer est toujours recouvert d'un gr
 brun-rouge (`landIron`, `IRON_TINT` à 55 %) ; sinon, celui d'une case cultivable
 (fertilité > 0) d'un vert léger (`landFertile`, 80/255 d'opacité). Les trois textures sont différentes de la couleur du joueur : champs en
 bandes vertes, pêche en points blancs sur l'eau bleue, mine en bandes diagonales
-sombres et orangées (provisoire, 00-Game §11). La texture de pêche et celle de
-mine remplacent la couleur de la case. Celle des champs aussi quand
-`showPlayerColor` est faux ; quand il est vrai, la case garde 70 % de sa couleur
-(relief teinté par le joueur) et prend 30 % de la bande verte
-(`FIELD_ALPHA_ON_PLAYER`) : à 100 %, les champs couvraient la couleur des joueurs
+sombres et orangées (provisoire, 00-Game §11). Chaque texture remplace la
+couleur de la case quand `showPlayerColor` est faux ; quand il est vrai, la case
+garde 70 % de sa couleur (relief teinté par le joueur, ou mer) et prend 30 % de
+la texture (`TEXTURE_ALPHA_ON_PLAYER`) : à 100 %, les champs couvraient la
+couleur des joueurs ; même réglage pour la pêche et la mine
 (auteur, 25 octobre 2026). À chaque tour, seules sont
 repeintes : les cases dont la ville a changé et leurs quatre voisines (la couleur
 d'une case dépend de ses voisines de gauche, droite, haut et bas), et les cases dont l'appartenance au champ, à la zone de pêche ou à la
@@ -352,10 +352,16 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
     `⋮⋮` à glisser change la priorité de la ville (`set_city_priority`, position
     = indice de la section sur laquelle on dépose) ;
   - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
-    la section seulement), symbole, curseur de 0 à `lines`, « actives / total »,
-    nombre de lignes remplies au dernier tour, suivi des ouvriers et du fer
-    qu'elles utilisent (`workers` du groupe, somme des coûts par rang calculée par le moteur,
-    00-Game §8.1 ; lignes remplies × `ironPerLine` du catalogue pour le fer) ;
+    la section seulement), consommation d'une ligne (`ironPerLine`, icône du fer,
+    →, icône du bien produit), curseur de 0 à `lines`, « actives / total »,
+    puis quelques nombres seulement, pour les lignes remplies au dernier tour
+    (simplification demandée par l'auteur, 25 octobre 2026) : « produit : »
+    production totale (lignes remplies × `productionPerLine` du catalogue),
+    « X/ligne » (`productionPerLine`), fer consommé au total (lignes remplies ×
+    `ironPerLine`) suivi de l'icône du fer, ouvriers employés (`workers` du
+    groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
+    suivis de l'icône d'ouvrier (`population/pop-worker.png`). Plus de nombre de
+    lignes remplies ni de raison du manque sur cette ligne ;
     l'infobulle donne le coût d'une ligne : ouvriers de la 1re ligne et
     minimum (`workersPerLine`, `workersFloor`), fer, produits. L'ordre `set_active_lines` part au
     relâchement du curseur ;
@@ -505,9 +511,33 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
      texte donne « produit / maximum · cases travaillées / cases » ;
      Importations et Exportations grisées
      (« à venir ») ; une ligne Consommation : minimum garanti et surplus.
-     Icônes des libellés (`iconLabel`) : le métier qui produit, `pop-farmer`
-     pour Agriculture et `pop-fisherman` pour Pêche ; `pop-sailor` pour
-     Importations et Exportations, en attendant une icône du commerce.
+     Icônes des libellés (`iconLabel`) : `pop-sailor` pour Importations et
+     Exportations, en attendant une icône du commerce. Agriculture et Pêche
+     n'ont plus l'icône du métier seule : elles portent le **rendement par
+     travailleur**, « n [nourriture] / [métier] » (`yieldLabel`,
+     `miscellaneous/misc-food-ham.png` puis `pop-farmer` ou `pop-fisherman`), pour
+     comparer champs et mer selon les machines possédées. `n` = mécanisation du
+     dernier tour (`stats.mechanization.tractor` ou `.fishingBoat`, millièmes de
+     case par travailleur) × production maximale ÷ cases (`wheatMax / farmTiles`,
+     `fishMax / seaTiles`), deux décimales au plus, 0 sans case : c'est ce que
+     rapporte un travailleur de plus tant que la surface n'est pas toute
+     travaillée. Aucun nouveau champ du moteur ni du message. L'infobulle
+     (réécrite à chaque tour) nomme les deux facteurs et leurs valeurs :
+     mécanisation (cases par travailleur, selon les tracteurs ou les bateaux
+     possédés) et fertilité moyenne d'une case (rendement moyen d'une case d'eau
+     pour la pêche). Le texte contient des retours à la ligne : `#tip:not(.rich)`
+     est en `white-space: pre-line`.
+     Entre Pêche et Importations, le **curseur de la part de fermiers** (il était
+     dans le panneau latéral) : « Agriculture versus pêche », curseur de 0 à 100, valeur
+     en % de fermiers ; la piste est jaune (`--occ-farm`) à gauche du curseur et
+     bleue (`--occ-fish`) à droite, coupée au curseur par la variable CSS `--p`
+     que `infobar.ts` met à jour ; puis la note du report (00-Game §4 : le réglage ne compte que si la
+     population manque). L'ordre `set_farm_share` part au relâchement (`change`)
+     par le rappel `onFarmShare` du constructeur de `InfoBar` ; le curseur n'est
+     pas réécrit par les tours tant qu'il est tenu (`farmSliderActive`, remis à
+     faux aussi sur `pointerup`, `pointercancel` et `blur` : un clic sans
+     déplacement n'envoie pas `change`). Il est mis à jour à l'ouverture du
+     détail et à chaque tour tant qu'il est ouvert.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
      *Fer* : barre pleine = capacité (`ironCapacity`), vert = fer extrait au
      dernier tour, trait noir épais = fer requis (`ironRequired`, compté sur
@@ -585,10 +615,8 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
   **Provisoire, à valider** : une proposition par paire à la fois, les bots ne
   répondent pas, durée de vie des propositions à fixer (02-Engine §7, point 33).
 - **Panneau latéral** : population, fermiers, pêcheurs, inactifs, nourriture,
-  villes, cultivé / max, pêché / max du joueur ; curseur de la part de fermiers
-  (0 à 100 %), l'ordre `set_farm_share` part au relâchement ; la note sous le
-  curseur rappelle le report (00-Game §4) : le réglage ne compte que si la
-  population ne suffit pas à travailler champs et mer ; tableau de tous les
+  villes, cultivé / max, pêché / max du joueur (le curseur de la part de
+  fermiers est dans le détail Nourriture de la barre d'informations) ; tableau de tous les
   joueurs (couleur, population, villes) ; case survolée (coordonnées, terrain et
   altitude, fertilité, fer, propriétaire, ville) ; bloc
   développement (durées mesurées, pause, quitter).

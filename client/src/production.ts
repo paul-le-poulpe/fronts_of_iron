@@ -23,13 +23,19 @@ const HOLD_MS = 500;
 
 type Drag = { kind: "city"; city: number } | { kind: "line"; city: number; good: string };
 
-/** Icône de `public/icons/miscellaneous/`, à la taille du texte. */
-function miscIcon(file: string, alt: string): HTMLImageElement {
+/** Icône de `public/icons/<path>`, à la taille du texte. */
+function icon(path: string, alt: string): HTMLImageElement {
   const img = el("img", "ib-img") as HTMLImageElement;
-  img.src = `icons/miscellaneous/${file}`;
+  img.src = `icons/${path}`;
   img.alt = alt;
   return img;
 }
+
+/** Icône de `public/icons/miscellaneous/`. */
+const miscIcon = (file: string, alt: string): HTMLImageElement => icon(`miscellaneous/${file}`, alt);
+
+const ironIcon = (): HTMLImageElement => icon("goods/goods-iron-ingot.png", "Fer");
+const workerIcon = (): HTMLImageElement => icon("population/pop-worker.png", "Ouvriers");
 
 export class ProductionPanel {
   private readonly root: HTMLElement;
@@ -241,7 +247,10 @@ export class ProductionPanel {
       mark.title = "Lignes utiles : au-delà, la production dépasserait la demande et les ouvriers vont ailleurs.";
       wrap.append(mark);
     }
-    row.append(grip, sym, wrap, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
+    // Consommation d'une ligne : fer → bien produit.
+    const cost = el("span", "cost");
+    cost.append(num(this.catalog.ironPerLine[g.good] ?? 0), ironIcon(), "→", sym);
+    row.append(grip, cost, wrap, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
     // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
     if (!this.catalog.armamentIds.includes(g.good)) {
       const growth = el("div", "growth");
@@ -342,10 +351,14 @@ export class ProductionPanel {
         filled += g.filled;
         const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
         if (cell) {
-          const wanted = Math.min(g.active, g.usefulLines);
-          const workers = g.workers;
+          // Seulement les lignes qui travaillent ce tour (remplies) : production
+          // totale, production par ligne, fer consommé, ouvriers employés.
+          const perLine = this.catalog.productionPerLine[g.good] ?? 0;
           const iron = g.filled * (this.catalog.ironPerLine[g.good] ?? 0);
-          cell.textContent = `remplies : ${g.filled} · ouvriers : ${num(workers)} · fer : ${num(iron)}${g.filled < wanted ? " (population ou fer manquant)" : g.filled < g.active ? " (demande atteinte)" : ""}`;
+          cell.replaceChildren(
+            `produit : ${num(g.filled * perLine)} · ${num(perLine)}/ligne · ${num(iron)}`, ironIcon(),
+            ` · ${num(g.workers)}`, workerIcon(),
+          );
         }
         const inService = Math.min(g.active, g.usefulLines);
         const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);

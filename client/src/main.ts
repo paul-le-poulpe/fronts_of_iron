@@ -138,7 +138,7 @@ function onInit(s: Session, init: InitMessage): void {
   s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
-  s.infobar = new InfoBar($("infobar"), init.catalog, setMapOption);
+  s.infobar = new InfoBar($("infobar"), init.catalog, setMapOption, (percent) => sendOrder({ type: "set_farm_share", percent }));
   buildFactoryMenu(init.catalog);
   $("prod").hidden = true;
   $("production").setAttribute("aria-pressed", "false");
@@ -210,17 +210,6 @@ function updatePanel(players: readonly PlayerStats[]): void {
   $("s-cities").textContent = num(me.cities);
   $("s-cultivated").textContent = `${num(me.cultivated)} / ${num(me.farmTiles)}`;
   $("s-fished").textContent = `${num(me.fished)} / ${num(me.seaTiles)}`;
-  const slider = $<HTMLInputElement>("farm");
-  if (!sliderActive) {
-    slider.value = String(me.farmPercent);
-    $("farm-value").textContent = `${me.farmPercent} %`;
-  }
-  // Report (00-Game §4) : le réglage ne joue que si la population ne suffit pas à tout travailler.
-  $("farm-note").textContent =
-    `Pêcheurs : ${100 - me.farmPercent} %. ` +
-    (me.seaTiles === 0
-      ? "Aucune case d'eau dans vos zones : tout le monde va aux champs."
-      : "Si un côté a assez de monde, le surplus va à l'autre ; le réglage ne compte que si la population manque.");
 
   const rows = $("players").querySelectorAll("tbody tr");
   players.forEach((p, i) => {
@@ -244,19 +233,6 @@ function buildPlayersTable(mirror: Mirror): void {
     body.appendChild(tr);
   }
 }
-
-let sliderActive = false;
-const farmSlider = $<HTMLInputElement>("farm");
-farmSlider.addEventListener("pointerdown", () => (sliderActive = true));
-farmSlider.addEventListener("input", () => {
-  sliderActive = true;
-  $("farm-value").textContent = `${farmSlider.value} %`;
-});
-// L'ordre part au relâchement (événement `change`), pas à chaque mouvement du curseur.
-farmSlider.addEventListener("change", () => {
-  sliderActive = false;
-  sendOrder({ type: "set_farm_share", percent: Number(farmSlider.value) });
-});
 
 /** Cases du menu « Carte » telles que le joueur les a laissées. */
 const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, factories: true };

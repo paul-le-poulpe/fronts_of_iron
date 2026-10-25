@@ -829,10 +829,12 @@ points 31 et 32 sont des choix de plus.
     `MINING` : `mechanizationBase` 100, `mechanizationMax` 500,
     `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans pompe,
     2 avec le maximum) ; `GOODS.*.productionPerLine` 30 machines par tour et par
-    ligne (avec une référence de 1 000 fermiers, 30 tracteurs donnent x = 0,3 et font
+    ligne, sauf le tracteur et la pompe à vapeur, 10 (valeurs de l'auteur, 25 octobre 2026 ; avec 30 et
+    une référence de 1 000 fermiers, 30 tracteurs donnaient x = 0,3 et faisaient
     passer la surface par fermier de 0,3 à 0,912 case) ;
     `ARMAMENT.types` : fusil 10, mitrailleuse 4, artillerie 2, canon anti-aérien 1,
-    canon anti-char 1 par ligne et par tour ; `ARMAMENT.decayRate` 100 (1 % de
+    canon anti-char 1, chenillette 1 par ligne et par tour (chenillette : fer 5,
+    comme le tracteur ; valeurs de l'auteur) ; `ARMAMENT.decayRate` 100 (1 % de
     l'excès par tour) ; `ironPerLine` 1, sauf artillerie 10, tracteur 5, bateau de pêche 3
     (valeurs de l'auteur). `FACTORY.unlockTurns` 500,
     `FACTORY.maxTypesPerCity` 1 sont des valeurs

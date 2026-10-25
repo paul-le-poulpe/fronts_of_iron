@@ -47,9 +47,9 @@ export const rgbCss = (c: Rgb): string => `rgb(${c[0]},${c[1]},${c[2]})`;
 const WATER: Rgb = [111, 156, 204];
 const FIELD_DARK: Rgb = [96, 152, 52];
 const FIELD_LIGHT: Rgb = [128, 190, 72];
-// Avec « Couleur des joueurs », un champ garde 70 % de la couleur du territoire et prend 30 % de sa bande verte ;
-// sans, la bande remplace la couleur.
-const FIELD_ALPHA_ON_PLAYER = 0.3;
+// Avec « Couleur des joueurs », un champ, une zone de pêche ou une mine garde 70 % de la couleur de la case
+// (territoire, ou mer) et prend 30 % de sa bande ; sans, la bande remplace la couleur.
+const TEXTURE_ALPHA_ON_PLAYER = 0.3;
 const FISH_DARK: Rgb = [138, 184, 224];
 const FISH_LIGHT: Rgb = [225, 240, 250];
 // Texture provisoire de la mine (fer exploité) : bandes diagonales sombres et orangées.
@@ -161,8 +161,8 @@ export class Painter {
             : onLand
               ? y % 2 === 0 ? FIELD_DARK : FIELD_LIGHT
               : (x + 2 * y) % 4 === 0 ? FISH_LIGHT : FISH_DARK;
-          if (onLand && !mine && this.showPlayerColor) {
-            const a = FIELD_ALPHA_ON_PLAYER;
+          if (this.showPlayerColor) {
+            const a = TEXTURE_ALPHA_ON_PLAYER;
             r = Math.round(r * (1 - a) + tex[0] * a);
             g = Math.round(g * (1 - a) + tex[1] * a);
             bl = Math.round(bl * (1 - a) + tex[2] * a);

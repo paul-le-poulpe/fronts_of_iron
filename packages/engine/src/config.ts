@@ -12,4 +12,5 @@ export * from "./config/limits.ts";
 export * from "./config/map.ts";
 export * from "./config/resources.ts";
 export * from "./config/sea-zones.ts";
+export * from "./config/units.ts";
 export * from "./config/workforce.ts";

@@ -233,6 +233,12 @@ Chaque ville a trois rayons, du plus grand au plus petit :
 Les rayons d'expansion et de contrôle sont les mêmes pour toutes les villes.
 **Le rayon de contrôle est la moitié du rayon d'expansion** (règle de
 l'auteur) : seul le rayon d'expansion est réglé, le moteur en déduit l'autre.
+
+**Ordre de grandeur** (repère de l'auteur, 25 octobre 2026, pas une règle du
+moteur) : le rayon de contrôle d'une ville vaut environ **10 000 m**. Avec 25
+cases, une case fait environ 400 m. Sert à choisir les valeurs exprimées en
+mètres, comme la largeur de front (§3.8, `FRONTS.metersPerConnection` = 5 000
+par connexion).
 D'autres types de villes pourraient venir plus tard ; ce n'est pas prévu.
 
 ### 3.2 Zone d'une ville
@@ -765,8 +771,9 @@ donnée par l'auteur, 23 octobre 2026). Sans elle, une population nulle
 donnerait zéro fermier, donc zéro nourriture, donc une population maximale
 nulle : la population ne repartirait jamais. La population tend donc toujours
 au moins vers `FOOD.minimum / consommation_par_tête`. Pour comparer : une
-ville entièrement cultivée en terre fertile (317 cases de fertilité 5) produit
-1 585.
+ville entièrement cultivée en terre fertile produit 9 805 (1 961 cases de
+fertilité 5 dans un disque de rayon de contrôle 25 ; c'était 317 cases et
+1 585 avec l'ancien rayon de 10).
 
 Le minimum n'est pas ajouté à la production : `max`, pas une somme. Une seule
 ville cultivée ajoute donc peu au minimum. Voulu par l'auteur : un joueur aura
@@ -1099,10 +1106,12 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   | --- | --- | --- |
   | Manufacture d'armes | fusils | décrites ci-dessous |
   | Chantier naval | bateaux de pêche | plus tard ; exemple de l'auteur : navires de transport (§3.6), puis navires de guerre |
-  | Usine mécanique | pompes à vapeur | tracteurs ; plus tard, différents types de chars à partir des tracteurs |
+  | Usine mécanique | pompes à vapeur | tracteurs, puis chenillettes (premier char, débloqué par les tracteurs ; 25 octobre 2026) ; plus tard, d'autres chars à partir des tracteurs |
 
   Pour l'instant : l'arbre de l'infanterie, les bateaux de pêche seuls, et
-  pompes à vapeur → tracteurs.
+  pompes à vapeur → tracteurs → chenillettes. La chenillette est un type
+  d'armement (stocké dans la réserve, §8.3) produit par une usine de biens :
+  un arbre peut mêler biens et armement.
 
 **Usine d'armement d'infanterie** (premier arbre décrit) :
 
@@ -1114,7 +1123,8 @@ fusils                       production de base de l'usine
     └── canons anti-chars    débloqués par une ligne d'artillerie
 ```
 
-- Cinq types d'armement en tout (§8.3).
+- Cinq types d'armement dans cet arbre (§8.3) ; un sixième, la chenillette,
+  vient de l'usine mécanique.
 - Débloquer une branche ajoute une production, sans remplacer les
   précédentes : une même usine peut avoir des lignes de fusils, de
   mitrailleuses et d'artillerie en même temps.
@@ -1234,9 +1244,9 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   remplace le rouge plein ; le rouge foncé ne sert plus qu'aux hachures de la
   vue « Ressources naturelles ».
 - Zone d'exploitation : vert, puis texture de champs (§6.6). Quand la couleur
-  des joueurs est affichée, la texture des champs est effacée (mélangée à 30 %
-  à la couleur du territoire) pour ne pas couvrir cette couleur (auteur,
-  25 octobre 2026). Zone de pêche :
+  des joueurs est affichée, les textures des champs, de la pêche et de la mine
+  sont effacées (mélangées à 30 % à la couleur de la case) pour ne pas couvrir
+  cette couleur ni trop trancher sur la mer (auteur, 25 octobre 2026). Zone de pêche :
   même calcul en mer, centré sur la ville (§6.6), dessinée par une texture
   propre à la pêche sur l'eau, comme les champs sur la terre. Elle ne doit pas
   ressembler au territoire du joueur. Zone de mine (fer exploité) : même calcul

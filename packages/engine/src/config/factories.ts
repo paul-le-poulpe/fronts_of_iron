@@ -59,6 +59,7 @@ export const FACTORY_TYPES = {
     tree: [
       { good: "miningMachine", parent: null },
       { good: "tractor", parent: "miningMachine" },
+      { good: "tankette", parent: "tractor" },
     ],
   },
 } as const satisfies Record<string, FactoryTypeConfig>;

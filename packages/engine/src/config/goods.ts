@@ -11,16 +11,19 @@ export interface ProductConfig {
   readonly ironPerLine: number;
   /** Icône : chemin sous `client/public/icons/`, par exemple `goods/goods-tractor-outline.png`. Absent : la page affiche un symbole texte. Sans effet sur la simulation. */
   readonly icon?: string;
+  /** Description affichée au survol de l'icône (vue des usines ; page des fronts pour une unité sans description propre, `config/units.ts`). Sans effet sur la simulation. */
+  readonly description?: string;
 }
 
 /**
  * Valeurs d'essai : 30 machines par tour et par ligne (à 1 000 fermiers,
  * `FARMING.maxMachinesPer1000` = 100 demande 100 tracteurs pour la pleine
- * mécanisation).
+ * mécanisation). Tracteur et pompe à vapeur : 10, valeurs de l'auteur
+ * (25 octobre 2026 ; 30 avant).
  */
 export const GOODS = {
   tractor: {
-    productionPerLine: 30, workersPerLine: 200, ironPerLine: 5,
+    productionPerLine: 10, workersPerLine: 200, ironPerLine: 5,
     icon: "goods/goods-tractor-outline.png",
   },
   fishingBoat: {
@@ -28,7 +31,7 @@ export const GOODS = {
     icon: "goods/goods-fishing-boat.png",
   },
   miningMachine: {
-    productionPerLine: 30, workersPerLine: 200, ironPerLine: 1,
+    productionPerLine: 10, workersPerLine: 200, ironPerLine: 1,
     icon: "goods/goods-mining-pump.png",
   },
 } as const satisfies Record<string, ProductConfig>;
