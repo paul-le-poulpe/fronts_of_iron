@@ -4,7 +4,7 @@
 
 import { fmix32 } from "./bits.ts";
 import { FERTILITY, RESOURCES, TEST_MAP, type TestMapConfig } from "./config.ts";
-import { RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE, type GameMap } from "./map.ts";
+import { TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE, type GameMap } from "./map.ts";
 import { ONE, valueNoise } from "./noise.ts";
 import { generateResourcePresence } from "./resources.ts";
 
@@ -48,19 +48,21 @@ export function generateTestMap(seed: number, cfg: TestMapConfig = TEST_MAP): Ga
   // Ressources : le bit i de `resources` est la i-ème clé de RESOURCES. La
   // présence se calcule sur le terrain fini, qui ne change plus ensuite.
   const resources = new Uint8Array(size);
-  // Fertilité (00-Game §2) : la terre hors montagne a FERTILITY.land, la montagne, l'eau et le fer 0.
+  // Fertilité (00-Game §2) : la terre hors montagne a FERTILITY.land, la montagne, l'eau et une ressource 0.
   const fertility = new Uint8Array(size);
   for (let t = 0; t < size; t++) {
     const b = terrain[t]!;
     if ((b & TERRAIN_LAND) !== 0 && (b & TERRAIN_ALTITUDE) < cfg.mountainAltitude) fertility[t] = FERTILITY.land;
   }
   const map: GameMap = { width, height, terrain, resources, fertility };
+  // Une case ne porte qu'une ressource : la clé la plus loin dans RESOURCES
+  // (la plus rare) remplace celles d'avant.
   Object.values(RESOURCES).forEach((resource, i) => {
     const present = generateResourcePresence(map, seed, resource.presence);
-    for (let t = 0; t < size; t++) if (present[t] !== 0) resources[t] = resources[t]! | (1 << i);
+    for (let t = 0; t < size; t++) if (present[t] !== 0) resources[t] = 1 << i;
   });
-  // Une case qui porte du fer n'est pas cultivable (00-Game §2, §7).
-  for (let t = 0; t < size; t++) if ((resources[t]! & RESOURCE_IRON) !== 0) fertility[t] = 0;
+  // Une case qui porte une ressource n'est pas cultivable (00-Game §2, §7).
+  for (let t = 0; t < size; t++) if (resources[t] !== 0) fertility[t] = 0;
   return map;
 }
 

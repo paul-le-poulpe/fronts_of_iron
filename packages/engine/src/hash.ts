@@ -32,8 +32,9 @@ export function hashMap(map: GameMap): number {
  * (cases, population, capitale, villes, cases de ressources, reste de
  * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
  * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
- * déblocage, biens produits, réserves d'armement), villes (joueur, case, port, groupe), routes, propriétaires,
- * ville de chaque case.
+ * déblocage, biens produits, réserves d'armement), villes (joueur, case, port, groupe), routes,
+ * statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
+ * Pas `state.events` (liste du dernier tour, jamais lue par les règles).
  */
 export function hashState(state: GameState): number {
   let h = mixWord(state.mapHash, state.tick);
@@ -109,6 +110,16 @@ export function hashState(state: GameState): number {
   for (const road of state.roads) {
     h = mixWord(h, road[0]);
     h = mixWord(h, road[1]);
+  }
+  // Diplomatie : les statuts (les deux cases de chaque paire), puis les propositions dans l'ordre de création.
+  // `state.events` n'y est pas : rien ne le lit dans les règles.
+  h = mixBytes(h, state.diplomacy);
+  h = mixWord(h, state.proposals.length);
+  for (const p of state.proposals) {
+    h = mixWord(h, p.from);
+    h = mixWord(h, p.to);
+    h = mixWord(h, p.kind === "pact" ? 0 : 1);
+    h = mixWord(h, p.createdTick);
   }
   // Deux cases par mot (poids faible en premier). Boucles écrites ici et non dans
   // une fonction commune : mesuré sous Node 24, 0,9 ms ainsi contre 5 ms avec

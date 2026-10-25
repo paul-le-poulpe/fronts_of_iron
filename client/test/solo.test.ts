@@ -123,7 +123,7 @@ test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et mar
   const me = mirror.stats[HUMAN - 1]!;
   assert.equal(me.ironExtracted, 1);
   assert.ok(me.miners > 0 && me.factoryWorkers > 0);
-  assert.deepEqual(mirror.factoryMarks.get(city), { type: "infantryArmament", level: 1 });
+  assert.deepEqual(mirror.factoryMarks.get(city), { type: "infantryArmament", level: 1, good: "rifle" });
   assert.equal(mirror.detail!.factories[0]!.groups[0]!.filled, 1);
   assert.ok(mirror.detail!.reserve[0]! > 0);
   // Un seul gisement exploité : le rayon de la mine couvre au moins une case de fer, et les pixels suivent le recalcul complet.

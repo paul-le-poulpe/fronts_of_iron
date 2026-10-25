@@ -45,8 +45,9 @@ Modules prévus :
 | Routes terrestres et maritimes | décrit en partie (§3.5, §3.6). Nœuds : les villes sur terre, les zones maritimes en mer (§2.1) |
 | Croissance des villes | décrit (§3.7) : affichage seulement, pas de taille dans le moteur |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
+| Fronts terrestres | version 1 décrite en partie (§3.8) ; fronts aériens et maritimes plus tard |
 | Armée, combat | annoncé, non décrit |
-| Politique entre joueurs | annoncé. Menu de diplomatie et droit de passage envisagés (§1, §3.5) ; options non décrites |
+| Politique entre joueurs | décrit en partie (§1, Diplomatie) : statuts neutre, pacte de non-agression, guerre ; menu au clic sur un joueur. Ni alliance, ni droit de passage, ni garantie d'indépendance, ni commerce dans cette version |
 
 Le joueur agit par une barre de boutons. Pour l'instant, tous les boutons sont
 dans cette même barre :
@@ -63,11 +64,52 @@ Prévu : une section maritime, avec le bouton qui interdit des zones maritimes
 aux bateaux du joueur (§3.6). Cette section n'existe pas encore. Elle pourra
 être séparée de la barre plus tard, selon le nombre de boutons.
 
-**Diplomatie** (envisagée) : le joueur clique sur un autre joueur ; un petit
-menu apparaît à côté de la souris (pas un panneau latéral), avec des options
-comme déclarer la guerre, accorder un droit de passage (§3.5), faire une
-alliance. Inspiration : les jeux Paradox. La liste exacte des options sera
-choisie avec l'auteur.
+**Diplomatie** (décrite par l'auteur, 25 octobre 2026).
+
+*Statut.* Une seule valeur par paire de joueurs, la même vue des deux côtés :
+- **Neutre** : statut de départ. Pas de combat.
+- **Pacte de non-agression** : pas de combat. Il faut le rompre avant de pouvoir
+  déclarer la guerre.
+- **Guerre** : le seul statut où le combat est possible. La guerre doit être
+  déclarée avant d'attaquer.
+
+Il n'y a, dans cette version, ni alliance, ni droit de passage, ni garantie
+d'indépendance, ni commerce (les routes commerciales viendront plus tard).
+**Aucune attaque ni armée n'existe encore** : la règle « pas de combat hors
+guerre » est écrite ici, mais le moteur n'a rien à bloquer pour l'instant. Il
+tient le statut de chaque paire et rien ne le lit.
+
+*Actions.* Le joueur clique sur le territoire d'un autre joueur (quand aucun
+bouton de la barre n'est armé) : un petit menu apparaît à côté de la souris,
+pas un panneau latéral. Il montre le nom du joueur, sa couleur, son statut avec
+le joueur, puis seulement les actions possibles :
+
+| Statut | Action | Qui décide | Résultat |
+| --- | --- | --- | --- |
+| Neutre | Déclarer la guerre | le joueur seul | guerre |
+| Neutre | Proposer un pacte | les deux | pacte si l'autre accepte |
+| Pacte | Rompre le pacte | le joueur seul | neutre |
+| Guerre | Proposer la paix | les deux | neutre si l'autre accepte |
+
+*Propositions* (idée reprise d'OpenFront). La cible reçoit une notification avec
+deux boutons, Accepter et Refuser. Sans réponse après `DIPLOMACY.proposalTurns`
+tours, la proposition expire et le statut ne change pas. L'auteur de la
+proposition reçoit une notification quand elle est acceptée, refusée ou
+expirée. Tant qu'elle attend, la ligne de son menu est grisée avec « En attente
+de réponse ».
+
+*Choix provisoires du moteur, à valider* (02-Engine §7) :
+- au plus une proposition en attente par paire de joueurs, dans un sens ou dans
+  l'autre ; un ordre de proposition pendant qu'une autre attend est ignoré. Chez
+  la cible, la ligne est grisée avec « Proposition reçue » ;
+- déclarer la guerre supprime la proposition en attente de la paire ; tout
+  changement de statut supprime les propositions de la paire ;
+- accepter un pacte demande que le statut soit encore neutre, accepter la paix
+  qu'il soit encore guerre ;
+- les bots n'envoient aucun ordre de diplomatie et ne répondent pas : une
+  proposition qui leur est faite expire (IA reportée, §1.1).
+
+Inspiration générale : les jeux Paradox.
 
 L'interface est définie par l'auteur ; elle n'est pas inventée.
 
@@ -91,6 +133,13 @@ L'interface est définie par l'auteur ; elle n'est pas inventée.
   selon des critères propres à la ressource. Exemple décrit : le **fer** est
   plus probable en altitude ; sur une montagne, le seuil est modifié pour que
   le fer y soit plus fréquent.
+  **Aluminium** (décision de l'auteur, 25 octobre 2026) : même calcul que le
+  fer, avec un seuil plus haut (environ 4 fois moins de cases) et son propre
+  bruit. **Une case ne porte qu'une ressource** : quand deux sont présentes,
+  celle qui est la plus rare (la plus loin dans la liste du fichier de
+  configuration) l'emporte, donc l'aluminium prend la place du fer. Comme le
+  fer, une case d'aluminium n'est pas cultivable. Aucune règle n'extrait
+  l'aluminium pour l'instant.
 - Le propriétaire d'une case n'est pas conquis case par case : il se déduit des
   villes (§3.2).
 
@@ -299,7 +348,7 @@ routes maritimes coûtent (§3.6).
    Envisagé : un **droit de passage**, accordé par un joueur à un autre par la
    diplomatie (§1). Le chemin du joueur autorisé pourrait alors passer par les
    villes de celui qui l'autorise, et éviter une route maritime plus longue.
-   Non décidé ; les options de diplomatie seront choisies avec l'auteur.
+   Non décidé : la diplomatie du §1 ne contient pas cette option.
 5. **Groupes** : les villes du joueur reliées entre elles par ses routes
    (point 4, sans passer par d'autres joueurs) forment un groupe. Le groupe de
    la capitale, le **groupe principal**, est relié par terre ; chaque autre
@@ -391,6 +440,87 @@ toutes les villes sont donc dessinées à la même taille.
 
 Exception, calculée par le client : une ville qui porte une usine (§8) est
 dessinée plus grande, selon le niveau de l'usine (son nombre de lignes).
+
+### 3.8 Fronts terrestres (version 1)
+
+Décrit avec l'auteur le 25 octobre 2026. C'est la **version 1** : elle pourra
+changer. Fronts aériens et maritimes : plus tard, non décrits.
+
+**Entrée.** Le système des fronts ne lit que le résultat du système des
+routes (§3.5) : la liste des paires de villes reliées. La façon dont cette
+liste est construite ne le concerne pas, et le système des routes pourra être
+remanié sans toucher aux fronts.
+
+**Connexion.** Une route dont les deux villes appartiennent à deux joueurs
+différents. Deux villes « se touchent » quand une route les relie ; la forme
+de leurs zones (§3.2) n'est pas regardée.
+
+**Front.** L'ensemble des connexions entre un groupe (§3.5) d'un joueur et un
+groupe d'un autre joueur. Un front est donc défini par une paire de groupes, et
+il est **symétrique** : les deux joueurs voient le même front. Si le groupe g
+de A touche deux groupes de B, il y a deux fronts, (g, B₁) et (g, B₂).
+
+Les fronts existent en paix comme en guerre : la configuration se fait par
+front (contenu de la configuration : non décrit).
+
+**Classement, pour chaque joueur** : d'abord par groupe du joueur (une
+« île » : villes reliées par ses routes, deux groupes d'un même continent non
+reliés par la terre comptent pour deux), puis par adversaire. Sous un même
+adversaire, une île peut avoir plusieurs fronts (cas ci-dessus). Un joueur peut
+avoir plusieurs fronts contre le même adversaire sur des îles différentes.
+
+**Largeur** : nombre de connexions du front × `FRONTS.metersPerConnection`.
+Elle n'est pas stockée : elle se déduit de la liste des connexions.
+
+**Position du front sur une route.** Chaque connexion porte la position du
+front le long de son segment, comptée depuis la ville d'un des deux joueurs,
+en millièmes de la longueur de la route (entier, sans racine carrée).
+- **Déclaration de guerre** (ordre « Déclarer la guerre », §1 et §9) : chaque
+  connexion de chaque front entre les deux joueurs est mise au milieu, 500.
+  Cet effet sur les fronts n'est pas implémenté : le moteur change le statut
+  des deux joueurs et ne touche pas aux fronts.
+- **Avancée** : non décrite (armée, combat).
+- **Prise d'une ville** (déclencheur non décrit) : A prend la ville X à B.
+  Les routes entre X et des villes de A ne sont plus des connexions, dont
+  celle par laquelle A est passé : elles sont retirées du front. Les routes
+  entre X et des villes de B deviennent des connexions, ajoutées au front avec
+  le front à `FRONTS.capturePercent` % de la route côté X (1 %, valeur donnée
+  par l'auteur) : 1 % tenu par A, 99 % par B.
+- **Fondation pendant une guerre** : interdite à moins de
+  `FRONTS.noFoundingDistance` d'un front entre deux joueurs en guerre.
+  Proposition : distance mesurée depuis le point du front sur chaque
+  connexion.
+
+**Cases et récoltes.** Le front ne change pas la propriété des cases : la zone
+d'une ville (§3.2) reste à son joueur tant que la ville ne change pas de main,
+même si une partie est derrière la ligne du front. Choix de l'auteur, le plus
+simple pour l'instant ; à revoir peut-être.
+
+**Stockage dans le moteur.** Une table des fronts, dans l'état de la partie et
+dans le hash, séparée de la liste des routes : chaque front a un identifiant
+stable, ses deux joueurs, ses deux groupes et la liste de ses connexions, avec
+la position du front sur chacune. Recalculée quand les routes ou les
+propriétaires des villes changent (fondation, prise) : une connexion déjà
+présente garde sa position. Structures, calcul, hash, tracé, tests et pièges :
+**`05-Fronts.md`**.
+
+Pourquoi deux tables et pas un champ dans la liste des routes : la liste des
+routes est la sortie du système des routes, qui la réordonne à chaque
+fondation (02-Engine) ; la plupart des routes ne sont pas des connexions ; un
+front regroupe des connexions sous un identifiant, ce que la liste des routes
+n'a pas. Rien n'est stocké deux fois : les routes disent quelles villes sont
+reliées, la table des fronts dit lesquelles se font face et où est la ligne.
+
+**Affichage** (client seulement). En paix, la frontière reste celle des zones
+(§11). Dès la guerre, le client trace une courbe par les points du front, un
+par connexion : spline de Catmull-Rom centripète, qui passe par chaque point,
+dessinée en courbes de Bézier cubiques (`bezierCurveTo`). Calculée quand le
+front change, pas à chaque image ; coût proportionnel au nombre de points.
+La frontière passe des angles du partage de Voronoi à une courbe lisse au
+moment de la déclaration : discontinuité acceptée par l'auteur. Le client doit
+ordonner les points (deux connexions qui partent de la même ville et se
+suivent autour d'elle sont voisines), gérer un front coupé en plusieurs lignes,
+et choisir où la ligne s'arrête au-delà du dernier point (§13).
 
 ## 4. La population
 
@@ -485,12 +615,12 @@ Tous les flux sont comptés par nation, pas par ville. Deux catégories :
 | Catégorie | Origine | Connues à ce jour |
 | --- | --- | --- |
 | Ressources naturelles | extraites de la carte, dans la zone des villes | blé (§6), poisson (§6), fer (§7) ; liste dans le fichier de configuration |
-| Biens | fabriqués par les usines à partir des ressources (§8) | machines : tracteurs, bateaux de pêche, engins miniers ; navires de transport (§3.6) |
+| Biens | fabriqués par les usines à partir des ressources (§8) | machines : tracteurs, bateaux de pêche, pompes à vapeur ; navires de transport (§3.6) |
 
 - Nourriture = blé + poisson. Elle ne sert qu'à fixer la population maximale
   (§4.1).
 - Les machines augmentent la mécanisation d'une activité : tracteurs pour
-  l'agriculture, bateaux pour la pêche, engins miniers pour l'extraction.
+  l'agriculture, bateaux pour la pêche, pompes à vapeur pour l'extraction.
   D'autres usages des biens pourront venir.
 - Les joueurs peuvent échanger ressources et biens (commerce, non décrit).
 - L'affichage des flux sera défini avec l'auteur.
@@ -669,7 +799,7 @@ Pour chaque ressource naturelle r autre que le blé et le poisson (le fer, et
 celles de la liste). **Même fonctionnement que l'agriculture et la pêche**
 (décision de l'auteur, 24 octobre 2026) : des cases (le gisement), des
 travailleurs (les mineurs) qui en exploitent une partie, et des machines (les
-engins miniers) qui réduisent le nombre de mineurs requis. Le moteur n'a besoin
+pompes à vapeur) qui réduisent le nombre de mineurs requis. Le moteur n'a besoin
 que du nombre de cases du gisement couvertes par les villes du joueur : c'est
 sa capacité maximale.
 
@@ -694,8 +824,17 @@ vaut 0 (§2).
 - **On n'extrait que ce qui est demandé.** Une ressource sans demande n'occupe
   personne.
 - **Extraire ne vide pas la case** : c'est une capacité par tour, un flux.
-- `Mécanisation_minière` suit la courbe du §6.3, avec les **engins miniers**
+- `Mécanisation_minière` suit la courbe du §6.3, avec les **pompes à vapeur**
   comme machines et ses propres valeurs de configuration.
+- **Les pompes servent à tous les minerais de la même façon** (décision de
+  l'auteur, 25 octobre 2026) : fer, aluminium et les suivants. Elles sont
+  réparties entre les minerais proportionnellement à leurs mineurs : avec
+  100 mineurs sur le fer et 50 sur l'aluminium, 2/3 des pompes vont au fer.
+  Choix optimal parce que les premières pompes donnent un plus grand bonus que
+  les suivantes (courbe du §6.3), et que tous les mineurs viennent de la même
+  population. **Pas encore dans le moteur** : seul le fer est extrait, il
+  reçoit donc toutes les pompes ; la répartition reste à écrire avec
+  l'extraction de l'aluminium.
 - Les mineurs sont affectés ligne de production par ligne de production, avec
   les ouvriers d'usine de chaque ligne, avant les champs et la pêche (§4).
 - Le groupe (§3.5) où se trouvent les cases n'intervient pas : l'extraction
@@ -711,11 +850,16 @@ vaut 0 (§2).
   sans second clic (décision de l'auteur, 24 octobre 2026). Nombre maximal de
   types d'usines différents par ville : `FACTORY.maxTypesPerCity` (fichier de
   configuration), 1 pour commencer.
-- Chaque type d'usine a un logo, affiché à côté de la ville où elle est
-  construite.
+- Le logo d'une usine est l'icône du bien qui a le plus de lignes construites
+  dans l'usine (actives ou non ; à égalité, le premier de l'arbre ; sans ligne,
+  la racine de l'arbre). Il est affiché à côté de la ville où elle est
+  construite, sur un fond gris clair de 18 × 18 pixels d'écran cerclé de noir
+  (20 × 20 au total ; remplacé par un carré gris de 5 × 5 à bordure sombre quand il
+  dépasserait le tiers du rayon de contrôle à l'écran), et dans
+  l'en-tête de sa section du panneau de production.
 - **Niveau = ligne de production.** Un niveau d'usine est une ligne de
   production élémentaire d'un bien. Exemple : 3 lignes de tracteurs et 1 ligne
-  d'engins miniers dans la même usine font une usine de niveau 4.
+  de pompes à vapeur dans la même usine font une usine de niveau 4.
 - Chaque ligne emploie un nombre fixe d'ouvriers, propre à son bien
   (`GOODS[b].workersPerLine`, `ARMAMENT.types[a].workersPerLine`), réglé comme
   sa production et sa consommation de fer. Le panneau de production indique,
@@ -727,7 +871,7 @@ vaut 0 (§2).
   1 pour les autres biens et types d'armement.
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
-  l'auteur : une usine d'engins miniers qui débloque les tracteurs, puis les
+  l'auteur : une usine de pompes à vapeur qui débloque les tracteurs, puis les
   chars (§8.4).
 - **Spécialisation** (décision de l'auteur, 24 octobre 2026) : le coût en
   ouvriers d'une ligne baisse avec son **rang** dans le groupe (même bien ou
@@ -782,8 +926,8 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   - dans la section, une sous-section par bien produit : les lignes de ce bien,
     leur nombre de lignes actives (curseur) ;
   - les biens encore verrouillés de l'arbre de l'usine (§8.4) apparaissent
-    aussi, avec la progression de leur déblocage : **symbole du parent →
-    flèche qui se remplit → symbole du bien**. Le joueur voit ainsi quelle ligne
+    aussi, avec la progression de leur déblocage : **symbole du parent,
+    progression en chiffres, jauge qui se remplit, cadenas, symbole du bien**. Le joueur voit ainsi quelle ligne
     débloque quel bien. Les symboles n'existent pas encore : un texte
     provisoire les remplace ;
   - **une ligne de panneau par bien de l'arbre de l'usine** (précision de
@@ -793,7 +937,7 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
     dessous, pour une machine, une jauge de croissance qui se remplit jusqu'à
     la ligne suivante, §8.2), débloqué sans
     ligne (bouton **+** qui crée la première ligne), ou verrouillé (symbole du
-    parent → flèche → symbole du bien). Il n'y a pas de bouton « Ajouter une
+    parent, progression, jauge, cadenas, symbole du bien). Il n'y a pas de bouton « Ajouter une
     ligne » séparé ni de liste de biens à choisir (§8.2).
 - **Priorité** : le joueur fait glisser **des villes entières** (une section
   monte ou descend avec toutes ses lignes), et **des lignes au sein d'une
@@ -832,7 +976,7 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
 
 **Croissance automatique des lignes** (décision de l'auteur, 24 octobre 2026).
 
-- Un groupe de lignes de **machine** (tracteurs, bateaux de pêche, engins
+- Un groupe de lignes de **machine** (tracteurs, bateaux de pêche, pompes
   miniers) **grandit tout seul** : après `FACTORY.growthTurns` tours-lignes,
   il gagne une ligne, puis la jauge repart pour la ligne suivante (le
   dépassement éventuel est gardé).
@@ -945,16 +1089,20 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
 - La structure des arbres est dans le fichier de configuration.
 - **Types d'usine de base** (décrits par l'auteur, 24 octobre 2026) : ce sont
   les choix du menu « Inaugurer une usine » (§1). Chacun commence par la racine
-  de son arbre :
+  de son arbre. Chaque type a un **nom propre**, différent de celui de son bien
+  principal (décision de l'auteur, 25 octobre 2026) : « manufacture d'armes »,
+  « chantier naval », « usine mécanique ». C'est ce nom qu'affichent le menu
+  « Inaugurer une usine » et l'en-tête de la section du panneau de production
+  (l'icône reste celle du bien le plus construit) :
 
   | Type d'usine | Racine | Branches |
   | --- | --- | --- |
-  | Armement d'infanterie | fusils | décrites ci-dessous |
-  | Bateaux de pêche | bateaux de pêche | plus tard ; exemple de l'auteur : navires de transport (§3.6), puis navires de guerre |
-  | Engins miniers | engins miniers | tracteurs ; plus tard, différents types de chars à partir des tracteurs |
+  | Manufacture d'armes | fusils | décrites ci-dessous |
+  | Chantier naval | bateaux de pêche | plus tard ; exemple de l'auteur : navires de transport (§3.6), puis navires de guerre |
+  | Usine mécanique | pompes à vapeur | tracteurs ; plus tard, différents types de chars à partir des tracteurs |
 
   Pour l'instant : l'arbre de l'infanterie, les bateaux de pêche seuls, et
-  engins miniers → tracteurs.
+  pompes à vapeur → tracteurs.
 
 **Usine d'armement d'infanterie** (premier arbre décrit) :
 
@@ -984,6 +1132,11 @@ fusils                       production de base de l'usine
 | Créer une ligne de production | la ville (l'usine), le bien | maximum de lignes non atteint ; conditions et coût à définir (§8.2) | ajoute une ligne |
 | Régler les lignes actives | l'usine, le bien, le nombre de lignes actives | entre 0 et le nombre de lignes de ce bien dans cette usine | change les lignes qui reçoivent des ouvriers (§8.1) |
 | Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de remplissage (§4, §8.1) |
+| Déclarer la guerre | le joueur visé | un autre joueur ; statut neutre (§1) | statut guerre ; supprime la proposition en attente de la paire |
+| Proposer un pacte | le joueur visé | un autre joueur ; statut neutre ; aucune proposition en attente pour la paire | crée une proposition (§1) |
+| Rompre le pacte | le joueur visé | statut pacte | statut neutre |
+| Proposer la paix | le joueur visé | un autre joueur ; statut guerre ; aucune proposition en attente pour la paire | crée une proposition (§1) |
+| Répondre à une proposition | l'auteur de la proposition, accepter ou refuser | le joueur est la cible d'une proposition de cet auteur ; pour accepter, le statut est encore celui que la proposition change | accepter : statut pacte (pacte) ou neutre (paix) ; refuser : rien ne change. Dans les deux cas la proposition disparaît |
 | Changer de capitale | la ville | la ville appartient au joueur ; coût et conditions à définir (§3.4) | la ville devient la capitale ; recalcule les villes reliées (§3.5, §3.6) |
 | Interdire / autoriser une zone maritime | la zone | la zone existe | ajoute ou retire la zone des zones interdites du joueur ; recalcule ses routes maritimes (§3.6) |
 
@@ -991,7 +1144,9 @@ Les noms et formats exacts des ordres sont fixés avec la session du moteur.
 
 ## 10. Fichier de configuration
 
-Noms proposés, dans le style de `packages/engine/src/config.ts`.
+Noms proposés, dans le style des fichiers de `packages/engine/src/config/` (un
+fichier par thème, voir 02-Engine §1 ; `config.ts` les ré-exporte). Les fichiers
+sont importés à la compilation, jamais lus à l'exécution (CLAUDE.md, règle 2).
 
 **Aucune valeur n'est fixée, et aucune ne doit être devinée.** Elles seront
 choisies ensemble plus tard, en essayant des valeurs.
@@ -1013,13 +1168,14 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FARMING.maxTractorsPerFarmer` | `m_max` : tracteurs par fermier au-delà desquels la mécanisation n'augmente plus |
 | `FARMING.mechanizationCurveExponent` | `n` de la courbe §6.3, entier ≥ 1 |
 | `FISHING.*` | mêmes quatre valeurs pour la pêche, avec les bateaux ; plus `FISHING.tileYield` (rendement d'une case d'eau sans bateau, 3 pour une terre de 5, ratio donné par l'auteur) et `FISHING.tileYieldMax` (rendement avec le maximum de bateaux, environ le double ; 6 pour commencer) (§6.4) |
-| `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les engins miniers |
+| `MINING.*` | mêmes quatre valeurs pour l'extraction, avec les pompes à vapeur |
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
 | `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, `workersPerLine`, icône (§8.3) |
 | `ARMAMENT.maxStockTurns` | nombre de tours de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 100 évoqué par l'auteur, non fixé. Un tour dure 100 ms : 100 tours = 10 s de production |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
+| `DIPLOMACY.proposalTurns` | durée de vie d'une proposition de pacte ou de paix, en tours (§1) ; **à fixer** : 300 en attendant (valeur provisoire, pas donnée par l'auteur) |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
 | `ARMAMENT` (noms) | noms proposés des cinq types d'infanterie : `rifle`, `machineGun`, `artillery`, `antiAirGun`, `antiTankGun` (§8.4) |
 | `FACTORY.specialization` | `decayPercent` (5) : baisse de la 2e ligne en % du coût initial ; `floorPercent` (10) : coût minimal d'une ligne en % du coût initial (§8) |
@@ -1028,18 +1184,21 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; **1**, choisi avec l'auteur : une case coûte `1 + altitude` (de 1 à 32). Constante `ROAD_HEIGHT_COST_FACTOR` de `client/src/roadpaths.ts` |
+| `FRONTS.metersPerConnection` | largeur ajoutée à un front par connexion, en mètres (§3.8) ; à fixer |
+| `FRONTS.capturePercent` | position du front, en % de la route depuis la ville prise, sur les connexions créées par une prise (§3.8) ; 1, valeur donnée par l'auteur |
+| `FRONTS.noFoundingDistance` | distance à un front en guerre en dessous de laquelle on ne peut pas fonder de ville (§3.8) ; à fixer |
 | `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
 | `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
 | `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |
 | `SEA_ZONES.minBasinArea` | surface minimale d'un bassin, en cases d'eau ; en dessous, il n'a aucune zone maritime (§2.1) |
 | `SEA_ZONES.finalIterations` | itérations zones → barycentre après la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur |
 
-Dans `config.ts`, `SEA_ZONES.spacing` et `SEA_ZONES.minBasinArea` ont des
+Dans `config/sea-zones.ts`, `SEA_ZONES.spacing` et `SEA_ZONES.minBasinArea` ont des
 valeurs d'essai, choisies pour faire tourner la visualisation. Elles ne sont
 pas fixées.
 
 Le générateur de la carte de test a déjà ses réglages, `TEST_MAP` dans
-`packages/engine/src/config.ts` (02-Engine §2). `SEA_ZONES` en est séparé : il
+`packages/engine/src/config/map.ts` (02-Engine §2). `SEA_ZONES` en est séparé : il
 s'applique à toute carte.
 
 ## 11. Affichage
@@ -1060,11 +1219,12 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   terme), avec des cases à cocher : « Ressources naturelles » (hachures rouge
   foncé sur le fer, décochée en début de partie), « Couleur des joueurs »
   (cochée) et « Fertilité » (hachures vertes épaisses sur les terres
-  cultivables, décochée). D'autres vues pourront s'y ajouter (relief, par
+  cultivables, décochée) et « Icônes d'usine » (les logos des usines à côté des
+  villes, cochée ; elle n'est pas forcée pendant le placement). D'autres vues pourront s'y ajouter (relief, par
   exemple).
   Pendant le mode « Créer une ville » (§3.3), une liste de vues est affichée
   d'office, même décochées (précision de l'auteur, 24 octobre 2026) : pour
-  l'instant les trois. C'est temporaire : à la sortie du mode, la carte revient
+  l'instant les trois premières (pas « Icônes d'usine »). C'est temporaire : à la sortie du mode, la carte revient
   aux vues cochées.
 - **Terres cultivables** (fertilité > 0) : un vert léger sur le relief, dans la
   carte de base, toujours affiché (auteur, 24 octobre 2026 ; avant, seulement
@@ -1073,7 +1233,10 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   dans la carte de base, toujours affiché (auteur, 24 octobre 2026). Il
   remplace le rouge plein ; le rouge foncé ne sert plus qu'aux hachures de la
   vue « Ressources naturelles ».
-- Zone d'exploitation : vert, puis texture de champs (§6.6). Zone de pêche :
+- Zone d'exploitation : vert, puis texture de champs (§6.6). Quand la couleur
+  des joueurs est affichée, la texture des champs est effacée (mélangée à 30 %
+  à la couleur du territoire) pour ne pas couvrir cette couleur (auteur,
+  25 octobre 2026). Zone de pêche :
   même calcul en mer, centré sur la ville (§6.6), dessinée par une texture
   propre à la pêche sur l'eau, comme les champs sur la terre. Elle ne doit pas
   ressembler au territoire du joueur. Zone de mine (fer exploité) : même calcul
@@ -1082,7 +1245,11 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
-- Diplomatie : petit menu à côté de la souris, au clic sur un joueur (§1).
+- Fronts en guerre : spline de Catmull-Rom par le point du front de chaque
+  connexion, dessinée en Bézier cubiques (§3.8).
+- Diplomatie : petit menu à côté de la souris, au clic sur le territoire d'un
+  autre joueur (§1) ; les propositions et les changements de statut arrivent
+  par des notifications empilées en bas à gauche de la carte (03-Client §7).
 - **Barre d'informations en haut de l'écran** (décrite par l'auteur, 24 octobre
   2026), compacte, sur une ligne. Quatre sections ; un clic sur une section
   déplie son détail sous la barre, un second clic le replie :
@@ -1101,7 +1268,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
      production du tour, **gros trait noir** = production requise par les
      lignes en service (le réglage du joueur ramené à la demande, §8.2) ; si
      la production est sous le requis, l'écart est
-     **rouge**. Machines (tracteurs, bateaux de pêche, engins miniers) :
+     **rouge**. Machines (tracteurs, bateaux de pêche, pompes à vapeur) :
      valeur actuelle sur le nombre qu'il faudrait pour une mécanisation totale.
   4. **Armement (stock)** : rien dans la barre, tout dans le détail. Une jauge
      par type ; au-delà du stock cible (§8.3), la barre est **hachurée de
@@ -1115,7 +1282,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   fichier de configuration. Des icônes provisoires d'abord ; l'auteur dessine
   et importe les vraies, sous le même nom de fichier.
 - Les icônes ont un style par famille, pour qu'un coup d'œil dise ce qu'on
-  regarde : un style pour les machines (tracteur, bateau de pêche, engin minier),
+  regarde : un style pour les machines (tracteur, bateau de pêche, pompe à vapeur),
   un autre pour l'armement, etc. Styles à dessiner par l'auteur.
 - Population : un personnage en pixel art de 16 × 16, dessiné par l'auteur,
   une variante par rôle, dans `client/public/icons/population/` :
@@ -1150,6 +1317,9 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Le réseau de routes terrestres se déduit des villes (§3.5) : il peut être
   gardé dans l'état ou recalculé, le résultat est le même. Il est recalculé
   quand une ville est fondée ou disparaît.
+- La table des fronts (§3.8) entre dans l'état, donc dans le hash : seule la
+  position du front sur chaque connexion et l'identifiant des fronts ne se
+  déduisent pas des villes. Elle lit la liste des routes et ne la modifie pas.
 - Le réseau maritime (§3.6) est calculé une fois, à la génération de la
   carte, après les zones maritimes, et ne change pas. Comme les zones, il est
   recalculé par chaque client à partir de la graine.
@@ -1157,7 +1327,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   en entiers (§13 : longueur d'une liaison).
 - **Les flux se citent en boucle** : les tracteurs d'un tour viennent des
   usines, qui consomment du fer, extrait par des mineurs, dont le nombre dépend
-  des engins miniers, qui viennent des usines. Proposition : à chaque tour, les
+  des pompes à vapeur, qui viennent des usines. Proposition : à chaque tour, les
   machines utilisées sont celles produites au tour précédent (100 ms de
   décalage). À valider.
 
@@ -1238,19 +1408,21 @@ valider sur la visualisation.
   cases de mer d'un bassin sans zone maritime (§2.1, lac) comptent-elles ?
   Choix provisoire du moteur : toute case d'eau de la zone compte, lac
   compris, avec un rendement fixe `FISHING.tileYield` (02-Engine §7).
-- Fer : choix validés par l'auteur, implémentés (02-Engine §2, `npm run
-  viz:iron`). Bruit du générateur de la carte, avec sa propre graine ; seuil
+- Fer et aluminium : choix validés par l'auteur, implémentés (02-Engine §2,
+  `npm run viz:resources`). Bruit du générateur de la carte, avec sa propre graine ; seuil
   qui baisse avec l'altitude, plus une baisse supplémentaire sur les
   montagnes (altitude ≥ un seuil). Réglages : valeurs d'essai, à choisir sur
-  la visualisation.
+  la visualisation. Le rapport fer / aluminium (environ 4 sur la graine
+  12345) dépend de la surface de montagne de la carte, où l'aluminium se
+  concentre : 6 sur la graine 7, 9 sur la graine 99.
 
 **Extraction**
-- Mécanisation minière : le nombre d'engins par mineur dépend du nombre de
+- Mécanisation minière : le nombre de pompes par mineur dépend du nombre de
   mineurs, qui dépend de la mécanisation (même boucle que celle évitée au §6.2
-  par les fermiers disponibles). Les engins sont rapportés aux mineurs qui
+  par les fermiers disponibles). Les pompes sont rapportées aux mineurs qui
   exploitent les cases à pleine mécanisation (§6.2, décision de l'auteur du
-  24 octobre 2026 ; avant : aux mineurs sans engin, choix provisoire du moteur).
-- Machines (tracteurs, bateaux de pêche, engins miniers) : choix provisoire du
+  24 octobre 2026 ; avant : aux mineurs sans pompe, choix provisoire du moteur).
+- Machines (tracteurs, bateaux de pêche, pompes à vapeur) : choix provisoire du
   moteur, celles produites au tour précédent (proposition du §12).
 
 **Usines**
@@ -1316,6 +1488,37 @@ valider sur la visualisation.
   par liaison à la génération.
 - Navires de transport par marin : dépend du nombre de marins, qui dépend de la
   mécanisation (même boucle qu'à l'extraction).
+
+**Diplomatie (§1)**
+- Délai entre la rupture d'un pacte et la possibilité de déclarer la guerre.
+  Aucun pour l'instant : la guerre peut être déclarée le tour suivant la
+  rupture (choix provisoire du moteur).
+- Durée d'un pacte. Illimitée pour l'instant : il dure jusqu'à ce qu'un joueur
+  le rompe.
+- `DIPLOMACY.proposalTurns` : valeur à fixer (§10).
+- Alliance, droit de passage (§3.5), garantie d'indépendance, commerce : hors
+  de cette version.
+- Effet du statut sur le combat : avec les armées. Effet de la déclaration de
+  guerre sur les fronts : voir « Fronts » ci-dessous.
+
+**Fronts (§3.8)**
+- **Identité d'un front quand les groupes changent** (à résoudre plus tard,
+  demandé par l'auteur) : l'identifiant d'un groupe est le plus petit
+  identifiant de ville du groupe (§3.5), et il change quand une ville change
+  de main ; deux groupes peuvent fusionner, un groupe se couper. Quel front
+  garde son identifiant et sa configuration ?
+- Déclaration de guerre : l'ordre existe (§1, §9) mais ne met pas encore les
+  connexions au milieu (§3.8). Ce qui fait avancer le front ; ce qui
+  déclenche la prise d'une ville.
+- Prise de X par A : les routes entre X et un troisième joueur C deviennent
+  des connexions A–C. Position si A et C sont en guerre ?
+- Fondation pendant une guerre, loin du front, qui crée une route entre deux
+  joueurs en guerre : position de la nouvelle connexion ?
+- Fondation qui retire une route d'un front par croisement (§3.5), hors de la
+  distance interdite.
+- Contenu de la configuration d'un front.
+- Affichage : où la ligne s'arrête au-delà du dernier point (côte, bord de la
+  zone de contrôle, dernier point).
 
 **Armement**
 - Stock cible (§8.3) : les lignes désactivées par le joueur comptent-elles

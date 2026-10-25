@@ -14,6 +14,7 @@ import {
   armamentReserveMax,
   CITY,
   createGame,
+  DIPLOMACY,
   FACTORY,
   FACTORY_TYPE_IDS,
   FACTORY_TYPES,
@@ -30,6 +31,9 @@ import {
   PRODUCT_IDS,
   productConfig,
   RESOURCES,
+  STATUS_PACT,
+  STATUS_WAR,
+  statusOf,
   waterYieldMilli,
   workersForLines,
   machineReference,
@@ -44,8 +48,10 @@ const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
 const IRON = Object.keys(RESOURCES).indexOf("iron");
 
 import { createBot, type Bot } from "./bots.ts";
+import { dominantGood } from "./names.ts";
 import {
   HUMAN,
+  type DiplomacyView,
   type FactoryCatalog,
   type HumanDetail,
   type HumanOrder,
@@ -84,6 +90,10 @@ export function factoryCatalog(): FactoryCatalog {
       PRODUCT_IDS.map((id) => [id, Math.floor((productConfig(id).workersPerLine * FACTORY.specialization.floorPercent) / 100)]),
     ),
     ironPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).ironPerLine])),
+    icons: Object.fromEntries(PRODUCT_IDS.flatMap((id) => {
+      const icon = productConfig(id).icon;
+      return icon === undefined ? [] : [[id, icon]];
+    })),
     economy: {
       foodPerHead: POPULATION.foodPerHead,
       foodMinimum: FOOD.minimum,
@@ -220,7 +230,11 @@ export class SoloGame {
     // Usines de tous les joueurs (marqueurs de la carte) : envoyées seulement quand elles changent.
     const marks: number[] = [];
     for (const p of state.players) {
-      for (const f of p.factories) marks.push(f.city, FACTORY_TYPE_IDS.indexOf(f.type), factoryLevel(f));
+      for (const f of p.factories) {
+        const tree = FACTORY_TYPES[f.type].tree;
+        const good = dominantGood(tree, f.groups);
+        marks.push(f.city, FACTORY_TYPE_IDS.indexOf(f.type), factoryLevel(f), tree.findIndex((n) => n.good === good));
+      }
     }
     const marksKey = marks.join(",");
     const factoryMarks = marksKey !== this.sentMarks ? Uint32Array.from(marks) : null;
@@ -276,6 +290,7 @@ export class SoloGame {
       human: this.humanDetail(),
       players,
       results,
+      diplomacy: this.diplomacyView(),
       paused,
       perf: { bots: t1 - t0, apply: t2 - t1, pack: t3 - t2 },
     };
@@ -291,6 +306,26 @@ export class SoloGame {
       const p = this.state.players[HUMAN - 1]!;
       p.population = Math.max(0, p.population + amount);
     }
+  }
+
+  /**
+   * Statuts du joueur humain envers chaque joueur, propositions et événements du
+   * dernier tour qui le concernent. Envoyé à chaque tour : une dizaine de valeurs.
+   */
+  diplomacyView(): DiplomacyView {
+    const state = this.state;
+    const mine = (a: number, b: number): boolean => a === HUMAN || b === HUMAN;
+    return {
+      status: state.players.map((p) => {
+        if (p.id === HUMAN) return "neutral";
+        const s = statusOf(state, HUMAN, p.id);
+        return s === STATUS_WAR ? "war" : s === STATUS_PACT ? "pact" : "neutral";
+      }),
+      proposals: state.proposals
+        .filter((p) => mine(p.from, p.to))
+        .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
+      events: state.events.filter((e) => mine(e.from, e.to)),
+    };
   }
 
   /** Le détail des usines du joueur humain (panneau de production). */
@@ -382,6 +417,19 @@ export class SoloGame {
         return me.factories[order.position]?.city === order.city;
       case "set_line_priority":
         return factoryOf(me, order.city)?.groups[order.position]?.good === order.good;
+      // Diplomatie : `applyTurn` vide les événements au début du tour, donc ceux de `state.events` sont de ce tour.
+      case "declare_war":
+        return state.events.some((e) => e.type === "war_declared" && e.from === HUMAN && e.to === order.target);
+      case "break_pact":
+        return state.events.some((e) => e.type === "pact_broken" && e.from === HUMAN && e.to === order.target);
+      case "propose_pact":
+        return state.events.some((e) => e.type === "proposal_sent" && e.kind === "pact" && e.from === HUMAN && e.to === order.target);
+      case "propose_peace":
+        return state.events.some((e) => e.type === "proposal_sent" && e.kind === "peace" && e.from === HUMAN && e.to === order.target);
+      case "answer_proposal": {
+        const answer = order.accept ? "proposal_accepted" : "proposal_refused";
+        return state.events.some((e) => e.type === answer && e.from === order.from && e.to === HUMAN);
+      }
     }
   }
 }

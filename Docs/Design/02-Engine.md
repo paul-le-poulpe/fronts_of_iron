@@ -9,12 +9,16 @@ document décide. Implémenté : les villes (00-Game §3.1 à §3.6 : fondation,
 zones, routes terrestres, ports, groupes), la fertilité de la carte (§2), la
 population, l'agriculture, la pêche et la nourriture (§4, §4.1, §6.1 à §6.5), les
 usines, leurs lignes de production et leurs ouvriers (§4 étape 1, §8), les
-machines (tracteurs, bateaux de pêche, engins miniers), l'extraction du fer (§7),
-l'armement et ses réserves (§8.3), et leurs ordres : `found_city`,
+machines (tracteurs, bateaux de pêche, pompes à vapeur), l'extraction du fer (§7),
+l'armement et ses réserves (§8.3), la diplomatie (§1 : statut de chaque paire de
+joueurs, propositions), et leurs ordres : `found_city`,
 `set_farm_share`, `build_factory`, `create_line`, `set_active_lines`,
-`set_city_priority`, `set_line_priority`. Pas implémenté : coût de création d'une usine ou d'une ligne, nombre maximal de
-lignes, armées (donc consommation de l'armement), routes maritimes, changement
-de capitale, disparition d'une ville, commerce, diplomatie.
+`set_city_priority`, `set_line_priority`, `declare_war`, `propose_pact`,
+`break_pact`, `propose_peace`, `answer_proposal`. Pas implémenté : coût de création d'une usine ou d'une ligne, nombre maximal de
+lignes, armées (donc consommation de l'armement, et aucun combat que le statut
+de guerre pourrait autoriser ou interdire), routes maritimes, changement
+de capitale, disparition d'une ville, commerce, effet de la déclaration de
+guerre sur les fronts.
 
 ---
 
@@ -22,7 +26,8 @@ de capitale, disparition d'une ville, commerce, diplomatie.
 
 | Fichier (`packages/engine/`) | Contenu |
 | --- | --- |
-| `src/config.ts` | tous les nombres réglables (carte de test, nombre maximal de joueurs et de villes, zones maritimes, présence et capacité des ressources, rayons des villes, population, nourriture, fertilité, agriculture, pêche, extraction, biens, armement, usines et leurs arbres) |
+| `src/config.ts` | ré-exporte `src/config/` ; les autres fichiers du moteur importent d'ici |
+| `src/config/` | tous les nombres réglables, un fichier par thème, importés à la compilation (règle 2) : `map.ts` (carte de test), `sea-zones.ts`, `cities.ts` (rayons, coût de fondation), `workforce.ts` (population, nourriture, fertilité, agriculture, pêche, extraction), `resources.ts` (présence et capacité), `goods.ts` (biens), `armament.ts`, `factories.ts` (réglages des usines et arbres), `diplomacy.ts` (durée de vie des propositions), `limits.ts` (plafonds liés à la taille des tableaux, pas des réglages) |
 | `src/bits.ts` | rotation de bits, étapes de MurmurHash3 |
 | `src/rng.ts` | générateur aléatoire xoshiro128** |
 | `src/map.ts` | bits du terrain et des ressources, `GameMap`, parcours des 4 voisins |
@@ -35,7 +40,8 @@ de capitale, disparition d'une ville, commerce, diplomatie.
 | `src/roads.ts` | réseau de routes terrestres (00-Game §3.5) : `addCityToRoads` (mise à jour à chaque fondation), `computeRoads` (calcul complet, référence des tests), `segmentsCross` |
 | `src/factories.ts` | usines et lignes (00-Game §8) : indices des produits et des types d'usine (pour le hash), `isUnlocked`, `armamentReserveMax`, et les cinq ordres d'usine (`buildFactory`, `createLine`, `setActiveLines`, `setCityPriority`, `setLinePriority`) |
 | `src/economy.ts` | population, remplissage des lignes, extraction du fer, production, agriculture, pêche, nourriture, armement (00-Game §4, §6, §7, §8) : `stepEconomy` (une étape par tour), `harvest`, `mechanization`, `mechanizationCurve`, `minersFor` |
-| `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine |
+| `src/diplomacy.ts` | diplomatie (00-Game §1) : statut d'une paire (`statusOf`), propositions, les cinq ordres (`declareWar`, `breakPact`, `propose`, `answerProposal`), `expireProposals`, type des événements |
+| `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie |
 | `src/turn.ts` | `applyTurn(state, { turn, intents })` |
 | `src/hash.ts` | `hashMap`, `hashState` |
 | `test/*.test.ts` | tests (`npm test`) |
@@ -46,6 +52,7 @@ de capitale, disparition d'une ville, commerce, diplomatie.
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population), de temps en temps `set_farm_share`, et des ordres d'usine tirés au hasard (dont beaucoup sont invalides) |
 | `test/bench.ts` | mesure (`npm run bench`) |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
+| `test/resources-viz.ts` | visualisation du fer et de l'aluminium ensemble (conflit compris), avec des curseurs pour les réglages (`npm run viz:resources`) → `out/resources.html`, ignoré par git |
 | `test/iron-viz.ts` | visualisation de la présence du fer, avec des curseurs pour les réglages (`npm run viz:iron`) → `out/iron.html`, ignoré par git |
 | `test/cities-viz.ts` | visualisation d'une partie scriptée, avec un curseur sur les étapes : zones, fer, routes, villes, capitales, ports, tableau par joueur (population, fermiers, pêcheurs, inactifs, nourriture), surface cultivée et surface pêchée (`npm run viz:cities`) → `out/cities.html`, ignoré par git |
 
@@ -68,7 +75,8 @@ des imports écrits avec l'extension `.ts`.
     bit est un lac ;
   - bits 0 à 4 : altitude 0 à 31, toujours 0 sur l'eau.
 - `resources : Uint8Array`, un octet par case, un bit par ressource : le bit i
-  est la i-ème clé de `RESOURCES` (`config.ts`). Bit 0 = fer (`RESOURCE_IRON`).
+  est la i-ème clé de `RESOURCES` (`config/resources.ts`). Bit 0 = fer (`RESOURCE_IRON`),
+  bit 1 = aluminium (`RESOURCE_ALUMINIUM`). Une case n'a qu'un bit à 1.
   `RESOURCE_COUNT` est le nombre de ressources. 1 = présente sur la case.
 - `fertility : Uint8Array`, un octet par case : fertilité 0 à 10 (00-Game §2).
   Montagne, eau et case de fer : 0. Autre terre : `FERTILITY.land` (§7).
@@ -134,11 +142,22 @@ la ressource si son bruit dépasse :
 seuil = threshold − altitude × perAltitude − (altitude ≥ mountainAltitude ? mountainBonus : 0)
 ```
 
-Réglages du fer : `RESOURCES.iron.presence` dans `config.ts`, valeurs d'essai.
-Avec ces valeurs, graine 12345 : fer sur 8,6 % des cases hors montagne, 21,6 %
-des montagnes, 11,6 % de la terre. `npm run viz:iron` montre la carte et
-recalcule la répartition à chaque mouvement de curseur ; la page affiche les
-valeurs à recopier dans `config.ts`. La capacité d'extraction d'une case de fer
+Réglages : `RESOURCES.iron.presence` et `RESOURCES.aluminium.presence` dans
+`config/resources.ts`, valeurs d'essai. Avec ces valeurs, graine 12345 : fer
+sur 5,0 % des cases hors montagne, 15,6 % des montagnes, 7,5 % de la terre
+(11 608 cases) ; aluminium sur 0,5 %, 9,2 % et 2,5 % (3 893 cases), soit un
+rapport fer / aluminium de 3,0.
+
+**Une case ne porte qu'une ressource.** `generateTestMap` parcourt `RESOURCES`
+dans l'ordre et écrit `1 << i` pour chaque ressource présente : la plus loin
+dans la liste remplace celles d'avant. L'aluminium, ajouté après le fer,
+l'emporte donc sur lui ; mettre les ressources les plus rares en dernier. Une
+case qui porte une ressource, quelle qu'elle soit, a une fertilité de 0.
+
+`npm run viz:resources` montre la carte des deux ressources, avec la même
+règle de conflit, et recalcule la répartition à chaque mouvement de curseur ; la
+page affiche les valeurs à recopier dans `config/resources.ts`. `npm run
+viz:iron` ne montre que le fer, sans conflit. La capacité d'extraction d'une case de fer
 (`RESOURCES.iron.capacityPerTile`, 1 fer par tour) n'intervient pas dans la
 génération : elle sert à l'étape du joueur (§4, étape de la population).
 
@@ -164,8 +183,9 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
 
 ## 4. Ordres et tours
 
-- `applyTurn(state, { turn, intents })` applique les ordres dans l'ordre du
-  tableau, puis fait l'étape de population et de nourriture de chaque joueur
+- `applyTurn(state, { turn, intents })` vide `state.events`, applique les ordres
+  dans l'ordre du tableau, supprime les propositions de diplomatie arrivées à
+  terme (`expireProposals`), puis fait l'étape de population et de nourriture de chaque joueur
   (« Étape de nourriture », plus bas), passe `state.tick` à `turn`, et renvoie la liste des cases dont le
   propriétaire a été écrit, chacune une fois, dans l'ordre de leur première
   modification (pas par adresse croissante). C'est cette liste que l'affichage
@@ -225,6 +245,53 @@ Dans `GameState` :
 
 Au plus `MAX_CITIES` = 65 535 villes (`tileCity` est un `Uint16Array`) ; un
 ordre au-delà est ignoré. Aucune règle n'en parle : c'est la limite du type.
+
+### Diplomatie (00-Game §1, §9)
+
+Dans `GameState` (`diplomacy.ts` pour la logique) :
+
+- `diplomacy : Uint8Array` de `n × n` octets, `n` = nombre de joueurs. La paire
+  (a, b) est à l'indice `(a − 1) × n + (b − 1)` **et** à `(b − 1) × n + (a − 1)` :
+  les deux sont écrites ensemble, par `setStatus` seulement. Valeurs : 0 neutre
+  (au départ), 1 pacte de non-agression, 2 guerre. La diagonale reste à 0.
+- `proposals : Proposal[]`, dans l'ordre de création. Une `Proposal` est
+  `{ from, to, kind, createdTick }` : `kind` vaut `"pact"` (pacte de non-agression,
+  depuis neutre) ou `"peace"` (paix, depuis guerre), `createdTick` est le numéro du
+  tour de l'ordre. Le tableau est réassigné (`filter`) à chaque suppression.
+- `events : DiplomacyEvent[]`, la liste du dernier tour (voir plus bas).
+
+Ordres, tous avec `player` écrit par le serveur. Un champ qui n'est pas un
+identifiant de joueur, ou qui désigne le joueur lui-même, rend l'ordre invalide.
+
+| Ordre | Champs | Valide si | Effet |
+| --- | --- | --- | --- |
+| `declare_war` | `target` | statut neutre | statut guerre ; supprime la proposition de la paire ; événement `war_declared` |
+| `propose_pact` | `target` | statut neutre, aucune proposition en attente pour la paire (dans un sens ou l'autre) | ajoute `{ from: player, to: target, kind: "pact", createdTick: tour }` ; événement `proposal_sent` |
+| `break_pact` | `target` | statut pacte | statut neutre ; événement `pact_broken` |
+| `propose_peace` | `target` | statut guerre, aucune proposition en attente pour la paire | idem avec `kind: "peace"` |
+| `answer_proposal` | `from`, `accept` (booléen) | une proposition de `from` à `player` est en attente ; pour accepter, le statut est encore neutre (pacte) ou guerre (paix) | accepter : statut pacte (pacte) ou neutre (paix), proposition supprimée, événement `proposal_accepted` ; refuser : proposition supprimée, événement `proposal_refused` |
+
+Tout changement de statut supprime les propositions de la paire (`setStatus`).
+
+**Expiration.** `expireProposals`, appelée par `applyTurn` après tous les ordres
+du tour, supprime dans l'ordre du tableau les propositions telles que
+`tour − createdTick ≥ DIPLOMACY.proposalTurns`, et ajoute un `proposal_expired`
+pour chacune. Une réponse reçue pendant le dernier tour est donc appliquée avant.
+`DIPLOMACY.proposalTurns` est une valeur provisoire (`config/diplomacy.ts`).
+
+**Événements.** `GameState.events` est vidé au début d'`applyTurn` (après la
+vérification du numéro de tour) et reçoit, pendant le tour, un `DiplomacyEvent` par
+fait : `proposal_sent`, `proposal_accepted`, `proposal_refused`, `proposal_expired`
+(champs `type, from, to, kind, turn`), `war_declared`, `pact_broken` (champs
+`type, from, to, turn`). `from` est l'auteur de l'action ou de la proposition,
+`to` l'autre joueur ; `turn` est le numéro du tour en cours (`state.tick + 1`, car
+`tick` n'avance qu'à la fin). La liste reste lisible entre deux appels
+d'`applyTurn` : c'est ce que l'affichage lit. Elle n'est **pas dans le hash**, et
+aucune règle ne doit la lire (§6). Le client solo s'en sert aussi pour savoir
+quels ordres humains ont été appliqués (`solo.ts`, `wasApplied`).
+
+Rien dans le moteur ne lit le statut : aucune attaque n'existe (00-Game §1,
+§13).
 
 ### `found_city`
 
@@ -288,7 +355,7 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 
 ```
 0. machines du tour : tracteurs = goods[tractor], bateaux = goods[fishingBoat],
-   engins = goods[miningMachine]  (produits au tour précédent, §7)
+   pompes = goods[miningMachine]  (produits au tour précédent, §7)
 
 1. remplissage des lignes (00-Game §4, étape 1) :
      capacité = cases de fer du joueur × RESOURCES.iron.capacityPerTile
@@ -302,15 +369,15 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
              bien ne dépasse pas sa demande du tour précédent)
            demande = fer + ironPerLine(bien)
            si demande > capacité : ARRÊT (de tout le remplissage)
-           m = mineurs(demande, engins)
+           m = mineurs(demande, pompes)
            si travailleurs + workersForRank(bien, j + 1) + m > population : ARRÊT
            travailleurs += workersForRank(bien, j + 1) ; mineurs = m ; fer = demande ; filled++
            si bien : produit[b] += productionPerLine
 
    cases_exploitées(d) = ceil(d / capacityPerTile)
-   mineurs(d, engins)  = ceil(cases_exploitées(d) × 1000 / M)
-     M = mechanization(MINING, ceil(cases_exploitées(d) × 1000 / M_max), engins)
-     (les engins sont rapportés aux mineurs à pleine mécanisation, §7)
+   mineurs(d, pompes)  = ceil(cases_exploitées(d) × 1000 / M)
+     M = mechanization(MINING, ceil(cases_exploitées(d) × 1000 / M_max), pompes)
+     (les pompes sont rapportées aux mineurs à pleine mécanisation, §7)
 
 2. reste = population − travailleurs − mineurs
 
@@ -481,8 +548,11 @@ sa capitale : `cities[capital - 1].group`.
 5. le nombre de villes, puis pour chacune : identifiant, joueur, case, port
    (0 ou 1), groupe ;
 6. le nombre de routes, puis pour chacune : a, b ;
-7. `owner`, deux cases par mot ;
-8. `tileCity`, deux cases par mot.
+7. `diplomacy` (les `n × n` octets, par mots de 4 octets), puis le nombre de
+   propositions et pour chacune, dans l'ordre de création : `from`, `to`, le genre
+   (0 pacte, 1 paix), `createdTick`. `events` n'y est pas (§6) ;
+8. `owner`, deux cases par mot ;
+9. `tileCity`, deux cases par mot.
 
 `test/engine.test.ts` change chaque champ des villes et de l'économie l'un après
 l'autre et vérifie que le hash change ; `test/factories.test.ts` fait de même
@@ -579,6 +649,17 @@ ils sont donc dans le hash (§6).
   (ou en ajouter une au milieu)** : `Player.goods`, les trois tableaux d'armement,
   `Factory.progress` (par nœud de l'arbre) et les indices du hash sont rangés dans
   cet ordre. Ajouter à la fin.
+- **Mettre `state.events` dans le hash, ou le lire dans une règle** : la liste est
+  vidée à chaque tour et sert seulement à l'affichage (et à savoir quels ordres
+  humains ont été appliqués, côté client). Un client qui l'ignore, ou qui la lit
+  à un autre moment, doit calculer le même état. Si une règle la lisait, ou si le
+  hash la contenait, un client qui fabrique ses messages autrement (ou rejoint en
+  cours de partie) serait signalé comme désynchronisé, ou divergerait sans signal.
+  Ce qu'une règle doit savoir se lit dans l'état haché (`diplomacy`, `proposals`).
+- **Supprimer une proposition sans passer par `setStatus` ou `expireProposals`, ou
+  écrire une seule des deux cases de `diplomacy`** : le statut ne serait plus le
+  même vu des deux côtés, ou une proposition resterait pour un statut qu'elle ne
+  peut plus changer.
 - **Lire `Player.goods` après l'étape pour savoir quelles machines le tour a
   utilisées** : l'étape les remplace à la fin par la production du tour, qui
   servira au tour suivant.
@@ -612,7 +693,7 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
    chance sur 4 milliards par comparaison.
 5. Un tour au mauvais numéro lève une erreur (le client devra alors se
    resynchroniser, partie 3).
-6. Carte de test 800 × 500 et ses réglages (`src/config.ts`).
+6. Carte de test 800 × 500 et ses réglages (`src/config/map.ts`).
 7. Zones maritimes : les choix provisoires du prototype sont listés dans
    00-Game §2.1 ; `SEA_ZONES.spacing` et `minBasinArea` sont des valeurs
    d'essai.
@@ -655,7 +736,7 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     joueur sans case d'eau a tous ses travailleurs aux champs.
 18. Unités : la population est un nombre de personnes ; les surfaces sont des
     cases ; `M` est en millièmes de case par travailleur ; `m_max` est en machines
-    pour 1 000 travailleurs. Les machines (tracteurs, bateaux de pêche, engins
+    pour 1 000 travailleurs. Les machines (tracteurs, bateaux de pêche, pompes
     miniers) sont celles produites au tour précédent (point 26).
 19. `fermiers_requis` arrondi vers le haut : assez de fermiers pour couvrir toute
     la surface (00-Game §13 laisse l'arrondi ouvert).
@@ -693,12 +774,12 @@ points 31 et 32 sont des choix de plus.
     tour t utilisent `Player.goods` tel que produit au tour t − 1 ; `goods` est
     remis à 0 puis recalculé à la fin de l'étape. Un joueur qui n'a pas de ligne
     de machines a donc 0 machine, comme avant.
-27. **Mécanisation minière** (00-Game §6.2, §13) : engins par mineur = engins ÷
+27. **Mécanisation minière** (00-Game §6.2, §13) : pompes par mineur = pompes ÷
     mineurs qui exploitent les cases à pleine mécanisation
     (`fullMechanizationWorkers(MINING, cases)`, à `MINING.mechanizationMax` ;
-    jusqu'au 24 octobre 2026 : mineurs sans engin, à `mechanizationBase`). Le calcul des
+    jusqu'au 24 octobre 2026 : mineurs sans pompe, à `mechanizationBase`). Le calcul des
     mineurs d'une ligne en plus se fait donc sur la demande totale de fer
-    (`minersFor(demande, engins)`), pas ligne par ligne ; les mineurs d'une ligne
+    (`minersFor(demande, pompes)`), pas ligne par ligne ; les mineurs d'une ligne
     sont la différence avec ceux de la ligne d'avant, jamais négative.
 28. **Priorité d'un groupe** (00-Game §13) : un groupe de lignes d'un même bien a
     une seule position dans la section de sa ville.
@@ -734,10 +815,10 @@ points 31 et 32 sont des choix de plus.
     est ≥ `goodsDemand` du bien. `goodsDemand` (dans l'état, haché) = machines
     d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
     la référence étant `machineReference(cfg, disponibles + report, surface)`
-    pour les tracteurs et les bateaux. Pour les engins, la référence est les
+    pour les tracteurs et les bateaux. Pour les pompes, la référence est les
     mineurs à pleine mécanisation des cases qu'il faudrait pour le fer de **toutes les
     lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
-    une usine d'engins seule, plafonnée à une demande nulle (§4, remplissage),
+    une usine de pompes seule, plafonnée à une demande nulle (§4, remplissage),
     n'extrairait jamais de fer et sa demande resterait nulle. Un groupe ne perd
     jamais de ligne ; ses lignes au-delà de la demande ne sont simplement pas
     remplies. Choix provisoires : « toutes les lignes produisent » et « jamais
@@ -746,7 +827,7 @@ points 31 et 32 sont des choix de plus.
     sur la carte de test soit jouable : `workersPerLine` 200 pour chaque produit (4 × 50) ;
     `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne à 1 fer) ;
     `MINING` : `mechanizationBase` 100, `mechanizationMax` 500,
-    `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans engin,
+    `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans pompe,
     2 avec le maximum) ; `GOODS.*.productionPerLine` 30 machines par tour et par
     ligne (avec une référence de 1 000 fermiers, 30 tracteurs donnent x = 0,3 et font
     passer la surface par fermier de 0,3 à 0,912 case) ;
@@ -756,6 +837,28 @@ points 31 et 32 sont des choix de plus.
     (valeurs de l'auteur). `FACTORY.unlockTurns` 500,
     `FACTORY.maxTypesPerCity` 1 sont des valeurs
     de l'auteur ; `ARMAMENT.maxStockTurns` 100 est celle qu'il a évoquée.
+
+33. **Diplomatie** (00-Game §1 donne le tableau des statuts et des actions ; le reste
+    est provisoire, à valider avec l'auteur) :
+    - au plus une proposition en attente par paire de joueurs, dans un sens ou
+      dans l'autre ; un ordre de proposition pendant qu'une autre attend est
+      invalide. La cible a la ligne du menu grisée « Proposition reçue » ;
+    - déclarer la guerre supprime la proposition de la paire ; tout changement de
+      statut supprime les propositions de la paire ;
+    - `answer_proposal` : seule la cible peut répondre ; accepter un pacte demande
+      le statut neutre, accepter la paix le statut guerre ;
+    - un ordre sur soi-même, sur un joueur inconnu ou depuis un mauvais statut est
+      ignoré ;
+    - aucun délai entre la rupture d'un pacte et la déclaration de guerre : elle
+      est possible dès le tour suivant, et même dans le même tour si les deux ordres
+      s'y suivent. Un pacte est illimité jusqu'à sa rupture (00-Game §13) ;
+    - `DIPLOMACY.proposalTurns` : 300 (30 s à 100 ms par tour), valeur provisoire, à
+      fixer par l'auteur ;
+    - `diplomacy` est une matrice `n × n` d'octets : 10 000 octets pour 100 joueurs
+      (la cible). Pour `MAX_PLAYERS` (65 535) elle serait impossible à allouer ; à
+      changer si la cible de joueurs dépasse quelques centaines ;
+    - les bots du client n'envoient aucun ordre de diplomatie et ne répondent pas
+      (IA reportée, 00-Game §1.1).
 
 **Réglé le 24 octobre 2026.** La première version suspendait une ligne
 d'armement quand sa réserve atteignait son maximum ; sans armée, la ligne ne
@@ -847,6 +950,9 @@ passe finale.
   d'économie.
 - `client/test/solo.test.ts`, « ouvriers d'un groupe de lignes » : compare le
   panneau à `workersForLines` ; il force la population à 100 000.
+
+**Aucun test ne couvre la diplomatie pour l'instant** (statuts, propositions,
+expiration, événements, hash) : à écrire à la passe finale.
 
 **Exigences que ces tests devront couvrir** (déjà écrites dans 00-Game) :
 rang calculé par groupe (un bien dans une usine) ; coût du rang 1 = `workersPerLine`,

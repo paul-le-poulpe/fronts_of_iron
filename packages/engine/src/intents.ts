@@ -5,11 +5,14 @@
 // Les règles viennent de Docs/Design/00-Game.md. Ordres pour l'instant : fonder
 // une ville (§3.3), régler la part fermiers / pêcheurs (§4, §9), et les ordres des
 // usines (§8, §9) : construire une usine, créer une ligne, régler les lignes
-// actives, changer les priorités. Les autres actions du joueur n'ont pas encore
-// de règle écrite et n'ont donc pas d'ordre.
+// actives, changer les priorités, et les ordres de diplomatie (§1, §9) : déclarer
+// la guerre, proposer un pacte, rompre un pacte, proposer la paix, répondre à une
+// proposition. Les autres actions du joueur n'ont pas encore de règle écrite et
+// n'ont donc pas d'ordre.
 
 import type { FactoryTypeId, ProductId } from "./config.ts";
 import { foundCity } from "./cities.ts";
+import { answerProposal, breakPact, declareWar, propose } from "./diplomacy.ts";
 import {
   buildFactory,
   createLine,
@@ -87,6 +90,45 @@ export interface SetLinePriorityIntent {
   readonly position: number;
 }
 
+/** Déclarer la guerre à un joueur avec qui le statut est neutre (00-Game §1). */
+export interface DeclareWarIntent {
+  readonly type: "declare_war";
+  /** Écrit par le serveur. */
+  readonly player: number;
+  /** Identifiant du joueur visé : un autre joueur. */
+  readonly target: number;
+}
+
+/** Proposer un pacte de non-agression à un joueur avec qui le statut est neutre (00-Game §1). */
+export interface ProposePactIntent {
+  readonly type: "propose_pact";
+  readonly player: number;
+  readonly target: number;
+}
+
+/** Rompre le pacte de non-agression avec un joueur : le statut redevient neutre (00-Game §1). */
+export interface BreakPactIntent {
+  readonly type: "break_pact";
+  readonly player: number;
+  readonly target: number;
+}
+
+/** Proposer la paix à un joueur avec qui on est en guerre (00-Game §1). */
+export interface ProposePeaceIntent {
+  readonly type: "propose_peace";
+  readonly player: number;
+  readonly target: number;
+}
+
+/** Répondre à la proposition en attente que `from` a envoyée à `player` (00-Game §1). */
+export interface AnswerProposalIntent {
+  readonly type: "answer_proposal";
+  readonly player: number;
+  /** Identifiant de l'auteur de la proposition. */
+  readonly from: number;
+  readonly accept: boolean;
+}
+
 export type Intent =
   | FoundCityIntent
   | SetFarmShareIntent
@@ -94,7 +136,12 @@ export type Intent =
   | CreateLineIntent
   | SetActiveLinesIntent
   | SetCityPriorityIntent
-  | SetLinePriorityIntent;
+  | SetLinePriorityIntent
+  | DeclareWarIntent
+  | ProposePactIntent
+  | BreakPactIntent
+  | ProposePeaceIntent
+  | AnswerProposalIntent;
 
 /** Applique un ordre s'il est valide. Renvoie false, sans rien modifier, sinon. */
 export function applyIntent(state: GameState, intent: unknown, changed: number[]): boolean {
@@ -133,6 +180,16 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
         setLinePriority(state, player, city as number, good, position as number)
       );
     }
+    case "declare_war":
+      return declareWar(state, player, fields["target"]);
+    case "propose_pact":
+      return propose(state, player, fields["target"], "pact");
+    case "break_pact":
+      return breakPact(state, player, fields["target"]);
+    case "propose_peace":
+      return propose(state, player, fields["target"], "peace");
+    case "answer_proposal":
+      return answerProposal(state, player, fields["from"], fields["accept"]);
     default:
       return false;
   }

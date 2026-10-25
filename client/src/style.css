@@ -136,6 +136,31 @@ input[type="number"] {
 #map.placing { cursor: crosshair; }
 #map.dragging { cursor: grabbing; }
 
+/* Légende de la vue « Ressources naturelles » : le rectangle reprend le sens des bandes de la carte (« \ »). */
+#map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 2px 8px #0003;
+  font-size: 12px;
+  pointer-events: none;
+}
+#map-legend[hidden] { display: none; }
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-swatch {
+  width: 22px;
+  height: 12px;
+  border: 1px solid var(--hatch);
+  background: repeating-linear-gradient(45deg, var(--hatch) 0 2px, transparent 2px 4px);
+}
+
 #toast {
   position: absolute;
   left: 50%;
@@ -232,7 +257,7 @@ input.lines-slider::-moz-range-thumb { width: 10px; height: 10px; border-radius:
 .grow .growth { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; margin-top: -2px; }
 .unlocked { display: flex; align-items: center; gap: 6px; }
 .unlocked .plus { margin-left: auto; }
-button.plus { width: 22px; height: 22px; padding: 0; line-height: 1; font-weight: 600; }
+button.plus { width: 22px; height: 22px; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 
 #panel {
   grid-area: panel;
@@ -329,17 +354,36 @@ tr.me td { font-weight: 600; }
 }
 /* Infobulle construite (setTip, goodtips.ts) : largeur fixe pour les barres, sections séparées par un trait. */
 #tip.rich { width: 340px; max-width: calc(100vw - 8px); padding: 8px 10px; font-size: 13px; }
+/* Arbre de progression d'un type d'usine (menu « Inaugurer une usine ») : largeur du contenu, traits en coude. */
+#tip.rich:has(.tip-tree) { width: auto; }
+.tip-tree, .tip-tree ul { list-style: none; margin: 0; padding: 0; }
+.tip-tree { margin-top: 6px; }
+.tip-tree ul { padding-left: 18px; }
+.tip-tree li { position: relative; padding: 3px 0; }
+.tip-tree ul > li::before { content: ""; position: absolute; left: -12px; top: 0; bottom: 0; border-left: 1px solid var(--occ-idle); }
+.tip-tree ul > li:last-child::before { bottom: auto; height: 13px; }
+.tip-tree ul > li::after { content: ""; position: absolute; left: -12px; top: 13px; width: 8px; border-top: 1px solid var(--occ-idle); }
+.tip-tree-node { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tip-tree-root { font-weight: 600; }
+.tip-tree-ph { width: 16px; height: 16px; flex: none; border: 1px dashed var(--occ-idle); border-radius: 3px; }
+.tip-tree-sub { font-size: 11px; color: var(--muted); padding-left: 22px; line-height: 1.3; }
 #tip h4 { margin: 0 0 4px; font-size: 14px; }
+#tip h4.tip-head { display: flex; align-items: center; gap: 6px; }
 #tip p { margin: 0 0 6px; }
 .tip-sec { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; }
 .tip-lbl { color: var(--muted); font-size: 12px; }
 .tip-kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-variant-numeric: tabular-nums; }
 .tip-kv > :nth-child(even) { text-align: right; }
 /* Jauge de la surface par fermier : la valeur est écrite au-dessus du bout du remplissage. */
-.tip-gauge { margin: 16px 0 2px; }
+/* Jauge de mécanisation et barre de surface : une grille libellé | barre | valeur, bords alignés. */
+.tip-bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-variant-numeric: tabular-nums; }
+.tip-bars > .tip-gauge-lbl { align-self: end; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.tip-bars > .tip-gauge, .tip-bars > .tip-scale { grid-column: 2 / -1; }
+.tip-gauge { margin-top: 16px; }
+.tip-scale { white-space: nowrap; }
 .tip-gauge-val { position: absolute; top: -16px; transform: translateX(-50%); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tip-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tip-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.tip-bars > .ib-track:not(.tip-gauge) { margin-top: 6px; }
 .ib-chev::before { content: "\25BE"; color: var(--muted); font-size: 11px; }
 .ib-sec[aria-expanded="true"] .ib-chev::before { content: "\25B4"; }
 .pos { color: var(--ok); font-weight: 600; }
@@ -379,8 +423,12 @@ tr.me td { font-weight: 600; }
 }
 .ib-row.occ { grid-template-columns: 12px 142px minmax(0, 1fr) 110px; }
 .ib-row.occ .ib-label { display: flex; align-items: center; gap: 6px; }
+.ib-gear { opacity: 0.75; cursor: help; }
+.ib-gear:hover { opacity: 1; }
+.ib-row.occ .ib-gear { margin-left: auto; }
 .ib-row.soon { opacity: 0.45; }
 .ib-label { white-space: nowrap; }
+.ib-iconlabel { display: inline-flex; align-items: center; gap: 6px; }
 .ib-value { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ib-row.occ .ib-value { min-width: 110px; }
 .ib-note, .ib-legend, .ib-consumption { margin: 10px 0 0; }
@@ -417,6 +465,69 @@ tr.me td { font-weight: 600; }
 .ib-key.req { width: 4px; height: 14px; background: #000; border: 0; }
 .ib-key.target { width: 2px; height: 14px; background: var(--fg); border: 0; }
 .ib-key.hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
+
+/* ---- notifications (notifications.ts) ---- */
+
+/* Pile en bas à gauche de la carte, la plus récente en bas. Quand la légende des ressources
+   est affichée (même coin), la pile se place au-dessus d'elle : sa hauteur est fixe (deux lignes). */
+#notifs {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  width: 300px;
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+#map-legend:not([hidden]) ~ #notifs { bottom: 76px; }
+.notif {
+  position: relative;
+  overflow: hidden;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--notif-color, var(--accent));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px #0003;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.notif.dismissable { cursor: pointer; }
+.notif-buttons { display: flex; gap: 6px; margin-top: 6px; }
+.notif-buttons button { padding: 3px 12px; font-size: 12px; }
+.notif-buttons button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.notif-buttons button.danger { color: var(--bad); border-color: var(--bad); }
+/* Temps restant : largeur recalculée à chaque tour, la transition lisse le pas de 100 ms. */
+.notif-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--line); }
+.notif-bar i { display: block; height: 100%; width: 100%; background: var(--notif-color, var(--accent)); transition: width 100ms linear; }
+
+/* ---- menu de diplomatie (diplomacy.ts) ---- */
+
+/* Petit menu à côté de la souris, au clic sur le territoire d'un autre joueur. */
+#dip-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 230px;
+  padding: 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px #0003;
+}
+.dip-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px 6px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.dip-badge { margin-left: auto; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.dip-badge.pact { color: var(--ok); border-color: var(--ok); }
+.dip-badge.war { color: var(--bad); border-color: var(--bad); }
+#dip-menu button { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: left; padding: 6px 10px; }
+#dip-menu button.danger { color: var(--bad); }
+#dip-menu button.danger:hover:not(:disabled) { border-color: var(--bad); }
+.dip-note { font-size: 12px; color: var(--muted); }
 
 @media (max-width: 760px) {
   #game {

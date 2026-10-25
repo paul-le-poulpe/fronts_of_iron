@@ -68,7 +68,7 @@ describe("remplissage des lignes (00-Game §4, §7, §8)", () => {
     assert.ok(line(s, 1, "rifle"));
     const pop = p.population;
     stepEconomy(s);
-    const miners = Math.ceil(1000 / MINING.mechanizationBase); // 1 fer = 1 case = 1 000 millièmes, sans engin
+    const miners = Math.ceil(1000 / MINING.mechanizationBase); // 1 fer = 1 case = 1 000 millièmes, sans pompe
     assert.equal(minersFor(1, 0), miners);
     assert.deepEqual([filled(s, 1, "rifle"), p.factoryWorkers, p.miners, p.ironExtracted, p.minedTiles], [1, W, miners, 1, ironTilesFor(1)]);
     assert.equal(p.armamentReserve[0], ARMAMENT.types.rifle.productionPerLine);
@@ -112,12 +112,12 @@ describe("remplissage des lignes (00-Game §4, §7, §8)", () => {
     assert.deepEqual([filled(s, 1, "rifle"), p.ironExtracted, p.minedTiles], [3, 3, 3]);
   });
 
-  it("les machines utilisées sont celles du tour précédent : les engins miniers réduisent les mineurs au tour suivant", () => {
+  it("les machines utilisées sont celles du tour précédent : les pompes à vapeur réduisent les mineurs au tour suivant", () => {
     const s = withFactory(RICH_MAP, "miningMachines");
     const p = s.players[0]!;
     assert.ok(line(s, 1, "miningMachine"));
     stepEconomy(s);
-    assert.equal(p.miners, minersFor(1, 0), "premier tour : aucun engin");
+    assert.equal(p.miners, minersFor(1, 0), "premier tour : aucune pompe");
     assert.equal(p.goods[2], GOODS.miningMachine.productionPerLine);
     stepEconomy(s);
     assert.equal(p.miners, minersFor(1, GOODS.miningMachine.productionPerLine));

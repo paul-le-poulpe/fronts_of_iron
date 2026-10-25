@@ -16,7 +16,9 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit ;
 - `Docs/Design/03-Client.md` — le client : mode solo, messages avec le Worker,
   affichage, interface provisoire ;
-- `Docs/Design/04-Tooltips.md` — feuille de route des infobulles des icônes.
+- `Docs/Design/04-Tooltips.md` — feuille de route des infobulles des icônes ;
+- `Docs/Design/05-Fronts.md` — fronts terrestres (version 1) : comment
+  implémenter les règles de 00-Game §3.8, et carnet de conception.
 
 ---
 
@@ -65,9 +67,10 @@ Depuis la racine du dépôt, après `npm install` :
 - `cd packages/engine && npm run viz:sea` — visualisation pas à pas des zones
   maritimes, écrite dans `packages/engine/out/sea-zones.html`. Réglages en
   argument : `npm run viz:sea -- --seed=7 --spacing=50`.
-- `cd packages/engine && npm run viz:iron` — carte de présence du fer, avec
-  des curseurs pour ses réglages, écrite dans `packages/engine/out/iron.html`.
-  Autre graine : `npm run viz:iron -- --seed=7`.
+- `cd packages/engine && npm run viz:resources` — carte de présence du fer et
+  de l'aluminium (une seule ressource par case), avec des curseurs pour leurs
+  réglages, écrite dans `packages/engine/out/resources.html`. Autre graine :
+  `npm run viz:resources -- --seed=7`. `npm run viz:iron` : le fer seul.
 - `cd packages/engine && npm run viz:cities` — partie scriptée pas à pas :
   villes, zones, routes, ports, groupes, écrite dans
   `packages/engine/out/cities.html`.
@@ -108,7 +111,10 @@ ordres. Un seul écart et les parties divergent sans erreur visible. Dans
   de tour ;
 - pas de `Math.sin`, `cos`, `tan`, `atan2`, `pow`, `exp`, `log` : leur résultat
   n'est pas garanti identique d'un navigateur à l'autre. Calculer en entiers ;
-- pas de dépendance npm, pas d'accès au DOM, au réseau ni aux fichiers ;
+- pas de dépendance npm, pas d'accès au DOM, au réseau ni aux fichiers à
+  l'exécution. Les réglages (`src/config/`, un fichier par thème) sont des
+  modules TypeScript importés à la compilation, donc embarqués dans le bundle ;
+  ne jamais les remplacer par un fichier lu ou téléchargé au lancement ;
 - parcourir les collections dans un ordre fixé (tableaux, ou `Map`/`Set` dont
   l'ordre d'insertion est lui-même déterministe).
 

@@ -11,7 +11,8 @@
 // curseur ou un glisser en cours n'est pas détruit par le tour suivant.
 
 import { attachGoodTip } from "./goodtips.ts";
-import { factoryName, factorySymbol, productName, productSymbol } from "./names.ts";
+import { productIcon } from "./icons.ts";
+import { dominantGood, factoryName, productName, productSymbol } from "./names.ts";
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
@@ -22,9 +23,19 @@ const HOLD_MS = 500;
 
 type Drag = { kind: "city"; city: number } | { kind: "line"; city: number; good: string };
 
+/** Icône de `public/icons/miscellaneous/`, à la taille du texte. */
+function miscIcon(file: string, alt: string): HTMLImageElement {
+  const img = el("img", "ib-img") as HTMLImageElement;
+  img.src = `icons/miscellaneous/${file}`;
+  img.alt = alt;
+  return img;
+}
+
 export class ProductionPanel {
   private readonly root: HTMLElement;
   private readonly send: (order: HumanOrder) => void;
+  /** Survol d'une usine : la carte hachure la zone de sa ville (0 : plus rien). */
+  private readonly highlight: (city: number) => void;
   private readonly catalog: FactoryCatalog;
   private readonly summary: HTMLElement;
   private readonly cities: HTMLElement;
@@ -35,10 +46,13 @@ export class ProductionPanel {
   private holdUntil = 0;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
 
-  constructor(root: HTMLElement, catalog: FactoryCatalog, send: (order: HumanOrder) => void) {
+  constructor(root: HTMLElement, catalog: FactoryCatalog, send: (order: HumanOrder) => void,
+    highlight: (city: number) => void,
+  ) {
     this.root = root;
     this.catalog = catalog;
     this.send = send;
+    this.highlight = highlight;
     root.innerHTML = "";
     this.summary = el("div", "prod-summary");
     this.cities = el("div", "prod-cities");
@@ -86,6 +100,8 @@ export class ProductionPanel {
 
   private rebuild(d: HumanDetail): void {
     this.cities.innerHTML = "";
+    // Les sections remplacées ne signalent pas la fin du survol.
+    this.highlight(0);
     if (d.factories.length === 0) {
       const p = el("p", "muted");
       p.textContent = "Aucune usine. Utilisez « Inaugurer une usine » dans la barre du bas, puis cliquez sur la zone d'une de vos villes.";
@@ -98,19 +114,23 @@ export class ProductionPanel {
   private citySection(f: FactoryView): HTMLElement {
     const section = el("section", "fsec");
     section.dataset["city"] = String(f.city);
+    section.addEventListener("pointerenter", () => this.highlight(f.city));
+    section.addEventListener("pointerleave", () => this.highlight(0));
     const head = el("header", "fhead");
     const grip = this.grip({ kind: "city", city: f.city }, section);
     const title = el("strong");
     title.textContent = `Ville n° ${f.city}`;
     const meta = el("span", "muted");
-    meta.textContent = `${factorySymbol(f.type)} ${factoryName(f.type)} · niveau ${f.level}`;
-    head.append(grip, title, meta);
+    meta.textContent = `${factoryName(f.type)} · niveau ${f.level}`;
+    // Le bien qui a le plus de lignes construites représente l'usine (actives ou non).
+    const mark = productIcon(dominantGood(this.tree(f.type), f.groups));
+    head.append(grip, title, mark, meta);
     section.append(head);
 
     // Une ligne par bien de l'arbre (00-Game §8.1) : d'abord les biens en production,
     // dans l'ordre de priorité (glissables), avec un bouton + pour une ligne de plus ;
     // puis les autres biens de l'arbre, dans l'ordre de l'arbre : débloqués, un bouton +
-    // crée la première ligne ; verrouillés, [parent] → flèche qui se remplit → [bien].
+    // crée la première ligne ; verrouillés, [parent] progression, jauge, cadenas, [bien].
     for (const g of f.groups) section.append(this.groupRow(f, g));
     const tree = this.tree(f.type);
     tree.forEach((node) => {
@@ -132,7 +152,10 @@ export class ProductionPanel {
       const text = el("span", "muted small");
       text.dataset["progText"] = `${f.city}:${parentIndex}`;
       text.title = "Tours-lignes produits / requis";
-      row.append(goodSpan(node.parent!), bar, goodSpan(node.good), text);
+      const padlock = el("img", "ib-img") as HTMLImageElement;
+      padlock.src = "icons/miscellaneous/misc-padlock.png";
+      padlock.alt = "Verrouillé";
+      row.append(goodSpan(node.parent!), text, bar, padlock, goodSpan(node.good));
       row.title = `Verrouillé : il faut ${num(this.catalog.unlockTurns)} tours-lignes de production de ${productName(node.parent!)} (une ligne : ${num(this.catalog.unlockTurns)} tours ; dix lignes : dix fois moins).`;
       section.append(row);
     });
@@ -145,7 +168,7 @@ export class ProductionPanel {
   private plus(city: number, good: string, title: string): HTMLElement {
     const b = el("button", "plus") as HTMLButtonElement;
     b.type = "button";
-    b.textContent = "+";
+    b.append(miscIcon("misc-plus-lighter.png", title));
     b.title = `${title} : ${productName(good)}`;
     b.addEventListener("click", () => {
       this.holdUntil = 0;
@@ -159,8 +182,7 @@ export class ProductionPanel {
     row.dataset["city"] = String(f.city);
     row.dataset["good"] = g.good;
     const grip = this.grip({ kind: "line", city: f.city, good: g.good }, row);
-    const sym = el("span", "sym");
-    sym.textContent = productSymbol(g.good);
+    const sym = productIcon(g.good);
     if (!attachGoodTip(sym, g.good)) sym.title = productName(g.good);
     const slider = el("input") as HTMLInputElement;
     slider.type = "range";
@@ -230,8 +252,8 @@ export class ProductionPanel {
       const text = el("span", "muted small");
       text.dataset["growthText"] = `${f.city}:${g.good}`;
       text.title = "Tours / requis";
-      growth.append(bar, text);
-      growth.title = `Une ligne de plus tous les ${num(this.catalog.growthTurns)} tours-lignes (chaque tour où toutes les lignes produisent en ajoute autant que de lignes), tant que la production ne couvre pas la demande.`;
+      growth.append(miscIcon("misc-up-lighter.png", "Ligne suivante"), bar, text);
+      growth.title = `L'usine gagne un niveau à chaque fois qu'elle produit l'équivalent de ${num(this.catalog.growthTurns)} tours sur une seule ligne. Plus de lignes la font grandir plus vite.`;
       row.append(growth);
     }
     this.bindLineDrop(row, f.city);
@@ -378,7 +400,7 @@ function span(text: string): HTMLElement {
 
 /** Symbole d'un bien, avec son infobulle construite s'il en a une. */
 function goodSpan(good: string): HTMLElement {
-  const s = span(productSymbol(good));
+  const s = productIcon(good);
   attachGoodTip(s, good);
   return s;
 }

@@ -14,7 +14,12 @@ export type HumanOrder =
   | { readonly type: "create_line"; readonly city: number; readonly good: string }
   | { readonly type: "set_active_lines"; readonly city: number; readonly good: string; readonly count: number }
   | { readonly type: "set_city_priority"; readonly city: number; readonly position: number }
-  | { readonly type: "set_line_priority"; readonly city: number; readonly good: string; readonly position: number };
+  | { readonly type: "set_line_priority"; readonly city: number; readonly good: string; readonly position: number }
+  | { readonly type: "declare_war"; readonly target: number }
+  | { readonly type: "propose_pact"; readonly target: number }
+  | { readonly type: "break_pact"; readonly target: number }
+  | { readonly type: "propose_peace"; readonly target: number }
+  | { readonly type: "answer_proposal"; readonly from: number; readonly accept: boolean };
 
 // ---- page → Worker ----
 
@@ -69,6 +74,8 @@ export interface FactoryCatalog {
   readonly workersFloor: Readonly<Record<string, number>>;
   /** Fer consommé par une ligne remplie, par bien ou type d'armement. */
   readonly ironPerLine: Readonly<Record<string, number>>;
+  /** Icône d'un bien ou d'un type d'armement (chemin sous `public/icons/`) ; absent : symbole texte. */
+  readonly icons: Readonly<Record<string, string>>;
   /** Réglages que la barre d'informations lit (envoyés une fois). */
   readonly economy: EconomyInfo;
 }
@@ -180,6 +187,41 @@ export interface PlayerStats {
   readonly fullMachines: Readonly<Record<string, number>>;
 }
 
+/** Statut diplomatique de deux joueurs (00-Game §1) : neutre, pacte de non-agression, guerre. */
+export type DiplomaticStatusName = "neutral" | "pact" | "war";
+
+/** Proposition en attente, dans un sens ou dans l'autre, qui concerne le joueur humain. */
+export interface ProposalView {
+  readonly from: number;
+  readonly to: number;
+  readonly kind: "pact" | "peace";
+  /** Tour de l'envoi. */
+  readonly startTick: number;
+  /** Tour où elle expire sans réponse (`startTick` + `DIPLOMACY.proposalTurns`). */
+  readonly endTick: number;
+}
+
+/** Événement diplomatique du tour (même sens des champs que `DiplomacyEvent` du moteur, diplomacy.ts). */
+export type DiplomacyEventView =
+  | {
+      readonly type: "proposal_sent" | "proposal_accepted" | "proposal_refused" | "proposal_expired";
+      readonly from: number;
+      readonly to: number;
+      readonly kind: "pact" | "peace";
+      readonly turn: number;
+    }
+  | { readonly type: "war_declared" | "pact_broken"; readonly from: number; readonly to: number; readonly turn: number };
+
+/** La diplomatie vue du joueur humain, envoyée à chaque tour. */
+export interface DiplomacyView {
+  /** Statut du joueur humain envers chaque joueur, `status[id - 1]` ; "neutral" pour lui-même. */
+  readonly status: readonly DiplomaticStatusName[];
+  /** Propositions en attente dont il est l'auteur ou la cible, dans l'ordre de création. */
+  readonly proposals: readonly ProposalView[];
+  /** Événements du tour dont il est l'auteur ou la cible. */
+  readonly events: readonly DiplomacyEventView[];
+}
+
 export interface OrderResult {
   readonly id: number;
   readonly order: HumanOrder;
@@ -201,7 +243,8 @@ export interface TickMessage {
   /** Routes : paires d'identifiants de villes. Même condition que `cities`. */
   readonly roads: Uint16Array | null;
   /**
-   * Usines de tous les joueurs, 3 nombres chacune [ville, indice du type, niveau]. Présente
+   * Usines de tous les joueurs, 4 nombres chacune [ville, indice du type, niveau, indice dans
+   * l'arbre du bien qui a le plus de lignes construites, `dominantGood`]. Présente
    * seulement si elle a changé depuis le tour précédent ; sinon `null`.
    */
   readonly factoryMarks: Uint32Array | null;
@@ -211,6 +254,8 @@ export interface TickMessage {
   readonly players: readonly PlayerStats[];
   /** Résultat des ordres humains appliqués pendant ce tour. */
   readonly results: readonly OrderResult[];
+  /** Statuts, propositions et événements diplomatiques du joueur humain (00-Game §1). */
+  readonly diplomacy: DiplomacyView;
   readonly paused: boolean;
   /** Durées mesurées dans le Worker, en ms. */
   readonly perf: { readonly bots: number; readonly apply: number; readonly pack: number };

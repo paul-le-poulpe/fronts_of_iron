@@ -17,6 +17,9 @@ export const TERRAIN_LAND = 0x80;
 export const TERRAIN_SHORE = 0x40;
 export const TERRAIN_OCEAN = 0x20;
 export const TERRAIN_ALTITUDE = 0x1f;
+/** Bits de `resources` : mêmes valeurs que RESOURCE_IRON et RESOURCE_ALUMINIUM du moteur (map.ts). */
+export const RESOURCE_IRON = 0x01;
+export const RESOURCE_ALUMINIUM = 0x02;
 
 export interface MirrorCity {
   readonly id: number;
@@ -31,6 +34,8 @@ export interface FactoryMark {
   /** Identifiant du type d'usine (`FactoryCatalog.factoryTypes[i].id`). */
   readonly type: string;
   readonly level: number;
+  /** Bien qui a le plus de lignes construites dans l'usine : son icône la représente (`dominantGood`). */
+  readonly good: string;
 }
 
 /** Ce que comptent les rayons d'exploitation : les cases des champs, de la mer ou du fer. */
@@ -180,8 +185,9 @@ export class Mirror {
     if (msg.factoryMarks !== null) {
       const f = msg.factoryMarks;
       this.factoryMarks = new Map();
-      for (let i = 0; i < f.length; i += 3) {
-        this.factoryMarks.set(f[i]!, { type: this.catalog.factoryTypes[f[i + 1]!]!.id, level: f[i + 2]! });
+      for (let i = 0; i < f.length; i += 4) {
+        const type = this.catalog.factoryTypes[f[i + 1]!]!;
+        this.factoryMarks.set(f[i]!, { type: type.id, level: f[i + 2]!, good: type.tree[f[i + 3]!]!.good });
       }
     }
     this.detail = msg.human;

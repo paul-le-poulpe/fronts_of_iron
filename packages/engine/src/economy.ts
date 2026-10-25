@@ -140,8 +140,8 @@ export function ironTilesFor(demand: number): number {
 }
 
 /**
- * Mineurs pour extraire `demand` fer par tour avec `machines` engins miniers (00-Game
- * §7). Engins rapportés aux mineurs qui exploitent ces cases à pleine
+ * Mineurs pour extraire `demand` fer par tour avec `machines` pompes à vapeur (00-Game
+ * §7). Pompes rapportées aux mineurs qui exploitent ces cases à pleine
  * mécanisation (00-Game §6.2, même référence que les autres machines). Ne baisse
  * jamais quand `demand` monte.
  */
@@ -332,8 +332,8 @@ function stepPlayer(p: Player): void {
   const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);
   p.goodsDemand[TRACTOR] = full(machineReference(FARMING, availableFarmers + spareFishers, p.farmTiles), FARMING.maxMachinesPer1000);
   p.goodsDemand[FISHING_BOAT] = full(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), FISHING.maxMachinesPer1000);
-  // Engins : sur le fer demandé par toutes les lignes actives, pas sur le fer extrait.
-  // Sinon une usine d'engins seule, plafonnée à une demande nulle, n'extrairait
+  // Pompes : sur le fer demandé par toutes les lignes actives, pas sur le fer extrait.
+  // Sinon une usine de pompes seule, plafonnée à une demande nulle, n'extrairait
   // jamais de fer et sa demande resterait nulle.
   let requiredIron = 0;
   for (const f of p.factories) for (const g of f.groups) requiredIron += g.active * productConfig(g.good).ironPerLine;

@@ -104,7 +104,7 @@ const html = `<!doctype html>
       <tbody id="stats"></tbody>
     </table>
     <pre id="config"></pre>
-    <button id="reset">Valeurs de config.ts</button>
+    <button id="reset">Valeurs de config/resources.ts</button>
   </div>
   <div class="mapwrap">
     <canvas id="map"></canvas>
@@ -211,7 +211,7 @@ document.getElementById("reset").onclick = reset;
 document.getElementById("params").textContent =
   "Carte de test " + P.W + " × " + P.H + ", graine " + P.seed + " · bruit du fer : octaves " +
   P.octaves.map((o) => "cellule " + o.cell + " × " + o.weight).join(", ") +
-  " · valeurs de départ = valeurs d'essai de config.ts, pas des valeurs fixées.";
+  " · valeurs de départ = valeurs d'essai de config/resources.ts, pas des valeurs fixées.";
 
 Promise.all([unpack(P.terrain), unpack(P.noise)]).then(([t, n]) => {
   terrain = t;

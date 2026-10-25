@@ -17,7 +17,8 @@
 // elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par tour ».
 
 import { attachGoodTip } from "./goodtips.ts";
-import { productName, productSymbol } from "./names.ts";
+import { productIcon } from "./icons.ts";
+import { productName } from "./names.ts";
 import type { FactoryCatalog, HumanDetail, PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
@@ -91,8 +92,19 @@ function icon(path: string): HTMLImageElement {
   return img;
 }
 
-function symbol(text: string): HTMLElement {
-  return el("span", "sym", text);
+/** Libellé précédé d'une icône dessinée, alignés comme dans le détail Population. */
+function iconLabel(path: string, text: string, ...after: HTMLElement[]): HTMLElement {
+  const l = el("span", "ib-iconlabel");
+  l.append(icon(path), text, ...after);
+  return l;
+}
+
+/** Engrenage : l'infobulle de la machine qui mécanise un métier (goodtips.ts). */
+function gearIcon(machine: string): HTMLImageElement {
+  const gear = icon("miscellaneous/misc-gear-stolen.png");
+  gear.classList.add("ib-gear");
+  attachGoodTip(gear, machine);
+  return gear;
 }
 
 function legendItem(className: string, text: string): HTMLElement {
@@ -102,13 +114,14 @@ function legendItem(className: string, text: string): HTMLElement {
 }
 
 /** Options de vue de la carte du menu « Carte » (00-Game §11). */
-export type MapOption = "iron" | "playerColor" | "fertility";
+export type MapOption = "iron" | "playerColor" | "fertility" | "factories";
 
 /** Options du menu, dans l'ordre d'affichage, avec l'état de leur case en début de partie. */
 export const MAP_OPTIONS: readonly { readonly id: MapOption; readonly label: string; readonly initial: boolean }[] = [
   { id: "iron", label: "Ressources naturelles", initial: false },
   { id: "playerColor", label: "Couleur des joueurs", initial: true },
   { id: "fertility", label: "Fertilité", initial: false },
+  { id: "factories", label: "Icônes d'usine", initial: true },
 ];
 
 interface Section {
@@ -248,9 +261,9 @@ export class InfoBar {
 
     const occupations = [
       { label: "Ouvriers d'usine", icon: "pop-worker", color: "var(--occ-factory)", read: (s: PlayerStats) => s.factoryWorkers },
-      { label: "Mineurs", icon: "pop-miner", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners },
-      { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers },
-      { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers },
+      { label: "Mineurs", icon: "pop-miner", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners, machine: "miningMachine" },
+      { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers, machine: "tractor" },
+      { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers, machine: "fishingBoat" },
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
     ];
     const stacked = el("div", "ib-stack");
@@ -270,6 +283,8 @@ export class InfoBar {
       value.title = "Personnes · part";
       const label = el("span", "ib-label");
       label.append(icon(`population/${o.icon}.png`), o.label);
+      // L'engrenage dit que ce métier se mécanise ; son infobulle est celle de la machine.
+      if (o.machine !== undefined) label.append(gearIcon(o.machine));
       r.append(sw, label, t.root, value);
       return { r, fill: t.fill, value };
     });
@@ -331,8 +346,9 @@ export class InfoBar {
     fish.root.prepend(fishMax);
     const fishValue = el("span", "ib-value");
     fishValue.title = "Poisson · pêchées / pêchables · maximum";
-    const imports = row("Importations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
-    const exports_ = row("Exportations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
+    // Icônes : le métier qui produit la nourriture ; le marin pour le commerce, en attendant une icône à lui.
+    const imports = row(iconLabel("population/pop-sailor.png", "Importations"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
+    const exports_ = row(iconLabel("population/pop-sailor.png", "Exportations"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const consumption = el("p", "ib-consumption");
     const minimum = el("span");
     const surplusLine = el("span");
@@ -341,8 +357,8 @@ export class InfoBar {
       "food",
       el("h3", undefined, "Nourriture produite par tour"),
       row("Population", capRoot, capValue),
-      row("Agriculture", wheat.root, wheatValue),
-      row("Pêche", fish.root, fishValue),
+      row(iconLabel("population/pop-farmer.png", "Agriculture", gearIcon("tractor")), wheat.root, wheatValue),
+      row(iconLabel("population/pop-fisherman.png", "Pêche", gearIcon("fishingBoat")), fish.root, fishValue),
       imports,
       exports_,
       consumption,
@@ -387,19 +403,20 @@ export class InfoBar {
     const iron = track("flow");
     const ironValue = el("span", "ib-value");
     ironValue.title = "Extrait / demandé · capacité";
-    const ironRow = row(symbol("[fer]"), iron.root, ironValue);
-    ironRow.querySelector(".ib-label")!.append(" Fer");
+    const ironRow = row(iconLabel("goods/goods-iron-ingot.png", "Fer"), iron.root, ironValue);
+    // Aucune règle n'extrait l'aluminium encore : même ligne grisée que le commerce.
+    const aluminiumRow = row(iconLabel("goods/goods-aluminium-ingot.png", "Aluminium"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
 
     const machines = [
       { good: "tractor", label: "Tracteurs" },
       { good: "fishingBoat", label: "Bateaux de pêche" },
-      { good: "miningMachine", label: "Engins miniers" },
+      { good: "miningMachine", label: "Pompes à vapeur" },
     ].map((m) => {
       const t = track("flow");
       const value = el("span", "ib-value");
       value.title = "Possédés / utiles";
       const label = el("span");
-      const sym = symbol(productSymbol(m.good));
+      const sym = productIcon(m.good);
       attachGoodTip(sym, m.good);
       label.append(sym, ` ${m.label}`);
       return { ...m, index: catalog.goodIds.indexOf(m.good), t, value, r: row(label, t.root, value) };
@@ -415,6 +432,7 @@ export class InfoBar {
       "flow",
       el("h3", undefined, "Ressources (flux)"),
       ironRow,
+      aluminiumRow,
       ...machines.map((m) => m.r),
       legend,
     );
@@ -457,7 +475,7 @@ export class InfoBar {
       const value = el("span", "ib-value");
       value.title = "Stock / cible · par tour";
       const label = el("span");
-      label.append(symbol(productSymbol(id)), ` ${capitalize(productName(id))}`);
+      label.append(productIcon(id), ` ${capitalize(productName(id))}`);
       return { id, index, t, value, r: row(label, t.root, value) };
     });
     const empty = el("p", "muted", "Aucune ligne d'armement.");

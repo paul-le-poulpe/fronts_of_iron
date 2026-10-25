@@ -19,6 +19,8 @@ export const TERRAIN_ALTITUDE = 0x1f;
 export const RESOURCE_COUNT = Object.keys(RESOURCES).length;
 /** Bit 0 de `resources` : fer (première clé de RESOURCES). */
 export const RESOURCE_IRON = 0x01;
+/** Bit 1 de `resources` : aluminium (deuxième clé de RESOURCES). */
+export const RESOURCE_ALUMINIUM = 0x02;
 
 export interface GameMap {
   readonly width: number;

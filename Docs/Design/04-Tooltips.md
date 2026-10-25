@@ -22,7 +22,9 @@ Modèle : l'infobulle du tracteur (validée par l'auteur, 24 octobre 2026).
 
 Couleurs des barres :
 - **vert** (`--ok`) : remplissage d'une jauge d'effet (part du gain possible
-  atteinte) ;
+  atteinte). Chaque barre a un libellé à gauche ; la jauge des machines est
+  l'engrenage (`public/icons/miscellaneous/misc-gear-stolen.png`) suivi de
+  « Mécanisation » ;
 - **couleur du métier** concerné, celle du détail Population (`--occ-farm`,
   `--occ-fish`, `--occ-mine`, `--occ-factory`, `--occ-idle`) : la barre de ce
   que ce métier produit ou travaille (surface cultivée, surface pêchée, cases de
@@ -34,10 +36,19 @@ Couleurs des barres :
 | --- | --- | --- |
 | `[tracteur]` | surface par fermier sans tracteur / au maximum ; fermiers, tracteurs utilisés / d'une mécanisation totale | jauge verte surface par fermier ; surface cultivée / cultivable (`--occ-farm`) |
 | `[bateau de pêche]` | surface par pêcheur sans bateau / au maximum, rendement d'une case d'eau sans bateau / au maximum ; pêcheurs, bateaux utilisés / d'une mécanisation totale | jauge verte surface par pêcheur ; surface pêchée / pêchable (`--occ-fish`) |
-| `[engin minier]` | cases par mineur sans engin / au maximum ; mineurs, engins utilisés / d'une mécanisation totale | jauge verte cases par mineur ; cases de fer exploitées / cases de fer (`--occ-mine`) |
+| `[pompe à vapeur]` | texte : valable pour tous les minerais, répartition proportionnelle aux mineurs (00-Game §7) ; cases par mineur sans pompe / au maximum ; mineurs, pompes utilisées / d'une mécanisation totale | jauge verte cases par mineur ; cases de fer exploitées / cases de fer (`--occ-mine`) |
 
 Ces trois infobulles sont posées sur chaque symbole du bien dans la barre
 d'informations (détail Ressources) et dans le panneau de production.
+
+Types d'usine, dans le menu « Inaugurer une usine » (validé par l'auteur sur
+maquette, 25 octobre 2026) : au survol d'un choix, l'**arbre de progression**
+du type, à droite du menu. Forme différente du modèle du tracteur : en-tête
+« \<type\> : arbre de progression », puis l'arbre en liste indentée, traits en
+coude, une icône et un nom par bien, la racine en gras avec « production de
+base ». Pas de règle ni de nombre : la condition de déblocage est la même
+partout (`FACTORY.unlockTurns`), l'afficher n'apprend rien. Détail :
+03-Client.md (« Inaugurer une usine »).
 
 ## À faire
 
@@ -64,9 +75,10 @@ pour le tracteur.
   armes n'est pas décrit dans 00-Game : rien d'autre tant qu'il ne l'est pas.
 
 ### Types d'usine
-- `[Armement d'infanterie]`, `[Bateaux de pêche]`, `[Engins miniers]` (menu
-  « Inaugurer une usine », panneau de production) : arbre des biens, déblocage
-  (00-Game §8.1, §8.2).
+- Menu « Inaugurer une usine » : fait (arbre de progression, ci-dessus).
+- En-tête de section du panneau de production (nom du type) : pas encore
+  d'infobulle ; l'arbre de progression pourrait y être repris, avec l'état de
+  déblocage de cette usine.
 
 ### Autres
 - `⇄` (Ressources, flux) et `▣` (Armement, stock) sur la barre : rien de plus

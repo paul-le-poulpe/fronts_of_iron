@@ -469,7 +469,7 @@ describe("sources du moteur (règle 2 du CLAUDE.md)", () => {
   ];
 
   const dir = join(import.meta.dirname, "..", "src");
-  for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
+  for (const file of readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts"))) {
     it(`${file} n'utilise aucune fonction interdite`, () => {
       // Les commentaires peuvent nommer ces fonctions ; seul le code compte.
       const code = readFileSync(join(dir, file), "utf8")

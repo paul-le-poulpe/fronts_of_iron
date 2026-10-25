@@ -4,14 +4,17 @@
 
 import "./style.css";
 
-import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
+import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";
 import { HUMAN, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
+import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
 import { factoryName, productSymbol } from "./names.ts";
+import { Diplomacy } from "./diplomacy.ts";
+import { clearNotifications, installNotifications, updateNotifications } from "./notifications.ts";
 import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
-import { MapView } from "./render.ts";
-import { setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
+import { MapView, RESOURCE_LEGEND } from "./render.ts";
+import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -24,6 +27,9 @@ const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
 
 installTooltips();
+installNotifications($("notifs"));
+/** Menu de diplomatie et notifications des événements diplomatiques (00-Game §1). */
+const diplomacy = new Diplomacy((order) => sendOrder(order));
 
 // ---- écran de départ ----
 
@@ -128,7 +134,8 @@ function onInit(s: Session, init: InitMessage): void {
   s.view.placementCheck = (tile) => foundingProblem(mirror, tile);
   s.view.factoryCheck = (tile) => factoryTarget(mirror, tile);
   setGoodTipEconomy(init.catalog.economy);
-  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder);
+  setProductIcons(init.catalog.icons);
+  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   s.infobar = new InfoBar($("infobar"), init.catalog, setMapOption);
@@ -139,6 +146,8 @@ function onInit(s: Session, init: InitMessage): void {
   buildPlayersTable(mirror);
   $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(HUMAN))}"></span>`;
   setPlacement(false);
+  clearNotifications();
+  diplomacy.reset();
   $("dev-line").textContent = "tour 0";
 }
 
@@ -163,9 +172,17 @@ function onTick(s: Session, msg: TickMessage): void {
   s.infobar?.update(msg.human, msg.players[HUMAN - 1]!);
   setGoodTipStats(msg.players[HUMAN - 1]!);
   refreshTip();
+  // Les barres de temps restant d'abord, puis les cartes créées par ce tour (elles lisent le tour courant).
+  updateNotifications(msg.tick);
+  diplomacy.update(msg.diplomacy);
   for (const r of msg.results) {
     if (!r.applied) {
-      const what = r.order.type === "found_city" ? "Ville non fondée" : "Réglage non appliqué";
+      const what =
+        r.order.type === "found_city"
+          ? "Ville non fondée"
+          : DIPLOMATIC_ORDERS.includes(r.order.type)
+            ? "Action diplomatique sans effet"
+            : "Réglage non appliqué";
       toast(`${what} : le moteur a refusé l'ordre (tour ${msg.tick}).`);
     }
   }
@@ -176,6 +193,8 @@ function onTick(s: Session, msg: TickMessage): void {
       `dessin ${view.lastDrawMs.toFixed(2)} ms`;
   }
 }
+
+const DIPLOMATIC_ORDERS: readonly HumanOrder["type"][] = ["declare_war", "propose_pact", "break_pact", "propose_peace", "answer_proposal"];
 
 const lerp = (avg: number, x: number): number => (avg === 0 ? x : avg * 0.9 + x * 0.1);
 
@@ -240,7 +259,7 @@ farmSlider.addEventListener("change", () => {
 });
 
 /** Cases du menu « Carte » telles que le joueur les a laissées. */
-const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false };
+const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, factories: true };
 /** Vues de la carte affichées d'office pendant le mode placement, sans toucher aux cases (00-Game §11). */
 const PLACEMENT_MAP_OPTIONS: readonly MapOption[] = ["iron", "playerColor", "fertility"];
 
@@ -262,9 +281,13 @@ function applyMapOptions(): void {
   const shown = (o: MapOption): boolean => mapChecked[o] || (placement && PLACEMENT_MAP_OPTIONS.includes(o));
   const fertility = shown("fertility");
   const iron = shown("iron");
-  if (s.view.showFertility !== fertility || s.view.showIron !== iron) {
+  $("map-legend").hidden = !iron;
+  // Les icônes d'usine ne font pas partie des vues du placement : seule leur case compte.
+  const factories = mapChecked.factories;
+  if (s.view.showFertility !== fertility || s.view.showIron !== iron || s.view.showFactoryLogos !== factories) {
     s.view.showFertility = fertility;
     s.view.showIron = iron;
+    s.view.showFactoryLogos = factories;
     s.view.requestDraw();
   }
   const playerColor = shown("playerColor");
@@ -272,6 +295,22 @@ function applyMapOptions(): void {
   s.painter.showPlayerColor = playerColor;
   s.painter.paintAll();
   s.view.uploadAll();
+}
+
+// Légende de la vue « Ressources naturelles » : icône, couleur des hachures, nom.
+for (const r of Object.values(RESOURCE_LEGEND)) {
+  const item = document.createElement("div");
+  item.className = "legend-item";
+  const img = document.createElement("img");
+  img.className = "ib-img";
+  img.src = `icons/${r.icon}`;
+  img.alt = "";
+  const swatch = document.createElement("span");
+  swatch.className = "legend-swatch";
+  const [red, green, blue] = r.rgba;
+  swatch.style.setProperty("--hatch", `rgb(${red} ${green} ${blue})`);
+  item.append(img, swatch, r.name);
+  $("map-legend").append(item);
 }
 
 // Le menu « Carte » se ferme au clic en dehors de lui.
@@ -294,6 +333,8 @@ $("quit").addEventListener("click", () => {
   if (s === null) return;
   s.worker.terminate();
   session = null;
+  clearNotifications();
+  diplomacy.reset();
   setPlacementFlag(false);
   setFactoryArmed(null);
   gameScreen.hidden = true;
@@ -306,7 +347,7 @@ function showHover(tile: number): void {
   const m = session?.mirror;
   if (!m) return;
   if (tile < 0) {
-    for (const id of ["h-tile", "h-terrain", "h-fertility", "h-iron", "h-owner", "h-city"]) $(id).textContent = "—";
+    for (const id of ["h-tile", "h-terrain", "h-fertility", "h-iron", "h-aluminium", "h-owner", "h-city"]) $(id).textContent = "—";
   } else {
     const w = m.width;
     const b = m.terrain[tile]!;
@@ -318,7 +359,8 @@ function showHover(tile: number): void {
           ? "Océan"
           : "Lac";
     $("h-fertility").textContent = String(m.fertility[tile]!);
-    $("h-iron").textContent = (m.resources[tile]! & 1) !== 0 ? "oui" : "non";
+    $("h-iron").textContent = (m.resources[tile]! & RESOURCE_IRON) !== 0 ? "oui" : "non";
+    $("h-aluminium").textContent = (m.resources[tile]! & RESOURCE_ALUMINIUM) !== 0 ? "oui" : "non";
     const owner = m.ownerOf(tile);
     $("h-owner").textContent = owner === 0 ? "personne" : owner === HUMAN ? "Vous" : `Bot ${owner - 1}`;
     const id = m.tileCity[tile]!;
@@ -329,7 +371,7 @@ function showHover(tile: number): void {
   }
   if (factoryArmed !== null && tile >= 0) {
     const target = factoryTarget(m, tile);
-    $("bar-hint").textContent = target.problem ?? `Cliquez pour inaugurer l'usine « ${factoryName(factoryArmed)} » dans la ville n° ${target.city}.`;
+    $("bar-hint").textContent = target.problem ?? `Cliquez pour inaugurer : ${factoryName(factoryArmed)}, dans la ville n° ${target.city}.`;
   }
   if (placement && tile >= 0) {
     const problem = foundingProblem(m, tile);
@@ -413,6 +455,11 @@ function onMapClick(tile: number): void {
     setFactoryArmed(null);
     return;
   }
+  if (m && !placement) {
+    // Aucun outil armé : un clic sur le territoire d'un autre joueur ouvre le menu de diplomatie, ailleurs il le ferme.
+    diplomacy.openFor(m.ownerOf(tile));
+    return;
+  }
   if (!placement || !m) return;
   const problem = foundingProblem(m, tile);
   if (problem !== null) {
@@ -428,13 +475,16 @@ let factoryArmed: string | null = null;
 const factoryButton = $<HTMLButtonElement>("factory");
 const factoryMenu = $("factory-menu");
 
-/** Remplit le menu déplié vers le haut : un choix par type d'usine, avec le symbole provisoire de sa racine. */
+/** Remplit le menu déplié vers le haut : un choix par type d'usine, avec l'icône de sa racine et son arbre de progression au survol. */
 function buildFactoryMenu(catalog: InitMessage["catalog"]): void {
   factoryMenu.innerHTML = "";
   for (const type of catalog.factoryTypes) {
     const b = document.createElement("button");
     b.type = "button";
-    b.textContent = `${productSymbol(type.tree[0]!.good)} ${factoryName(type.id)}`;
+    const root = type.tree[0]!.good;
+    if (productIconPath(root) === undefined) b.textContent = `${productSymbol(root)} ${factoryName(type.id)}`;
+    else b.append(productIcon(root), ` ${factoryName(type.id)}`);
+    attachFactoryTreeTip(b, type, factoryMenu);
     b.addEventListener("click", () => setFactoryArmed(type.id));
     factoryMenu.appendChild(b);
   }
@@ -452,7 +502,7 @@ function setFactoryArmed(type: string | null): void {
     view.refresh();
   }
   $("bar-hint").textContent =
-    type === null ? "" : `Usine « ${factoryName(type)} » : cliquez sur la zone d'une de vos villes qui n'a pas d'usine (Échap : annuler).`;
+    type === null ? "" : `${factoryName(type)} : cliquez sur la zone d'une de vos villes qui n'a pas d'usine (Échap : annuler).`;
 }
 
 factoryButton.addEventListener("click", () => {

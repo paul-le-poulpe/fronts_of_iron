@@ -1,9 +1,10 @@
 // L'état complet d'une partie. Tout ce qui est ici entre dans le hash (hash.ts),
-// sauf `changedMark`, remis à zéro à la fin de chaque tour, et `roadNetwork`,
-// entièrement déduit des villes.
+// sauf `changedMark`, remis à zéro à la fin de chaque tour, `roadNetwork`,
+// entièrement déduit des villes, et `events`, que rien ne lit dans le moteur.
 
 import { isUint32 } from "./bits.ts";
 import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
+import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
 import { hashMap } from "./hash.ts";
 import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
@@ -136,6 +137,20 @@ export interface GameState {
   /** Toutes les routes candidates et leur grille (roads.ts). Déduit des villes : hors du hash, comme `changedMark`. */
   readonly roadNetwork: RoadNetwork;
   readonly rng: Rng;
+  /**
+   * Statut diplomatique de chaque paire de joueurs (diplomacy.ts) : `players.length`²
+   * octets, la paire (a, b) est à `(a - 1) × n + (b - 1)` et aussi à `(b - 1) × n + (a - 1)`,
+   * les deux écrites ensemble. 0 neutre (au départ), 1 pacte, 2 guerre.
+   */
+  readonly diplomacy: Uint8Array;
+  /** Propositions en attente de réponse, dans l'ordre de création. Réassigné à chaque suppression. */
+  proposals: Proposal[];
+  /**
+   * Ce que le dernier tour a produit, pour l'affichage : vidé au début d'`applyTurn`,
+   * rempli pendant le tour. Hors du hash, et aucune règle ne le lit : un client qui
+   * l'ignore calcule le même état (02-Engine §4, §6).
+   */
+  readonly events: DiplomacyEvent[];
   /** Numéro du dernier tour appliqué ; 0 avant le premier. */
   tick: number;
   /** 1 sur les cases déjà listées comme modifiées pendant le tour en cours. */
@@ -207,6 +222,9 @@ export function createGame(setup: GameSetup): GameState {
     roads: [],
     roadNetwork: createRoadNetwork(map.width, map.height, CITY.expansionRadius),
     rng: createRng(setup.seed),
+    diplomacy: new Uint8Array(playerCount * playerCount),
+    proposals: [],
+    events: [],
     tick: 0,
     changedMark: new Uint8Array(size),
   };

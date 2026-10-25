@@ -9,6 +9,8 @@
 // Infobulle construite (`setTip`) : une fonction qui renvoie le contenu (titres,
 // sections, barres) au lieu d'un texte. Elle est appelée à l'affichage, puis à
 // chaque `refreshTip` tant que l'encadré reste affiché (une fois par tour).
+// Avec `beside`, l'encadré est placé à droite de cet élément au lieu de sous
+// l'élément survolé (menu « Inaugurer une usine » : à droite du menu).
 
 /** Délai avant l'affichage, en ms. */
 const SHOW_DELAY_MS = 120;
@@ -17,12 +19,15 @@ const GAP_PX = 6;
 
 /** Contenu construit de chaque élément enregistré par `setTip`. */
 const builders = new WeakMap<Element, () => Node>();
+/** Élément à droite duquel placer l'encadré, pour les éléments enregistrés avec `beside`. */
+const besides = new WeakMap<Element, Element>();
 /** Reconstruit l'encadré affiché ; sans effet avant `installTooltips`. */
 let refresh = (): void => {};
 
-/** Donne à `el` une infobulle construite par `build` (à la place d'un `title`). */
-export function setTip(el: Element, build: () => Node): void {
+/** Donne à `el` une infobulle construite par `build` (à la place d'un `title`), à droite de `beside` s'il est donné. */
+export function setTip(el: Element, build: () => Node, beside?: Element): void {
   builders.set(el, build);
+  if (beside) besides.set(el, beside);
   el.removeAttribute("title");
   el.setAttribute("data-tip", "");
 }
@@ -50,9 +55,17 @@ export function installTooltips(): void {
 
   /** Sous l'élément, aligné sur son bord gauche, sans sortir de la fenêtre ; au-dessus s'il n'y a pas la place. */
   const place = (el: Element): void => {
-    const r = el.getBoundingClientRect();
     const w = box.offsetWidth;
     const h = box.offsetHeight;
+    const beside = besides.get(el);
+    if (beside) {
+      // À droite de `beside`, bords bas alignés, sans sortir de la fenêtre.
+      const b = beside.getBoundingClientRect();
+      box.style.left = `${Math.max(4, Math.min(b.right + GAP_PX, window.innerWidth - w - 4))}px`;
+      box.style.top = `${Math.max(4, Math.min(b.bottom - h, window.innerHeight - h - 4))}px`;
+      return;
+    }
+    const r = el.getBoundingClientRect();
     const left = Math.max(4, Math.min(r.left, window.innerWidth - w - 4));
     const below = r.bottom + GAP_PX;
     const top = below + h <= window.innerHeight - 4 ? below : Math.max(4, r.top - GAP_PX - h);
@@ -94,6 +107,10 @@ export function installTooltips(): void {
     timer = window.setTimeout(() => show(el), SHOW_DELAY_MS);
   });
   document.addEventListener("pointerdown", hide);
+  // Échap ferme le menu « Inaugurer une usine » sous la souris : sans cela, son infobulle resterait affichée.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
   document.documentElement.addEventListener("pointerleave", hide);
   document.addEventListener("scroll", hide, true);
   window.addEventListener("blur", hide);

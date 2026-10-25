@@ -4,8 +4,9 @@
 // placement le rayon d'expansion et la case survolée. Le tampon n'est renvoyé au
 // canvas que pour la partie repeinte.
 
-import { type Mirror, TERRAIN_LAND } from "./mirror.ts";
+import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter, playerDark, rgbCss } from "./painter.ts";
+import { productIconPath } from "./icons.ts";
 import { factoryInitial } from "./names.ts";
 import { HUMAN } from "./protocol.ts";
 
@@ -21,13 +22,23 @@ const DRAG_THRESHOLD_PX = 4;
 /** Hachures des vues : période et épaisseur des bandes, en pixels CSS (constantes à l'écran, quel que soit le zoom). */
 const HATCH_PERIOD_PX = 10;
 const HATCH_WIDTH_PX = 4;
+/** Logo d'usine sur la carte, en pixels d'écran : icône de 16, 1 de fond gris clair autour, puis un cadre noir de 1. */
+const FACTORY_ICON_PX = 16;
+const FACTORY_LOGO_PX = FACTORY_ICON_PX + 4;
+const FACTORY_LOGO_BG = "#ececec";
+const FACTORY_LOGO_FRAME = "#000";
+/** Au-delà du tiers du rayon de contrôle (en pixels d'écran), le logo est remplacé par un carré de 5 px : bordure sombre de 1, intérieur gris. */
+const FACTORY_LOGO_MAX_RADIUS_SHARE = 3;
+const FACTORY_DOT_PX = 5;
+const FACTORY_DOT_BG = "#9a9a9a";
+const FACTORY_DOT_FRAME = "#3a3a3a";
 
 type Rgba = readonly [number, number, number, number];
 
 /** Hachures d'une vue du menu Carte : un masque de cases, une couleur, un sens des bandes. */
 interface Hatching {
   /** Un pixel opaque par case hachurée. */
-  readonly mask: HTMLCanvasElement;
+  mask: HTMLCanvasElement;
   readonly rgba: Rgba;
   /** Bandes « / » (1) ou « \ » (-1) : la fertilité et le fer se croisent quand les deux sont affichés. */
   readonly slope: 1 | -1;
@@ -35,6 +46,12 @@ interface Hatching {
   pattern: CanvasPattern | null;
   patternDpr: number;
 }
+
+/** Ressources de la vue « Ressources naturelles » : couleur des hachures (la légende de la carte la reprend) et icône. */
+export const RESOURCE_LEGEND = {
+  iron: { name: "Fer", icon: "goods/goods-iron-ingot.png", rgba: [130, 30, 22, 190] },
+  aluminium: { name: "Aluminium", icon: "goods/goods-aluminium-ingot.png", rgba: [31, 63, 168, 190] },
+} as const satisfies Record<string, { name: string; icon: string; rgba: Rgba }>;
 
 export class MapView {
   /** Mode « Créer une ville » actif. */
@@ -47,8 +64,10 @@ export class MapView {
   factoryCheck: (tile: number) => { city: number; ok: boolean } = () => ({ city: 0, ok: false });
   /** Vue « Fertilité » du menu Carte : hachures vertes sur les cases cultivables. */
   showFertility = false;
-  /** Vue « Ressources naturelles » du menu Carte : hachures rouge foncé sur les cases de fer. */
+  /** Vue « Ressources naturelles » du menu Carte : hachures rouge foncé sur les cases de fer, bleues sur celles d'aluminium. */
   showIron = false;
+  /** Case « Icônes d'usine » du menu Carte : logos des usines à côté des villes. */
+  showFactoryLogos = true;
 
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -62,11 +81,20 @@ export class MapView {
   private readonly fertileHatch: Hatching;
   /** Hachures rouge foncé des cases de fer. */
   private readonly ironHatch: Hatching;
+  /** Hachures bleues des cases d'aluminium. */
+  private readonly aluminiumHatch: Hatching;
+  /** Hachures blanches de la zone de la ville dont l'usine est survolée dans le panneau ; son masque change avec la ville. */
+  private readonly cityHatch: Hatching;
+  /** Ville mise en évidence (0 : aucune) et le masque de sa zone. */
+  private highlighted = 0;
+  private highlightMask: HTMLCanvasElement | null = null;
   /** Calque des hachures, à la taille du canvas : un masque à la caméra, rempli du motif. */
   private readonly hatch: HTMLCanvasElement;
   private readonly hatchCtx: CanvasRenderingContext2D;
   /** Zones de ville colorées pour le mode usine, par « ville:ok » ; vidé quand les zones changent. */
   private readonly zoneLayers = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number }>();
+  /** Icônes des biens déjà demandées, par chemin ; un chargement fini redessine la carte. */
+  private readonly logos = new Map<string, HTMLImageElement>();
   private cssW = 1;
   private cssH = 1;
   private dpr = 1;
@@ -97,10 +125,16 @@ export class MapView {
     this.image = new ImageData(painter.bytes, mirror.width, mirror.height);
     this.fertileHatch = hatching(buildMask(mirror, (t) => mirror.fertility[t] !== 0), [70, 160, 80, 120], 1);
     this.ironHatch = hatching(
-      buildMask(mirror, (t) => (mirror.resources[t]! & 1) !== 0 && (mirror.terrain[t]! & TERRAIN_LAND) !== 0),
-      [130, 30, 22, 190],
+      buildMask(mirror, (t) => (mirror.resources[t]! & RESOURCE_IRON) !== 0 && (mirror.terrain[t]! & TERRAIN_LAND) !== 0),
+      RESOURCE_LEGEND.iron.rgba,
       -1,
     );
+    this.aluminiumHatch = hatching(
+      buildMask(mirror, (t) => (mirror.resources[t]! & RESOURCE_ALUMINIUM) !== 0 && (mirror.terrain[t]! & TERRAIN_LAND) !== 0),
+      RESOURCE_LEGEND.aluminium.rgba,
+      -1,
+    );
+    this.cityHatch = hatching(document.createElement("canvas"), [255, 255, 255, 220], 1);
     this.hatch = document.createElement("canvas");
     const hatchCtx = this.hatch.getContext("2d");
     if (hatchCtx === null) throw new Error("canvas 2D indisponible");
@@ -258,6 +292,29 @@ export class MapView {
   refresh(): void {
     this.canvas.classList.toggle("placing", this.placement || this.factoryMode);
     this.zoneLayers.clear();
+    this.highlightMask = null;
+    this.requestDraw();
+  }
+
+  /** Icône d'un bien pour le logo d'une usine, une fois chargée ; `null` avant, ou si le bien n'a pas d'icône. */
+  private logo(good: string): HTMLImageElement | null {
+    const path = productIconPath(good);
+    if (path === undefined) return null;
+    let img = this.logos.get(path);
+    if (img === undefined) {
+      img = new Image();
+      img.addEventListener("load", () => this.requestDraw());
+      img.src = `icons/${path}`;
+      this.logos.set(path, img);
+    }
+    return img.complete && img.naturalWidth > 0 ? img : null;
+  }
+
+  /** Hachure en blanc la zone de la ville `city` (0 : retire la mise en évidence). */
+  highlightCity(city: number): void {
+    if (city === this.highlighted) return;
+    this.highlighted = city;
+    this.highlightMask = null;
     this.requestDraw();
   }
 
@@ -342,7 +399,16 @@ export class MapView {
     ctx.imageSmoothingEnabled = zoom < 1;
     ctx.drawImage(this.base, 0, 0);
     if (this.showFertility) this.drawHatch(this.fertileHatch);
-    if (this.showIron) this.drawHatch(this.ironHatch);
+    if (this.showIron) {
+      this.drawHatch(this.ironHatch);
+      this.drawHatch(this.aluminiumHatch);
+    }
+
+    if (this.highlighted > 0 && this.highlighted <= mirror.cities.length) {
+      this.highlightMask ??= buildMask(mirror, (t) => mirror.tileCity[t] === this.highlighted);
+      this.cityHatch.mask = this.highlightMask;
+      this.drawHatch(this.cityHatch);
+    }
 
     const w = mirror.width;
     const px = 1 / zoom; // un pixel d'écran, en cases
@@ -425,19 +491,41 @@ export class MapView {
       else ctx.arc(x, y, s, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      // Logo de l'usine à côté de la ville : un carré avec l'initiale du type (provisoire).
-      if (factory) {
-        const side = s0 * 2.4;
-        const fx = x + s * 1.1;
-        const fy = y - s * 1.1 - side;
-        ctx.fillStyle = "#3a3430";
-        ctx.fillRect(fx, fy, side, side);
-        ctx.strokeRect(fx, fy, side, side);
-        ctx.fillStyle = "#fff";
-        ctx.font = `bold ${side * 0.75}px system-ui, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(factoryInitial(factory.type), fx + side / 2, fy + side / 2 + side * 0.04);
+      // Logo de l'usine à côté de la ville : l'icône de son bien dominant sur un fond gris clair
+      // cerclé de noir (les icônes ont souvent un contour noir) ; l'initiale du type tant qu'elle n'est pas chargée.
+      if (factory && this.showFactoryLogos) {
+        // Dessiné en pixels de l'écran, coin aligné sur un pixel entier : bords nets, 20 px à tout zoom (5 px quand le logo est remplacé par un carré).
+        const u = Math.max(1, Math.round(k));
+        const side = FACTORY_LOGO_PX * u;
+        const dx = Math.round((x + s * 1.1) * zoom * k + this.tx * k);
+        const dy = Math.round((y - s * 1.1) * zoom * k + this.ty * k) - side;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (FACTORY_LOGO_PX * FACTORY_LOGO_MAX_RADIUS_SHARE > mirror.controlRadius * zoom) {
+          // Carte trop dézoomée : le logo couvrirait plus du tiers de la zone de la ville.
+          const dot = FACTORY_DOT_PX * u;
+          ctx.fillStyle = FACTORY_DOT_FRAME;
+          ctx.fillRect(dx, dy + side - dot, dot, dot);
+          ctx.fillStyle = FACTORY_DOT_BG;
+          ctx.fillRect(dx + u, dy + side - dot + u, dot - 2 * u, dot - 2 * u);
+        } else {
+          ctx.fillStyle = FACTORY_LOGO_FRAME;
+          ctx.fillRect(dx, dy, side, side);
+          ctx.fillStyle = FACTORY_LOGO_BG;
+          ctx.fillRect(dx + u, dy + u, side - 2 * u, side - 2 * u);
+          const logo = this.logo(factory.good);
+          if (logo !== null) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(logo, dx + 2 * u, dy + 2 * u, FACTORY_ICON_PX * u, FACTORY_ICON_PX * u);
+          } else {
+            ctx.fillStyle = FACTORY_LOGO_FRAME;
+            ctx.font = `bold ${side * 0.6}px system-ui, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(factoryInitial(factory.type), dx + side / 2, dy + side / 2 + side * 0.04);
+          }
+        }
+        ctx.restore();
       }
       if (city.port) {
         const pt = mirror.portTile(city.id);
