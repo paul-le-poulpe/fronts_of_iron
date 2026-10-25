@@ -203,8 +203,10 @@ Dans `GameState` :
   (somme de leurs fertilités : `fertilité_totale`), `seaTiles` (cases d'eau du
   joueur, mer et lacs), et les résultats du dernier tour : `farmers`, `fishers`,
   `idle`, `cultivated`, `farmMechanization` (mécanisation M de l'agriculture,
-  millièmes de case par fermier), `fished`, `wheat`, `fish`, `food`, `factoryWorkers`,
-  `miners`, `minedTiles`, `ironExtracted`.
+  millièmes de case par fermier), `fished`, `fishMechanization` (M de la pêche,
+  par pêcheur), `wheat`, `fish`, `food`, `factoryWorkers`, `miners`,
+  `minedTiles`, `mineMechanization` (M de l'extraction, cases de fer par mineur,
+  celle de `minersFor` pour le fer des lignes remplies), `ironExtracted`.
 - Usines et armement, par joueur :
   - `factories : Factory[]`, une usine par ville. **L'ordre du tableau est la
     priorité des villes** (00-Game §4, §8.1). Une `Factory` est `{ city, type,
@@ -358,9 +360,10 @@ si population < 0 : population = 0 et reste = 0
 
 Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
 travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
-`cultivated` et `fished` = les deux surfaces, `farmMechanization` = M de
-l'agriculture, `wheat`, `fish`, `food`,
-`factoryWorkers` = travailleurs, `miners` = mineurs, `minedTiles` =
+`cultivated` et `fished` = les deux surfaces, `farmMechanization` et
+`fishMechanization` = M de l'agriculture et de la pêche, `wheat`, `fish`, `food`,
+`factoryWorkers` = travailleurs, `miners` = mineurs, `mineMechanization` = M de
+l'extraction, `minedTiles` =
 `cases_exploitées(fer)`, `ironExtracted` = fer. Ils sont calculés sur la
 population du début de l'étape (avant `delta`) : `farmers + fishers + idle +
 factoryWorkers + miners` = cette population. La mécanisation est calculée avec les
@@ -468,9 +471,9 @@ sa capitale : `cities[capital - 1].group`.
    population, capitale, nombre de ressources puis `resourceTiles`, nombre de
    villes puis `cityIds`, puis `growthRemainder`, `farmPercent`, `farmTiles`,
    `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`,
-   `farmMechanization`, `fished`,
+   `farmMechanization`, `fished`, `fishMechanization`,
    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
-   `ironExtracted`, puis `goods` (nombre, valeurs), puis pour chaque type
+   `mineMechanization`, `ironExtracted`, puis `goods` (nombre, valeurs), puis pour chaque type
    d'armement : réserve, reste, puis le nombre d'usines et pour
    chacune, dans l'ordre de priorité : ville, indice du type d'usine, `progress`
    (nombre, valeurs), nombre de groupes et pour chacun, dans son ordre : indice du
@@ -667,8 +670,8 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     à l'étape 2 (fermiers et pêcheurs), puis à l'étape 3 (inactifs). Sans ligne
     remplie, toute la population va à l'étape 2.
 23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `farmMechanization`, `fished`,
-    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
-    `ironExtracted`) gardés dans le joueur et hachés.
+    `fishMechanization`, `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
+    `mineMechanization`, `ironExtracted`) gardés dans le joueur et hachés.
 24. Valeurs d'essai de l'économie : `POPULATION.foodPerHead` 1,
     `POPULATION.growthPerMillion` 5 000 (0,5 % du surplus par tour ; 1 000 était
     cinq fois plus lent), `FARMING` et `FISHING` : `mechanizationBase` 300,
@@ -741,7 +744,7 @@ points 31 et 32 sont des choix de plus.
     de perte ».
 32. Valeurs d'essai (aucune n'est fixée, 00-Game §10), choisies pour qu'une partie
     sur la carte de test soit jouable : `workersPerLine` 200 pour chaque produit (4 × 50) ;
-    `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne) ;
+    `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne à 1 fer) ;
     `MINING` : `mechanizationBase` 100, `mechanizationMax` 500,
     `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans engin,
     2 avec le maximum) ; `GOODS.*.productionPerLine` 30 machines par tour et par
@@ -749,7 +752,8 @@ points 31 et 32 sont des choix de plus.
     passer la surface par fermier de 0,3 à 0,912 case) ;
     `ARMAMENT.types` : fusil 10, mitrailleuse 4, artillerie 2, canon anti-aérien 1,
     canon anti-char 1 par ligne et par tour ; `ARMAMENT.decayRate` 100 (1 % de
-    l'excès par tour) ; `ironPerLine` 1 pour tous. `FACTORY.unlockTurns` 500,
+    l'excès par tour) ; `ironPerLine` 1, sauf artillerie 10, tracteur 5, bateau de pêche 3
+    (valeurs de l'auteur). `FACTORY.unlockTurns` 500,
     `FACTORY.maxTypesPerCity` 1 sont des valeurs
     de l'auteur ; `ARMAMENT.maxStockTurns` 100 est celle qu'il a évoquée.
 

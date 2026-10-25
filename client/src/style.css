@@ -396,6 +396,8 @@ tr.me td { font-weight: 600; }
 .ib-track .ib-fill { background: var(--ok); }
 .ib-track.wheat .ib-fill { background: #e3c766; }
 .ib-track.fish .ib-fill { background: #3a7fc4; }
+.ib-track.wheat .ib-max { background: repeating-linear-gradient(45deg, #e3c766 0 2px, transparent 2px 5px); }
+.ib-track.fish .ib-max { background: repeating-linear-gradient(45deg, #3a7fc4 0 2px, transparent 2px 5px); }
 .ib-cap .cap-now { background: var(--ok); }
 .ib-cap .cap-food { background: repeating-linear-gradient(45deg, var(--ok) 0 2px, transparent 2px 5px); }
 .ib-cap .cap-land { background: #dcdcdc; }

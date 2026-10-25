@@ -40,8 +40,8 @@ import {
 
 /** Case de `Player.goods` des bateaux de pêche. */
 const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
-/** Case de `Player.goods` des tracteurs. */
-const TRACTOR = GOOD_IDS.indexOf("tractor");
+/** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
+const IRON = Object.keys(RESOURCES).indexOf("iron");
 
 import { createBot, type Bot } from "./bots.ts";
 import {
@@ -93,8 +93,12 @@ export function factoryCatalog(): FactoryCatalog {
         miningMachine: MINING.maxMachinesPer1000,
       },
       armamentDecayPercent: ARMAMENT.decayRate / 100,
-      farmMechanizationBase: FARMING.mechanizationBase,
-      farmMechanizationMax: FARMING.mechanizationMax,
+      mechanization: {
+        tractor: { base: FARMING.mechanizationBase, max: FARMING.mechanizationMax },
+        fishingBoat: { base: FISHING.mechanizationBase, max: FISHING.mechanizationMax },
+        miningMachine: { base: MINING.mechanizationBase, max: MINING.mechanizationMax },
+      },
+      waterYield: { base: FISHING.tileYield, max: FISHING.tileYieldMax },
     },
   };
 }
@@ -169,8 +173,8 @@ export class SoloGame {
     const citiesBefore = state.cities.length;
     // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
     const linesBefore = human.length > 0 ? this.lineCounts() : null;
-    // Les tracteurs que l'étape va utiliser : ceux produits au tour d'avant, remplacés par `applyTurn`.
-    const tractorsUsed = state.players.map((p) => p.goods[TRACTOR]!);
+    // Les machines que l'étape va utiliser : celles produites au tour d'avant, remplacées par `applyTurn`.
+    const machinesUsed = state.players.map((p) => Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goods[i]!])));
     applyTurn(state, { turn: state.tick + 1, intents });
     const t2 = performance.now();
 
@@ -226,6 +230,7 @@ export class SoloGame {
       // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
       // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
       const fishRef = machineReference(FISHING, p.farmers + p.fishers + p.idle, p.seaTiles);
+      const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000);
       return {
       id: p.id,
       population: p.population,
@@ -236,8 +241,9 @@ export class SoloGame {
       wheat: p.wheat,
       fish: p.fish,
       cultivated: p.cultivated,
-      farmMechanization: p.farmMechanization,
-      tractorsUsed: tractorsUsed[p.id - 1]!,
+      mechanization: { tractor: p.farmMechanization, fishingBoat: p.fishMechanization, miningMachine: p.mineMechanization },
+      machinesUsed: machinesUsed[p.id - 1]!,
+      ironTiles: p.resourceTiles[IRON]!,
       farmTiles: p.farmTiles,
       fished: p.fished,
       seaTiles: p.seaTiles,
@@ -251,10 +257,9 @@ export class SoloGame {
       ironExtracted: p.ironExtracted,
       // Nourriture si toutes les cases fertiles et toutes les cases d'eau étaient travaillées,
       // avec le rendement de l'eau des bateaux actuels (00-Game §6.4, §6.5).
-      foodPotential: Math.max(
-        FOOD.minimum,
-        p.fertilitySum + Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000),
-      ),
+      foodPotential: Math.max(FOOD.minimum, p.fertilitySum + fishMax),
+      wheatMax: p.fertilitySum,
+      fishMax,
       // Demande calculée par le moteur (goodsDemand) : la même que celle qui arrête la croissance des lignes.
       fullMachines: Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsDemand[i]!])),
       };

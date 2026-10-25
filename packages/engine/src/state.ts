@@ -72,6 +72,8 @@ export interface Player {
   farmMechanization: number;
   /** Surface pêchée, en cases (≤ seaTiles). */
   fished: number;
+  /** Mécanisation de la pêche (00-Game §6.4) : surface par pêcheur, en millièmes de case. */
+  fishMechanization: number;
   wheat: number;
   fish: number;
   /** Nourriture du tour : max(blé + poisson, FOOD.minimum). */
@@ -99,6 +101,8 @@ export interface Player {
   miners: number;
   /** Cases de fer exploitées au dernier tour (00-Game §7, `cases_exploitées`). */
   minedTiles: number;
+  /** Mécanisation de l'extraction (00-Game §7) : cases de fer par mineur, en millièmes de case. */
+  mineMechanization: number;
   /** Fer extrait au dernier tour : celui des lignes remplies. */
   ironExtracted: number;
 }
@@ -177,6 +181,7 @@ export function createGame(setup: GameSetup): GameState {
       cultivated: 0,
       farmMechanization: 0,
       fished: 0,
+      fishMechanization: 0,
       wheat: 0,
       fish: 0,
       food: 0,
@@ -188,6 +193,7 @@ export function createGame(setup: GameSetup): GameState {
       factoryWorkers: 0,
       miners: 0,
       minedTiles: 0,
+      mineMechanization: 0,
       ironExtracted: 0,
     });
   }

@@ -318,12 +318,15 @@ function stepPlayer(p: Player): void {
   p.cultivated = farm.area;
   p.farmMechanization = farm.mechanization;
   p.fished = sea.area;
+  p.fishMechanization = sea.mechanization;
   p.wheat = farm.yield;
   p.fish = sea.yield;
   p.food = Math.max(p.wheat + p.fish, FOOD.minimum);
   p.factoryWorkers = lines.workers;
   p.miners = lines.miners;
   p.minedTiles = ironTilesFor(lines.iron);
+  // Celle de `minersFor` pour le fer de toutes les lignes remplies (00-Game §7).
+  p.mineMechanization = mechanization(MINING, fullMechanizationWorkers(MINING, p.minedTiles), p.goods[MINING_MACHINE]!);
   p.ironExtracted = lines.iron;
   // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2).
   const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);

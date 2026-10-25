@@ -63,12 +63,14 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.cultivated);
     h = mixWord(h, p.farmMechanization);
     h = mixWord(h, p.fished);
+    h = mixWord(h, p.fishMechanization);
     h = mixWord(h, p.wheat);
     h = mixWord(h, p.fish);
     h = mixWord(h, p.food);
     h = mixWord(h, p.factoryWorkers);
     h = mixWord(h, p.miners);
     h = mixWord(h, p.minedTiles);
+    h = mixWord(h, p.mineMechanization);
     h = mixWord(h, p.ironExtracted);
     h = mixWord(h, p.goods.length);
     for (const n of p.goods) h = mixWord(h, n);

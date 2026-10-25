@@ -83,9 +83,14 @@ export interface EconomyInfo {
   readonly machinesPer1000: Readonly<Record<string, number>>;
   /** Part de l'excès d'armement supprimée par tour, en pourcent (`ARMAMENT.decayRate` / 100). */
   readonly armamentDecayPercent: number;
-  /** `FARMING.mechanizationBase` et `FARMING.mechanizationMax` : surface par fermier sans tracteur et à pleine mécanisation, en millièmes de case. */
-  readonly farmMechanizationBase: number;
-  readonly farmMechanizationMax: number;
+  /**
+   * `mechanizationBase` et `mechanizationMax` de chaque bien-machine (clé = identifiant
+   * du bien) : surface par travailleur sans machine et à pleine mécanisation, en
+   * millièmes de case (`FARMING`, `FISHING`, `MINING`).
+   */
+  readonly mechanization: Readonly<Record<string, { readonly base: number; readonly max: number }>>;
+  /** `FISHING.tileYield` et `FISHING.tileYieldMax` : rendement d'une case d'eau sans bateau et au maximum. */
+  readonly waterYield: { readonly base: number; readonly max: number };
 }
 
 /** Un groupe de lignes du même bien dans une usine du joueur. */
@@ -137,10 +142,15 @@ export interface PlayerStats {
   readonly wheat: number;
   readonly fish: number;
   readonly cultivated: number;
-  /** Surface par fermier du dernier tour, en millièmes de case (`Player.farmMechanization`). */
-  readonly farmMechanization: number;
-  /** Tracteurs utilisés par l'agriculture au dernier tour (ceux produits au tour d'avant, 00-Game §12). */
-  readonly tractorsUsed: number;
+  /**
+   * Mécanisation du dernier tour par bien-machine, en millièmes de case par
+   * travailleur : `Player.farmMechanization`, `fishMechanization`, `mineMechanization`.
+   */
+  readonly mechanization: Readonly<Record<string, number>>;
+  /** Machines utilisées au dernier tour, par bien (celles produites au tour d'avant, 00-Game §12). */
+  readonly machinesUsed: Readonly<Record<string, number>>;
+  /** Cases de fer des zones du joueur. */
+  readonly ironTiles: number;
   /** `surface_max` : cases fertiles du joueur. */
   readonly farmTiles: number;
   readonly fished: number;
@@ -158,6 +168,10 @@ export interface PlayerStats {
   readonly ironExtracted: number;
   /** Nourriture si toutes les terres et toutes les eaux étaient travaillées (au moins FOOD.minimum). */
   readonly foodPotential: number;
+  /** Blé si toutes les cases fertiles étaient cultivées (`Player.fertilitySum`). */
+  readonly wheatMax: number;
+  /** Poisson si toutes les cases d'eau étaient pêchées, au rendement d'eau des bateaux actuels. */
+  readonly fishMax: number;
   /**
    * Machines d'une mécanisation totale (00-Game §6.2) : la référence (disponibles
    * plafonnés aux travailleurs qui couvrent la surface à pleine mécanisation) × machines pour 1 000

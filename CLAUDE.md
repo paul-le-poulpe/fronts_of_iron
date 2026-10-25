@@ -15,7 +15,8 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
 - `Docs/Design/01-Architecture.md` — réseau, lobby, moteur : ce qui existe,
   pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit ;
 - `Docs/Design/03-Client.md` — le client : mode solo, messages avec le Worker,
-  affichage, interface provisoire.
+  affichage, interface provisoire ;
+- `Docs/Design/04-Tooltips.md` — feuille de route des infobulles des icônes.
 
 ---
 

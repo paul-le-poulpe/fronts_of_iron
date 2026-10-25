@@ -318,14 +318,19 @@ export class InfoBar {
     const capValue = el("span", "ib-value");
     capValue.title = "Actuelle / nourrie / potentielle";
     capRoot.title = "Vert : actuelle · hachuré : nourrie · gris : potentielle (toutes cases exploitées)";
+    // Production maximale (toute la surface travaillée) : hachures sous le remplissage.
     const wheat = track("flow");
     wheat.root.classList.add("wheat");
+    const wheatMax = el("i", "ib-max");
+    wheat.root.prepend(wheatMax);
     const wheatValue = el("span", "ib-value");
-    wheatValue.title = "Blé · cultivées / cultivables";
+    wheatValue.title = "Blé · cultivées / cultivables · maximum";
     const fish = track("flow");
     fish.root.classList.add("fish");
+    const fishMax = el("i", "ib-max");
+    fish.root.prepend(fishMax);
     const fishValue = el("span", "ib-value");
-    fishValue.title = "Poisson · pêchées / pêchables";
+    fishValue.title = "Poisson · pêchées / pêchables · maximum";
     const imports = row("Importations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const exports_ = row("Exportations", track("flow").root, el("span", "ib-value", "à venir"), "soon");
     const consumption = el("p", "ib-consumption");
@@ -360,10 +365,14 @@ export class InfoBar {
         span(capFood, 0, pct(maxNow, scale));
         span(capLand, 0, pct(maxLand, scale));
         capValue.textContent = `${num(s.population)} / ${num(maxNow)} / ${num(maxLand)}`;
-        span(wheat.fill, 0, pct(s.wheat, s.food));
-        wheatValue.textContent = `${num(s.wheat)} · ${num(s.cultivated)} / ${num(s.farmTiles)} cases`;
-        span(fish.fill, 0, pct(s.fish, s.food));
-        fishValue.textContent = `${num(s.fish)} · ${num(s.fished)} / ${num(s.seaTiles)} cases`;
+        // Même échelle pour le blé et le poisson : la plus grande production, atteinte ou possible.
+        const foodScale = Math.max(s.wheat, s.fish, s.wheatMax, s.fishMax, 1);
+        span(wheat.fill, 0, pct(s.wheat, foodScale));
+        span(wheatMax, 0, pct(Math.max(s.wheat, s.wheatMax), foodScale));
+        wheatValue.textContent = `${num(s.wheat)} / ${num(s.wheatMax)} · ${num(s.cultivated)} / ${num(s.farmTiles)} cases`;
+        span(fish.fill, 0, pct(s.fish, foodScale));
+        span(fishMax, 0, pct(Math.max(s.fish, s.fishMax), foodScale));
+        fishValue.textContent = `${num(s.fish)} / ${num(s.fishMax)} · ${num(s.fished)} / ${num(s.seaTiles)} cases`;
         minimum.textContent = `minimum garanti ${num(this.info.foodMinimum)}`;
         setSigned(surplusLine, surplusOf(s));
       },

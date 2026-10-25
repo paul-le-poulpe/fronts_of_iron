@@ -685,7 +685,8 @@ cases_exploitées[r] = ceil(extraction[r] / rendement[r])
 mineurs[r]      = ceil(cases_exploitées[r] × 1000 / Mécanisation_minière)
 ```
 
-Pour le fer aujourd'hui : chaque ligne remplie consomme 1 fer par tour (§8).
+Pour le fer aujourd'hui : chaque ligne remplie consomme le fer par ligne de
+son bien ou type d'armement (§8).
 
 **Une case de fer n'est pas cultivable** (décision de l'auteur) : sa fertilité
 vaut 0 (§2).
@@ -721,8 +722,9 @@ vaut 0 (§2).
   pour chaque groupe de lignes, les ouvriers et le fer qu'il utilise.
 - Chaque ligne produit, par tour, une quantité propre au bien
   (`GOODS[b].productionPerLine`), et consomme la ressource indiquée pour ce
-  bien. **Pour commencer : chaque ligne remplie consomme 1 unité de fer par
-  tour**, quel que soit son bien ou son type d'armement.
+  bien. **Fer par ligne remplie et par tour** (`ironPerLine`, décision de
+  l'auteur, 24 octobre 2026) : artillerie 10, tracteur 5, bateau de pêche 3,
+  1 pour les autres biens et types d'armement.
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
   l'auteur : une usine d'engins miniers qui débloque les tracteurs, puis les
@@ -756,10 +758,10 @@ production[b]     = somme, sur les lignes actives et remplies de b, de GOODS[b].
 consommation[r]   = somme, sur les biens b qui utilisent r, de production[b] × ratio de r pour b
 ```
 
-Pour commencer, avec 1 fer par ligne :
+Pour le fer, le ratio est fixé par ligne et non par unité produite :
 
 ```
-consommation[fer] = nombre de lignes remplies (biens et armement)
+consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironPerLine
 ```
 
 `consommation[r]` est la part « usines » de la demande d'extraction (§7).
@@ -1325,8 +1327,8 @@ valider sur la visualisation.
 - Arbre (§8.4) : la ligne « plus haut dans l'arbre » qui débloque une branche
   doit-elle être dans la même usine, ou n'importe où dans la nation ?
 - Usine d'armement d'infanterie (§8.4) : la branche suivante se débloque après
-  `FACTORY.unlockTurns` tours (§8.2). Ressource consommée : 1 fer par ligne
-  pour commencer (§8).
+  `FACTORY.unlockTurns` tours (§8.2). Ressource consommée : le fer par ligne
+  de chaque type (§8).
 - Usage des cinq types d'infanterie par les armées : avec le module armée.
 
 **Taille des villes (affichage)**

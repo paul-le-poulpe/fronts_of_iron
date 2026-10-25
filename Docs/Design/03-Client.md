@@ -388,23 +388,31 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
   à l'affichage, puis à chaque tour tant que l'encadré est affiché (`refreshTip`,
   appelé par `main.ts` après la barre d'informations). Encadré de 340 px, en 13 px.
   Les contenus des biens sont dans `goodtips.ts` (`attachGoodTip(el, bien)`, posé
-  sur chaque `[bien]` de la barre d'informations et du panneau de production) ;
-  seul le **tracteur** en a un pour l'instant :
-  titre ; une phrase (les tracteurs augmentent la surface que cultive chaque
-  fermier, donc moins de fermiers pour la même surface) ; « Surface par fermier »
-  sans tracteur (`farmMechanizationBase`) et à pleine mécanisation
-  (`farmMechanizationMax`, avec le rapport tiré de `machinesPer1000.tractor`) ;
-  « Votre nation · fermiers · tracteurs utilisés / tracteurs d'une mécanisation
-  totale », une jauge verte de la surface par fermier du dernier tour
-  (`stats.farmMechanization`, copié de `Player.farmMechanization`), de la valeur
-  sans tracteur (vide) à la valeur maximale (pleine), la valeur écrite au bout ;
-  puis une barre jaune (`--occ-farm`, la couleur des fermiers) « Surface cultivée
-  cultivées / cultivables ». La jauge montre un effet commun à tous les fermiers
-  (00-Game §6.2 : une seule mécanisation pour tous), pas une part de fermiers
-  équipés. `stats.tractorsUsed` est lu par `SoloGame` dans `goods` **avant**
-  `applyTurn` : ce sont les tracteurs que l'étape a utilisés, ceux qui donnent la
-  jauge, pas ceux produits pendant le tour (qui servent au tour suivant et que la
-  ligne *Tracteurs* du détail Ressources affiche).
+  sur chaque `[bien]` de la barre d'informations et du panneau de production).
+  Feuille de route de toutes les icônes : `04-Tooltips.md`. Les trois
+  **machines** (tracteur, bateau de pêche, engin minier) ont la même infobulle,
+  décrite par une entrée de `MACHINE_TIPS` (noms, libellés, ce qu'on lit dans
+  les statistiques, couleur de la barre) :
+  titre ; une phrase (la machine augmente la surface que travaille chaque
+  fermier, pêcheur ou mineur, donc moins de travailleurs pour la même surface ;
+  les bateaux augmentent aussi le rendement d'une case d'eau) ; la surface par
+  travailleur sans machine et à pleine mécanisation (`economy.mechanization[bien]`,
+  avec le rapport tiré de `machinesPer1000[bien]`) ; pour les bateaux, le
+  rendement d'une case d'eau sans bateau et au maximum (`economy.waterYield`) ;
+  « Votre nation · travailleurs · machines utilisées / machines d'une
+  mécanisation totale », une jauge verte de la mécanisation du dernier tour
+  (`stats.mechanization[bien]`, copié de `Player.farmMechanization`,
+  `fishMechanization`, `mineMechanization`), de la valeur sans machine (vide) à
+  la valeur maximale (pleine), la valeur écrite au bout ; puis une barre de la
+  couleur du métier dans le détail Population : « Surface cultivée » cultivées /
+  cultivables (`--occ-farm`), « Surface pêchée » pêchées / cases d'eau
+  (`--occ-fish`), « Cases exploitées » cases de fer exploitées / cases de fer
+  (`--occ-mine`, `stats.ironTiles`). La jauge montre un effet commun à tous les
+  travailleurs (00-Game §6.2 : une seule mécanisation pour tous), pas une part
+  de travailleurs équipés. `stats.machinesUsed` est lu par `SoloGame` dans
+  `goods` **avant** `applyTurn` : ce sont les machines que l'étape a utilisées,
+  celles qui donnent la jauge, pas celles produites pendant le tour (qui servent
+  au tour suivant et que les lignes de machines du détail Ressources affichent).
   1. **Population** : « Population n  ±v  / max ». `v` est la croissance du
      tour (population − somme des occupations, qui est la population au début du
      tour : une fondation de ville, qui retire des habitants avant l'étape, n'y
@@ -421,7 +429,12 @@ les usines changent). Une image n'est dessinée que si quelque chose a changé
      `SoloGame` : `max(FOOD.minimum, fertilitySum + floor(seaTiles ×
      waterYieldMilli(pêcheurs, bateaux) / 1000))`. Puis Agriculture (blé ·
      cultivé / cases cultivables, barre couleur blé) et Pêche (poisson · pêché /
-     cases d'eau, barre bleue), à l'échelle de la nourriture totale ;
+     cases d'eau, barre bleue), à une échelle commune, la plus grande production
+     atteinte ou possible. Sous le remplissage, des hachures de la même couleur
+     montrent la production maximale (toute la surface travaillée) :
+     `stats.wheatMax` = `fertilitySum`, `stats.fishMax` = `floor(seaTiles ×
+     waterYieldMilli(pêcheurs, bateaux) / 1000)`, calculés par `SoloGame`. Le
+     texte donne « produit / maximum · cases travaillées / cases » ;
      Importations et Exportations grisées
      (« à venir ») ; une ligne Consommation : minimum garanti et surplus.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :

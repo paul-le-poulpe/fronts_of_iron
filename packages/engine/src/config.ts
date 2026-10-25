@@ -66,7 +66,7 @@ export const RESOURCES = {
     },
     /**
      * Capacité d'extraction d'une case de fer, en fer par tour (00-Game §7). Valeur
-     * d'essai : une case nourrit une ligne de production (1 fer par ligne et par tour).
+     * d'essai : une case nourrit une ligne à 1 fer par tour (fusil, par exemple).
      */
     capacityPerTile: 1,
   },
@@ -214,7 +214,7 @@ export interface ProductConfig {
   readonly productionPerLine: number;
   /** Ouvriers employés par une ligne remplie : 200 pour commencer (4 × 50, décision de l'auteur, 24 octobre 2026), quel que soit le bien (00-Game §8, §13). */
   readonly workersPerLine: number;
-  /** Fer consommé par tour par une ligne remplie : 1 pour commencer, quel que soit le bien (00-Game §8). */
+  /** Fer consommé par tour par une ligne remplie : 1 par défaut ; tracteur 5, bateau de pêche 3, artillerie 10 (00-Game §8). */
   readonly ironPerLine: number;
 }
 
@@ -225,8 +225,8 @@ export interface ProductConfig {
  * = 100 demande 100 tracteurs pour la pleine mécanisation).
  */
 export const GOODS = {
-  tractor: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
-  fishingBoat: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
+  tractor: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 5 },
+  fishingBoat: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 3 },
   miningMachine: { productionPerLine: 30, workersPerLine: 200, ironPerLine: 1 },
 } as const satisfies Record<string, ProductConfig>;
 
@@ -245,7 +245,7 @@ export const ARMAMENT = {
   types: {
     rifle: { productionPerLine: 10, workersPerLine: 200, ironPerLine: 1 },
     machineGun: { productionPerLine: 4, workersPerLine: 200, ironPerLine: 1 },
-    artillery: { productionPerLine: 2, workersPerLine: 200, ironPerLine: 1 },
+    artillery: { productionPerLine: 2, workersPerLine: 200, ironPerLine: 10 },
     antiAirGun: { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
     antiTankGun: { productionPerLine: 1, workersPerLine: 200, ironPerLine: 1 },
   },
