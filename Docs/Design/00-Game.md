@@ -3,9 +3,20 @@
 Ce que le jeu est, et chaque action du joueur, qui devient un type d'ordre du
 moteur (01-Architecture §3). Rédigé avec l'auteur, au fur et à mesure.
 
-**Ce qui n'est pas écrit ici n'est pas décidé.** Le moteur n'implémente que ce
-document ; ce qui reste à trancher est listé au §13. Rien n'est repris
-d'OpenFront par défaut.
+**Ce qui n'est pas écrit ici, ou dans un document thématique listé ci-dessous,
+n'est pas décidé.** Le moteur n'implémente que ces documents ; ce qui reste à
+trancher est listé au §13 (et dans chaque document thématique). Rien n'est
+repris d'OpenFront par défaut.
+
+**Documents thématiques** : ils font foi pour leur domaine ; ce document n'en
+garde qu'un résumé et y renvoie. Une règle n'est écrite qu'à un seul endroit.
+
+| Domaine | Document |
+| --- | --- |
+| Fronts terrestres : détection, unités, affectation des troupes, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
+
+Un fichier dont le nom finit par `-History` (par exemple `05-Fronts-History.md`)
+est un historique de discussions : il ne fait jamais foi.
 
 ---
 
@@ -45,7 +56,7 @@ Modules prévus :
 | Routes terrestres et maritimes | décrit en partie (§3.5, §3.6). Nœuds : les villes sur terre, les zones maritimes en mer (§2.1) |
 | Croissance des villes | décrit (§3.7) : affichage seulement, pas de taille dans le moteur |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
-| Fronts terrestres | version 1 décrite en partie (§3.8) ; fronts aériens et maritimes plus tard |
+| Fronts terrestres | version 1 décrite (`05-Fronts.md`, résumé §3.8), pas implémentée ; fronts aériens et maritimes plus tard |
 | Armée, combat | annoncé, non décrit |
 | Politique entre joueurs | décrit en partie (§1, Diplomatie) : statuts neutre, pacte de non-agression, guerre ; menu au clic sur un joueur. Ni alliance, ni droit de passage, ni garantie d'indépendance, ni commerce dans cette version |
 
@@ -75,9 +86,10 @@ aux bateaux du joueur (§3.6). Cette section n'existe pas encore. Elle pourra
 
 Il n'y a, dans cette version, ni alliance, ni droit de passage, ni garantie
 d'indépendance, ni commerce (les routes commerciales viendront plus tard).
-**Aucune attaque ni armée n'existe encore** : la règle « pas de combat hors
-guerre » est écrite ici, mais le moteur n'a rien à bloquer pour l'instant. Il
-tient le statut de chaque paire et rien ne le lit.
+**Les attaques sont décrites dans `05-Fronts.md`, pas encore implémentées** : la
+règle « pas de combat hors guerre » est écrite ici, mais le moteur n'a rien à
+bloquer pour l'instant. Il tient le statut de chaque paire et rien ne le lit.
+Effets de la guerre et de la paix sur les fronts : `05-Fronts.md` §2.3.
 
 *Actions.* Le joueur clique sur le territoire d'un autre joueur (quand aucun
 bouton de la barre n'est armé) : un petit menu apparaît à côté de la souris,
@@ -237,8 +249,7 @@ l'auteur) : seul le rayon d'expansion est réglé, le moteur en déduit l'autre.
 **Ordre de grandeur** (repère de l'auteur, 25 octobre 2026, pas une règle du
 moteur) : le rayon de contrôle d'une ville vaut environ **10 000 m**. Avec 25
 cases, une case fait environ 400 m. Sert à choisir les valeurs exprimées en
-mètres, comme la largeur de front (§3.8, `FRONTS.metersPerConnection` = 5 000
-par connexion).
+mètres, comme la largeur de front (`05-Fronts.md` : 5 000 m par connexion).
 D'autres types de villes pourraient venir plus tard ; ce n'est pas prévu.
 
 ### 3.2 Zone d'une ville
@@ -293,6 +304,9 @@ elles existeront.
 
 **La première ville est gratuite.** Sa fondation donne au joueur
 `POPULATION.initial` personnes (§4).
+
+**Pendant une guerre** : le rayon d'expansion d'une ville impliquée dans un
+front actif ne compte pas pour fonder (règle dans `05-Fronts.md` §8).
 
 L'auteur a annoncé d'autres règles de placement, à décrire (§13).
 
@@ -449,84 +463,21 @@ dessinée plus grande, selon le niveau de l'usine (son nombre de lignes).
 
 ### 3.8 Fronts terrestres (version 1)
 
-Décrit avec l'auteur le 25 octobre 2026. C'est la **version 1** : elle pourra
-changer. Fronts aériens et maritimes : plus tard, non décrits.
+**Les règles des fronts sont dans `05-Fronts.md`, qui fait foi.** Ce
+paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
 
-**Entrée.** Le système des fronts ne lit que le résultat du système des
-routes (§3.5) : la liste des paires de villes reliées. La façon dont cette
-liste est construite ne le concerne pas, et le système des routes pourra être
-remanié sans toucher aux fronts.
-
-**Connexion.** Une route dont les deux villes appartiennent à deux joueurs
-différents. Deux villes « se touchent » quand une route les relie ; la forme
-de leurs zones (§3.2) n'est pas regardée.
-
-**Front.** L'ensemble des connexions entre un groupe (§3.5) d'un joueur et un
-groupe d'un autre joueur. Un front est donc défini par une paire de groupes, et
-il est **symétrique** : les deux joueurs voient le même front. Si le groupe g
-de A touche deux groupes de B, il y a deux fronts, (g, B₁) et (g, B₂).
-
-Les fronts existent en paix comme en guerre : la configuration se fait par
-front (contenu de la configuration : non décrit).
-
-**Classement, pour chaque joueur** : d'abord par groupe du joueur (une
-« île » : villes reliées par ses routes, deux groupes d'un même continent non
-reliés par la terre comptent pour deux), puis par adversaire. Sous un même
-adversaire, une île peut avoir plusieurs fronts (cas ci-dessus). Un joueur peut
-avoir plusieurs fronts contre le même adversaire sur des îles différentes.
-
-**Largeur** : nombre de connexions du front × `FRONTS.metersPerConnection`.
-Elle n'est pas stockée : elle se déduit de la liste des connexions.
-
-**Position du front sur une route.** Chaque connexion porte la position du
-front le long de son segment, comptée depuis la ville d'un des deux joueurs,
-en millièmes de la longueur de la route (entier, sans racine carrée).
-- **Déclaration de guerre** (ordre « Déclarer la guerre », §1 et §9) : chaque
-  connexion de chaque front entre les deux joueurs est mise au milieu, 500.
-  Cet effet sur les fronts n'est pas implémenté : le moteur change le statut
-  des deux joueurs et ne touche pas aux fronts.
-- **Avancée** : non décrite (armée, combat).
-- **Prise d'une ville** (déclencheur non décrit) : A prend la ville X à B.
-  Les routes entre X et des villes de A ne sont plus des connexions, dont
-  celle par laquelle A est passé : elles sont retirées du front. Les routes
-  entre X et des villes de B deviennent des connexions, ajoutées au front avec
-  le front à `FRONTS.capturePercent` % de la route côté X (1 %, valeur donnée
-  par l'auteur) : 1 % tenu par A, 99 % par B.
-- **Fondation pendant une guerre** : interdite à moins de
-  `FRONTS.noFoundingDistance` d'un front entre deux joueurs en guerre.
-  Proposition : distance mesurée depuis le point du front sur chaque
-  connexion.
-
-**Cases et récoltes.** Le front ne change pas la propriété des cases : la zone
-d'une ville (§3.2) reste à son joueur tant que la ville ne change pas de main,
-même si une partie est derrière la ligne du front. Choix de l'auteur, le plus
-simple pour l'instant ; à revoir peut-être.
-
-**Stockage dans le moteur.** Une table des fronts, dans l'état de la partie et
-dans le hash, séparée de la liste des routes : chaque front a un identifiant
-stable, ses deux joueurs, ses deux groupes et la liste de ses connexions, avec
-la position du front sur chacune. Recalculée quand les routes ou les
-propriétaires des villes changent (fondation, prise) : une connexion déjà
-présente garde sa position. Structures, calcul, hash, tracé, tests et pièges :
-**`05-Fronts.md`**.
-
-Pourquoi deux tables et pas un champ dans la liste des routes : la liste des
-routes est la sortie du système des routes, qui la réordonne à chaque
-fondation (02-Engine) ; la plupart des routes ne sont pas des connexions ; un
-front regroupe des connexions sous un identifiant, ce que la liste des routes
-n'a pas. Rien n'est stocké deux fois : les routes disent quelles villes sont
-reliées, la table des fronts dit lesquelles se font face et où est la ligne.
-
-**Affichage** (client seulement). En paix, la frontière reste celle des zones
-(§11). Dès la guerre, le client trace une courbe par les points du front, un
-par connexion : spline de Catmull-Rom centripète, qui passe par chaque point,
-dessinée en courbes de Bézier cubiques (`bezierCurveTo`). Calculée quand le
-front change, pas à chaque image ; coût proportionnel au nombre de points.
-La frontière passe des angles du partage de Voronoi à une courbe lisse au
-moment de la déclaration : discontinuité acceptée par l'auteur. Le client doit
-ordonner les points (deux connexions qui partent de la même ville et se
-suivent autour d'elle sont voisines), gérer un front coupé en plusieurs lignes,
-et choisir où la ligne s'arrête au-delà du dernier point (§13).
+- Un **front** est l'ensemble des routes (§3.5) entre un groupe d'un joueur et
+  un groupe d'un autre joueur. Il existe en paix (front potentiel, où l'on peut
+  déjà placer des troupes) et en guerre (front actif).
+- Le joueur y affecte des **unités** (infanterie, équipements, blindés ;
+  `config/units.ts`) en première et en seconde ligne, selon des niches, une
+  priorité par front et des réglages par type d'unité.
+- En guerre, il lance des **attaques** : attaque sur tout le front, percées sur
+  une route, barrage (hors périmètre). Les rounds de combat font des pertes et
+  font avancer le front le long des routes ; le front arrivé au bout d'une
+  route prend la ville. Encerclement à la prise.
+- Le front ne change pas la propriété des cases tant que la ville ne change pas
+  de main.
 
 ## 4. La population
 
@@ -558,7 +509,10 @@ et choisir où la ligne s'arrête au-delà du dernier point (§13).
      à la fois tous les champs et toute la mer ; sinon, les deux sont remplis
      à 100 % ;
   4. ceux qui n'ont toujours pas de surface à travailler forment la
-     **population inactive**.
+     **population inactive** ;
+  5. les **soldats** des fronts sont recrutés en dernier, parmi les inactifs,
+     sauf en mobilisation forcée, où ils passent en premier (règles dans
+     `05-Fronts.md` §4.1).
 
   ```
   F, P              = fermiers et pêcheurs disponibles, selon le réglage
@@ -1194,9 +1148,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; **1**, choisi avec l'auteur : une case coûte `1 + altitude` (de 1 à 32). Constante `ROAD_HEIGHT_COST_FACTOR` de `client/src/roadpaths.ts` |
-| `FRONTS.metersPerConnection` | largeur ajoutée à un front par connexion, en mètres (§3.8) ; à fixer |
-| `FRONTS.capturePercent` | position du front, en % de la route depuis la ville prise, sur les connexions créées par une prise (§3.8) ; 1, valeur donnée par l'auteur |
-| `FRONTS.noFoundingDistance` | distance à un front en guerre en dessous de laquelle on ne peut pas fonder de ville (§3.8) ; à fixer |
+| `FRONTS`, `UNITS`, `NICHES` | réglages des fronts et des unités militaires : `config/fronts.ts` et `config/units.ts`, décrits dans `05-Fronts.md` §3 et §12 |
 | `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
 | `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
 | `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |
@@ -1255,8 +1207,8 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
-- Fronts en guerre : spline de Catmull-Rom par le point du front de chaque
-  connexion, dessinée en Bézier cubiques (§3.8).
+- Fronts : double ligne rouge, zones hachurées, courbe, liste et panneau des
+  fronts, mobilisation forcée, barre jaune de l'armement : `05-Fronts.md` §11.
 - Diplomatie : petit menu à côté de la souris, au clic sur le territoire d'un
   autre joueur (§1) ; les propositions et les changements de statut arrivent
   par des notifications empilées en bas à gauche de la carte (03-Client §7).
@@ -1327,9 +1279,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Le réseau de routes terrestres se déduit des villes (§3.5) : il peut être
   gardé dans l'état ou recalculé, le résultat est le même. Il est recalculé
   quand une ville est fondée ou disparaît.
-- La table des fronts (§3.8) entre dans l'état, donc dans le hash : seule la
-  position du front sur chaque connexion et l'identifiant des fronts ne se
-  déduisent pas des villes. Elle lit la liste des routes et ne la modifie pas.
+- Fronts, troupes, attaques : état et hash décrits dans `05-Fronts.md` §13.
 - Le réseau maritime (§3.6) est calculé une fois, à la génération de la
   carte, après les zones maritimes, et ne change pas. Comme les zones, il est
   recalculé par chaque client à partir de la graine.
@@ -1509,26 +1459,9 @@ valider sur la visualisation.
 - Alliance, droit de passage (§3.5), garantie d'indépendance, commerce : hors
   de cette version.
 - Effet du statut sur le combat : avec les armées. Effet de la déclaration de
-  guerre sur les fronts : voir « Fronts » ci-dessous.
+  guerre sur les fronts : `05-Fronts.md` §2.3.
 
-**Fronts (§3.8)**
-- **Identité d'un front quand les groupes changent** (à résoudre plus tard,
-  demandé par l'auteur) : l'identifiant d'un groupe est le plus petit
-  identifiant de ville du groupe (§3.5), et il change quand une ville change
-  de main ; deux groupes peuvent fusionner, un groupe se couper. Quel front
-  garde son identifiant et sa configuration ?
-- Déclaration de guerre : l'ordre existe (§1, §9) mais ne met pas encore les
-  connexions au milieu (§3.8). Ce qui fait avancer le front ; ce qui
-  déclenche la prise d'une ville.
-- Prise de X par A : les routes entre X et un troisième joueur C deviennent
-  des connexions A–C. Position si A et C sont en guerre ?
-- Fondation pendant une guerre, loin du front, qui crée une route entre deux
-  joueurs en guerre : position de la nouvelle connexion ?
-- Fondation qui retire une route d'un front par croisement (§3.5), hors de la
-  distance interdite.
-- Contenu de la configuration d'un front.
-- Affichage : où la ligne s'arrête au-delà du dernier point (côte, bord de la
-  zone de contrôle, dernier point).
+**Fronts** : points ouverts et choix provisoires dans `05-Fronts.md` §15.
 
 **Armement**
 - Stock cible (§8.3) : les lignes désactivées par le joueur comptent-elles

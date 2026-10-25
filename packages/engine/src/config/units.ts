@@ -1,4 +1,4 @@
-// Unités militaires des fronts terrestres (Docs/Design/05-Fronts.md §12). Pas
+// Unités militaires des fronts terrestres (Docs/Design/05-Fronts.md §3). Pas
 // encore lues par le moteur : les fronts ne sont pas implémentés.
 //
 // Valeurs données par l'auteur, justes entre elles ; à ajuster plus tard dans
@@ -186,7 +186,7 @@ export const UNITS = {
 export type UnitId = keyof typeof UNITS;
 
 /**
- * Niches (05-Fronts §12) : un rôle sur le front, rempli par un ou plusieurs types
+ * Niches (05-Fronts §3, §4.2) : un rôle sur le front, rempli par un ou plusieurs types
  * d'unités. Chaque niche couvre toute la largeur du front, en mètres. Unités
  * rangées de la meilleure à la moins bonne : on couvre le plus de largeur
  * possible avec la première, puis on passe à la suivante. Chaque unité est dans

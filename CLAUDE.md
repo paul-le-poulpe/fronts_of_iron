@@ -4,21 +4,38 @@ Jeu de stratégie multijoueur dans le navigateur. **Parties courtes. Pas de
 brouillard de guerre.** L'architecture réseau s'inspire d'OpenFront (lockstep) ;
 **le jeu lui-même n'est pas OpenFront.**
 
-**Les règles du jeu ne sont pas encore définies.** Elles seront écrites dans
-`Docs/Design/00-Game.md`, rédigé avec l'auteur. Tant que ce document n'existe
-pas ou ne tranche pas un point, aucune règle de jeu n'est implémentée ni
+**Les règles du jeu sont écrites avec l'auteur**, dans `Docs/Design/00-Game.md`
+et dans les documents thématiques que 00-Game liste en tête. Tant qu'aucun de
+ces documents ne tranche un point, aucune règle de jeu n'est implémentée ni
 inventée — et rien n'est repris d'OpenFront « par défaut ».
 
+**Où écrire une règle** :
+- 00-Game est le point d'entrée : ce que le jeu est dans les grandes lignes,
+  les règles qui n'ont pas de document à elles, et la liste des documents
+  thématiques. Ne pas le surcharger : un domaine qui grossit (les fronts, par
+  exemple) a son propre document, qui fait foi pour ce domaine.
+- **Une règle n'est écrite qu'à un seul endroit.** 00-Game garde au plus un
+  résumé du domaine et renvoie au document thématique.
+- Un document thématique ne contient que l'état actuel des règles, sans
+  historique. Les discussions et les règles remplacées vont dans un fichier
+  `-History` (par exemple `05-Fronts-History.md`), qui **ne fait jamais foi** :
+  ne jamais implémenter à partir de lui.
+- Ce que l'auteur n'a pas tranché mais qu'il faut choisir pour implémenter est
+  marqué « provisoire » dans le document et listé à part.
+
 À lire avant de toucher au code :
-- `Docs/Design/00-Game.md` (quand il existe) — ce que le jeu est, et chaque
-  action du joueur, qui devient un type d'ordre du moteur ;
+- `Docs/Design/00-Game.md` — ce que le jeu est, et chaque action du joueur, qui
+  devient un type d'ordre du moteur ; liste en tête les documents thématiques ;
 - `Docs/Design/01-Architecture.md` — réseau, lobby, moteur : ce qui existe,
   pourquoi, et ce qu'une modification bien intentionnée casserait sans bruit ;
 - `Docs/Design/03-Client.md` — le client : mode solo, messages avec le Worker,
   affichage, interface provisoire ;
 - `Docs/Design/04-Tooltips.md` — feuille de route des infobulles des icônes ;
-- `Docs/Design/05-Fronts.md` — fronts terrestres (version 1) : comment
-  implémenter les règles de 00-Game §3.8, et carnet de conception.
+- `Docs/Design/05-Fronts.md` — fronts terrestres (version 1), document
+  thématique qui fait foi : détection, unités, affectation des troupes,
+  attaques, combat, avancée, prise de ville, encerclement, interface, et notes
+  d'implémentation. Historique des discussions (ne fait pas foi) :
+  `05-Fronts-History.md`.
 
 ---
 
