@@ -14,11 +14,14 @@ l'armement et ses réserves (§8.3), la diplomatie (§1 : statut de chaque paire
 joueurs, propositions), et leurs ordres : `found_city`,
 `set_farm_share`, `build_factory`, `create_line`, `set_active_lines`,
 `set_city_priority`, `set_line_priority`, `declare_war`, `propose_pact`,
-`break_pact`, `propose_peace`, `answer_proposal`. Pas implémenté : coût de création d'une usine ou d'une ligne, nombre maximal de
-lignes, armées (donc consommation de l'armement, et aucun combat que le statut
-de guerre pourrait autoriser ou interdire), routes maritimes, changement
-de capitale, disparition d'une ville, commerce, effet de la déclaration de
-guerre sur les fronts.
+`break_pact`, `propose_peace`, `answer_proposal`. **Les fronts terrestres (version 1)**
+sont implémentés le 26 octobre 2026 (`05-Fronts.md`, qui fait foi) : détection des fronts, unités et
+affectation des troupes, mobilisation forcée, attaques, combat, avancée, percées, prise de ville et
+encerclement, et leurs ordres : `set_front_priority`, `set_front_reassign`, `set_unit_line_mode`,
+`set_breakthrough_motorized_only`, `set_forced_mobilization`, `start_front_attack`, `stop_front_attack`,
+`start_breakthrough`, `cancel_breakthrough` (§4, « Fronts »). Pas implémenté : coût de création d'une usine ou d'une ligne,
+nombre maximal de lignes, routes maritimes, changement de capitale, commerce, bots qui font la guerre
+(05-Fronts §14, étape 4), fronts aériens et maritimes.
 
 ---
 
@@ -27,7 +30,7 @@ guerre sur les fronts.
 | Fichier (`packages/engine/`) | Contenu |
 | --- | --- |
 | `src/config.ts` | ré-exporte `src/config/` ; les autres fichiers du moteur importent d'ici |
-| `src/config/` | tous les nombres réglables, un fichier par thème, importés à la compilation (règle 2) : `map.ts` (carte de test), `sea-zones.ts`, `cities.ts` (rayons, coût de fondation), `workforce.ts` (population, nourriture, fertilité, agriculture, pêche, extraction), `resources.ts` (présence et capacité), `goods.ts` (biens), `armament.ts`, `factories.ts` (réglages des usines et arbres), `diplomacy.ts` (durée de vie des propositions), `limits.ts` (plafonds liés à la taille des tableaux, pas des réglages) |
+| `src/config/` | tous les nombres réglables, un fichier par thème, importés à la compilation (règle 2) : `map.ts` (carte de test), `sea-zones.ts`, `cities.ts` (rayons, coût de fondation), `workforce.ts` (population, nourriture, fertilité, agriculture, pêche, extraction), `resources.ts` (présence et capacité), `goods.ts` (biens), `armament.ts`, `factories.ts` (réglages des usines et arbres), `diplomacy.ts` (durée de vie des propositions), `fronts.ts` (réglages des fronts, 05-Fronts §12), `units.ts` (unités et niches, 05-Fronts §3), `limits.ts` (plafonds liés à la taille des tableaux, pas des réglages) |
 | `src/bits.ts` | rotation de bits, étapes de MurmurHash3 |
 | `src/rng.ts` | générateur aléatoire xoshiro128** |
 | `src/map.ts` | bits du terrain et des ressources, `GameMap`, parcours des 4 voisins |
@@ -41,8 +44,14 @@ guerre sur les fronts.
 | `src/factories.ts` | usines et lignes (00-Game §8) : indices des produits et des types d'usine (pour le hash), `isUnlocked`, `armamentReserveMax`, et les cinq ordres d'usine (`buildFactory`, `createLine`, `setActiveLines`, `setCityPriority`, `setLinePriority`) |
 | `src/economy.ts` | population, remplissage des lignes, extraction du fer, production, agriculture, pêche, nourriture, armement (00-Game §4, §6, §7, §8) : `stepEconomy` (une étape par tour), `harvest`, `mechanization`, `mechanizationCurve`, `minersFor` |
 | `src/diplomacy.ts` | diplomatie (00-Game §1) : statut d'une paire (`statusOf`), propositions, les cinq ordres (`declareWar`, `breakPact`, `propose`, `answerProposal`), `expireProposals`, type des événements |
-| `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie |
-| `src/turn.ts` | `applyTurn(state, { turn, intents })` |
+| `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
+| `src/units.ts` | unités militaires en entiers : `UNIT_DATA` (multiplicateurs convertis à l'échelle 100), `fillWidth` (remplissage d'une largeur, niche par niche, plafond de l'infanterie), `lineRoom`, `splitLines`, `damageOf`, `lossesFrom` (pertes d'un groupe), `motorization` |
+| `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection`, `Transfer`, `Breakthrough` ; `updateFronts` (détection, identité, répartition des troupes), `startWar`, `endWar`, ordres de réglage, `deployedEquipment`, `activeFrontCities` |
+| `src/troops.ts` | affectation des troupes : `assignTroops` (recrutement et répartition par paliers), `releaseSurplus` (réassignation), `trimSide` (recalage d'un camp), `applyTransfers`, `loseUnits`, `recruitBeforeEconomy`, `recruitAfterEconomy` |
+| `src/attacks.ts` | ordres d'attaque : `startFrontAttack`, `stopFrontAttack`, `startBreakthrough`, `cancelBreakthrough` |
+| `src/combat.ts` | `combatRound` : un round par front actif (dégâts, pertes, avancée de l'assaut, percées), puis les prises de villes ; `frontAdvance`, `reactionFactor100`, `forceSpeed` |
+| `src/conquest.ts` | `captureCity` : encerclement, changement de propriétaire de la ville et de sa zone, recalcul des fronts |
+| `src/turn.ts` | `applyTurn(state, { turn, intents })` : l'ordre d'un tour est au §4 |
 | `src/hash.ts` | `hashMap`, `hashState` |
 | `test/*.test.ts` | tests (`npm test`) |
 | `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage, récolte en rationnels exacts avec BigInt) et cartes fabriquées à la main, pour les tests de villes et d'économie |
@@ -50,7 +59,10 @@ guerre sur les fronts.
 | `test/factories.test.ts` | tests des usines : remplissage tout ou rien dans l'ordre de priorité, capacité de fer, machines du tour précédent, déblocage, réserve d'armement, ordres, hash |
 | `test/specialization.test.ts` | ouvriers d'une ligne selon son rang (`workersForRank`, `workersForLines`), remplissage avec ces coûts, jauge de croissance automatique proportionnelle au nombre de lignes |
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population), de temps en temps `set_farm_share`, et des ordres d'usine tirés au hasard (dont beaucoup sont invalides) |
+| `test/fronts.test.ts`, `test/troops.test.ts`, `test/combat.test.ts` | tests des fronts (05-Fronts §13.7) : détection, positions, guerre et paix, ordres, hash ; affectation des troupes ; pertes, avancée, percées, prise de ville et encerclement |
+| `test/war-helpers.ts` | petite carte de terre, duel de deux villes, `turn`, `play`, `arm` (recrute tout de suite), `stock` (réserve seule) |
 | `test/bench.ts` | mesure (`npm run bench`) |
+| `test/fronts-viz.ts` | visualisation des fronts d'une partie scriptée : routes, connexions colorées par front, points du front, chaînes de 05-Fronts §11.4 (calcul de `client/src/frontgeom.ts`), tableau par joueur (`npm run viz:fronts`) → `out/fronts.html`, ignoré par git |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
 | `test/resources-viz.ts` | visualisation du fer et de l'aluminium ensemble (conflit compris), avec des curseurs pour les réglages (`npm run viz:resources`) → `out/resources.html`, ignoré par git |
 | `test/iron-viz.ts` | visualisation de la présence du fer, avec des curseurs pour les réglages (`npm run viz:iron`) → `out/iron.html`, ignoré par git |
@@ -185,8 +197,11 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
 
 - `applyTurn(state, { turn, intents })` vide `state.events`, applique les ordres
   dans l'ordre du tableau, supprime les propositions de diplomatie arrivées à
-  terme (`expireProposals`), puis fait l'étape de population et de nourriture de chaque joueur
-  (« Étape de nourriture », plus bas), passe `state.tick` à `turn`, et renvoie la liste des cases dont le
+  terme (`expireProposals`), puis, dans cet ordre (05-Fronts §13.2) : le recrutement de la mobilisation forcée
+  (`recruitBeforeEconomy`), l'étape de population et de nourriture de chaque joueur
+  (« Étape de nourriture », plus bas), le recrutement parmi les inactifs (`recruitAfterEconomy`), les mouvements
+  d'unités arrivés (`applyTransfers`) et, si le numéro du tour est un multiple de `FRONTS.combatTurns`, le round de combat
+  (`combatRound`, prises de villes comprises). Il passe ensuite `state.tick` à `turn`, et renvoie la liste des cases dont le
   propriétaire a été écrit, chacune une fois, dans l'ordre de leur première
   modification (pas par adresse croissante). C'est cette liste que l'affichage
   relira. Elle ne contient pas une case qui passe d'une ville à une autre du
@@ -290,8 +305,47 @@ d'`applyTurn` : c'est ce que l'affichage lit. Elle n'est **pas dans le hash**, e
 aucune règle ne doit la lire (§6). Le client solo s'en sert aussi pour savoir
 quels ordres humains ont été appliqués (`solo.ts`, `wasApplied`).
 
-Rien dans le moteur ne lit le statut : aucune attaque n'existe (00-Game §1,
-§13).
+Le statut est lu par les fronts (05-Fronts §2.3) : un front est actif entre deux joueurs en guerre, et seuls
+les fronts actifs ont des positions, des attaques et des combats.
+
+### Fronts (05-Fronts, 26 octobre 2026)
+
+Dans `GameState` : `fronts : Front[]` (par identifiant croissant), `nextFrontId`, `nextBreakthroughId`. Par joueur :
+`forcedMobilization` et `soldiers` (population des unités sur les fronts et en route : elle reste dans `population`
+mais ne travaille pas ; l'étape d'économie se fait sur `population − soldiers`). Une `City.player` change à la prise de la ville.
+
+- **Détection** (`updateFronts`, appelée à la fin de `foundCity` et par `captureCity`, jamais à chaque tour) : une
+  connexion est une route dont les deux villes sont à deux joueurs ; un front est l'ensemble des connexions d'un couple de
+  groupes. Les positions se retrouvent par la clé `(p1, p2, city1, city2)` ; le front garde l'identifiant et les réglages de
+  l'ancien front qui partage le plus de connexions avec lui (à égalité, le plus petit identifiant ; un identifiant n'est
+  repris qu'une fois). Les unités, mouvements et percées des anciens fronts sont répartis entre les nouveaux au prorata des
+  connexions gardées ; un front sans connexion gardée rend ses unités à la réserve sans délai ; un front dont la taille ou la
+  composition a changé est recalé (`trimSide`).
+- **Troupes** : un `FrontSide` garde `firstLine` et `secondLine` (nombre d'unités par type, dans l'ordre de `UNITS`), les
+  mouvements `transfers` (`toFront`, ligne visée, tour d'arrivée), les réglages (`priorityIndex`, `reassign`, `lineMode`,
+  `motorizedOnly`) et les attaques (`frontAttack`, `breakthroughs`). `assignTroops` forme les unités avec l'équipement de
+  `armamentReserve` et les personnes d'un budget (les inactifs après l'économie ; toute la population qui peut travailler
+  pour la mobilisation forcée, premier palier de la première ligne seulement), puis les répartit : première ligne par paliers
+  de priorité, seconde ligne par cibles `pourcentage × largeur`. Les unités en route comptent comme présentes.
+- **Combat** (`combatRound`) : pour chaque front actif, les percées dont le délai est écoulé commencent, les dégâts de chaque
+  combat sont calculés sur les effectifs du début du round (`damageOf`), appliqués ensemble (`lossesFrom`, `loseUnits`),
+  puis les percées avancent de phase, s'essoufflent ou prennent la ville, et l'assaut fait avancer toutes les routes. Les
+  prises de villes (`captureCity`) viennent après tous les fronts.
+- **Guerre et paix** : `declare_war` met toutes les connexions des fronts entre les deux joueurs à 500 (`startWar`) ; une paix
+  acceptée met les positions à 0 et supprime attaques et percées (`endWar`). `intents.ts` appelle ces deux fonctions parce
+  que `fronts.ts` lit `diplomacy.ts` (`statusOf`) : l'inverse ferait un cycle d'imports.
+- **Événement** : `city_captured` (`from` a pris `city` à `to`) dans `state.events`, pour l'affichage.
+
+| Ordre | Champs | Valide si | Effet |
+| --- | --- | --- | --- |
+| `set_front_priority` | `front`, `priority` (indice dans `FRONTS.priorityPercent`) | le joueur est un camp du front | `priorityIndex` |
+| `set_front_reassign` | `front`, `enabled` | idem | `reassign` |
+| `set_unit_line_mode` | `front`, `unit` (clé de `UNITS`), `mode` (`first`, `balanced`, `second`) | idem | `lineMode` du type ; le camp est recalé sans délai |
+| `set_breakthrough_motorized_only` | `front`, `enabled` | idem | `motorizedOnly` |
+| `set_forced_mobilization` | `enabled` | toujours | `forcedMobilization` du joueur |
+| `start_front_attack`, `stop_front_attack` | `front` | front actif ; le joueur en est un camp ; l'attaque n'est pas déjà dans cet état | `frontAttack` |
+| `start_breakthrough` | `front`, `city1`, `city2` | front actif ; la connexion est dans ce front ; pas déjà une percée de ce camp sur cet axe | ajoute une `Breakthrough` en phase 0 |
+| `cancel_breakthrough` | `id` | la percée est au joueur | la supprime ; ses unités restent en seconde ligne |
 
 ### `found_city`
 
@@ -307,7 +361,8 @@ par `intents.ts` (`tile` entier, 0 ≤ `tile` < nombre de cases), le reste par
 3. si le joueur a déjà une capitale : `population ≥ foundingCost(n)`, `n`
    étant le nombre de ses villes (`cityIds.length`), et une de ses villes est à une distance
    ≤ `CITY.expansionRadius` de `tile` (`dx² + dy² ≤ R²`). Les villes des autres
-   joueurs ne comptent pas ;
+   joueurs ne comptent pas, ni celles qui ont une connexion dans un front actif (05-Fronts §8,
+   `activeFrontCities`) ;
 4. sinon (première ville) : aucune autre condition. Elle est gratuite.
 
 Effets, dans cet ordre, une fois toutes les conditions vérifiées (un ordre
@@ -320,7 +375,7 @@ refusé ne modifie rien) :
    100)`, en entiers (00-Game §3.3) ;
 2. la ville est ajoutée (`cities`, `cityIds` du joueur ; capitale du joueur si
    c'est sa première) ;
-3. zones, 4. routes, 5. ports, 6. groupes (voir ci-dessous).
+3. zones, 4. routes, 5. ports, 6. groupes (voir ci-dessous), 7. fronts (`updateFronts`).
 
 ### `set_farm_share`
 
@@ -349,7 +404,8 @@ par le serveur, `city` entier, ville du joueur. Les chaînes (`factoryType`,
 `stepEconomy(state)` (`economy.ts`), appelée par `applyTurn` après tous les ordres du
 tour, pour chaque joueur dans l'ordre des identifiants, y compris un joueur sans
 ville. Elle utilise la population de ce moment : le coût d'une fondation de ce tour
-est déjà retiré. Unités : population en personnes, surfaces en cases, mécanisation
+est déjà retiré, et les soldats (`Player.soldiers`) ne travaillent pas : le remplissage des lignes, les fermiers et
+les pêcheurs se répartissent sur `max(0, population − soldiers)`, la croissance sur `population` entière. Unités : population en personnes, surfaces en cases, mécanisation
 `M` en millièmes de case par travailleur, `m_max` en machines pour 1 000
 travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 
@@ -413,10 +469,11 @@ nourriture = max(blé + poisson, FOOD.minimum)
      des groupes de ce bien : progress = min(unlockTurns, progress + n)
    déclin de l'excès, pour chaque type d'armement :
      stock_cible = lignes de a (toutes les usines, tout état) × productionPerLine × maxStockTurns
-     excès = max(0, réserve − stock_cible)
+     excès = max(0, réserve + équipement déployé − stock_cible)     (05-Fronts §4.6 : l'équipement des fronts, en route compris, compte)
      si excès == 0 : reste = 0
      sinon : total = reste + excès × decayRate ; perdu = floor(total / S)
-             reste = total − perdu × S ; réserve −= perdu
+             si perdu > réserve : réserve = 0, reste = 0   (seul l'équipement non déployé décline)
+             sinon : reste = total − perdu × S ; réserve −= perdu
 
 surplus  = nourriture − population × POPULATION.foodPerHead      (négatif possible)
 reste    = reste + surplus × POPULATION.growthPerMillion
@@ -540,7 +597,7 @@ sa capitale : `cities[capital - 1].group`.
    `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`,
    `farmMechanization`, `fished`, `fishMechanization`,
    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
-   `mineMechanization`, `ironExtracted`, puis `goods` (nombre, valeurs), puis pour chaque type
+   `mineMechanization`, `ironExtracted`, `forcedMobilization`, `soldiers`, puis `goods` (nombre, valeurs), puis pour chaque type
    d'armement : réserve, reste, puis le nombre d'usines et pour
    chacune, dans l'ordre de priorité : ville, indice du type d'usine, `progress`
    (nombre, valeurs), nombre de groupes et pour chacun, dans son ordre : indice du
@@ -548,11 +605,15 @@ sa capitale : `cities[capital - 1].group`.
 5. le nombre de villes, puis pour chacune : identifiant, joueur, case, port
    (0 ou 1), groupe ;
 6. le nombre de routes, puis pour chacune : a, b ;
-7. `diplomacy` (les `n × n` octets, par mots de 4 octets), puis le nombre de
+7. les fronts : `nextFrontId`, `nextBreakthroughId`, le nombre de fronts, puis pour chacun (par identifiant) : id, joueurs, groupes,
+   connexions (villes, position), et pour chaque camp : première et seconde ligne, mouvements (type, nombre, sens, ligne, arrivée),
+   priorité, réassignation, interrupteurs, « motorisé seulement », attaque, percées (id, axe, tour, phase, unités engagées de
+   l'attaquant, tranche engagée, force de contre-attaque, PV de départ) ;
+8. `diplomacy` (les `n × n` octets, par mots de 4 octets), puis le nombre de
    propositions et pour chacune, dans l'ordre de création : `from`, `to`, le genre
    (0 pacte, 1 paix), `createdTick`. `events` n'y est pas (§6) ;
-8. `owner`, deux cases par mot ;
-9. `tileCity`, deux cases par mot.
+9. `owner`, deux cases par mot ;
+10. `tileCity`, deux cases par mot.
 
 `test/engine.test.ts` change chaque champ des villes et de l'économie l'un après
 l'autre et vérifie que le hash change ; `test/factories.test.ts` fait de même
@@ -666,6 +727,21 @@ ils sont donc dans le hash (§6).
 - **Écrire `filled` ailleurs que dans `fillLines`** : c'est le résultat du dernier
   remplissage, remis à 0 au début de chaque étape. Le compteur de déblocage et la
   production le lisent juste après.
+- **Ajouter un champ aux fronts sans l'ajouter à `hashFront`** (hash.ts) : même piège que pour l'état des joueurs ;
+  `test/fronts.test.ts` change chaque champ l'un après l'autre.
+- **Faire importer `fronts.ts` par `diplomacy.ts`** : `fronts.ts` lit le statut (`statusOf`) ; c'est `intents.ts` qui
+  appelle `startWar` et `endWar`, pour éviter un cycle d'imports.
+- **Parcourir `state.fronts` pendant une prise** : `captureCity` appelle `updateFronts`, qui remplace le tableau. `combatRound`
+  finit tous les combats avant la première prise, et revérifie chaque arrivée sur l'état d'alors.
+- **Lire les résultats d'un joueur le tour d'une prise** : une ville prise change `farmTiles` et les autres totaux après
+  l'étape d'économie du tour ; `cultivated` et les autres résultats ne sont remis d'aplomb qu'au tour suivant.
+- **Supposer que la capitale est la plus ancienne ville** : une ville prise est insérée dans `cityIds` de l'attaquant à sa
+  place (par identifiant) ; la capitale du défenseur devient sa ville de plus petit identifiant.
+- **Compter les soldats un par un** : `Player.soldiers` est tenu à jour à chaque formation, arrivée, perte et dissolution ;
+  `countSoldiers` le recalcule, et les tests des fronts les comparent.
+- **Former des unités avec une réserve qui décline** : la réserve non utilisée décline de 1 % de l'excès par tour, et
+  l'équipement déployé compte dans l'excès : un test qui attend un nombre exact d'unités les forme tout de suite
+  (`arm` de `test/war-helpers.ts`) plutôt que de jouer des tours.
 - Ordres de grandeur de l'économie, tous très en dessous de 2⁵³ (≈ 9 × 10¹⁵) :
   `machines × 1000 × S` (10⁷ par machine), `fertilité_totale × surface` (≤ 4 × 10⁶ ×
   4 × 10⁵ sur la carte de test), `surplus × growthPerMillion` (5 × 10¹² pour une
@@ -862,6 +938,11 @@ points 31 et 32 sont des choix de plus.
     - les bots du client n'envoient aucun ordre de diplomatie et ne répondent pas
       (IA reportée, 00-Game §1.1).
 
+34. **Fronts** (26 octobre 2026) : les choix provisoires de 05-Fronts §15, dont ceux faits à l'implémentation (objectif d'un palier
+    en partie entière, population servie dans l'ordre des niches, réassignation par simulation, recalage d'un camp, délai d'une unité
+    formée, groupe touché sans infanterie, forces d'une percée choisies après le délai, prises simultanées) sont les seuls choix de
+    ce moteur pour les fronts ; aucune valeur de `config/fronts.ts` n'est de moi (valeurs de l'auteur, §12 de 05-Fronts).
+
 **Réglé le 24 octobre 2026.** La première version suspendait une ligne
 d'armement quand sa réserve atteignait son maximum ; sans armée, la ligne ne
 reprenait jamais et bloquait le déblocage. L'auteur a corrigé la règle
@@ -869,6 +950,12 @@ reprenait jamais et bloquait le déblocage. L'auteur a corrigé la règle
 stock cible décline. Il n'y a plus de statut suspendu.
 
 ## 8. Mesures
+
+**Avec les fronts (26 octobre 2026)**, même scénario (guerres, attaques et soldats à partir du tour 1 500), `npm run bench` : tour
+moyen 62 µs sur 10 000 tours (65 villes) ; étape de nourriture seule 26 µs pour 8 joueurs ; hash 0,7 ms ; 100 joueurs, 3 000 tours :
+tour moyen 495 µs, étape seule 249 µs (avant les fronts : 102 et 110 µs ; les fronts parcourent une fois par tour les fronts de
+chaque joueur, `frontsByPlayer`). Les mesures qui suivent
+datent d'avant les fronts.
 
 `npm run bench`, sur le PC de l'auteur (Node 24.19), 23 octobre 2026. **Les
 usines (24 octobre 2026) changent les chiffres de tour et d'étape** : le scénario
@@ -922,41 +1009,26 @@ d'avant les usines :
   plus du rayon de contrôle l'une de l'autre, et la terre fait 154 000 cases),
   d'où la carte de 1 600 × 1 000.
 
-## 9. Tests à reprendre
+## 9. Tests
 
-**Décidé le 24 octobre 2026.** Les règles changent encore beaucoup : les tests
-sont mis de côté jusqu'à ce qu'elles se stabilisent. Ce qui doit rester clair
-entre-temps, ce sont les exigences (00-Game, §8 de ce document), sur lesquelles
-les tests seront écrits ensuite. Cette section liste l'état des tests, pour la
-passe finale.
+**Passe finale du 26 octobre 2026** (demandée par l'auteur à la fin des fronts). Tous les tests passent (`npm test`). Ce qui a été
+repris : `factories.test.ts` (une usine naît avec une ligne ; un bien n'est rempli que sous la demande du tour précédent, le
+premier tour la fixe ; plus de suspension de l'armement) ; `specialization.test.ts` (une mer assez grande pour que la demande de
+bateaux dépasse la capacité des lignes : deux villes sur une bande de terre) ; `economy.test.ts` (`harvest` renvoie aussi la
+mécanisation ; invariants des résultats un tour de prise exceptés) ; `engine.test.ts` (l'aluminium remplace le fer sur une case) ;
+`helpers.ts` (la capitale est une ville du joueur, pas forcément la plus ancienne : une ville prise change de main) ;
+`client/test/solo.test.ts` (niveau 2 d'une usine qui a une ligne de plus).
 
-**Échouent aujourd'hui, avant les changements de spécialisation :**
+**Nouveaux** : `fronts.test.ts`, `troops.test.ts`, `combat.test.ts` (liste en §1), `determinism.test.ts` (le scénario joue des
+guerres à partir du tour 1 500, `warsFromTurn` : soldats, attaques, villes prises, mêmes hashes dans deux processus) et, côté
+client, `client/test/fronts.test.ts`.
 
-- `test/factories.test.ts` : 7 tests supposent qu'une usine naît sans ligne
-  (elle naît avec une ligne active de son bien racine) et utilisent
-  `armamentSuspended` et `ARMAMENT.resumePercent`, supprimés avec la règle du
-  24 octobre (§7). Le fichier n'a plus de typecheck valide.
-- `test/economy.test.ts` : le test qui compare `harvest` à `bruteHarvest`
-  (BigInt) échoue, avec ou sans les changements de spécialisation. Cause non
-  cherchée.
-- `client/test/solo.test.ts`, « usine du joueur » : attend le niveau 1 de
-  l'usine, le moteur donne 2 (même cause que `factories.test.ts`).
+**Aucun test ne couvre encore** : la diplomatie hors guerre et paix (propositions, expiration, événements, hash), la répartition des troupes de plusieurs fronts qui fusionnent (seulement la coupure), la
+réassignation autrement que par la conservation des unités et le transfert vers le front prioritaire, les unités motorisées
+(aucune n'existe : seuls `reactionFactor100` et `motorization` sont testés, sur des nombres), le barrage d'artillerie (hors
+périmètre).
 
-**Écrits trop tôt, à relire :**
-
-- `test/specialization.test.ts` (7 tests) : coût par rang, remplissage tout ou
-  rien avec ces coûts, jauge de croissance automatique. Ils fixent `decayPercent`
-  5, `floorPercent` 10 et `growthTurns` 500 par leurs valeurs actuelles
-  (125 tours pour 4 lignes, plancher 20). Ils dépendent aussi de la demande de
-  bateaux de pêche sur leur carte (270), qui change avec les réglages
-  d'économie.
-- `client/test/solo.test.ts`, « ouvriers d'un groupe de lignes » : compare le
-  panneau à `workersForLines` ; il force la population à 100 000.
-
-**Aucun test ne couvre la diplomatie pour l'instant** (statuts, propositions,
-expiration, événements, hash) : à écrire à la passe finale.
-
-**Exigences que ces tests devront couvrir** (déjà écrites dans 00-Game) :
+**Exigences que les tests couvrent** (écrites dans 00-Game et 05-Fronts) :
 rang calculé par groupe (un bien dans une usine) ; coût du rang 1 = `workersPerLine`,
 rang 2 = −`decayPercent` %, jamais sous le plancher ni nul ; remplissage dans
 l'ordre, tout ou rien ; jauge de croissance +lignes remplies par tour, reste

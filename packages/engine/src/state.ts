@@ -5,6 +5,7 @@
 import { isUint32 } from "./bits.ts";
 import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
 import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
+import type { Front } from "./fronts.ts";
 import { hashMap } from "./hash.ts";
 import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
@@ -106,12 +107,21 @@ export interface Player {
   mineMechanization: number;
   /** Fer extrait au dernier tour : celui des lignes remplies. */
   ironExtracted: number;
+  /** Mobilisation forcée (05-Fronts §4.1) : les soldats passent avant les lignes de production. Éteinte au départ. */
+  forcedMobilization: boolean;
+  /**
+   * Soldats : population des unités sur les fronts et en route (05-Fronts §4.1). Ils sont
+   * comptés dans `population` (ils mangent) mais ne travaillent pas : la répartition du
+   * §4 de 00-Game se fait sur `population − soldiers`.
+   */
+  soldiers: number;
 }
 
 export interface City {
   /** 1, 2, 3… dans l'ordre de fondation ; la ville est `state.cities[id - 1]`. Plus petit = plus ancienne. */
   readonly id: number;
-  readonly player: number;
+  /** Propriétaire. Change à la prise de la ville par un front (05-Fronts §10), nulle part ailleurs. */
+  player: number;
   /** Case où la ville est fondée. */
   readonly tile: number;
   /** Port : la zone de la ville contient au moins une case non terrestre (00-Game §3.6). */
@@ -136,6 +146,15 @@ export interface GameState {
   readonly roads: [number, number][];
   /** Toutes les routes candidates et leur grille (roads.ts). Déduit des villes : hors du hash, comme `changedMark`. */
   readonly roadNetwork: RoadNetwork;
+  /**
+   * Fronts terrestres (05-Fronts §2), par identifiant croissant. Recalculés quand les
+   * routes ou le propriétaire d'une ville changent (`updateFronts`), jamais à chaque tour.
+   */
+  fronts: Front[];
+  /** Prochain identifiant de front (1, 2, 3…). */
+  nextFrontId: number;
+  /** Prochain identifiant de percée. */
+  nextBreakthroughId: number;
   readonly rng: Rng;
   /**
    * Statut diplomatique de chaque paire de joueurs (diplomacy.ts) : `players.length`²
@@ -210,6 +229,8 @@ export function createGame(setup: GameSetup): GameState {
       minedTiles: 0,
       mineMechanization: 0,
       ironExtracted: 0,
+      forcedMobilization: false,
+      soldiers: 0,
     });
   }
   return {
@@ -221,6 +242,9 @@ export function createGame(setup: GameSetup): GameState {
     tileCity: new Uint16Array(size),
     roads: [],
     roadNetwork: createRoadNetwork(map.width, map.height, CITY.expansionRadius),
+    fronts: [],
+    nextFrontId: 1,
+    nextBreakthroughId: 1,
     rng: createRng(setup.seed),
     diplomacy: new Uint8Array(playerCount * playerCount),
     proposals: [],

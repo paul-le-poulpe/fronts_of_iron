@@ -91,6 +91,10 @@ Depuis la racine du dépôt, après `npm install` :
 - `cd packages/engine && npm run viz:cities` — partie scriptée pas à pas :
   villes, zones, routes, ports, groupes, écrite dans
   `packages/engine/out/cities.html`.
+- `cd packages/engine && npm run viz:fronts` — partie scriptée avec guerres :
+  routes, connexions colorées par front, points du front, chaînes, fronts de
+  chaque joueur, écrite dans `packages/engine/out/fronts.html`. Réglages en
+  argument : `npm run viz:fronts -- --seed=7 --turns=5000 --every=250`.
 - `cd worker && npx wrangler dev` — Worker et lobby en local sur
   `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
   (copier `worker/.dev.vars.example` ; fichier ignoré par git).

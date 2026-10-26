@@ -8,6 +8,7 @@ export {
   FERTILITY,
   FISHING,
   FOOD,
+  FRONTS,
   GOODS,
   MAX_CITIES,
   MAX_PLAYERS,
@@ -52,6 +53,57 @@ export {
 } from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
 export { foundCity, foundingCost } from "./cities.ts";
+export { NICHES, UNITS, type NicheId, type UnitConfig, type UnitId } from "./config.ts";
+export {
+  MIDDLE,
+  ROUTE,
+  activeFrontCities,
+  countSoldiers,
+  deployedEquipment,
+  deployedUnits,
+  frontById,
+  frontWidth,
+  isActive,
+  priorityPercent,
+  sideIndex,
+  updateFronts,
+  type Breakthrough,
+  type Front,
+  type FrontConnection,
+  type FrontSide,
+  type Transfer,
+} from "./fronts.ts";
+export { applyTransfers, assignTroops, loseUnits, splitProportional, trimSide } from "./troops.ts";
+export { combatRound, endOf, forceSpeed, frontAdvance, reactionFactor100 } from "./combat.ts";
+export { captureCity } from "./conquest.ts";
+export {
+  FILL_ORDER,
+  KIND_ARMOR,
+  KIND_EQUIPMENT,
+  KIND_INFANTRY,
+  LINE_BALANCED,
+  LINE_FIRST,
+  LINE_SECOND,
+  NICHE_IDS,
+  NICHE_UNITS,
+  UNIT_COUNT,
+  UNIT_DATA,
+  UNIT_IDS,
+  damageOf,
+  fillWidth,
+  hitPointsOf,
+  infantryCount,
+  isUnitId,
+  lineRoom,
+  lossesFrom,
+  metersOf,
+  motorization,
+  roundDiv,
+  splitLines,
+  toScale100,
+  unitIndex,
+  type UnitData,
+} from "./units.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
 export {
   createGame,
@@ -120,15 +172,23 @@ export {
   type AnswerProposalIntent,
   type BreakPactIntent,
   type BuildFactoryIntent,
+  type CancelBreakthroughIntent,
   type CreateLineIntent,
   type DeclareWarIntent,
   type FoundCityIntent,
+  type FrontAttackIntent,
   type Intent,
   type ProposePactIntent,
   type ProposePeaceIntent,
   type SetActiveLinesIntent,
+  type SetBreakthroughMotorizedOnlyIntent,
   type SetCityPriorityIntent,
   type SetFarmShareIntent,
+  type SetForcedMobilizationIntent,
+  type SetFrontPriorityIntent,
+  type SetFrontReassignIntent,
+  type SetUnitLineModeIntent,
+  type StartBreakthroughIntent,
   type SetLinePriorityIntent,
 } from "./intents.ts";
 export { applyTurn, type Turn } from "./turn.ts";

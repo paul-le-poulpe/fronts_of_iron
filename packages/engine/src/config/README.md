@@ -5,7 +5,7 @@ lit pendant la partie. Ce sont des modules TypeScript : ils sont compilés avec
 le moteur et embarqués dans le même bundle (règle 2 du `CLAUDE.md`). Ils ne sont
 jamais lus ou téléchargés au lancement.
 
-`../config.ts` ré-exporte les dix fichiers. Le reste du code importe depuis
+`../config.ts` ré-exporte les douze fichiers. Le reste du code importe depuis
 `config.ts`, jamais depuis un fichier du dossier.
 
 Tous les joueurs d'une partie doivent faire tourner le même build. Si deux
@@ -31,6 +31,8 @@ typecheck`, puis `npm test` (certains tests comparent des résultats chiffrés).
 | `goods.ts` | production, ouvriers et fer par ligne, pour chaque machine | `factories.ts` (`productConfig`), `economy.ts` |
 | `armament.ts` | idem pour chaque type d'armement ; stock cible et déclin | `factories.ts`, `economy.ts` |
 | `factories.ts` | délais de déblocage et de croissance, spécialisation, arbres de production | `economy.ts`, `factories.ts`, `state.ts` |
+| `fronts.ts` | réglages des fronts : largeur d'une connexion, priorités, délais de transfert et de combat, avancée, percée, prise de ville, encerclement (valeurs de l'auteur, 05-Fronts §12) | `fronts.ts`, `troops.ts`, `combat.ts`, `conquest.ts`, `client/src/solo.ts` |
+| `units.ts` | unités militaires (attaques, largeurs, PV, multiplicateurs décimaux à deux décimales au plus, valeurs de l'auteur) et niches des fronts ; convertis une fois en entiers par `src/units.ts` | `units.ts`, `troops.ts`, `combat.ts`, `client/src/solo.ts` |
 | `diplomacy.ts` | durée de vie d'une proposition de pacte ou de paix (`DIPLOMACY.proposalTurns`, en tours) ; **valeur provisoire, à fixer par l'auteur** | `diplomacy.ts`, `client/src/solo.ts` (fin de la barre de temps restant) |
 | `limits.ts` | plafonds liés à la taille des tableaux | `cities.ts`, `state.ts` |
 
@@ -126,6 +128,13 @@ hash, validation des ordres (`isProductId`), catalogue de la page.
    affichée sur la carte en est tirée.
 
 `FACTORY.maxTypesPerCity` limite le nombre de types différents par ville.
+
+### Une unité militaire
+
+`units.ts` : ajouter une entrée à `UNITS` (à la fin, l'ordre des clés est celui des effectifs de chaque camp d'un front et du
+hash) avec un équipement existant de `ARMAMENT.types`, puis la ranger dans une seule niche de `NICHES` ; les multiplicateurs
+s'écrivent avec deux décimales au plus (un test le vérifie). `client/src/names.ts` : son nom (`UNIT_NAMES`) et celui de la
+niche (`NICHE_NAMES`). Le moteur n'a rien d'autre à changer.
 
 ### Un bien (machine)
 

@@ -21,6 +21,7 @@ import {
   type ProductId,
 } from "./config.ts";
 import { ARMAMENT_IDS, armamentIndex, armamentReserveMax, goodIndex, productConfig } from "./factories.ts";
+import { deployedEquipment, frontsByPlayer } from "./fronts.ts";
 import type { GameState, Player } from "./state.ts";
 
 /** Échelle de la courbe de mécanisation (00-Game §6.3) : x = 1 s'écrit S. */
@@ -189,8 +190,9 @@ interface LineFill {
  * 00-Game §8.2) : ses ouvriers vont ailleurs, et le remplissage continue avec les
  * groupes suivants. Écrit `filled` dans les groupes.
  * Les ouvriers d'une ligne dépendent de son rang dans le groupe (`workersForRank`).
+ * `people` : la population qui peut travailler, soldats déduits (05-Fronts §4.1).
  */
-function fillLines(p: Player, machines: number): LineFill {
+function fillLines(p: Player, machines: number, people: number): LineFill {
   let workers = 0;
   let miners = 0;
   let iron = 0;
@@ -207,7 +209,7 @@ function fillLines(p: Player, machines: number): LineFill {
         if (demand > capacity) break scan;
         const needed = minersFor(demand, machines);
         const lineWorkers = workersForRank(g.good, j + 1);
-        if (workers + lineWorkers + needed > p.population) break scan;
+        if (workers + lineWorkers + needed > people) break scan;
         workers += lineWorkers;
         miners = needed;
         iron = demand;
@@ -224,8 +226,11 @@ function fillLines(p: Player, machines: number): LineFill {
  * `p.goods` (les machines du tour suivant), l'armement dans les réserves ; puis
  * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
  * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
+ * `deployed` : équipement des unités sur les fronts et en route, par type d'armement ;
+ * il compte dans le stock, mais le déclin ne retire que l'équipement non déployé
+ * (05-Fronts §4.6).
  */
-function produce(p: Player): void {
+function produce(p: Player, deployed: readonly number[]): void {
   p.goods.fill(0);
   for (const f of p.factories) {
     for (const g of f.groups) {
@@ -245,13 +250,19 @@ function produce(p: Player): void {
   }
   growLines(p);
   for (let a = 0; a < ARMAMENT_IDS.length; a++) {
-    const excess = Math.max(0, p.armamentReserve[a]! - armamentReserveMax(p, ARMAMENT_IDS[a]!));
+    const excess = Math.max(0, p.armamentReserve[a]! + deployed[a]! - armamentReserveMax(p, ARMAMENT_IDS[a]!));
     if (excess === 0) {
       p.armamentRemainder[a] = 0;
       continue;
     }
     const total = p.armamentRemainder[a]! + excess * ARMAMENT.decayRate;
     const lost = Math.floor(total / CURVE_SCALE);
+    if (lost > p.armamentReserve[a]!) {
+      // Le déclin ne retire que l'équipement non déployé : le stock non déployé tombe à zéro.
+      p.armamentReserve[a] = 0;
+      p.armamentRemainder[a] = 0;
+      continue;
+    }
     p.armamentRemainder[a] = total - lost * CURVE_SCALE;
     p.armamentReserve[a] = p.armamentReserve[a]! - lost;
   }
@@ -295,12 +306,15 @@ function growLines(p: Player): void {
  * la population du début de l'étape, puis la croissance la change. Les machines
  * utilisées sont celles produites au tour précédent (00-Game §12).
  */
-function stepPlayer(p: Player): void {
+function stepPlayer(p: Player, deployed: readonly number[]): void {
   const tractors = p.goods[TRACTOR]!;
   const fishingBoats = p.goods[FISHING_BOAT]!;
-  const lines = fillLines(p, p.goods[MINING_MACHINE]!);
+  // Les soldats comptent dans la population mais ne travaillent pas (05-Fronts §4.1) : la répartition se
+  // fait sur le reste. Si la population tombe sous le nombre de soldats, les soldats restent et les autres rôles rétrécissent.
+  const people = Math.max(0, p.population - p.soldiers);
+  const lines = fillLines(p, p.goods[MINING_MACHINE]!, people);
   // Ce qui reste après les ouvriers et les mineurs passe à l'étape 2 du §4, fermiers et pêcheurs selon le réglage du joueur.
-  const remaining = p.population - lines.workers - lines.miners;
+  const remaining = people - lines.workers - lines.miners;
   const availableFarmers = Math.floor((remaining * p.farmPercent) / 100);
   const availableFishers = remaining - availableFarmers;
   // Report (00-Game §4, étape 3) : les disponibles en trop d'un côté vont à l'autre,
@@ -341,7 +355,7 @@ function stepPlayer(p: Player): void {
     fullMechanizationWorkers(MINING, ironTilesFor(Math.min(requiredIron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile))),
     MINING.maxMachinesPer1000,
   );
-  produce(p);
+  produce(p, deployed);
 
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
   // fraction d'un tour à l'autre. Les négatifs sont arrondis vers zéro (Math.trunc).
@@ -358,5 +372,6 @@ function stepPlayer(p: Player): void {
 
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
-  for (const p of state.players) stepPlayer(p);
+  const fronts = frontsByPlayer(state);
+  for (const p of state.players) stepPlayer(p, deployedEquipment(state, p.id, fronts[p.id - 1]));
 }

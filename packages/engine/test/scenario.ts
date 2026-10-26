@@ -15,6 +15,7 @@ import {
   hashState,
   nextInt,
   POPULATION,
+  UNIT_IDS,
   PRODUCT_IDS,
   type GameMap,
   type GameState,
@@ -43,6 +44,11 @@ export interface ScenarioOptions {
   foundMinPopulation: number;
   /** Un hash est relevé tous les `checkpointEvery` tours. */
   checkpointEvery: number;
+  /**
+   * Les joueurs simulés n'envoient d'ordres de guerre et de front qu'à partir de ce tour : sans cela, les soldats et les
+   * pertes freinent la croissance de la population et donc les fondations de villes, que d'autres tests mesurent.
+   */
+  warsFromTurn: number;
   /** Carte déjà générée, pour ne pas la refaire à chaque partie. */
   map?: GameMap;
   /** Appelé après chaque tour, avec la liste des cases modifiées. Peut modifier l'état (outil de visualisation). */
@@ -67,6 +73,12 @@ export interface ScenarioResult {
   totalPopulation: number;
   /** Nombre de couples (joueur, tour) où au moins une ligne de production était remplie : les usines sont jouées. */
   filledLinePlayerTurns: number;
+  /** Nombre de couples (joueur, tour) où le joueur a des soldats : les troupes sont jouées. */
+  soldierPlayerTurns: number;
+  /** Nombre de tours où au moins un front a une attaque ou une percée en cours : le combat est joué. */
+  fightingTurns: number;
+  /** Nombre de villes prises. */
+  captures: number;
   /** Temps total passé dans applyTurn, en ms. */
   applyMs: number;
 }
@@ -115,6 +127,45 @@ function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent
   }
 }
 
+/**
+ * Un ordre de guerre ou de front tiré au hasard pour le joueur `player` : déclarer la guerre,
+ * proposer ou accepter la paix, régler un front, lancer ou arrêter une attaque ou une percée. Beaucoup sont
+ * invalides (front inconnu, joueur étranger au front, pas en guerre).
+ */
+function frontOrder(bot: Rng, state: GameState, player: number): Intent {
+  const front = 1 + nextInt(bot, Math.max(1, state.nextFrontId));
+  const other = 1 + nextInt(bot, state.players.length);
+  const connection = state.fronts.find((f) => f.id === front)?.connections[0];
+  switch (nextInt(bot, 14)) {
+    case 0:
+    case 1:
+      return { type: "declare_war", player, target: other };
+    case 2:
+      return { type: "propose_peace", player, target: other };
+    case 3:
+      return { type: "answer_proposal", player, from: other, accept: nextInt(bot, 2) === 0 };
+    case 4:
+      return { type: "set_front_priority", player, front, priority: nextInt(bot, 4) };
+    case 5:
+      return { type: "set_front_reassign", player, front, enabled: nextInt(bot, 2) === 0 };
+    case 6:
+      return { type: "set_unit_line_mode", player, front, unit: UNIT_IDS[nextInt(bot, UNIT_IDS.length)]!, mode: (["first", "balanced", "second"] as const)[nextInt(bot, 3)]! };
+    case 7:
+      return { type: "set_breakthrough_motorized_only", player, front, enabled: nextInt(bot, 2) === 0 };
+    case 8:
+      return { type: "set_forced_mobilization", player, enabled: nextInt(bot, 2) === 0 };
+    case 9:
+    case 10:
+      return { type: "start_front_attack", player, front };
+    case 11:
+      return { type: "stop_front_attack", player, front };
+    case 12:
+      return { type: "start_breakthrough", player, front, city1: connection?.city1 ?? 0, city2: connection?.city2 ?? 0 };
+    default:
+      return { type: "cancel_breakthrough", player, id: 1 + nextInt(bot, Math.max(1, state.nextBreakthroughId)) };
+  }
+}
+
 export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   mapSeed: 12345,
   gameSeed: 777,
@@ -123,10 +174,13 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   ordersPerPlayer: 4,
   foundMinPopulation: 6000,
   checkpointEvery: 100,
+  warsFromTurn: 1500,
 };
 
 /** Un joueur sur `FARM_SHARE_ONE_IN` envoie un `set_farm_share` à chaque tour, en moyenne. */
 const FARM_SHARE_ONE_IN = 150;
+/** Un joueur qui a une ville envoie un ordre de guerre ou de front à un tour sur `FRONT_ORDER_ONE_IN`. */
+const FRONT_ORDER_ONE_IN = 60;
 /** Un joueur qui a une ville envoie un ordre d'usine (construire, créer, régler, priorité) à un tour sur `FACTORY_ORDER_ONE_IN`. */
 const FACTORY_ORDER_ONE_IN = 25;
 
@@ -140,6 +194,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
   let applyMs = 0;
   let starvingPlayerTurns = 0;
   let filledLinePlayerTurns = 0;
+  let soldierPlayerTurns = 0;
+  let fightingTurns = 0;
+  let captures = 0;
   // Un joueur sans ville tire une case de toute la carte ; sinon, une case dans
   // un carré autour d'une de ses villes, un peu plus large que le rayon
   // d'expansion : une partie des ordres tombe hors de portée.
@@ -170,6 +227,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
       if (mine.length > 0 && nextInt(bot, FACTORY_ORDER_ONE_IN) === 0) {
         intents.push(factoryOrder(bot, p, mine));
       }
+      if (mine.length > 0 && turn >= opts.warsFromTurn && nextInt(bot, FRONT_ORDER_ONE_IN) === 0) {
+        intents.push(frontOrder(bot, state, p));
+      }
     }
     intents.push(GARBAGE[turn % GARBAGE.length] as Intent);
 
@@ -181,7 +241,10 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     for (const p of state.players) {
       if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
       if (p.factories.some((f) => f.groups.some((g) => g.filled > 0))) filledLinePlayerTurns++;
+      if (p.soldiers > 0) soldierPlayerTurns++;
     }
+    if (state.fronts.some((f) => f.sides.some((x) => x.frontAttack || x.breakthroughs.length > 0))) fightingTurns++;
+    captures += state.events.filter((e) => e.type === "city_captured").length;
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));
   }
@@ -193,6 +256,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     cities: state.cities.length,
     starvingPlayerTurns,
     filledLinePlayerTurns,
+    soldierPlayerTurns,
+    fightingTurns,
+    captures,
     totalPopulation: state.players.reduce((sum, p) => sum + p.population, 0),
     applyMs,
   };

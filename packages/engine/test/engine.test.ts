@@ -142,14 +142,17 @@ describe("carte de test", () => {
     assert.ok(ratio > 0.2 && ratio < 0.7, `part de terre ${ratio}`);
   });
 
-  it("porte la présence du fer dans le bit 0 de resources, et rien dans les autres bits", () => {
+  it("porte la présence du fer dans le bit 0 de resources et celle de l'aluminium dans le bit 1 ; une case ne porte qu'une ressource", () => {
     assert.equal(RESOURCE_COUNT, Object.keys(RESOURCES).length);
     assert.equal(RESOURCE_IRON, 1);
     const iron = generateResourcePresence(MAP, 12345, RESOURCES.iron.presence);
+    const aluminium = generateResourcePresence(MAP, 12345, RESOURCES.aluminium.presence);
     let count = 0;
     for (let t = 0; t < iron.length; t++) {
-      assert.equal(MAP.resources[t], iron[t] === 1 ? RESOURCE_IRON : 0, `case ${t}`);
-      count += iron[t]!;
+      // L'aluminium, plus rare et plus loin dans la liste, remplace le fer quand les deux sont présents (00-Game §2).
+      const expected = aluminium[t] === 1 ? 2 : iron[t] === 1 ? RESOURCE_IRON : 0;
+      assert.equal(MAP.resources[t], expected, `case ${t}`);
+      count += expected === RESOURCE_IRON ? 1 : 0;
     }
     assert.ok(count > 1000, "le fer doit être présent sur la carte de test");
   });
@@ -164,8 +167,8 @@ describe("carte de test", () => {
       else if ((b & TERRAIN_ALTITUDE) >= TEST_MAP.mountainAltitude) {
         assert.equal(MAP.fertility[t], 0, `montagne ${t}`);
         mountains++;
-      } else if ((MAP.resources[t]! & RESOURCE_IRON) !== 0) {
-        assert.equal(MAP.fertility[t], 0, `fer ${t} (00-Game §2 : une case de fer n'est pas cultivable)`);
+      } else if (MAP.resources[t] !== 0) {
+        assert.equal(MAP.fertility[t], 0, `ressource ${t} (00-Game §2 : une case de fer ou d'aluminium n'est pas cultivable)`);
         ironPlains++;
       } else {
         assert.equal(MAP.fertility[t], FERTILITY.land, `terre ${t}`);

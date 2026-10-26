@@ -15,9 +15,16 @@ qu'un résumé. Règles décidées avec l'auteur les 25 et 26 octobre 2026.
   d'artillerie, bots (§16).
 - C'est la **version 1** des fronts : elle pourra changer.
 
-État : rien n'est implémenté, sauf `packages/engine/src/config/units.ts`
-(unités et niches, pas encore lus par le moteur). Ordre d'implémentation au
-§14.
+**État (26 octobre 2026)** : les étapes 1 à 3 du §14 sont implémentées, moteur
+et client : détection des fronts, affectation des troupes, mobilisation forcée,
+ordres, guerre et paix, fondation en guerre, attaques, rounds de combat,
+percées, prise de ville, encerclement, interface (liste, panneau, zones, double
+ligne rouge, courbe en surimpression, onglet Population, barre jaune de
+l'armement), `npm run viz:fronts`. **Pas fait** : les bots (étape 4), la courbe
+comme nouvelle frontière (couleurs le long de la courbe, §11.1), le barrage
+d'artillerie (bouton sans effet), la percée sur plusieurs axes à la fois. Le
+moteur est décrit dans `02-Engine.md` (fichiers, état, hash, tour), le client
+dans `03-Client.md`. Ordre d'implémentation au §14.
 
 ---
 
@@ -731,10 +738,12 @@ défenseur par type, force de contre-attaque par type, PV de départ.
 
 ### 13.2 Ordre dans un tour (*provisoire*)
 
-Ordres, puis économie (00-Game §4 à §8 : répartition de la population, lignes,
-production), puis recrutement et affectation (§4), puis transferts arrivés,
-puis, si `tick % combatTurns = 0`, le round de combat de chaque front actif
-(§6, §7), puis les prises de villes et l'encerclement (§10).
+Ordres, puis recrutement de la mobilisation forcée (§4.1), puis économie
+(00-Game §4 à §8 : répartition de la population, lignes, production), puis
+recrutement et affectation (§4), puis transferts arrivés, puis, si `tick %
+combatTurns = 0`, le round de combat de chaque front actif (§6, §7), puis les
+prises de villes et l'encerclement (§10). Implémenté tel quel
+(`packages/engine/src/turn.ts`).
 
 ### 13.3 Hash (02-Engine §5)
 
@@ -809,6 +818,8 @@ front, fronts par joueur (île, adversaire, connexions), chaînes du §11.4.
 À chaque étape : mettre à jour 02-Engine, 03-Client, 00-Game §9 (ordres) et
 ce document s'il faut trancher un choix provisoire (CLAUDE.md, règle 8).
 
+Étapes 1 à 3 faites le 26 octobre 2026 (voir « État » en tête).
+
 ## 15. Choix provisoires (non tranchés par l'auteur)
 
 Choisis pour pouvoir implémenter ; à valider avec l'auteur, sans les
@@ -833,6 +844,66 @@ présenter comme décidés :
 - ligne de front arrêtée au dernier point ; surimpression de la courbe avant
   les couleurs le long de la courbe (§11.1, §11.4) ;
 - ordre des étapes dans un tour (§13.2).
+
+Choix faits à l'implémentation (26 octobre 2026), pour les points que ce
+document ne tranchait pas ; à valider avec l'auteur :
+
+- **Objectif d'un palier** (§4.3) : `pourcentage × besoin` en partie entière ;
+  le palier suivant complète jusqu'à 100 %, rien n'est perdu par l'arrondi.
+- **Population entre les types** (§4.1) : les types sont servis dans l'ordre
+  des niches (`NICHES`), toutes les premières lignes d'abord, puis toutes les
+  secondes lignes. L'infanterie, première niche, peut donc épuiser les
+  inactifs avant que les autres types reçoivent des personnes.
+- **Mobilisation forcée** (§4.1) : avant l'économie, un recrutement limité au
+  premier palier de la première ligne (chaque front jusqu'à son pourcentage de
+  priorité) prend sur toute la population qui peut travailler ; après
+  l'économie, le recrutement normal prend le reste parmi les inactifs, comme
+  hors mobilisation.
+- **Réassignation** (§4.4) : on simule la répartition avec, en plus de la
+  réserve, les unités libres des fronts qui l'autorisent (pas celles que des
+  percées engagent) ; ce qu'un front de ce type garde en trop par rapport au
+  résultat repart vers la réserve (délai de transfert), d'où la répartition
+  normale le redonne à un front qui en manque, avec un second délai : un
+  changement de front coûte deux délais.
+- **Recalage d'un camp** : quand un interrupteur change, ou quand un front
+  change de taille ou de composition (§2.5), toutes les unités du camp sont
+  rangées de nouveau entre les deux lignes (interrupteurs, plafond de
+  l'infanterie), sans délai ; l'équipement qui ne trouve pas de place même en
+  seconde ligne repart vers la réserve avec le délai. Il n'y a pas d'autre
+  passage d'une ligne à l'autre : les pertes de la première ligne ne sont pas
+  remplacées par la seconde.
+- **Front sans aucune connexion gardée** (une prise, une coupure de routes) :
+  ses unités et celles en route rendent leurs équipements à la réserve et leur
+  population au pays, sans délai.
+- **Délai d'une unité formée** : `transferTurns` tours après le tour de sa
+  formation ; l'unité formée hors tour par un test arrive un tour plus tard.
+- **Déclin du stock** (§4.6) : l'excès compte la réserve et l'équipement
+  déployé ; la perte est retirée de la réserve seulement, au plus ce qu'elle
+  contient (le reste de la baisse est alors remis à 0).
+- **Groupe touché sans infanterie** (§6.1) : son équipement est perdu en
+  entier dès que le groupe reçoit des dégâts.
+- **Attaque sur tout le front et percées** : elle tue d'abord les unités de la
+  première ligne qu'aucune percée n'engage ; l'avancée d'un round (§7.1) est
+  calculée sur les effectifs après les pertes du round.
+- **Forces d'une percée** (§7.2) : l'attaquant et la tranche du défenseur sont
+  choisis au premier round après le délai (`breakthroughDelayTurns`) ; une
+  percée qui n'a alors aucune force s'arrête ; deux tranches d'un même
+  attaquant ne recouvrent pas les mêmes unités ; la force de contre-attaque est
+  recalculée à chaque round. Première ligne percée sans infanterie dans la
+  tranche : elle l'est dès le premier round. Le facteur de réaction (§7.2,
+  point 6) lit la force de contre-attaque de la percée qui saute ; sans force,
+  X.
+- **Prise par plusieurs routes** (§10) : si plusieurs connexions arrivent au
+  bout dans le même round, les villes tombent une à une, par identifiant de
+  front puis de connexion, chaque prise recalculant les fronts ; une arrivée
+  qui n'est plus au bout après une prise est ignorée.
+- **Fronts envoyés au client** : tous, sans brouillard de guerre ; le panneau
+  d'un front dont le joueur n'est pas un camp n'a aucun réglage actif.
+- **Mode choix d'axe** : Échap le quitte ; le bouton Percée n'est plus visible
+  (le panneau est fermé).
+- **Outil de développement** (hors règles, 03-Client §3) : « + armement » et
+  « Armer les bots » donnent de l'armement et de la population ; ils servent à
+  essayer les fronts sans que les bots produisent.
 
 ## 16. Hors périmètre et pistes
 

@@ -161,8 +161,10 @@ describe("mécanisation et récolte (00-Game §6.2, §6.4, §6.5)", () => {
   });
 
   it("sans surface : rien à cultiver, tous les travailleurs disponibles sont inactifs", () => {
-    assert.deepEqual(harvest(FARMING, 500, 0, 0, 0), { workers: 0, area: 0, yield: 0 });
-    assert.deepEqual(harvest(FISHING, 500, 0, 0, 0), { workers: 0, area: 0, yield: 0 });
+    for (const cfg of [FARMING, FISHING]) {
+      const h = harvest(cfg, 500, 0, 0, 0);
+      assert.deepEqual([h.workers, h.area, h.yield], [0, 0, 0]);
+    }
   });
 
   it("donne les mêmes résultats que le calcul de référence en rationnels exacts (BigInt), sur des milliers de cas", () => {
@@ -542,6 +544,9 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
       ...DEFAULT_SCENARIO,
       turns: 3000,
       onTurn: (state, turn) => {
+        // Une ville prise change les totaux de cases d'un joueur après son étape du tour : ses résultats (cases cultivées,
+        // pêchées) ne sont remis d'aplomb qu'au tour suivant (05-Fronts §13.2).
+        const captured = state.events.some((e) => e.type === "city_captured");
         // Avec FOOD.minimum à 1 500, les joueurs simulés restent sous leur
         // nourriture : on force un surplus négatif (état artificiel) pour que la
         // baisse soit aussi exercée.
@@ -554,9 +559,9 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
         for (const p of state.players) {
           assert.ok(p.population >= 0);
           assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE, `reste ${p.growthRemainder}`);
-          assert.ok(p.cultivated <= p.farmTiles && p.fished <= p.seaTiles);
+          assert.ok(captured || (p.cultivated <= p.farmTiles && p.fished <= p.seaTiles));
           // Les joueurs simulés construisent aussi des usines (bateaux de pêche) : le rendement d'une case d'eau va de tileYield à tileYieldMax.
-          assert.ok(p.wheat <= p.fertilitySum && p.fish <= p.seaTiles * FISHING.tileYieldMax);
+          assert.ok(captured || (p.wheat <= p.fertilitySum && p.fish <= p.seaTiles * FISHING.tileYieldMax));
           assert.ok(p.fish >= FISHING.tileYield * p.fished && p.fish <= FISHING.tileYieldMax * p.fished);
           assert.ok(p.food >= FOOD.minimum && p.food === Math.max(p.wheat + p.fish, FOOD.minimum));
           assert.ok(p.farmers >= 0 && p.fishers >= 0 && p.idle >= 0 && p.factoryWorkers >= 0 && p.miners >= 0);

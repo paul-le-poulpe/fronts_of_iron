@@ -3,6 +3,7 @@
 
 import { CITY, MAX_CITIES, POPULATION } from "./config.ts";
 import { isLand } from "./map.ts";
+import { activeFrontCities, updateFronts } from "./fronts.ts";
 import { addCityToRoads } from "./roads.ts";
 import { setOwner, type City, type GameState } from "./state.ts";
 
@@ -44,6 +45,7 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
     c.port = zoneHasWater(state, c);
   }
   computeGroups(state);
+  updateFronts(state);
   return true;
 }
 
@@ -57,13 +59,19 @@ export function foundingCost(cityCount: number): number {
   return Math.floor((CITY.foundingCostPopulation * (100 + cityCount * CITY.foundingCostIncreasePercent)) / 100);
 }
 
-/** Une des villes `cityIds` est-elle à une distance ≤ rayon d'expansion de `tile` ? */
+/**
+ * Une des villes `cityIds` est-elle à une distance ≤ rayon d'expansion de `tile` ?
+ * Le rayon d'expansion d'une ville qui a une connexion dans un front actif ne
+ * compte pas (05-Fronts §8).
+ */
 function inExpansionRadius(state: GameState, cityIds: readonly number[], tile: number): boolean {
   const w = state.map.width;
   const x = tile % w;
   const y = (tile - x) / w;
   const r2 = CITY.expansionRadius * CITY.expansionRadius;
+  const atWar = activeFrontCities(state);
   for (const id of cityIds) {
+    if (atWar.has(id)) continue;
     const t = state.cities[id - 1]!.tile;
     const dx = (t % w) - x;
     const dy = Math.floor(t / w) - y;
@@ -133,7 +141,7 @@ function zoneHasWater(state: GameState, city: City): boolean {
  * composante : en rattachant toujours la racine la plus grande à la plus petite,
  * la racine d'une composante est son plus petit identifiant.
  */
-function computeGroups(state: GameState): void {
+export function computeGroups(state: GameState): void {
   const parent = new Int32Array(state.cities.length + 1);
   for (let i = 0; i < parent.length; i++) parent[i] = i;
   const find = (i: number): number => {

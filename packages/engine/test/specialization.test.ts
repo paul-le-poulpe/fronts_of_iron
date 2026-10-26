@@ -29,13 +29,20 @@ const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
 
 /** Fer sur une case sur dix : plus que ce que les lignes des tests consomment. */
 const LAND_MAP = customMap(10 * R, 6 * R, () => "land", (x, y) => (x + y) % 10 === 0);
-/** Le même, avec de l'océan à l'est de la ville : une demande de bateaux de pêche. */
-const SEA_MAP = customMap(10 * R, 6 * R, (x) => (x > CX + 3 ? "ocean" : "land"), (x, y) => (x + y) % 10 === 0);
+/**
+ * Une bande de terre de trois cases dans l'océan : la zone de chaque ville est presque toute de la mer, donc une grande
+ * demande de bateaux de pêche (deux villes : environ 3 700 cases d'eau, une demande de plusieurs centaines).
+ */
+const SEA_MAP = customMap(10 * R, 6 * R, (x) => (x >= CX - 1 && x <= CX + 1 ? "land" : "ocean"), (x, y) => (x + y) % 10 === 0);
 
 /** Joueur 1 avec une ville en (CX, CY) et une usine du type donné (née avec une ligne de son bien de base). */
-function withFactory(map: GameMap, type: string): GameState {
+function withFactory(map: GameMap, type: string, secondCity = false): GameState {
   const s = createGame({ seed: 1, map, playerCount: 2 });
   assert.ok(applyIntent(s, { type: "found_city", player: 1, tile: tileAt(map, CX, CY) }, []));
+  if (secondCity) {
+    s.players[0]!.population = 1_000_000;
+    assert.ok(applyIntent(s, { type: "found_city", player: 1, tile: tileAt(map, CX, CY + Math.floor(1.6 * R)) }, []));
+  }
   assert.ok(applyIntent(s, { type: "build_factory", player: 1, city: 1, factoryType: type }, []));
   return s;
 }
@@ -97,7 +104,7 @@ describe("remplissage avec les coûts par rang (00-Game §4, §8.1)", () => {
 
 describe("croissance automatique proportionnelle à la production (00-Game §8.2)", () => {
   const ready = (lines: number): { s: GameState; p: GameState["players"][number]; g: GameState["players"][number]["factories"][number]["groups"][number] } => {
-    const s = withFactory(SEA_MAP, "fishingBoats");
+    const s = withFactory(SEA_MAP, "fishingBoats", true);
     const p = s.players[0]!;
     const g = p.factories[0]!.groups[0]!;
     assert.equal(g.good, "fishingBoat");

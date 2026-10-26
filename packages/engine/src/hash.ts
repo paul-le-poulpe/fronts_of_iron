@@ -5,6 +5,7 @@
 
 import { fmix32, mixWord } from "./bits.ts";
 import { factoryTypeIndex, productIndex } from "./factories.ts";
+import type { Front } from "./fronts.ts";
 import type { GameMap } from "./map.ts";
 import type { GameState } from "./state.ts";
 
@@ -27,13 +28,64 @@ export function hashMap(map: GameMap): number {
   return fmix32(h ^ map.terrain.length);
 }
 
+function mixList(h: number, list: readonly number[]): number {
+  h = mixWord(h, list.length);
+  for (const n of list) h = mixWord(h, n);
+  return h;
+}
+
+/** Un front : joueurs, groupes, connexions avec leurs positions, puis chaque camp avec tous ses champs (05-Fronts §13.3). */
+function hashFront(h: number, f: Front): number {
+  h = mixWord(h, f.id);
+  h = mixWord(h, f.players[0]);
+  h = mixWord(h, f.players[1]);
+  h = mixWord(h, f.groups[0]);
+  h = mixWord(h, f.groups[1]);
+  h = mixWord(h, f.connections.length);
+  for (const c of f.connections) {
+    h = mixWord(h, c.city1);
+    h = mixWord(h, c.city2);
+    h = mixWord(h, c.position);
+  }
+  for (const s of f.sides) {
+    h = mixList(h, s.firstLine);
+    h = mixList(h, s.secondLine);
+    h = mixWord(h, s.transfers.length);
+    for (const t of s.transfers) {
+      h = mixWord(h, t.unit);
+      h = mixWord(h, t.count);
+      h = mixWord(h, t.toFront ? 1 : 0);
+      h = mixWord(h, t.line);
+      h = mixWord(h, t.arrival);
+    }
+    h = mixWord(h, s.priorityIndex);
+    h = mixWord(h, s.reassign ? 1 : 0);
+    h = mixList(h, s.lineMode);
+    h = mixWord(h, s.motorizedOnly ? 1 : 0);
+    h = mixWord(h, s.frontAttack ? 1 : 0);
+    h = mixWord(h, s.breakthroughs.length);
+    for (const b of s.breakthroughs) {
+      h = mixWord(h, b.id);
+      h = mixWord(h, b.city1);
+      h = mixWord(h, b.city2);
+      h = mixWord(h, b.startTick);
+      h = mixWord(h, b.phase);
+      h = mixList(h, b.attackers);
+      h = mixList(h, b.defenders1);
+      h = mixList(h, b.defenders2);
+      h = mixWord(h, b.startHp);
+    }
+  }
+  return h;
+}
+
 /**
  * Couvre : carte (par mapHash), numéro de tour, générateur aléatoire, joueurs
  * (cases, population, capitale, villes, cases de ressources, reste de
  * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
  * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
- * déblocage, biens produits, réserves d'armement), villes (joueur, case, port, groupe), routes,
- * statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
+ * déblocage, biens produits, réserves d'armement, mobilisation forcée, soldats), villes (joueur, case, port, groupe), routes,
+ * fronts (troupes, mouvements, réglages, attaques, percées), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
  * Pas `state.events` (liste du dernier tour, jamais lue par les règles).
  */
 export function hashState(state: GameState): number {
@@ -73,6 +125,8 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.minedTiles);
     h = mixWord(h, p.mineMechanization);
     h = mixWord(h, p.ironExtracted);
+    h = mixWord(h, p.forcedMobilization ? 1 : 0);
+    h = mixWord(h, p.soldiers);
     h = mixWord(h, p.goods.length);
     for (const n of p.goods) h = mixWord(h, n);
     for (const n of p.goodsDemand) h = mixWord(h, n);
@@ -111,6 +165,11 @@ export function hashState(state: GameState): number {
     h = mixWord(h, road[0]);
     h = mixWord(h, road[1]);
   }
+  // Fronts (05-Fronts §13.3) : compteurs d'identifiants, puis chaque front dans l'ordre des identifiants.
+  h = mixWord(h, state.nextFrontId);
+  h = mixWord(h, state.nextBreakthroughId);
+  h = mixWord(h, state.fronts.length);
+  for (const f of state.fronts) h = hashFront(h, f);
   // Diplomatie : les statuts (les deux cases de chaque paire), puis les propositions dans l'ordre de création.
   // `state.events` n'y est pas : rien ne le lit dans les règles.
   h = mixBytes(h, state.diplomacy);

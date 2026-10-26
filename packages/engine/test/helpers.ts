@@ -174,7 +174,8 @@ export function checkCityInvariants(state: GameState): void {
     assert.equal(p.seaTiles, seaTiles, `seaTiles du joueur ${p.id}`);
     const ids = cities.filter((c) => c.player === p.id).map((c) => c.id);
     assert.deepEqual(p.cityIds, ids, `cityIds du joueur ${p.id}`);
-    assert.equal(p.capital, ids[0] ?? 0, `capitale du joueur ${p.id}`);
+    // Une ville prise change de main (05-Fronts §10) : la capitale est une des villes du joueur, ou 0 s'il n'en a plus.
+    assert.ok(p.capital === 0 ? ids.length === 0 : ids.includes(p.capital), `capitale du joueur ${p.id}`);
   }
 
   // Identifiants, routes, groupes, ports.
@@ -254,3 +255,29 @@ export function bruteHarvest(
   return { workers: Number(workers), area: Number(area), yield: Number(output) };
 }
 
+
+/**
+ * Fronts par la définition de 05-Fronts §2, écrite avec des boucles sur toutes les paires de villes
+ * (sans passer par `updateFronts`) : pour chaque couple de groupes de deux joueurs, ses connexions
+ * (routes entre une ville de chacun), rangées par (city1, city2). Le résultat est rangé par première connexion.
+ */
+export function bruteFronts(state: GameState): { players: [number, number]; groups: [number, number]; connections: [number, number][] }[] {
+  const byKey = new Map<string, { players: [number, number]; groups: [number, number]; connections: [number, number][] }>();
+  for (const a of state.cities) {
+    for (const b of state.cities) {
+      if (a.player >= b.player) continue; // a est la ville du plus petit joueur
+      const road = state.roads.some(([x, y]) => (x === a.id && y === b.id) || (x === b.id && y === a.id));
+      if (!road) continue;
+      const key = `${a.group}:${b.group}`;
+      let f = byKey.get(key);
+      if (f === undefined) {
+        f = { players: [a.player, b.player], groups: [a.group, b.group], connections: [] };
+        byKey.set(key, f);
+      }
+      f.connections.push([a.id, b.id]);
+    }
+  }
+  const out = [...byKey.values()];
+  for (const f of out) f.connections.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  return out.sort((x, y) => x.connections[0]![0] - y.connections[0]![0] || x.connections[0]![1] - y.connections[0]![1]);
+}

@@ -56,8 +56,8 @@ Modules prévus :
 | Routes terrestres et maritimes | décrit en partie (§3.5, §3.6). Nœuds : les villes sur terre, les zones maritimes en mer (§2.1) |
 | Croissance des villes | décrit (§3.7) : affichage seulement, pas de taille dans le moteur |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
-| Fronts terrestres | version 1 décrite (`05-Fronts.md`, résumé §3.8), pas implémentée ; fronts aériens et maritimes plus tard |
-| Armée, combat | annoncé, non décrit |
+| Fronts terrestres | version 1 décrite (`05-Fronts.md`, résumé §3.8) et **implémentée** (26 octobre 2026), sans les bots ; fronts aériens et maritimes plus tard |
+| Armée, combat | terre : `05-Fronts.md` (unités, troupes, combat, prise de ville) ; air et mer : annoncé, non décrit |
 | Politique entre joueurs | décrit en partie (§1, Diplomatie) : statuts neutre, pacte de non-agression, guerre ; menu au clic sur un joueur. Ni alliance, ni droit de passage, ni garantie d'indépendance, ni commerce dans cette version |
 
 Le joueur agit par une barre de boutons. Pour l'instant, tous les boutons sont
@@ -86,9 +86,9 @@ aux bateaux du joueur (§3.6). Cette section n'existe pas encore. Elle pourra
 
 Il n'y a, dans cette version, ni alliance, ni droit de passage, ni garantie
 d'indépendance, ni commerce (les routes commerciales viendront plus tard).
-**Les attaques sont décrites dans `05-Fronts.md`, pas encore implémentées** : la
-règle « pas de combat hors guerre » est écrite ici, mais le moteur n'a rien à
-bloquer pour l'instant. Il tient le statut de chaque paire et rien ne le lit.
+**Les attaques sont décrites dans `05-Fronts.md` et implémentées** : la règle « pas de combat hors
+guerre » y est appliquée (un ordre d'attaque sur un front en paix est invalide). Le moteur tient le statut
+de chaque paire ; les fronts le lisent.
 Effets de la guerre et de la paix sur les fronts : `05-Fronts.md` §2.3.
 
 *Actions.* Le joueur clique sur le territoire d'un autre joueur (quand aucun
@@ -1103,6 +1103,14 @@ fusils                       production de base de l'usine
 | Répondre à une proposition | l'auteur de la proposition, accepter ou refuser | le joueur est la cible d'une proposition de cet auteur ; pour accepter, le statut est encore celui que la proposition change | accepter : statut pacte (pacte) ou neutre (paix) ; refuser : rien ne change. Dans les deux cas la proposition disparaît |
 | Changer de capitale | la ville | la ville appartient au joueur ; coût et conditions à définir (§3.4) | la ville devient la capitale ; recalcule les villes reliées (§3.5, §3.6) |
 | Interdire / autoriser une zone maritime | la zone | la zone existe | ajoute ou retire la zone des zones interdites du joueur ; recalcule ses routes maritimes (§3.6) |
+| Régler la priorité d'un front | le front, le niveau (1, 2, 3) | le joueur est un camp du front | `set_front_priority` (`05-Fronts.md` §4.3, §5) |
+| Autoriser la réassignation | le front, oui / non | idem | `set_front_reassign` (§4.4) |
+| Régler une unité sur un front | le front, le type d'unité, première ligne / équilibré / seconde ligne | idem | `set_unit_line_mode` (§4.2) |
+| Régler « Motorisé seulement » | le front, oui / non | idem | `set_breakthrough_motorized_only` (§7.2) |
+| Mobilisation forcée | oui / non | toujours | `set_forced_mobilization` (§4.1) |
+| Lancer ou arrêter l'attaque sur tout le front | le front | front actif ; le joueur en est un camp | `start_front_attack`, `stop_front_attack` (§5) |
+| Lancer une percée | le front, la connexion | front actif ; la connexion est dans ce front ; pas déjà une percée de ce camp sur cet axe | `start_breakthrough` (§7.2) |
+| Annuler une percée | la percée | elle est au joueur | `cancel_breakthrough` (§5) |
 
 Les noms et formats exacts des ordres sont fixés avec la session du moteur.
 
@@ -1182,7 +1190,8 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   foncé sur le fer, décochée en début de partie), « Couleur des joueurs »
   (cochée) et « Fertilité » (hachures vertes épaisses sur les terres
   cultivables, décochée) et « Icônes d'usine » (les logos des usines à côté des
-  villes, cochée ; elle n'est pas forcée pendant le placement). D'autres vues pourront s'y ajouter (relief, par
+  villes, cochée ; elle n'est pas forcée pendant le placement) et « Zones de front » (hachures rouges des fronts actifs,
+  cochée ; `05-Fronts.md` §11.1). D'autres vues pourront s'y ajouter (relief, par
   exemple).
   Pendant le mode « Créer une ville » (§3.3), une liste de vues est affichée
   d'office, même décochées (précision de l'auteur, 24 octobre 2026) : pour

@@ -3,9 +3,11 @@
 // changent. Le statut est un seul nombre par paire, le même vu des deux côtés :
 // neutre (au départ), pacte de non-agression, guerre.
 //
-// Rien dans le moteur ne lit encore le statut : aucune attaque n'existe (00-Game
-// §13). Le statut est quand même dans l'état et dans le hash, pour que tous les
-// clients le calculent de la même façon.
+// Les fronts lisent le statut (Docs/Design/05-Fronts.md §2.3) : un front est actif entre
+// deux joueurs en guerre. `intents.ts` appelle `startWar` et `endWar` (fronts.ts)
+// après `declareWar` et après une paix acceptée ; ce fichier n'importe pas fronts.ts
+// (fronts.ts lit `statusOf` : l'inverse ferait un cycle). Le statut est dans l'état
+// et dans le hash, pour que tous les clients le calculent de la même façon.
 //
 // Les événements (`state.events`) disent à l'affichage ce qui s'est passé pendant
 // le tour. Aucune règle ne les lit, et ils ne sont pas dans le hash (02-Engine §4, §6).
@@ -49,6 +51,14 @@ export type DiplomacyEvent =
       readonly type: "war_declared" | "pact_broken";
       readonly from: number;
       readonly to: number;
+      readonly turn: number;
+    }
+  | {
+      /** Une ville change de main à la suite d'un combat (05-Fronts §10). `from` l'a prise à `to`. */
+      readonly type: "city_captured";
+      readonly from: number;
+      readonly to: number;
+      readonly city: number;
       readonly turn: number;
     };
 
