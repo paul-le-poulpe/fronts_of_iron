@@ -615,7 +615,7 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
 .fp-atk-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .fp-atk { background: #f4c7c3; border: 3px solid transparent; color: #4a1010; font-weight: 600; padding: 6px 10px; }
 .fp-atk:hover:not(:disabled) { border-color: #e59a94; }
-.fp-atk.on { border-color: var(--front-dark); animation: fp-blink 0.9s steps(2, jump-none) infinite; }
+.fp-atk.on { border-color: var(--front-dark); animation: fp-blink var(--blink-period, 1s) steps(2, jump-none) infinite; }
 .fp-atk.grey, .fp-atk:disabled { background: #dcdcdc; color: #777; cursor: default; }
 .fp-atk.grey.on:disabled { border-color: var(--front-dark); }
 @keyframes fp-blink { 50% { border-color: transparent; } }
@@ -628,7 +628,7 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
 /* Percées : petits tableaux, deux par rangée. */
 .fp-bts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
 .fp-bts:empty { display: none; }
-.fp-bt { position: relative; padding: 6px 8px; border: 3px solid var(--line); border-radius: 8px; outline: 2px solid var(--front-red); outline-offset: 1px; animation: fp-bt-blink 1s steps(2, jump-none) infinite; }
+.fp-bt { position: relative; padding: 6px 8px; border: 3px solid var(--line); border-radius: 8px; outline: 2px solid var(--front-red); outline-offset: 1px; animation: fp-bt-blink var(--blink-period, 1s) steps(2, jump-none) infinite; }
 @keyframes fp-bt-blink { 50% { outline-color: transparent; } }
 .fp-bt-head { font-weight: 600; text-align: center; margin: 0 22px; }
 .fp-bt-cancel { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px; padding: 0; line-height: 1; }

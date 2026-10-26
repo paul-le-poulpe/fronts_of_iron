@@ -7,6 +7,7 @@
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter, playerDark, rgbCss } from "./painter.ts";
 import { productIconPath } from "./icons.ts";
+import { blinkOn } from "./blink.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
 import { factoryInitial } from "./names.ts";
 import { HUMAN, type FrontView } from "./protocol.ts";
@@ -456,6 +457,71 @@ export class MapView {
       ctx.strokeStyle = s.stroke;
       ctx.stroke(s.shape.outline);
     }
+    // Front survolé : un contour plus épais qui clignote montre qu'on peut cliquer (05-Fronts §11.1).
+    if (hovered !== undefined) {
+      const shape = this.frontLayer.zoneOf(hovered.id);
+      if (shape !== null && blinkOn(performance.now())) {
+        ctx.lineWidth = 5 * px;
+        ctx.strokeStyle = hovered.active ? "rgba(200,30,30,1)" : "rgba(40,90,210,1)";
+        ctx.stroke(shape.outline);
+      }
+      // Tant que la zone est survolée, l'image est redessinée à chaque image du navigateur pour que le contour clignote.
+      this.requestDraw();
+    }
+  }
+
+  private drawBreakthroughs(ctx: CanvasRenderingContext2D, px: number): void {
+    const { mirror } = this;
+    const roads = mirror.roads;
+    for (const front of mirror.fronts) {
+      for (let x = 0; x < 2; x++) {
+        for (const bt of front.sides[x]!.breakthroughs) {
+          // Le tracé de la route est rangé de la plus petite ville à la plus grande.
+          const a = Math.min(bt.city1, bt.city2);
+          const b = Math.max(bt.city1, bt.city2);
+          let index = -1;
+          for (let i = 0; i < roads.length; i += 2) {
+            if (roads[i] === a && roads[i + 1] === b) {
+              index = i / 2;
+              break;
+            }
+          }
+          const path = index < 0 ? undefined : mirror.roadTiles[index];
+          if (path === undefined || path.length < 2) continue;
+          const w = mirror.width;
+          const pts = Array.from(path, (t) => ({ x: (t % w) + 0.5, y: Math.floor(t / w) + 0.5 }));
+          // Avance vers la ville 2 si le camp 0 perce, vers la ville 1 sinon ; en sens inverse du tracé si la ville visée est la plus petite.
+          const towardSecond = x === 0;
+          const target = towardSecond ? bt.city2 : bt.city1;
+          if (target === a) pts.reverse();
+          ctx.beginPath();
+          ctx.moveTo(pts[0]!.x, pts[0]!.y);
+          for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k]!.x, pts[k]!.y);
+          ctx.lineWidth = 3 * px;
+          ctx.strokeStyle = "#d11b1b";
+          ctx.lineJoin = "round";
+          ctx.stroke();
+          // Flèche au milieu du tracé.
+          const m = Math.floor((pts.length - 1) / 2);
+          const p0 = pts[m]!;
+          const p1 = pts[m + 1]!;
+          const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+          const mx = (p0.x + p1.x) / 2;
+          const my = (p0.y + p1.y) / 2;
+          const s = 7 * px;
+          ctx.beginPath();
+          ctx.moveTo(mx + Math.cos(angle) * s, my + Math.sin(angle) * s);
+          ctx.lineTo(mx + Math.cos(angle + 2.5) * s, my + Math.sin(angle + 2.5) * s);
+          ctx.lineTo(mx + Math.cos(angle - 2.5) * s, my + Math.sin(angle - 2.5) * s);
+          ctx.closePath();
+          ctx.fillStyle = "#d11b1b";
+          ctx.fill();
+          ctx.lineWidth = 1 * px;
+          ctx.strokeStyle = "#fff";
+          ctx.stroke();
+        }
+      }
+    }
   }
 
   private draw(): void {
@@ -559,6 +625,10 @@ export class MapView {
         ctx.fill();
       }
     }
+
+    // Percées lancées, de l'un et l'autre camp, vues de la même façon : trait rouge le long de la route, flèche dans le sens de
+    // l'avancée (vers la ville de l'adversaire de celui qui perce) (05-Fronts §11.1).
+    this.drawBreakthroughs(ctx, px);
 
     // Mode choix d'axe : la connexion du front la plus proche de la souris.
     if (this.axisFront !== 0 && this.axisHover !== null) {

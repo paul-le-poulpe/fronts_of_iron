@@ -404,6 +404,7 @@ export class SoloGame {
       results,
       diplomacy: this.diplomacyView(),
       fronts,
+      failedBreakthroughs: state.events.filter((e) => e.type === "breakthrough_failed" && e.from === HUMAN).length,
       captured,
       paused,
       perf: { bots: t1 - t0, apply: t2 - t1, pack: t3 - t2 },
@@ -451,7 +452,7 @@ export class SoloGame {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: state.events.flatMap((e) => (e.type !== "city_captured" && mine(e.from, e.to) ? [e] : [])),
+      events: state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "breakthrough_failed" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 

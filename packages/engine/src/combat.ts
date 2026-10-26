@@ -144,7 +144,13 @@ function fightFront(state: GameState, front: Front, turn: number): Arrival[] {
   // Début des percées dont le délai est écoulé ; une percée sans force échoue.
   for (let x = 0; x < 2; x++) {
     const mine = sides[x]!;
-    mine.breakthroughs = mine.breakthroughs.filter((bt) => bt.phase !== 0 || turn < bt.startTick + FRONTS.breakthroughDelayTurns || beginBreakthrough(front, x, bt));
+    mine.breakthroughs = mine.breakthroughs.filter((bt) => {
+      if (bt.phase !== 0 || turn < bt.startTick + FRONTS.breakthroughDelayTurns) return true;
+      if (beginBreakthrough(front, x, bt)) return true;
+      // Aucune force à engager (seconde ligne vide, ou « Motorisé seulement » sans unité motorisée) : la percée s'arrête, le joueur le voit.
+      state.events.push({ type: "breakthrough_failed", from: front.players[x]!, to: front.players[1 - x]!, turn });
+      return false;
+    });
     assignCounterForces(front, x);
   }
   if (!sides.some((s) => s.frontAttack || s.breakthroughs.length > 0)) return arrivals;

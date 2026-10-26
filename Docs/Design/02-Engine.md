@@ -334,7 +334,7 @@ mais ne travaille pas ; l'étape d'économie se fait sur `population − soldier
 - **Guerre et paix** : `declare_war` met toutes les connexions des fronts entre les deux joueurs à 500 (`startWar`) ; une paix
   acceptée met les positions à 0 et supprime attaques et percées (`endWar`). `intents.ts` appelle ces deux fonctions parce
   que `fronts.ts` lit `diplomacy.ts` (`statusOf`) : l'inverse ferait un cycle d'imports.
-- **Événement** : `city_captured` (`from` a pris `city` à `to`) dans `state.events`, pour l'affichage.
+- **Événements** (dans `state.events`, pour l'affichage) : `city_captured` (`from` a pris `city` à `to`) et `breakthrough_failed` (la percée de `from` contre `to` n'a aucune force à engager au début).
 
 | Ordre | Champs | Valide si | Effet |
 | --- | --- | --- | --- |

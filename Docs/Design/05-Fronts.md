@@ -487,6 +487,9 @@ avancée      = arrondi(déséquilibre × v)     en millièmes de route
 8. **Seconde ligne percée** (toute l'infanterie de la force de contre-attaque
    éliminée, ou pas de force du tout) : le front avance jusqu'à la ville au
    bout de l'axe, qui tombe (§10).
+   *Provisoire* : si l'attaquant n'a aucune force à engager au début (seconde ligne vide, ou « Motorisé seulement » allumé alors
+   qu'aucune unité motorisée n'existe — c'est le cas de toutes aujourd'hui), la percée s'arrête sans avoir commencé ; le moteur
+   écrit l'événement `breakthrough_failed`, que la page affiche.
 9. **Essoufflement** : la percée s'arrête quand les PV des unités engagées par
    l'attaquant (infanterie et blindés : `nombre × hitPoints`) tombent sous
    `FRONTS.breakthroughExhaustionPercent` = **35** % de leur valeur au début de
@@ -602,10 +605,21 @@ voir l'historique.
   joueurs ; repli accepté, couleurs au partage de Voronoi et courbe en
   surimpression. *Provisoire* : surimpression d'abord ; couleurs le long de la
   courbe ensuite.
-- **Mode choix d'axe** (après le bouton percée) : chaque clic sur une route du
-  front lance une percée sur cette connexion (*provisoire* : la connexion du
-  front la plus proche du clic) ; plusieurs clics, plusieurs percées ; Échap
-  ou le bouton de nouveau quittent le mode.
+- **Mode choix d'axe** (après le bouton percée) : un clic sur la carte lance
+  une percée sur la connexion du front la plus proche du clic (*provisoire*),
+  et **le mode se désactive aussitôt** (décision de l'auteur, 26 octobre 2026) ;
+  pour une seconde percée, on rouvre le panneau du front. Échap quitte le mode
+  sans lancer de percée.
+- **Percée lancée** : le trait rouge de la route choisie reste affiché, avec
+  une petite flèche qui indique le sens de l'avancée (vers la ville de
+  l'adversaire de celui qui perce), de l'attaquant comme de l'adversaire : les
+  deux joueurs voient la même chose. Une percée qui s'arrête au début faute de
+  force (§7.2) le dit par un message.
+- **Survol d'une ligne de front** (zone du front survolée) : un contour plus
+  épais apparaît et clignote, pour montrer qu'on peut cliquer. **Un cycle de
+  clignotement dure 1 seconde**, pour ce contour comme pour les boutons et les
+  percées du panneau (une seule constante, `BLINK_PERIOD_MS`,
+  `client/src/blink.ts`).
 
 ### 11.2 Liste des fronts
 

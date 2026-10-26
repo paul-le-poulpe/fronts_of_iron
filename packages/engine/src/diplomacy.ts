@@ -54,6 +54,13 @@ export type DiplomacyEvent =
       readonly turn: number;
     }
   | {
+      /** Une percée de `from` contre `to` s'arrête au début faute de force à engager (05-Fronts §7.2). */
+      readonly type: "breakthrough_failed";
+      readonly from: number;
+      readonly to: number;
+      readonly turn: number;
+    }
+  | {
       /** Une ville change de main à la suite d'un combat (05-Fronts §10). `from` l'a prise à `to`. */
       readonly type: "city_captured";
       readonly from: number;

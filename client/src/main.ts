@@ -16,6 +16,7 @@ import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView, RESOURCE_LEGEND } from "./render.ts";
 import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
+import { applyBlinkPeriod } from "./blink.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -28,6 +29,7 @@ const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
 
 installTooltips();
+applyBlinkPeriod();
 installNotifications($("notifs"));
 /** Menu de diplomatie et notifications des événements diplomatiques (00-Game §1). */
 const diplomacy = new Diplomacy((order) => sendOrder(order));
@@ -176,6 +178,9 @@ function onTick(s: Session, msg: TickMessage): void {
     s.infobar?.setFronts(msg.fronts);
   }
   s.frontPanel?.refresh(mirror.fronts, msg.tick);
+  if (msg.failedBreakthroughs > 0) {
+    toast("Percée arrêtée : aucune unité à engager (seconde ligne vide, ou « Motorisé seulement » sans unité motorisée).", 6000);
+  }
   for (const c of msg.captured) {
     if (c.from === HUMAN || c.to === HUMAN) {
       const other = c.from === HUMAN ? c.to : c.from;
@@ -464,9 +469,13 @@ function foundingProblem(m: Mirror, tile: number): string | null {
 function onMapClick(tile: number): void {
   const m = session?.mirror;
   if (m && axisFront !== 0) {
-    // Mode choix d'axe : chaque clic lance une percée sur la connexion du front la plus proche (05-Fronts §11.1).
+    // Mode choix d'axe : le clic lance une percée sur la connexion du front la plus proche (05-Fronts §11.1), et le mode se
+    // désactive : pour en lancer une seconde, on rouvre le panneau du front.
     const axis = nearestConnection(m, axisFront, tile);
-    if (axis !== null) sendOrder({ type: "start_breakthrough", front: axisFront, city1: axis.city1, city2: axis.city2 });
+    if (axis !== null) {
+      sendOrder({ type: "start_breakthrough", front: axisFront, city1: axis.city1, city2: axis.city2 });
+      stopAxisMode();
+    }
     return;
   }
   if (m && factoryArmed !== null) {
@@ -587,7 +596,7 @@ function startAxisMode(frontId: number): void {
   setFactoryArmed(null);
   axisFront = frontId;
   s.view?.setAxisMode(frontId);
-  $("bar-hint").textContent = "Percée : cliquez sur une route du front pour lancer une percée (plusieurs possibles). Échap : quitter ce mode.";
+  $("bar-hint").textContent = "Percée : cliquez sur une route du front pour lancer la percée. Échap : annuler.";
 }
 
 function stopAxisMode(): void {

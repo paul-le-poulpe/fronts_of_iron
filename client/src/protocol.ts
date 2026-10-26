@@ -365,6 +365,8 @@ export interface TickMessage {
    * tour précédent. Positions et effectifs changent à chaque round de combat.
    */
   readonly fronts: readonly FrontView[] | null;
+  /** Nombre de percées du joueur humain qui se sont arrêtées au début faute de force à engager pendant ce tour (05-Fronts §7.2). */
+  readonly failedBreakthroughs: number;
   /** Villes prises pendant ce tour. La page reçoit alors `cities` et les cases de leur zone. */
   readonly captured: readonly { readonly city: number; readonly from: number; readonly to: number }[];
   readonly paused: boolean;
