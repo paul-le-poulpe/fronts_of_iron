@@ -73,19 +73,19 @@ test("courbe de Catmull-Rom centripète : passe par les points, point du bout r�
   assert.deepEqual(catmullRom([{ x: 3, y: 4 }])!.segments, []);
 });
 
-test("zones de front : cases de terre à moins d'un rayon de contrôle de la ligne, le plus proche gagne", () => {
+test("zones de front : cases de terre à moins d'un demi-rayon de contrôle de la ligne, le plus proche gagne", () => {
   const w = world([[40, 100], [100, 100], [40, 160], [100, 160]], [[1, 2], [3, 4]]);
   const a = view([[1, 2, 500]], false, 1); // point en (70, 100)
   const b = view([[3, 4, 500]], false, 2); // point en (70, 160)
   const zones = computeFrontZones(w, [a, b], () => true);
   assert.equal(zones[100 * 200 + 70], 1);
-  assert.equal(zones[100 * 200 + 70 + R], 1, "à la limite du rayon");
-  assert.equal(zones[100 * 200 + 70 + R + 2], 0, "au-delà du rayon");
+  assert.equal(zones[100 * 200 + 70 + Math.floor(R / 2)], 1, "à la limite du demi-rayon");
+  assert.equal(zones[100 * 200 + 70 + Math.floor(R / 2) + 2], 0, "au-delà");
   assert.equal(zones[160 * 200 + 70], 2);
-  assert.equal(zones[115 * 200 + 70], 1, "plus près du premier");
-  // À égalité de distance, le plus petit identifiant : deux fronts à 30 cases l'un de l'autre, case à mi-chemin.
-  const close = computeFrontZones(world([[40, 100], [100, 100], [40, 130], [100, 130]], [[1, 2], [3, 4]]), [a, b], () => true);
-  assert.equal(close[115 * 200 + 70], 1, "à égalité de distance, le plus petit identifiant");
+  assert.equal(zones[108 * 200 + 70], 1, "plus près du premier");
+  // À égalité de distance, le plus petit identifiant : deux fronts à 20 cases l'un de l'autre, case à mi-chemin.
+  const close = computeFrontZones(world([[40, 100], [100, 100], [40, 120], [100, 120]], [[1, 2], [3, 4]]), [a, b], () => true);
+  assert.equal(close[110 * 200 + 70], 1, "à égalité de distance, le plus petit identifiant");
   const noWater = computeFrontZones(w, [a], (t) => t % 200 < 70);
   assert.equal(noWater[100 * 200 + 75], 0, "terre seulement");
   assert.equal(noWater[100 * 200 + 65], 1);
@@ -170,7 +170,11 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
   // Des troupes posées à la main : l'attaquant (joueur 1) écrase le défenseur.
   front.sides[0]!.firstLine[0] = 500;
   front.sides[1]!.firstLine[0] = 100;
-  for (const p of game.state.players) p.soldiers = p.id === 1 ? 5000 : 1000;
+  // Assez de population pour que les emplois n'obligent pas à retirer ces soldats des fronts (05-Fronts §4.7).
+  for (const p of game.state.players) {
+    p.soldiers = p.id === 1 ? 5000 : 1000;
+    p.population = 10_000_000;
+  }
   apply(game.step([{ id: 3, order: { type: "start_front_attack", front: front.id } }]));
   let captured = false;
   for (let i = 0; i < 3000 && !captured; i++) {

@@ -334,7 +334,7 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
 
 **Fronts** (05-Fronts §11). `Mirror` garde les `FrontView` (`fronts`, `frontsVersion`), les paires de villes des
 connexions des fronts actifs (`isFrontPair`) et, à la demande, la zone de front de chaque case (`frontZones` : `frontgeom.ts`,
-distance à la ligne du front ≤ le rayon de contrôle, terre seulement, le front le plus proche gagne ; recalculée quand
+distance à la ligne du front ≤ la moitié du rayon de contrôle (sélection et affichage), terre seulement, le front le plus proche gagne ; recalculée quand
 `frontsVersion` change). **Double ligne rouge** : `Painter.colorOf` peint en rouge la case de terre dont une voisine est
 la terre d'une ville d'un autre joueur reliée à la sienne par une connexion d'un front actif, et la ligne sombre du joueur
 recule d'une case vers l'intérieur (bande de 4 cases : sombre, rouge, rouge, sombre). La couleur d'une case dépend donc de ses
@@ -610,7 +610,7 @@ la connexion visée est surlignée ; Échap quitte le mode.
      joueur). Détail : deux sections, **fronts actifs** puis **fronts en paix**, une ligne par front rangée par île
      (groupe du joueur) puis par adversaire : pastille de l'adversaire, « Île n° g · Bot k », et en petit l'île adverse et le
      nombre de connexions. Un clic sur une ligne ouvre le panneau du front (`openFront`, `main.ts`).
-  L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) en dernier, même en mobilisation forcée, et un
+  L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) avant les inactifs, qui sont en dernier, même en mobilisation forcée, et un
   interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie
   `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
   affichée tient compte des soldats.

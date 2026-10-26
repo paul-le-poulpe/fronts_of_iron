@@ -35,6 +35,8 @@ export interface UnitData {
   readonly equipment: number;
   readonly equipmentCount: number;
   readonly population: number;
+  /** Priorité de retrait, 1 à 10 : 10 est retirée en premier (05-Fronts §4.7). */
+  readonly releasePriority: number;
   readonly softAttack: number;
   readonly hardAttack: number;
   readonly frontWidth: number;
@@ -54,6 +56,7 @@ export interface UnitData {
 const ARMAMENT_KEYS: readonly string[] = Object.keys(ARMAMENT.types);
 
 type LooseUnit = {
+  readonly releasePriority: number;
   readonly equipment: string;
   readonly equipmentCount: number;
   readonly population: number;
@@ -82,6 +85,7 @@ export const UNIT_DATA: readonly UnitData[] = UNIT_IDS.map((id, index) => {
     equipment: ARMAMENT_KEYS.indexOf(u.equipment),
     equipmentCount: u.equipmentCount,
     population: u.population,
+    releasePriority: u.releasePriority,
     softAttack: u.softAttack,
     hardAttack: u.hardAttack,
     frontWidth: u.frontWidth,

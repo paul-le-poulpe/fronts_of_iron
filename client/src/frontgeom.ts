@@ -167,7 +167,7 @@ function dist2ToSegment(x: number, y: number, a: Pt, b: Pt): number {
 
 /**
  * Zones de front (05-Fronts §11.1) : une case de terre est dans la zone d'un front si sa
- * distance à la ligne du front (la suite des points de ses chaînes) est ≤ le rayon de
+ * distance à la ligne du front (la suite des points de ses chaînes) est ≤ la moitié du rayon de
  * contrôle d'une ville ; à plusieurs fronts, celui dont la ligne est la plus proche
  * (à égalité, le plus petit identifiant). Renvoie l'identifiant du front de chaque case, 0 = aucun.
  */
@@ -179,7 +179,8 @@ export function computeFrontZones(
   const { width, height } = world;
   const zone = new Uint16Array(width * height);
   const best = new Float32Array(width * height).fill(Infinity);
-  const r = world.controlRadius;
+  // La moitié du rayon de contrôle d'une ville (décision de l'auteur, 26 octobre 2026) : pour sélectionner un front et pour afficher sa zone.
+  const r = world.controlRadius / 2;
   const r2 = r * r;
   for (const f of [...fronts].sort((a, b) => a.id - b.id)) {
     const points = frontPoints(world, f);

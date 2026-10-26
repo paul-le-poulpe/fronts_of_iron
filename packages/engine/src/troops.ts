@@ -367,3 +367,52 @@ export function recruitAfterEconomy(state: GameState): void {
 }
 
 export { NO_LIMIT };
+
+/**
+ * Retrait des troupes (05-Fronts §4.7). Le pays manque de `shortage` personnes pour ses lignes de production, ses fermiers
+ * et ses pêcheurs, qui passent avant les soldats : on retire des unités des fronts, celles de plus haute `releasePriority`
+ * d'abord (infanterie, puis équipement, puis chars), des fronts de plus basse priorité d'abord (à égalité, de plus grand
+ * identifiant), de la seconde ligne avant la première, sans toucher aux unités qu'une percée engage. Un camp qui perd de
+ * l'infanterie est recalé : son équipement en trop part avec elle (`trimSide`). Les unités retirées retournent à la réserve
+ * avec le délai de transfert, et leur population ne travaille qu'à leur arrivée : les personnes déjà en chemin de retour
+ * comptent donc dans le manque, pour ne pas retirer deux fois les mêmes.
+ */
+export function releaseTroops(state: GameState, player: Player, shortage: number, fronts: readonly Front[]): void {
+  const sides = fronts
+    .map((front) => ({ front, i: sideIndex(front, player.id) }))
+    .filter((s) => s.i >= 0)
+    .sort((a, b) => priorityPercent(a.front.sides[a.i]!) - priorityPercent(b.front.sides[b.i]!) || b.front.id - a.front.id);
+  const outgoing = (): number => {
+    let people = 0;
+    for (const { front, i } of sides) {
+      for (const tr of front.sides[i]!.transfers) if (!tr.toFront) people += tr.count * UNIT_DATA[tr.unit]!.population;
+    }
+    return people;
+  };
+  const types = UNIT_DATA.map((u) => u.index).sort((a, b) => UNIT_DATA[b]!.releasePriority - UNIT_DATA[a]!.releasePriority || a - b);
+  for (const t of types) {
+    let need = shortage - outgoing();
+    if (need <= 0) return;
+    const pop = UNIT_DATA[t]!.population;
+    const touched: { front: Front; i: number }[] = [];
+    for (const s of sides) {
+      if (need <= 0) break;
+      const side = s.front.sides[s.i]!;
+      const lock = locked(s.front, s.i);
+      const fromSecond = Math.min(side.secondLine[t]! - lock.second[t]!, Math.ceil(need / pop));
+      if (fromSecond > 0) {
+        side.secondLine[t] = side.secondLine[t]! - fromSecond;
+        sendOut(state, side, t, fromSecond);
+        need -= fromSecond * pop;
+      }
+      const fromFirst = Math.min(side.firstLine[t]! - lock.first[t]!, Math.ceil(Math.max(0, need) / pop));
+      if (fromFirst > 0) {
+        side.firstLine[t] = side.firstLine[t]! - fromFirst;
+        sendOut(state, side, t, fromFirst);
+        need -= fromFirst * pop;
+      }
+      if (fromSecond > 0 || fromFirst > 0) touched.push(s);
+    }
+    for (const s of touched) trimSide(state, s.front, s.i);
+  }
+}

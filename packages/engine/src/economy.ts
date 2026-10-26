@@ -22,6 +22,7 @@ import {
 } from "./config.ts";
 import { ARMAMENT_IDS, armamentIndex, armamentReserveMax, goodIndex, productConfig } from "./factories.ts";
 import { deployedEquipment, frontsByPlayer } from "./fronts.ts";
+import { releaseTroops } from "./troops.ts";
 import type { GameState, Player } from "./state.ts";
 
 /** Échelle de la courbe de mécanisation (00-Game §6.3) : x = 1 s'écrit S. */
@@ -300,18 +301,24 @@ function growLines(p: Player): void {
   }
 }
 
+interface Allocation {
+  readonly lines: LineFill;
+  readonly remaining: number;
+  readonly availableFarmers: number;
+  readonly availableFishers: number;
+  readonly spareFarmers: number;
+  readonly spareFishers: number;
+  readonly farm: Harvest;
+  readonly sea: Harvest;
+}
+
 /**
- * Étape d'un joueur (00-Game §4, §4.1, §6, §7, §8) : remplissage des lignes, répartition du reste en fermiers et pêcheurs, récolte,
- * production, nourriture, croissance avec reste. Les résultats sont calculés sur
- * la population du début de l'étape, puis la croissance la change. Les machines
- * utilisées sont celles produites au tour précédent (00-Game §12).
+ * Répartition de `people` personnes (00-Game §4) : les lignes d'abord, puis fermiers et pêcheurs selon le réglage du
+ * joueur, avec le report de l'un à l'autre. Ne change que `filled` des groupes de lignes (recalculé à chaque appel).
  */
-function stepPlayer(p: Player, deployed: readonly number[]): void {
+function allocate(p: Player, people: number): Allocation {
   const tractors = p.goods[TRACTOR]!;
   const fishingBoats = p.goods[FISHING_BOAT]!;
-  // Les soldats comptent dans la population mais ne travaillent pas (05-Fronts §4.1) : la répartition se
-  // fait sur le reste. Si la population tombe sous le nombre de soldats, les soldats restent et les autres rôles rétrécissent.
-  const people = Math.max(0, p.population - p.soldiers);
   const lines = fillLines(p, p.goods[MINING_MACHINE]!, people);
   // Ce qui reste après les ouvriers et les mineurs passe à l'étape 2 du §4, fermiers et pêcheurs selon le réglage du joueur.
   const remaining = people - lines.workers - lines.miners;
@@ -325,6 +332,30 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
   // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
   const seaYield = Math.floor((p.seaTiles * waterYieldMilli(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), fishingBoats)) / MILLI);
   const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
+  return { lines, remaining, availableFarmers, availableFishers, spareFarmers, spareFishers, farm, sea };
+}
+
+/**
+ * Personnes que le pays emploie s'il y consacre toute sa population : ouvriers, mineurs, fermiers et pêcheurs. Ce qui est
+ * en plus est libre pour les soldats, puis inactif ; ce qui manque est retiré des fronts (05-Fronts §4.7).
+ */
+export function workersNeeded(p: Player): number {
+  const a = allocate(p, p.population);
+  return a.lines.workers + a.lines.miners + a.farm.workers + a.sea.workers;
+}
+
+/**
+ * Étape d'un joueur (00-Game §4, §4.1, §6, §7, §8) : remplissage des lignes, répartition du reste en fermiers et pêcheurs, récolte,
+ * production, nourriture, croissance avec reste. Les résultats sont calculés sur
+ * la population du début de l'étape, puis la croissance la change. Les machines
+ * utilisées sont celles produites au tour précédent (00-Game §12).
+ */
+function stepPlayer(p: Player, deployed: readonly number[]): void {
+  // Les soldats comptent dans la population mais ne travaillent pas (05-Fronts §4.1) : la répartition se fait sur le reste.
+  // Le pays qui manque de personnes pour ses lignes, ses fermiers et ses pêcheurs a déjà retiré des soldats des fronts
+  // (`releaseTroops`, appelée par `stepEconomy`, 05-Fronts §4.7) ; en mobilisation forcée, ce sont eux qui passent d'abord.
+  const people = Math.max(0, p.population - p.soldiers);
+  const { lines, remaining, availableFarmers, availableFishers, spareFarmers, spareFishers, farm, sea } = allocate(p, people);
 
   p.farmers = farm.workers;
   p.fishers = sea.workers;
@@ -373,5 +404,13 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
   const fronts = frontsByPlayer(state);
-  for (const p of state.players) stepPlayer(p, deployedEquipment(state, p.id, fronts[p.id - 1]));
+  for (const p of state.players) {
+    // Les soldats sont la dernière occupation avant l'inactivité (05-Fronts §4.7) : si les personnes qui ne sont pas des soldats
+    // ne suffisent pas aux lignes, aux fermiers et aux pêcheurs, des unités sont retirées des fronts. Pas en mobilisation forcée.
+    if (p.soldiers > 0 && !p.forcedMobilization) {
+      const shortage = workersNeeded(p) - Math.max(0, p.population - p.soldiers);
+      if (shortage > 0) releaseTroops(state, p, shortage, fronts[p.id - 1]!);
+    }
+    stepPlayer(p, deployedEquipment(state, p.id, fronts[p.id - 1]));
+  }
 }

@@ -47,7 +47,7 @@ nombre maximal de lignes, routes maritimes, changement de capitale, commerce, bo
 | `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
 | `src/units.ts` | unités militaires en entiers : `UNIT_DATA` (multiplicateurs convertis à l'échelle 100), `fillWidth` (remplissage d'une largeur, niche par niche, plafond de l'infanterie), `lineRoom`, `splitLines`, `damageOf`, `lossesFrom` (pertes d'un groupe), `motorization` |
 | `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection`, `Transfer`, `Breakthrough` ; `updateFronts` (détection, identité, répartition des troupes), `startWar`, `endWar`, ordres de réglage, `deployedEquipment`, `activeFrontCities` |
-| `src/troops.ts` | affectation des troupes : `assignTroops` (recrutement et répartition par paliers), `releaseSurplus` (réassignation), `trimSide` (recalage d'un camp), `applyTransfers`, `loseUnits`, `recruitBeforeEconomy`, `recruitAfterEconomy` |
+| `src/troops.ts` | affectation des troupes : `assignTroops` (recrutement et répartition par paliers), `releaseSurplus` (réassignation), `trimSide` (recalage d'un camp), `applyTransfers`, `loseUnits`, `recruitBeforeEconomy`, `recruitAfterEconomy`, `releaseTroops` (retrait des unités quand le pays manque de personnes, 05-Fronts §4.7) |
 | `src/attacks.ts` | ordres d'attaque : `startFrontAttack`, `stopFrontAttack`, `startBreakthrough`, `cancelBreakthrough` |
 | `src/combat.ts` | `combatRound` : un round par front actif (dégâts, pertes, avancée de l'assaut, percées), puis les prises de villes ; `frontAdvance`, `reactionFactor100`, `forceSpeed` |
 | `src/conquest.ts` | `captureCity` : encerclement, changement de propriétaire de la ville et de sa zone, recalcul des fronts |
@@ -199,7 +199,7 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
   dans l'ordre du tableau, supprime les propositions de diplomatie arrivées à
   terme (`expireProposals`), puis, dans cet ordre (05-Fronts §13.2) : le recrutement de la mobilisation forcée
   (`recruitBeforeEconomy`), l'étape de population et de nourriture de chaque joueur
-  (« Étape de nourriture », plus bas), le recrutement parmi les inactifs (`recruitAfterEconomy`), les mouvements
+  (« Étape de nourriture », plus bas ; elle retire d'abord des soldats des fronts si les emplois manquent de personnes, `releaseTroops`), le recrutement parmi les inactifs (`recruitAfterEconomy`), les mouvements
   d'unités arrivés (`applyTransfers`) et, si le numéro du tour est un multiple de `FRONTS.combatTurns`, le round de combat
   (`combatRound`, prises de villes comprises). Il passe ensuite `state.tick` à `turn`, et renvoie la liste des cases dont le
   propriétaire a été écrit, chacune une fois, dans l'ordre de leur première
@@ -737,6 +737,9 @@ ils sont donc dans le hash (§6).
   l'étape d'économie du tour ; `cultivated` et les autres résultats ne sont remis d'aplomb qu'au tour suivant.
 - **Supposer que la capitale est la plus ancienne ville** : une ville prise est insérée dans `cityIds` de l'attaquant à sa
   place (par identifiant) ; la capitale du défenseur devient sa ville de plus petit identifiant.
+- **Laisser les soldats ne pas être retirés** : sans `releaseTroops`, une population qui baisse sous ses emplois plus ses soldats
+  vide les champs (les soldats gardaient leur place) et la nourriture baisse encore ; `workersNeeded` compare l'emploi maximal
+  à `population − soldiers` avant l'étape de chaque joueur (hors mobilisation forcée).
 - **Compter les soldats un par un** : `Player.soldiers` est tenu à jour à chaque formation, arrivée, perte et dissolution ;
   `countSoldiers` le recalcule, et les tests des fronts les comparent.
 - **Former des unités avec une réserve qui décline** : la réserve non utilisée décline de 1 % de l'excès par tour, et

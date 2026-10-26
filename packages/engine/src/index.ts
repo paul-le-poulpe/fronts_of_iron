@@ -73,7 +73,7 @@ export {
   type FrontSide,
   type Transfer,
 } from "./fronts.ts";
-export { applyTransfers, assignTroops, loseUnits, splitProportional, trimSide } from "./troops.ts";
+export { applyTransfers, assignTroops, loseUnits, releaseTroops, splitProportional, trimSide } from "./troops.ts";
 export { combatRound, endOf, forceSpeed, frontAdvance, reactionFactor100 } from "./combat.ts";
 export { captureCity } from "./conquest.ts";
 export {
@@ -150,6 +150,7 @@ export {
   requiredWorkers,
   stepEconomy,
   waterYieldMilli,
+  workersNeeded,
   workersForLines,
   workersForRank,
   type Harvest,

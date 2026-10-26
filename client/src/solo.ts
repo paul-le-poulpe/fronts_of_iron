@@ -146,6 +146,7 @@ export function militaryCatalog(): MilitaryCatalog {
         kind: u.kind === KIND_INFANTRY ? "infantry" : u.kind === KIND_ARMOR ? "armor" : "equipment",
         hitPoints: u.hitPoints,
         motorized: u.motorized,
+        releasePriority: u.releasePriority,
       };
     }),
     niches: Object.entries(NICHES).map(([id, units]) => ({ id, units: [...units] })),

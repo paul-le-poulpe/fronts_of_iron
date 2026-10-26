@@ -39,6 +39,8 @@
 // `counterAttackMultiplier` absents = `attackMultiplier` ; `description` absente
 // = description de l'équipement ; `lossMultiplier` absent = 1.
 //
+// PRIORITÉ DE RETRAIT (`releasePriority`, 1 à 10) : voir UnitBase ; infanterie 10, équipement 5, chars 1.
+//
 // ICÔNE PROVISOIRE : `miscellaneous/misc-dev-icon.png` (toute rouge) marque une
 // unité dont l'icône reste à dessiner.
 
@@ -61,6 +63,12 @@ interface UnitBase {
   readonly hardAttack: number;
   /** Attaque antiaérienne. L'aérien n'est pas encore implémenté : valeur abstraite pour l'instant, lue par rien. */
   readonly airAttack: number;
+  /**
+   * Priorité de retrait, de 1 à 10 (05-Fronts §4.7) : quand le pays manque de personnes pour ses lignes de production,
+   * ses fermiers et ses pêcheurs, on retire des fronts les unités de la priorité la plus haute en premier. 10 : retirée en
+   * premier (la moins importante) ; 1 : retirée en dernier. Valeurs de l'auteur : infanterie 10, équipement 5, chars 1.
+   */
+  readonly releasePriority: number;
   /** Largeur de front en première ligne, en mètres par unité. */
   readonly frontWidth: number;
   /** Largeur de percée, en mètres par unité : en seconde ligne, pour percer ou repousser une percée. Absente : `frontWidth`. */
@@ -96,6 +104,7 @@ export const UNITS = {
     equipmentCount: 10,
     icon: "population/pop-soldier.png",
     description: "La base de toutes vos armées. Elle devra recevoir de l'équipement supplémentaire pour être vraiment efficace : canons, mitrailleuses, etc.",
+    releasePriority: 10,
     population: 10,
     softAttack: 10,
     hardAttack: 1,
@@ -113,6 +122,7 @@ export const UNITS = {
     equipment: "machineGun",
     equipmentCount: 1,
     icon: "armament/armament-machine-gun.png",
+    releasePriority: 5,
     population: 1,
     softAttack: 5,
     hardAttack: 0,
@@ -128,6 +138,7 @@ export const UNITS = {
     equipment: "artillery",
     equipmentCount: 1,
     icon: "armament/armament-artillery.png",
+    releasePriority: 5,
     population: 10,
     softAttack: 50,
     hardAttack: 5,
@@ -141,6 +152,7 @@ export const UNITS = {
     equipment: "antiTankGun",
     equipmentCount: 1,
     icon: "armament/armament-AT-gun.png",
+    releasePriority: 5,
     population: 5,
     softAttack: 0,
     hardAttack: 50,
@@ -157,6 +169,7 @@ export const UNITS = {
     equipment: "antiAirGun",
     equipmentCount: 1,
     icon: "armament/armament-AA-gun.png",
+    releasePriority: 5,
     population: 5,
     softAttack: 10,
     hardAttack: 0,
@@ -171,6 +184,7 @@ export const UNITS = {
     equipment: "tankette",
     equipmentCount: 1,
     icon: "miscellaneous/misc-dev-icon.png",
+    releasePriority: 1,
     population: 10,
     softAttack: 50,
     hardAttack: 10,

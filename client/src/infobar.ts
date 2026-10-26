@@ -320,9 +320,9 @@ export class InfoBar {
       { label: "Mineurs", icon: "pop-miner", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners, machine: "miningMachine" },
       { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers, machine: "tractor" },
       { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers, machine: "fishingBoat" },
-      { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
-      // Les soldats en dernier, même en mobilisation forcée (05-Fronts §11.5).
+      // Par ordre de priorité (05-Fronts §11.5) : les soldats, même en mobilisation forcée, passent après les emplois et avant l'inactivité.
       { label: "Soldats", icon: "pop-soldier", color: "var(--occ-soldier)", read: (s: PlayerStats) => s.soldiers },
+      { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
     ];
     const stacked = el("div", "ib-stack");
     const parts = occupations.map((o) => {

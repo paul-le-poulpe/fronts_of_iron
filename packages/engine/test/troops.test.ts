@@ -13,6 +13,7 @@ import {
   FRONTS,
   splitProportional,
   stepEconomy,
+  workersNeeded,
   type GameState,
 } from "../src/index.ts";
 import { customMap, tileAt } from "./helpers.ts";
@@ -239,5 +240,43 @@ describe("déclin du stock d'armement avec l'équipement déployé (05-Fronts §
     assert.equal(p.armamentReserve[0], 0);
     assert.equal(p.armamentRemainder[0], 0);
     assert.equal(p.factories[0]!.groups[0]!.filled, 1, "la ligne produit encore");
+  });
+});
+
+describe("retrait des troupes quand le pays manque de personnes (05-Fronts §4.7)", () => {
+  /** Joueur 1 avec 100 infanteries, 100 mitrailleuses et 5 chenillettes sur le front, population saturant ses champs. */
+  function army(): GameState {
+    const s = duel();
+    arm(s, 1, { infantry: 100, machineGun: 100, tankette: 5 }, 20_000);
+    play(s, FRONTS.transferTurns + 4);
+    assert.equal(s.players[0]!.soldiers, 1000 + 100 + 50);
+    return s;
+  }
+
+  it("les soldats passent après les champs : on retire d'abord l'infanterie, l'équipement suit, les chars restent", () => {
+    const s = army();
+    const p = s.players[0]!;
+    // La population des champs saturés : au-delà, tout est libre pour les soldats. Un manque de 550 personnes.
+    p.population = workersNeeded(p) + 600;
+    turn(s);
+    const side = front(s).sides[0]!;
+    assert.equal(side.firstLine[U.infantry]! + side.secondLine[U.infantry]!, 100 - 55, "55 infanteries retirées");
+    assert.equal(side.firstLine[U.machineGun], 45, "l'équipement est recalé sur l'infanterie restante");
+    assert.equal(side.firstLine[U.tankette]! + side.secondLine[U.tankette]!, 5, "les chars sont retirés en dernier");
+    assert.ok(side.transfers.some((t) => !t.toFront && t.unit === U.infantry), "retour vers la réserve avec le délai");
+    assert.equal(p.soldiers, countSoldiers(s, 1));
+    // Deux tours de suite ne retirent pas deux fois les mêmes personnes.
+    const inTransit = side.transfers.reduce((n, t) => n + t.count, 0);
+    turn(s);
+    assert.equal(side.transfers.reduce((n, t) => n + t.count, 0), inTransit);
+  });
+
+  it("en mobilisation forcée, les soldats passent d'abord : rien n'est retiré", () => {
+    const s = army();
+    const p = s.players[0]!;
+    p.forcedMobilization = true;
+    p.population = workersNeeded(p) + 600;
+    turn(s);
+    assert.equal(p.soldiers, 1150);
   });
 });

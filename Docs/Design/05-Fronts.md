@@ -156,6 +156,7 @@ tête). Attributs d'un type d'unité :
 | `population` | personnes pour opérer l'équipement (infanterie 10 ; artillerie 10 ; canons 5 ; mitrailleuse 1 ; chenillette 10) |
 | `icon`, `description` | affichage ; description absente : celle de l'équipement (`ProductConfig.description`) |
 | `softAttack`, `hardAttack`, `airAttack` | attaques anti-infanterie, antiblindée, antiaérienne (antiaérienne : hors périmètre, valeur sans effet) |
+| `releasePriority` | priorité de retrait, de 1 à 10 (§4.7) : 10 est retirée du front en premier, 1 en dernier. Infanterie 10, équipement 5, chars 1 (valeurs de l'auteur) |
 | `frontWidth` | mètres par unité en première ligne |
 | `breakthroughWidth` | mètres par unité en seconde ligne (percée, contre-attaque). Absente : `frontWidth` |
 | `damageType` | `infantry`, `armor` ou `equipment` : comment l'unité est perdue (§7.3) |
@@ -195,9 +196,12 @@ tête). Attributs d'un type d'unité :
   population (ils mangent, comptent pour la croissance) mais ne travaillent
   pas ; la répartition du §4 de 00-Game se fait sur `population − soldats
   déployés et en route`, puis le recrutement de nouveaux soldats prend parmi
-  les inactifs (ou avant les lignes en mobilisation forcée). Si la population
-  tombe sous le nombre de soldats, les soldats restent et les autres rôles
-  rétrécissent.
+  les inactifs (ou avant les lignes en mobilisation forcée).
+- **Les soldats sont la dernière occupation avant l'inactivité** (décision de
+  l'auteur, 26 octobre 2026) : les lignes, les fermiers et les pêcheurs passent
+  avant eux. Quand les personnes qui ne sont pas des soldats ne leur suffisent pas,
+  des unités sont retirées des fronts (§4.7) ; en mobilisation forcée, c'est
+  l'inverse.
 - Une unité qui revient d'un front rend sa population à la répartition et ses
   équipements à la réserve, à l'arrivée.
 
@@ -291,6 +295,24 @@ chaque ligne.
 - Les mouvements **entre lignes d'un même front** (survivants d'une percée,
   véhicules du défenseur, changement d'interrupteur *provisoire*) sont
   **sans délai**.
+
+### 4.7 Retrait des troupes
+
+Un pays dont la population hors soldats ne suffit pas à ses lignes de production, à ses
+fermiers et à ses pêcheurs (les emplois qu'il ferait tourner avec toute sa population,
+§4.1) **retire des unités des fronts** pour les leur rendre, à chaque tour, du manque :
+
+1. **Quelles unités** : celles de plus haute `releasePriority` d'abord (10 : les moins
+   importantes à retirer, retirées en premier ; 1 : en dernier), donc l'infanterie, puis
+   l'équipement, puis les chars. Un camp qui perd de l'infanterie est recalé (§2.5) :
+   son équipement en trop part avec elle, puisqu'il est plafonné par l'infanterie.
+2. **Où** (*provisoire*) : dans les fronts de plus basse priorité d'abord (à égalité,
+   de plus grand identifiant), la seconde ligne avant la première, sans toucher aux
+   unités qu'une percée engage.
+3. **Délai** : les unités retirées retournent à la réserve avec le délai de transfert
+   (§4.5), et leur population ne travaille qu'à leur arrivée. Les personnes déjà en
+   chemin de retour comptent dans le manque : on ne retire pas deux fois les mêmes.
+4. **Mobilisation forcée** : rien n'est retiré ; les soldats passent avant les emplois.
 
 ### 4.6 Réserve d'armement et déclin
 
@@ -558,7 +580,8 @@ voir l'historique.
   ligne de front, **des deux côtés**, **terre seulement**. Ligne de front =
   la suite des points du front (un par connexion, ordonnés comme au §11.4) ;
   une case est dans la zone d'un front si sa distance à cette ligne est ≤
-  `CITY.controlRadius` ; à plusieurs fronts, celui dont la ligne est la plus
+  **la moitié de `CITY.controlRadius`** (décision de l'auteur, 26 octobre 2026 : la
+  même zone sert à sélectionner un front et à l'afficher) ; à plusieurs fronts, celui dont la ligne est la plus
   proche (partage de Voronoi). Recalculée quand les fronts changent.
 - **Dessin de la zone** : contour rouge et hachures rouges espacées, environ
   un quart de la surface sous le trait (trait de 2 px tous les 8 px, à 45°),
@@ -665,8 +688,9 @@ Un panneau = un front ; une bonne partie de l'écran. De haut en bas :
 ### 11.5 Hors du panneau
 
 - **Onglet Population** de la barre d'informations : les rôles rangés du plus
-  prioritaire au moins prioritaire ; les soldats (icône `pop-soldier`) en
-  dernier, même quand la mobilisation forcée est allumée. Interrupteur
+  prioritaire au moins prioritaire : ouvriers, mineurs, fermiers, pêcheurs, puis les soldats
+  (icône `pop-soldier`), puis les inactifs en dernier (décision de l'auteur, 26 octobre 2026) ; les
+  soldats gardent cette place même quand la mobilisation forcée est allumée. Interrupteur
   **« MOBILISATION FORCÉE »** : interrupteur standard **rouge**, texte rouge,
   gras, majuscules, éteint par défaut.
 - **Barre de stock de chaque armement** (détail Armement) : nouvelle portion
@@ -850,6 +874,8 @@ document ne tranchait pas ; à valider avec l'auteur :
 
 - **Objectif d'un palier** (§4.3) : `pourcentage × besoin` en partie entière ;
   le palier suivant complète jusqu'à 100 %, rien n'est perdu par l'arrondi.
+- **Retrait des troupes** (§4.7) : les fronts de plus basse priorité d'abord, la seconde ligne
+  avant la première ; le manque se compare à l'emploi maximal du pays (`workersNeeded`).
 - **Population entre les types** (§4.1) : les types sont servis dans l'ordre
   des niches (`NICHES`), toutes les premières lignes d'abord, puis toutes les
   secondes lignes. L'infanterie, première niche, peut donc épuiser les

@@ -91,6 +91,8 @@ export interface UnitInfo {
   readonly kind: "infantry" | "armor" | "equipment";
   readonly hitPoints: number;
   readonly motorized: boolean;
+  /** Priorité de retrait des fronts, 1 à 10 : 10 est retirée en premier (05-Fronts §4.7). */
+  readonly releasePriority: number;
 }
 
 /** Ce que la page lit de `config/fronts.ts` et `config/units.ts` (envoyé une fois, dans `init`). */

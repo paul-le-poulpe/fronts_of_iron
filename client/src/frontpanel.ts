@@ -338,6 +338,7 @@ export class FrontPanel {
       `Largeur : ${u.frontWidth} m en première ligne, ${u.breakthroughWidth} m en seconde ligne`,
       `Attaque : ${u.softAttack} anti-infanterie, ${u.hardAttack} antiblindée` + (u.hitPoints > 0 ? ` · ${u.hitPoints} PV` : ""),
       u.motorized ? "Motorisé" : "À pied",
+      `Retrait des fronts : priorité ${u.releasePriority} sur 10 (10 : retiré en premier)`,
     ];
     return lines.filter((l) => l !== "").join("\n");
   }
