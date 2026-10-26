@@ -347,9 +347,9 @@ tracée en surimpression des couleurs avec un point par connexion ; les couleurs
 **Mode choix d'axe** : après le bouton Percée, chaque clic lance une percée sur la connexion du front la plus proche du clic ;
 la connexion visée est surlignée ; **le mode se désactive dès la première percée placée** (pour en lancer une seconde, on rouvre le
 panneau) ; Échap le quitte sans percée. **Percées affichées** (`render.ts`, `drawBreakthroughs`) : pour chaque percée des deux
-camps, un trait rouge le long du tracé de la route et une flèche au milieu, dans le sens de l'avancée ; les deux joueurs voient la
-même chose. **Survol d'une zone de front** : contour de 5 px qui clignote (la page redessine à chaque image tant qu'une zone est
-survolée). **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour le contour, les boutons d'attaque actifs et les
+camps, un trait rouge (le segment droit entre les deux villes, pas le tracé de la route) et une flèche de 14 px (`ARROW_PX`) au
+milieu, de la ville de celui qui perce vers celle de son adversaire ; les deux joueurs voient la même chose. **Survol d'une zone de
+front** : contour de 5 px, fixe. **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour les boutons d'attaque actifs et les
 percées du panneau (variable CSS `--blink-period` posée au démarrage). Une percée qui s'arrête au début faute de force est annoncée
 par un message (`failedBreakthroughs` du message `tick`, événement `breakthrough_failed` du moteur).
 

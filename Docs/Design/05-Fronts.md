@@ -26,6 +26,31 @@ d'artillerie (bouton sans effet), la percée sur plusieurs axes à la fois. Le
 moteur est décrit dans `02-Engine.md` (fichiers, état, hash, tour), le client
 dans `03-Client.md`. Ordre d'implémentation au §14.
 
+**Pour reprendre** (fin de la session du 26 octobre 2026) :
+
+- **Code** : moteur `packages/engine/src/` : `config/fronts.ts`, `units.ts`, `fronts.ts`, `troops.ts`, `attacks.ts`,
+  `combat.ts`, `conquest.ts` (liste et rôle de chacun : `02-Engine.md` §1) ; client `client/src/` : `frontgeom.ts`,
+  `frontlayer.ts`, `frontpanel.ts`, `blink.ts`, plus `infobar.ts`, `main.ts`, `mirror.ts`, `painter.ts`, `render.ts`,
+  `solo.ts` (`03-Client.md` §2). Tests : `npm test` (aucun échec ; `fronts`, `troops`, `combat`, `determinism` côté moteur,
+  `fronts` côté client). Visualisation : `npm run viz:fronts`.
+- **Essayer à la main** (mode solo) : fonder une ville à 1,5 rayon de contrôle d'un bot, « Armer les bots » et « + armement »
+  (barre de debug, `03-Client.md` §3), ajouter de la population si besoin (« +1 000 population » : les soldats se recrutent
+  parmi les inactifs seulement), déclarer la guerre par le menu de diplomatie (clic sur le territoire du bot, loin de la zone
+  de front), ouvrir le front par la liste (barre d'informations) ou par un clic dans sa zone. Pour une percée : décocher
+  « Motorisé seulement » (aucune unité motorisée n'existe) et avoir des unités en seconde ligne.
+- **Décisions de l'auteur à cette étape** (déjà dans le texte ci-dessous) : soldats avant les inactifs (§11.5) ; retrait des
+  troupes par priorité (§3, §4.7) ; zones de front au demi-rayon de contrôle (§11.1) ; mode choix d'axe qui se désactive
+  après une percée (§11.1) ; percée dessinée en segment droit avec une flèche de 14 px (§11.1) ; contour de survol épais, sans
+  clignotement, et 1 s par cycle pour les clignotements du panneau (§11.1, §11.3) ; interrupteur `◀ = ▶` et colonne « prio »
+  (§11.3).
+- **Non vérifié à l'écran** : les tableaux de percées du panneau (§11.3, point 3) et les couleurs d'un front en paix au
+  survol ; vérifiés seulement par lecture du code et par les tests de géométrie.
+- **Pas fait** : bots (§14, étape 4), couleurs de joueur le long de la courbe (§11.1), barrage d'artillerie, percée multi-axes,
+  unités motorisées (aucune dans `config/units.ts`), fronts aériens et maritimes (§16). Les choix provisoires à valider avec
+  l'auteur sont au §15.
+- **Tests** : l'auteur demande des tests minimaux (déterminisme avec fronts actifs, un round, une prise) ; ne pas en ajouter
+  sans qu'il le demande, et ne lancer la suite qu'une fois à la fin.
+
 ---
 
 ## 1. Vocabulaire et échelle
@@ -296,6 +321,15 @@ chaque ligne.
   véhicules du défenseur, changement d'interrupteur *provisoire*) sont
   **sans délai**.
 
+### 4.6 Réserve d'armement et déclin
+
+- L'équipement des fronts (déployé et en route) **compte** dans le stock qui
+  décline (00-Game §8.3).
+- La production d'armement **ne s'arrête jamais** ; seul l'excès au-dessus du
+  stock cible décline. Le déclin ne retire que l'équipement **non déployé** :
+  si l'équipement des fronts dépasse à lui seul le stock cible, le stock non
+  déployé décline vers zéro et la production continue.
+
 ### 4.7 Retrait des troupes
 
 Un pays dont la population hors soldats ne suffit pas à ses lignes de production, à ses
@@ -313,15 +347,6 @@ fermiers et à ses pêcheurs (les emplois qu'il ferait tourner avec toute sa pop
    (§4.5), et leur population ne travaille qu'à leur arrivée. Les personnes déjà en
    chemin de retour comptent dans le manque : on ne retire pas deux fois les mêmes.
 4. **Mobilisation forcée** : rien n'est retiré ; les soldats passent avant les emplois.
-
-### 4.6 Réserve d'armement et déclin
-
-- L'équipement des fronts (déployé et en route) **compte** dans le stock qui
-  décline (00-Game §8.3).
-- La production d'armement **ne s'arrête jamais** ; seul l'excès au-dessus du
-  stock cible décline. Le déclin ne retire que l'équipement **non déployé** :
-  si l'équipement des fronts dépasse à lui seul le stock cible, le stock non
-  déployé décline vers zéro et la production continue.
 
 ## 5. Attaques : types et ordres
 
@@ -610,16 +635,18 @@ voir l'historique.
   et **le mode se désactive aussitôt** (décision de l'auteur, 26 octobre 2026) ;
   pour une seconde percée, on rouvre le panneau du front. Échap quitte le mode
   sans lancer de percée.
-- **Percée lancée** : le trait rouge de la route choisie reste affiché, avec
-  une petite flèche qui indique le sens de l'avancée (vers la ville de
-  l'adversaire de celui qui perce), de l'attaquant comme de l'adversaire : les
-  deux joueurs voient la même chose. Une percée qui s'arrête au début faute de
-  force (§7.2) le dit par un message.
+- **Percée lancée** : le trait rouge de la route choisie reste affiché (le
+  **segment droit entre les deux villes**, pas le tracé de la route), avec une
+  flèche au milieu, de la ville de celui qui perce vers celle de son adversaire
+  (flèche de 14 px du centre à la pointe). Les percées de l'adversaire sont
+  dessinées de la même façon, la flèche dans l'autre sens : les deux joueurs
+  voient la même chose. Une percée qui s'arrête au début faute de force (§7.2)
+  le dit par un message.
 - **Survol d'une ligne de front** (zone du front survolée) : un contour plus
-  épais apparaît et clignote, pour montrer qu'on peut cliquer. **Un cycle de
-  clignotement dure 1 seconde**, pour ce contour comme pour les boutons et les
-  percées du panneau (une seule constante, `BLINK_PERIOD_MS`,
-  `client/src/blink.ts`).
+  épais apparaît, pour montrer qu'on peut cliquer (il ne clignote pas, décision
+  de l'auteur, 26 octobre 2026). Les boutons d'attaque actifs et les tableaux de
+  percées du panneau clignotent à **1 seconde par cycle**, une seule constante
+  (`BLINK_PERIOD_MS`, `client/src/blink.ts`).
 
 ### 11.2 Liste des fronts
 
@@ -939,8 +966,8 @@ document ne tranchait pas ; à valider avec l'auteur :
   qui n'est plus au bout après une prise est ignorée.
 - **Fronts envoyés au client** : tous, sans brouillard de guerre ; le panneau
   d'un front dont le joueur n'est pas un camp n'a aucun réglage actif.
-- **Mode choix d'axe** : Échap le quitte ; le bouton Percée n'est plus visible
-  (le panneau est fermé).
+- **Mode choix d'axe** : il se désactive dès la première percée placée (décision de
+  l'auteur) ; Échap le quitte sans percée ; le panneau est fermé pendant le mode.
 - **Outil de développement** (hors règles, 03-Client §3) : « + armement » et
   « Armer les bots » donnent de l'armement et de la population ; ils servent à
   essayer les fronts sans que les bots produisent.
