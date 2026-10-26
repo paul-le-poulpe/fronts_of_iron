@@ -7,8 +7,9 @@
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter, playerDark, rgbCss } from "./painter.ts";
 import { productIconPath } from "./icons.ts";
+import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
 import { factoryInitial } from "./names.ts";
-import { HUMAN } from "./protocol.ts";
+import { HUMAN, type FrontView } from "./protocol.ts";
 
 export interface MapViewHooks {
   /** Case sous la souris, ou -1 hors de la carte. */
@@ -22,6 +23,11 @@ const DRAG_THRESHOLD_PX = 4;
 /** Hachures des vues : période et épaisseur des bandes, en pixels CSS (constantes à l'écran, quel que soit le zoom). */
 const HATCH_PERIOD_PX = 10;
 const HATCH_WIDTH_PX = 4;
+/** Hachures des zones de front (05-Fronts §11.1) : trait de 2 px tous les 8 px, à 45°, pour voir la carte dessous. */
+const FRONT_HATCH_PERIOD_PX = 8;
+const FRONT_HATCH_WIDTH_PX = 2;
+const FRONT_RED_RGBA = [200, 30, 30, 200] as const;
+const FRONT_BLUE_RGBA = [40, 90, 210, 200] as const;
 /** Logo d'usine sur la carte, en pixels d'écran : icône de 16, 1 de fond gris clair autour, puis un cadre noir de 1. */
 const FACTORY_ICON_PX = 16;
 const FACTORY_LOGO_PX = FACTORY_ICON_PX + 4;
@@ -45,6 +51,9 @@ interface Hatching {
   /** Motif, refait quand la densité de pixels change. */
   pattern: CanvasPattern | null;
   patternDpr: number;
+  /** Période et épaisseur des bandes, en pixels d'écran. */
+  readonly period: number;
+  readonly stroke: number;
 }
 
 /** Ressources de la vue « Ressources naturelles » : couleur des hachures (la légende de la carte la reprend) et icône. */
@@ -68,6 +77,16 @@ export class MapView {
   showIron = false;
   /** Case « Icônes d'usine » du menu Carte : logos des usines à côté des villes. */
   showFactoryLogos = true;
+  /** Case « Zones de front » du menu Carte (05-Fronts §11.1) : hachures rouges des fronts actifs. */
+  showFrontZones = true;
+  /** Mode choix d'axe d'une percée (05-Fronts §11.1) : front visé (0 : hors du mode), et connexion survolée. */
+  axisFront = 0;
+  axisHover: { city1: number; city2: number } | null = null;
+  /** Front dont la zone est survolée (0 : aucun) : sa zone s'affiche toujours. */
+  private hoverFront = 0;
+  private readonly frontLayer: FrontLayer;
+  private readonly frontHatchRed: Hatching;
+  private readonly frontHatchBlue: Hatching;
 
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -135,6 +154,9 @@ export class MapView {
       -1,
     );
     this.cityHatch = hatching(document.createElement("canvas"), [255, 255, 255, 220], 1);
+    this.frontLayer = new FrontLayer(mirror);
+    this.frontHatchRed = hatching(document.createElement("canvas"), FRONT_RED_RGBA, 1, FRONT_HATCH_PERIOD_PX, FRONT_HATCH_WIDTH_PX);
+    this.frontHatchBlue = hatching(document.createElement("canvas"), FRONT_BLUE_RGBA, 1, FRONT_HATCH_PERIOD_PX, FRONT_HATCH_WIDTH_PX);
     this.hatch = document.createElement("canvas");
     const hatchCtx = this.hatch.getContext("2d");
     if (hatchCtx === null) throw new Error("canvas 2D indisponible");
@@ -285,7 +307,29 @@ export class MapView {
     if (tile === this.hoverTile) return;
     this.hoverTile = tile;
     this.hooks.onHover(tile);
-    if (this.placement || this.factoryMode) this.requestDraw();
+    const front = tile >= 0 ? (this.frontLayer.frontAt(tile)?.id ?? 0) : 0;
+    const frontChanged = front !== this.hoverFront;
+    this.hoverFront = front;
+    if (this.placement || this.factoryMode || frontChanged || this.axisFront !== 0) this.requestDraw();
+  }
+
+  /** Front dont la zone contient la case (05-Fronts §11.1), affichée ou non. */
+  frontAt(tile: number): FrontView | undefined {
+    return this.frontLayer.frontAt(tile);
+  }
+
+  /** À rappeler quand les fronts changent : les zones et la courbe sont redessinées. */
+  frontsChanged(): void {
+    this.hoverFront = this.hoverTile >= 0 ? (this.frontLayer.frontAt(this.hoverTile)?.id ?? 0) : 0;
+    this.requestDraw();
+  }
+
+  /** Mode choix d'axe : `frontId` 0 pour en sortir. */
+  setAxisMode(frontId: number): void {
+    this.axisFront = frontId;
+    this.axisHover = null;
+    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || frontId !== 0);
+    this.requestDraw();
   }
 
   /** À rappeler quand un mode (placement, usine), les villes ou les usines changent. */
@@ -364,7 +408,7 @@ export class MapView {
     const k = this.dpr;
     const h = this.hatchCtx;
     if (hatch.pattern === null || hatch.patternDpr !== k) {
-      hatch.pattern = h.createPattern(buildHatchTile(k, hatch.rgba, hatch.slope), "repeat");
+      hatch.pattern = h.createPattern(buildHatchTile(k, hatch.rgba, hatch.slope, hatch.period, hatch.stroke), "repeat");
       hatch.patternDpr = k;
     }
     const pattern = hatch.pattern;
@@ -389,6 +433,31 @@ export class MapView {
     ctx.restore();
   }
 
+  /**
+   * Zones de front (05-Fronts §11.1) : contour et hachures rouges des fronts actifs (case du menu Carte),
+   * hachures bleues d'un front en paix au survol seulement ; la zone survolée s'affiche toujours.
+   */
+  private drawFrontZones(): void {
+    const { ctx, zoom } = this;
+    const px = 1 / zoom;
+    const hovered = this.hoverFront === 0 ? undefined : this.mirror.fronts.find((f) => f.id === this.hoverFront);
+    const shapes: { shape: ZoneShape | null; hatch: Hatching; stroke: string }[] = [];
+    const RED = "rgba(200,30,30,0.95)";
+    const BLUE = "rgba(40,90,210,0.95)";
+    if (this.showFrontZones) shapes.push({ shape: this.frontLayer.activeZones(), hatch: this.frontHatchRed, stroke: RED });
+    if (hovered !== undefined && (!this.showFrontZones || !hovered.active)) {
+      shapes.push({ shape: this.frontLayer.zoneOf(hovered.id), hatch: hovered.active ? this.frontHatchRed : this.frontHatchBlue, stroke: hovered.active ? RED : BLUE });
+    }
+    for (const s of shapes) {
+      if (s.shape === null) continue;
+      s.hatch.mask = s.shape.mask;
+      this.drawHatch(s.hatch);
+      ctx.lineWidth = 2 * px;
+      ctx.strokeStyle = s.stroke;
+      ctx.stroke(s.shape.outline);
+    }
+  }
+
   private draw(): void {
     const { ctx, mirror, zoom } = this;
     const k = this.dpr;
@@ -403,6 +472,8 @@ export class MapView {
       this.drawHatch(this.ironHatch);
       this.drawHatch(this.aluminiumHatch);
     }
+
+    this.drawFrontZones();
 
     if (this.highlighted > 0 && this.highlighted <= mirror.cities.length) {
       this.highlightMask ??= buildMask(mirror, (t) => mirror.tileCity[t] === this.highlighted);
@@ -473,6 +544,33 @@ export class MapView {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+
+    // Courbe des fronts actifs, en surimpression des couleurs (05-Fronts §11.4).
+    if (mirror.fronts.some((f) => f.active)) {
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#7a0c0c";
+      ctx.lineWidth = 2.5 * px;
+      ctx.stroke(this.frontLayer.curves());
+      ctx.fillStyle = "#7a0c0c";
+      for (const p of this.frontLayer.points()) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.5 * px, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Mode choix d'axe : la connexion du front la plus proche de la souris.
+    if (this.axisFront !== 0 && this.axisHover !== null) {
+      const a = cities[this.axisHover.city1 - 1]!;
+      const b = cities[this.axisHover.city2 - 1]!;
+      ctx.beginPath();
+      ctx.moveTo(cx(a.tile), cy(a.tile));
+      ctx.lineTo(cx(b.tile), cy(b.tile));
+      ctx.strokeStyle = "rgba(255,60,40,0.95)";
+      ctx.lineWidth = 5 * px;
+      ctx.stroke();
+    }
 
     // Villes : un point, une étoile pour la capitale, un carré bleu pour le port.
     const s0 = Math.min(6.5, Math.max(3, zoom * 1.6)) * px;
@@ -554,8 +652,8 @@ export class MapView {
   }
 }
 
-function hatching(mask: HTMLCanvasElement, rgba: Rgba, slope: 1 | -1): Hatching {
-  return { mask, rgba, slope, pattern: null, patternDpr: 0 };
+function hatching(mask: HTMLCanvasElement, rgba: Rgba, slope: 1 | -1, period = HATCH_PERIOD_PX, stroke = HATCH_WIDTH_PX): Hatching {
+  return { mask, rgba, slope, pattern: null, patternDpr: 0, period, stroke };
 }
 
 /**
@@ -578,9 +676,9 @@ function buildMask(mirror: Mirror, inside: (t: number) => boolean): HTMLCanvasEl
 }
 
 /** Tuile du motif de hachures : bandes diagonales de `HATCH_WIDTH_PX` sur une période de `HATCH_PERIOD_PX`, en pixels d'écran. */
-function buildHatchTile(dpr: number, rgba: Rgba, slope: 1 | -1): HTMLCanvasElement {
-  const p = Math.max(2, Math.round(HATCH_PERIOD_PX * dpr));
-  const width = Math.max(1, Math.round(HATCH_WIDTH_PX * dpr));
+function buildHatchTile(dpr: number, rgba: Rgba, slope: 1 | -1, period: number, stroke: number): HTMLCanvasElement {
+  const p = Math.max(2, Math.round(period * dpr));
+  const width = Math.max(1, Math.round(stroke * dpr));
   const tile = document.createElement("canvas");
   tile.width = p;
   tile.height = p;

@@ -80,6 +80,10 @@ pour le tracteur.
   d'infobulle ; l'arbre de progression pourrait y être repris, avec l'état de
   déblocage de cette usine.
 
+### Unités militaires
+- Fait : au survol du nom d'une unité dans le panneau d'un front, un `title` (description de l'unité, sinon de son équipement ;
+  population, équipement, largeurs, attaques, PV, motorisé). Pas encore d'infobulle construite avec barres : à valider avec l'auteur.
+
 ### Autres
 - `⇄` (Ressources, flux) et `▣` (Armement, stock) sur la barre : rien de plus
   que le `title` actuel tant qu'ils ne sont que des titres de section.

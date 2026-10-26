@@ -56,6 +56,9 @@ const FISH_LIGHT: Rgb = [225, 240, 250];
 const MINE_DARK: Rgb = [58, 52, 48];
 const MINE_LIGHT: Rgb = [214, 126, 46];
 
+/** Double ligne rouge d'un front actif (05-Fronts §11.1). */
+const FRONT_RED: Rgb = [200, 30, 30];
+
 const LAND_LOW = [150, 176, 112] as const;
 const LAND_MID = [181, 160, 118] as const;
 const LAND_HIGH = [236, 232, 224] as const;
@@ -174,7 +177,12 @@ export class Painter {
         }
       }
       if (onLand) {
-        const e = this.edgeColor(t, x, id, city.player);
+        // Front actif : la case de chaque côté de la limite devient rouge, la ligne sombre recule d'une case vers l'intérieur.
+        const e = this.frontRed(t, x, id, city.player)
+          ? FRONT_RED
+          : this.nextToFrontRed(t, x, id, city.player)
+            ? this.borderRgb[city.player]!
+            : this.edgeColor(t, x, id, city.player);
         if (e !== null) {
           r = e[0];
           g = e[1];
@@ -209,6 +217,40 @@ export class Painter {
       if (m.tileCity[u]! !== id) return this.limitRgb[player]!;
     }
     return null;
+  }
+
+  /** Les quatre voisines de la case `t` (colonne `x`) qui sont dans la carte. */
+  private neighbors(t: number, x: number): number[] {
+    const w = this.mirror.width;
+    const out: number[] = [];
+    if (x > 0) out.push(t - 1);
+    if (x < w - 1) out.push(t + 1);
+    if (t >= w) out.push(t - w);
+    if (t + w < this.pixels.length) out.push(t + w);
+    return out;
+  }
+
+  /**
+   * Case de front : une case de terre de la ville `id` dont une voisine est la terre d'une ville d'un
+   * autre joueur reliée à `id` par une connexion d'un front actif (05-Fronts §11.1).
+   */
+  private frontRed(t: number, x: number, id: number, player: number): boolean {
+    const m = this.mirror;
+    for (const u of this.neighbors(t, x)) {
+      if ((m.terrain[u]! & TERRAIN_LAND) === 0) continue;
+      const idU = m.tileCity[u]!;
+      if (idU !== 0 && m.cities[idU - 1]!.player !== player && m.isFrontPair(id, idU)) return true;
+    }
+    return false;
+  }
+
+  /** Case voisine d'une case de front de la même ville : la ligne sombre du joueur y recule. */
+  private nextToFrontRed(t: number, x: number, id: number, player: number): boolean {
+    const m = this.mirror;
+    for (const u of this.neighbors(t, x)) {
+      if (m.tileCity[u] === id && (m.terrain[u]! & TERRAIN_LAND) !== 0 && this.frontRed(u, u % m.width, id, player)) return true;
+    }
+    return false;
   }
 
   /** Pixel d'une case, pour les tests. */

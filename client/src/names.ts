@@ -22,6 +22,28 @@ const FACTORY_NAMES: Readonly<Record<string, string>> = {
   miningMachines: "Usine mécanique",
 };
 
+/** Noms des unités militaires et des niches des fronts (05-Fronts §3). */
+const UNIT_NAMES: Readonly<Record<string, string>> = {
+  infantry: "Infanterie",
+  machineGun: "Mitrailleuse",
+  artillery: "Artillerie",
+  antiTankGun: "Canon anti-char",
+  antiAirGun: "Canon anti-aérien",
+  tankette: "Chenillette",
+};
+
+const NICHE_NAMES: Readonly<Record<string, string>> = {
+  infantry: "Infanterie",
+  machineGun: "Mitrailleuses",
+  artillery: "Artillerie",
+  antiTank: "Antichar",
+  antiAir: "Antiaérien",
+  assaultTank: "Chars d'assaut",
+};
+
+export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;
+export const nicheName = (id: string): string => NICHE_NAMES[id] ?? id;
+
 /** Nom d'un joueur de la partie solo : le joueur humain, puis les bots dans l'ordre de leur identifiant. */
 export const playerName = (id: number): string => (id === HUMAN ? "Vous" : `Bot ${id - 1}`);
 

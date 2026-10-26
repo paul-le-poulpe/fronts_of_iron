@@ -6,11 +6,12 @@ import "./style.css";
 
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";
-import { HUMAN, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
+import { HUMAN, type FrontView, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
 import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
-import { factoryName, productSymbol } from "./names.ts";
+import { factoryName, playerName, productSymbol } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
-import { clearNotifications, installNotifications, updateNotifications } from "./notifications.ts";
+import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
+import { FrontPanel } from "./frontpanel.ts";
 import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView, RESOURCE_LEGEND } from "./render.ts";
@@ -67,6 +68,7 @@ interface Session {
   view: MapView | null;
   production: ProductionPanel | null;
   infobar: InfoBar | null;
+  frontPanel: FrontPanel | null;
   nextOrderId: number;
   paused: boolean;
   ticks: number;
@@ -89,6 +91,7 @@ function startGame(mapSeed: number, bots: number): void {
     view: null,
     production: null,
     infobar: null,
+    frontPanel: null,
     nextOrderId: 1,
     paused: false,
     ticks: 0,
@@ -138,7 +141,16 @@ function onInit(s: Session, init: InitMessage): void {
   s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
-  s.infobar = new InfoBar($("infobar"), init.catalog, setMapOption, (percent) => sendOrder({ type: "set_farm_share", percent }));
+  s.frontPanel = new FrontPanel($("front-panel"), init.military, { send: sendOrder, chooseAxis: startAxisMode });
+  axisFront = 0;
+  s.infobar = new InfoBar(
+    $("infobar"),
+    init.catalog,
+    setMapOption,
+    (percent) => sendOrder({ type: "set_farm_share", percent }),
+    (enabled) => sendOrder({ type: "set_forced_mobilization", enabled }),
+    openFront,
+  );
   buildFactoryMenu(init.catalog);
   $("prod").hidden = true;
   $("production").setAttribute("aria-pressed", "false");
@@ -159,6 +171,20 @@ function onTick(s: Session, msg: TickMessage): void {
   painter.paintTiles(repaint);
   view.upload(repaint);
   if (msg.cities !== null || msg.factoryMarks !== null) view.refresh();
+  if (msg.fronts !== null) {
+    view.frontsChanged();
+    s.infobar?.setFronts(msg.fronts);
+  }
+  s.frontPanel?.refresh(mirror.fronts, msg.tick);
+  for (const c of msg.captured) {
+    if (c.from === HUMAN || c.to === HUMAN) {
+      const other = c.from === HUMAN ? c.to : c.from;
+      notify({
+        text: c.from === HUMAN ? `Vous avez pris la ville n° ${c.city} à ${playerName(other)}.` : `${playerName(other)} vous a pris la ville n° ${c.city}.`,
+        color: rgbCss(playerColor(other)),
+      });
+    }
+  }
   s.ticks++;
   s.perf = {
     bots: lerp(s.perf.bots, msg.perf.bots),
@@ -235,7 +261,7 @@ function buildPlayersTable(mirror: Mirror): void {
 }
 
 /** Cases du menu « Carte » telles que le joueur les a laissées. */
-const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, factories: true };
+const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, factories: true, frontZones: true };
 /** Vues de la carte affichées d'office pendant le mode placement, sans toucher aux cases (00-Game §11). */
 const PLACEMENT_MAP_OPTIONS: readonly MapOption[] = ["iron", "playerColor", "fertility"];
 
@@ -260,10 +286,12 @@ function applyMapOptions(): void {
   $("map-legend").hidden = !iron;
   // Les icônes d'usine ne font pas partie des vues du placement : seule leur case compte.
   const factories = mapChecked.factories;
-  if (s.view.showFertility !== fertility || s.view.showIron !== iron || s.view.showFactoryLogos !== factories) {
+  const frontZones = mapChecked.frontZones;
+  if (s.view.showFertility !== fertility || s.view.showIron !== iron || s.view.showFactoryLogos !== factories || s.view.showFrontZones !== frontZones) {
     s.view.showFertility = fertility;
     s.view.showIron = iron;
     s.view.showFactoryLogos = factories;
+    s.view.showFrontZones = frontZones;
     s.view.requestDraw();
   }
   const playerColor = shown("playerColor");
@@ -304,10 +332,19 @@ $("dbg-pop").addEventListener("click", () => {
   if (session !== null) post({ type: "debug", action: "addPopulation", amount: 1000 });
 });
 
+$("dbg-arm").addEventListener("click", () => {
+  if (session !== null) post({ type: "debug", action: "addArmament", amount: 1 });
+});
+$("dbg-bots").addEventListener("click", () => {
+  if (session !== null) post({ type: "debug", action: "armBots", amount: 3 });
+});
+
 $("quit").addEventListener("click", () => {
   const s = session;
   if (s === null) return;
   s.worker.terminate();
+  s.frontPanel?.close();
+  axisFront = 0;
   session = null;
   clearNotifications();
   diplomacy.reset();
@@ -344,6 +381,10 @@ function showHover(tile: number): void {
       id === 0
         ? "aucune zone"
         : `n° ${id}${m.cities[id - 1]!.tile === tile ? " (ici)" : ""}${m.stats[m.cities[id - 1]!.player - 1]?.capital === id ? ", capitale" : ""}`;
+  }
+  if (axisFront !== 0 && session?.view) {
+    session.view.axisHover = tile >= 0 ? nearestConnection(m, axisFront, tile) : null;
+    session.view.requestDraw();
   }
   if (factoryArmed !== null && tile >= 0) {
     const target = factoryTarget(m, tile);
@@ -392,6 +433,7 @@ document.addEventListener("keydown", (e) => {
   session?.infobar?.closeMenu();
   if (placement) setPlacement(false);
   if (factoryArmed !== null || !factoryMenu.hidden) setFactoryArmed(null);
+  if (axisFront !== 0) stopAxisMode();
 });
 
 /**
@@ -421,6 +463,12 @@ function foundingProblem(m: Mirror, tile: number): string | null {
 
 function onMapClick(tile: number): void {
   const m = session?.mirror;
+  if (m && axisFront !== 0) {
+    // Mode choix d'axe : chaque clic lance une percée sur la connexion du front la plus proche (05-Fronts §11.1).
+    const axis = nearestConnection(m, axisFront, tile);
+    if (axis !== null) sendOrder({ type: "start_breakthrough", front: axisFront, city1: axis.city1, city2: axis.city2 });
+    return;
+  }
   if (m && factoryArmed !== null) {
     const target = factoryTarget(m, tile);
     if (target.problem !== null) {
@@ -432,7 +480,14 @@ function onMapClick(tile: number): void {
     return;
   }
   if (m && !placement) {
-    // Aucun outil armé : un clic sur le territoire d'un autre joueur ouvre le menu de diplomatie, ailleurs il le ferme.
+    // Aucun outil armé : un clic dans une zone de front, affichée ou non, ouvre le panneau de ce front (05-Fronts §11.1) ;
+    // sinon un clic sur le territoire d'un autre joueur ouvre le menu de diplomatie, ailleurs il le ferme.
+    const front = session?.view?.frontAt(tile);
+    if (front !== undefined) {
+      diplomacy.openFor(0);
+      session?.frontPanel?.open(front);
+      return;
+    }
     diplomacy.openFor(m.ownerOf(tile));
     return;
   }
@@ -508,6 +563,64 @@ function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; pr
   else if (m.cities[city - 1]!.player !== HUMAN) problem = "Cette zone appartient à un autre joueur.";
   else if (m.factoryMarks.has(city)) problem = `La ville n° ${city} a déjà une usine.`;
   return { city, ok: problem === null, problem };
+}
+
+// ---- fronts : panneau, mode choix d'axe (05-Fronts §11) ----
+
+/** Front dont le joueur choisit l'axe d'une percée (0 : hors du mode). */
+let axisFront = 0;
+
+function openFront(id: number): void {
+  const s = session;
+  const front = s?.mirror?.fronts.find((f) => f.id === id);
+  if (s === null || front === undefined) return;
+  s.infobar?.closeAll();
+  s.frontPanel?.open(front);
+}
+
+/** « Percée » : le panneau se ferme et la carte passe en mode choix d'axe. */
+function startAxisMode(frontId: number): void {
+  const s = session;
+  if (s === null) return;
+  s.frontPanel?.close();
+  setPlacement(false);
+  setFactoryArmed(null);
+  axisFront = frontId;
+  s.view?.setAxisMode(frontId);
+  $("bar-hint").textContent = "Percée : cliquez sur une route du front pour lancer une percée (plusieurs possibles). Échap : quitter ce mode.";
+}
+
+function stopAxisMode(): void {
+  axisFront = 0;
+  session?.view?.setAxisMode(0);
+  $("bar-hint").textContent = "";
+}
+
+/** Connexion du front la plus proche de la case cliquée (choix provisoire, 05-Fronts §11.1). */
+function nearestConnection(m: Mirror, frontId: number, tile: number): { city1: number; city2: number } | null {
+  const front = m.fronts.find((f) => f.id === frontId);
+  if (front === undefined) return null;
+  const w = m.width;
+  const px = (tile % w) + 0.5;
+  const py = Math.floor(tile / w) + 0.5;
+  let best: { city1: number; city2: number } | null = null;
+  let bestD = Infinity;
+  for (const c of front.connections) {
+    const a = m.cities[c.city1 - 1]!.tile;
+    const b = m.cities[c.city2 - 1]!.tile;
+    const ax = (a % w) + 0.5;
+    const ay = Math.floor(a / w) + 0.5;
+    const dx = (b % w) + 0.5 - ax;
+    const dy = Math.floor(b / w) + 0.5 - ay;
+    const len2 = dx * dx + dy * dy;
+    const k = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2));
+    const d = (ax + dx * k - px) ** 2 + (ay + dy * k - py) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = { city1: c.city1, city2: c.city2 };
+    }
+  }
+  return best;
 }
 
 function sendOrder(order: HumanOrder): void {

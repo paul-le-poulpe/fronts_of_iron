@@ -10,7 +10,8 @@
 // surface cultivée (ou pêchée, ou du nombre de cases de fer exploitées). Les
 // histogrammes sont tenus à jour case par case.
 
-import type { FactoryCatalog, HumanDetail, InitMessage, PlayerStats, TickMessage } from "./protocol.ts";
+import { computeFrontZones, type GeomWorld } from "./frontgeom.ts";
+import type { FactoryCatalog, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
 import { RoadPaths } from "./roadpaths.ts";
 
 export const TERRAIN_LAND = 0x80;
@@ -70,6 +71,14 @@ export class Mirror {
   /** Même chose pour les cases de fer exploitées (la mine). */
   readonly ironThreshold: Int32Array;
   readonly catalog: FactoryCatalog;
+  readonly military: MilitaryCatalog;
+  /** Tous les fronts (05-Fronts), par identifiant, tels que le dernier message les donne. */
+  fronts: readonly FrontView[] = [];
+  /** Augmente à chaque changement des fronts : la vue et les zones recalculent alors. */
+  frontsVersion = 0;
+  /** Paires de villes `a × 65536 + b` (a < b) reliées par une connexion d'un front actif : double ligne rouge de la carte. */
+  private activePairs = new Set<number>();
+  private zoneCache: { version: number; zones: Uint16Array } | null = null;
   /** Usines de tous les joueurs, par identifiant de ville. */
   factoryMarks = new Map<number, FactoryMark>();
   /** Détail des usines du joueur humain, au dernier tour. */
@@ -92,6 +101,7 @@ export class Mirror {
     this.expansionRadius = init.expansionRadius;
     this.controlRadius = init.controlRadius;
     this.catalog = init.catalog;
+    this.military = init.military;
     this.roadPaths = new RoadPaths(init.width, init.height, init.terrain, Math.floor(init.expansionRadius / 2));
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
@@ -146,6 +156,30 @@ export class Mirror {
     return id === 0 ? 0 : this.cities[id - 1]!.player;
   }
 
+  /** Les villes `a` et `b` sont-elles reliées par une connexion d'un front actif ? */
+  isFrontPair(a: number, b: number): boolean {
+    return this.activePairs.has(a < b ? a * 65536 + b : b * 65536 + a);
+  }
+
+  /** Ce que la géométrie des fronts lit de la partie. */
+  world(): GeomWorld {
+    return {
+      width: this.width,
+      height: this.height,
+      cityTile: this.cities.map((c) => c.tile),
+      roads: this.roads,
+      controlRadius: this.controlRadius,
+    };
+  }
+
+  /** Front de chaque case de terre dans une zone de front (05-Fronts §11.1), 0 = aucun. Recalculé quand les fronts changent. */
+  frontZones(): Uint16Array {
+    if (this.zoneCache === null || this.zoneCache.version !== this.frontsVersion) {
+      this.zoneCache = { version: this.frontsVersion, zones: computeFrontZones(this.world(), this.fronts, (t) => this.isLand(t)) };
+    }
+    return this.zoneCache.zones;
+  }
+
   /** Case où dessiner l'icône de port de la ville (00-Game §3.6, §11). */
   portTile(cityId: number): number {
     return this.portTiles.get(cityId) ?? this.cities[cityId - 1]!.tile;
@@ -168,6 +202,9 @@ export class Mirror {
       }
     };
 
+    // Une ville prise change de joueur : ses cases quittent les histogrammes de l'ancien joueur
+    // (avec les villes d'avant), puis entrent dans ceux du nouveau (après).
+    for (const cap of msg.captured) this.countZone(cap.city, -1);
     if (msg.cities !== null) {
       const c = msg.cities;
       const n = c.length / 4;
@@ -180,6 +217,7 @@ export class Mirror {
       }
       this.portTiles.clear();
     }
+    for (const cap of msg.captured) this.countZone(cap.city, +1);
     if (msg.roads !== null) this.roads = msg.roads;
     if (msg.cities !== null || msg.roads !== null) this.roadTiles = this.roadPaths.sync(this.cities, this.roads);
     if (msg.factoryMarks !== null) {
@@ -197,15 +235,22 @@ export class Mirror {
       const t = tiles[i]!;
       const next = tiles[i + 1]!;
       const prev = this.tileCity[t]!;
-      this.count(t, prev, -1);
-      this.count(t, next, +1);
+      if (prev !== next) {
+        this.count(t, prev, -1);
+        this.count(t, next, +1);
+      }
       this.tileCity[t] = next;
-      mark(t);
-      if (t % w > 0) mark(t - 1);
-      if (t % w < w - 1) mark(t + 1);
-      if (t >= w) mark(t - w);
-      if (t + w < this.terrain.length) mark(t + w);
+      // La couleur d'une case dépend de ses voisines et des voisines de celles-ci (double ligne rouge d'un front).
+      const x = t % w;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2 + Math.abs(dy); dx <= 2 - Math.abs(dy); dx++) {
+          const nx = x + dx;
+          const u = t + dy * w + dx;
+          if (nx >= 0 && nx < w && u >= 0 && u < this.terrain.length) mark(u);
+        }
+      }
     }
+    if (msg.fronts !== null) this.setFronts(msg.fronts, mark);
     if (msg.cities !== null) {
       this.portTiles.clear();
       for (const city of this.cities) if (city.port) this.portTiles.set(city.id, this.findPortTile(city));
@@ -233,6 +278,56 @@ export class Mirror {
 
     for (const t of repaint) this.repaintMark[t] = 0;
     return repaint;
+  }
+
+  /** Retire (-1) ou ajoute (+1) les cases de la zone de la ville aux histogrammes de son joueur actuel. */
+  private countZone(cityId: number, sign: number): void {
+    const city = this.cities[cityId - 1];
+    if (city === undefined) return;
+    const w = this.width;
+    const r = this.controlRadius;
+    const cx = city.tile % w;
+    const cy = (city.tile - cx) / w;
+    for (let y = Math.max(0, cy - r); y <= Math.min(this.height - 1, cy + r); y++) {
+      for (let x = Math.max(0, cx - r); x <= Math.min(w - 1, cx + r); x++) {
+        if (this.tileCity[y * w + x] === cityId) this.count(y * w + x, cityId, sign);
+      }
+    }
+  }
+
+  /**
+   * Nouveaux fronts. Les paires de villes des fronts actifs changent la peinture (double ligne
+   * rouge) : les cases de leurs zones sont repeintes.
+   */
+  private setFronts(fronts: readonly FrontView[], mark: (t: number) => void): void {
+    const pairs = new Set<number>();
+    for (const f of fronts) {
+      if (!f.active) continue;
+      for (const c of f.connections) pairs.add(c.city1 < c.city2 ? c.city1 * 65536 + c.city2 : c.city2 * 65536 + c.city1);
+    }
+    const touched = new Set<number>();
+    for (const p of pairs) if (!this.activePairs.has(p)) touched.add(p);
+    for (const p of this.activePairs) if (!pairs.has(p)) touched.add(p);
+    this.activePairs = pairs;
+    this.fronts = fronts;
+    this.frontsVersion++;
+    if (touched.size === 0) return;
+    const cities = new Set<number>();
+    for (const p of touched) {
+      cities.add(Math.floor(p / 65536));
+      cities.add(p % 65536);
+    }
+    const w = this.width;
+    const r = this.controlRadius;
+    for (const id of cities) {
+      const city = this.cities[id - 1];
+      if (city === undefined) continue;
+      const cx = city.tile % w;
+      const cy = (city.tile - cx) / w;
+      for (let y = Math.max(0, cy - r); y <= Math.min(this.height - 1, cy + r); y++) {
+        for (let x = Math.max(0, cx - r); x <= Math.min(w - 1, cx + r); x++) if (this.tileCity[y * w + x] === id) mark(y * w + x);
+      }
+    }
   }
 
   /** Ce que la case compte pour les rayons d'exploitation : champs (terre fertile), mer, ou fer (terre qui porte du fer). */

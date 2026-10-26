@@ -8,6 +8,8 @@
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
 //
+// La cinquième section est la liste des fronts (05-Fronts §11.2), juste à droite d'Armement.
+//
 // Le dernier élément de la barre, contre le bord droit, est le bouton « Carte » : il
 // ouvre un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
 // racine, comme les détails (la barre a `overflow` et le couperait). Les cases ne
@@ -18,8 +20,9 @@
 
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
-import { productName } from "./names.ts";
-import type { FactoryCatalog, HumanDetail, PlayerStats } from "./protocol.ts";
+import { playerName, productName } from "./names.ts";
+import { playerColor, rgbCss } from "./painter.ts";
+import { HUMAN, type FactoryCatalog, type FrontView, type HumanDetail, type PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
@@ -64,6 +67,8 @@ interface Track {
   readonly mark: HTMLElement;
   /** Zone hachurée de rouge (armement, au-delà du stock cible). */
   readonly hatch: HTMLElement;
+  /** Équipement sur les fronts, jaune foncé, à gauche du stock (armement, 05-Fronts §11.5). */
+  readonly deployed: HTMLElement;
 }
 
 function track(kind: "flow" | "stock"): Track {
@@ -72,9 +77,10 @@ function track(kind: "flow" | "stock"): Track {
   const gap = el("i", "ib-gap");
   const hatch = el("i", "ib-hatch");
   const mark = el("i", kind === "flow" ? "ib-mark thick" : "ib-mark thin");
+  const deployed = el("i", "ib-front");
   mark.hidden = true;
-  root.append(fill, gap, hatch, mark);
-  return { root, fill, gap, mark, hatch };
+  root.append(deployed, fill, gap, hatch, mark);
+  return { root, fill, gap, mark, hatch, deployed };
 }
 
 /** Une ligne : étiquette, barre, texte de valeurs. */
@@ -132,7 +138,7 @@ function legendItem(className: string, text: string): HTMLElement {
 }
 
 /** Options de vue de la carte du menu « Carte » (00-Game §11). */
-export type MapOption = "iron" | "playerColor" | "fertility" | "factories";
+export type MapOption = "iron" | "playerColor" | "fertility" | "factories" | "frontZones";
 
 /** Options du menu, dans l'ordre d'affichage, avec l'état de leur case en début de partie. */
 export const MAP_OPTIONS: readonly { readonly id: MapOption; readonly label: string; readonly initial: boolean }[] = [
@@ -140,6 +146,7 @@ export const MAP_OPTIONS: readonly { readonly id: MapOption; readonly label: str
   { id: "playerColor", label: "Couleur des joueurs", initial: true },
   { id: "fertility", label: "Fertilité", initial: false },
   { id: "factories", label: "Icônes d'usine", initial: true },
+  { id: "frontZones", label: "Zones de front", initial: true },
 ];
 
 interface Section {
@@ -161,24 +168,37 @@ export class InfoBar {
   private readonly mapMenu: HTMLElement;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
   private readonly onFarmShare: (percent: number) => void;
+  private readonly onForcedMobilization: (enabled: boolean) => void;
+  private readonly onOpenFront: (id: number) => void;
   /** Vrai pendant que le joueur tient le curseur de la part de fermiers : les tours n'y touchent pas. */
   private farmSliderActive = false;
+  /** Jusqu'à cette heure, la case « mobilisation forcée » n'est pas réécrite par les tours (l'ordre n'est pas encore appliqué). */
+  private forcedUntil = 0;
+  /** Tous les fronts de la partie, au dernier message. */
+  private fronts: readonly FrontView[] = [];
+  private frontsKey = "";
 
   /**
    * `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée ;
-   * `onFarmShare`, au relâchement du curseur de la part de fermiers.
+   * `onFarmShare`, au relâchement du curseur de la part de fermiers ;
+   * `onForcedMobilization`, au changement de l'interrupteur de l'onglet Population ;
+   * `onOpenFront`, au clic sur une ligne de la liste des fronts.
    */
   constructor(
     root: HTMLElement,
     catalog: FactoryCatalog,
     onMapOption: (option: MapOption, checked: boolean) => void,
     onFarmShare: (percent: number) => void,
+    onForcedMobilization: (enabled: boolean) => void,
+    onOpenFront: (id: number) => void,
   ) {
     this.root = root;
     this.catalog = catalog;
     this.onFarmShare = onFarmShare;
+    this.onForcedMobilization = onForcedMobilization;
+    this.onOpenFront = onOpenFront;
     this.bar = el("div", "ib-bar");
-    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog)];
+    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.frontList()];
     root.replaceChildren(this.bar);
     this.sections.forEach((s, i) => {
       s.pane.hidden = true;
@@ -226,6 +246,12 @@ export class InfoBar {
     this.collapse();
     this.mapMenu.hidden = false;
     this.mapButton.setAttribute("aria-expanded", "true");
+  }
+
+  /** Replie le détail ouvert et ferme le menu « Carte ». */
+  closeAll(): void {
+    this.closeMenu();
+    this.collapse();
   }
 
   /** Replie le détail ouvert, s'il y en a un. */
@@ -295,6 +321,8 @@ export class InfoBar {
       { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers, machine: "tractor" },
       { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers, machine: "fishingBoat" },
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
+      // Les soldats en dernier, même en mobilisation forcée (05-Fronts §11.5).
+      { label: "Soldats", icon: "pop-soldier", color: "var(--occ-soldier)", read: (s: PlayerStats) => s.soldiers },
     ];
     const stacked = el("div", "ib-stack");
     const parts = occupations.map((o) => {
@@ -319,7 +347,17 @@ export class InfoBar {
       return { r, fill: t.fill, value };
     });
     const note = el("p", "muted small ib-note", "Répartition de la population au début du dernier tour.");
-    const pane = this.pane("pop", el("h3", undefined, "Population par occupation"), stacked, ...rows.map((x) => x.r), note);
+    // Mobilisation forcée (05-Fronts §4.1, §11.5) : interrupteur rouge, éteint par défaut.
+    const forcedBox = el("input");
+    forcedBox.type = "checkbox";
+    const forced = el("label", "ib-forced");
+    forced.title = "Les soldats sont recrutés avant les lignes de production, jusqu'au pourcentage de priorité de chaque front.";
+    forced.append(forcedBox, el("span", "ib-switch"), el("span", "ib-forced-text", "MOBILISATION FORCÉE"));
+    forcedBox.addEventListener("change", () => {
+      this.forcedUntil = Date.now() + 600;
+      this.onForcedMobilization(forcedBox.checked);
+    });
+    const pane = this.pane("pop", el("h3", undefined, "Population par occupation"), stacked, ...rows.map((x) => x.r), forced, note);
 
     return {
       button,
@@ -327,10 +365,11 @@ export class InfoBar {
       head: (_d, s) => {
         total.textContent = num(s.population);
         // Croissance du tour : la population d'après moins celle du début du tour, somme des occupations.
-        setSigned(delta, s.population - (s.factoryWorkers + s.miners + s.farmers + s.fishers + s.idle));
+        setSigned(delta, s.population - (s.factoryWorkers + s.miners + s.farmers + s.fishers + s.idle + s.soldiers));
         max.textContent = `/ ${num(this.info.foodPerHead > 0 ? Math.floor(s.food / this.info.foodPerHead) : 0)}`;
       },
       body: (_d, s) => {
+        if (Date.now() >= this.forcedUntil) forcedBox.checked = s.forcedMobilization;
         const counts = occupations.map((o) => o.read(s));
         const sum = counts.reduce((a, b) => a + b, 0);
         let from = 0;
@@ -555,7 +594,7 @@ export class InfoBar {
       const t = track("stock");
       t.mark.hidden = false;
       const value = el("span", "ib-value");
-      value.title = "Stock / cible · par tour";
+      value.title = "Stock / cible · par tour · sur les fronts";
       const label = el("span");
       label.append(productIcon(id), ` ${capitalize(productName(id))}`);
       return { id, index, t, value, r: row(label, t.root, value) };
@@ -565,31 +604,92 @@ export class InfoBar {
     const decay = el("span");
     const hatched = legendItem("hatch", "hachuré : au-delà du stock cible, ");
     hatched.append(decay);
-    legend.append(legendItem("stock", "stock"), legendItem("target", "stock cible"), hatched);
+    legend.append(legendItem("front", "sur les fronts"), legendItem("stock", "stock"), legendItem("target", "stock cible"), hatched);
     const pane = this.pane("stock", el("h3", undefined, "Armement (stock)"), ...rows.map((x) => x.r), empty, legend);
 
     return {
       button,
       pane,
       head: () => {},
-      body: (d) => {
+      body: (d, s) => {
         let shown = 0;
         for (const x of rows) {
           const stock = d.reserve[x.index] ?? 0;
           const target = d.reserveMax[x.index] ?? 0;
-          x.r.hidden = target === 0 && stock === 0;
+          // Équipement dans des unités des fronts, déployé et en route : il compte dans le stock (05-Fronts §4.6).
+          const onFronts = s.frontEquipment[x.index] ?? 0;
+          x.r.hidden = target === 0 && stock === 0 && onFronts === 0;
           if (x.r.hidden) continue;
           shown++;
-          // Échelle : 1,5 × la cible, ou le stock s'il la dépasse davantage, pour que l'excès se voie.
-          const scale = Math.max(Math.floor((target * 3) / 2), stock);
-          span(x.t.fill, 0, pct(stock, scale));
+          // Échelle : 1,5 × la cible, ou le total s'il la dépasse davantage, pour que l'excès se voie.
+          const scale = Math.max(Math.floor((target * 3) / 2), stock + onFronts);
+          // De gauche à droite : jaune foncé (fronts), bleu (en stock), hachures rouges (au-dessus du stock cible).
+          span(x.t.deployed, 0, pct(onFronts, scale));
+          span(x.t.fill, pct(onFronts, scale), pct(onFronts + stock, scale));
           span(x.t.hatch, pct(target, scale), 100);
           x.t.mark.style.left = `${pct(target, scale)}%`;
-          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par tour`;
+          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par tour · ${num(onFronts)} sur les fronts`;
         }
         empty.hidden = shown > 0;
         decay.textContent = `${num(this.info.armamentDecayPercent)} % de l'excès disparaît par tour`;
       },
+    };
+  }
+
+  // ---- 5. Fronts (05-Fronts §11.2) ----
+
+  /** À appeler quand le message d'un tour apporte de nouveaux fronts. */
+  setFronts(fronts: readonly FrontView[]): void {
+    this.fronts = fronts;
+  }
+
+  private frontList(): Section {
+    const count = el("strong", "ib-num");
+    const button = this.button("fronts", [el("span", "ib-name", "Fronts"), count]);
+    button.title = "Fronts de votre pays · actifs";
+    const activeTitle = el("h4", undefined, "Fronts actifs");
+    const peaceTitle = el("h4", undefined, "Fronts en paix");
+    const activeList = el("div", "fl-list");
+    const peaceList = el("div", "fl-list");
+    const empty = el("p", "muted", "Aucun front : aucune de vos routes ne touche un autre joueur.");
+    const pane = this.pane("fronts", el("h3", undefined, "Fronts"), activeTitle, activeList, peaceTitle, peaceList, empty);
+    const mine = (f: FrontView): number => f.players.indexOf(HUMAN);
+    const render = (): void => {
+      const list = this.fronts
+        .filter((f) => mine(f) >= 0)
+        .sort((a, b) => a.groups[mine(a)]! - b.groups[mine(b)]! || a.players[1 - mine(a)]! - b.players[1 - mine(b)]! || a.id - b.id);
+      const key = list.map((f) => `${f.id}:${f.active ? 1 : 0}:${f.connections.length}`).join(",");
+      if (key === this.frontsKey) return;
+      this.frontsKey = key;
+      const row = (f: FrontView): HTMLElement => {
+        const i = mine(f);
+        const other = f.players[1 - i]!;
+        const b = el("button", "fl-row");
+        b.type = "button";
+        const sw = el("span", "sw");
+        sw.style.background = rgbCss(playerColor(other));
+        b.append(
+          sw,
+          el("span", "fl-main", `Île n° ${f.groups[i]} · ${playerName(other)}`),
+          el("span", "muted small", `île n° ${f.groups[1 - i]} · ${f.connections.length} connexion${f.connections.length > 1 ? "s" : ""}`),
+        );
+        b.addEventListener("click", () => this.onOpenFront(f.id));
+        return b;
+      };
+      activeList.replaceChildren(...list.filter((f) => f.active).map(row));
+      peaceList.replaceChildren(...list.filter((f) => !f.active).map(row));
+      activeTitle.hidden = activeList.childElementCount === 0;
+      peaceTitle.hidden = peaceList.childElementCount === 0;
+      empty.hidden = list.length > 0;
+    };
+    return {
+      button,
+      pane,
+      head: () => {
+        const mineList = this.fronts.filter((f) => mine(f) >= 0);
+        count.textContent = `${mineList.filter((f) => f.active).length} / ${mineList.length}`;
+      },
+      body: render,
     };
   }
 

@@ -14,6 +14,7 @@ import {
   armamentReserveMax,
   CITY,
   createGame,
+  deployedEquipment,
   DIPLOMACY,
   FACTORY,
   FACTORY_TYPE_IDS,
@@ -23,20 +24,28 @@ import {
   FARMING,
   FISHING,
   FOOD,
+  FRONTS,
   foundingCost,
   generateTestMap,
   GOOD_IDS,
+  isActive,
+  KIND_ARMOR,
+  KIND_INFANTRY,
   MINING,
+  NICHES,
   POPULATION,
   PRODUCT_IDS,
   productConfig,
+  UNITS,
   RESOURCES,
   STATUS_PACT,
   STATUS_WAR,
   statusOf,
+  UNIT_DATA,
   waterYieldMilli,
   workersForLines,
   machineReference,
+  type Front,
   type GameState,
   type ProductId,
   type Intent,
@@ -53,7 +62,10 @@ import {
   HUMAN,
   type DiplomacyView,
   type FactoryCatalog,
+  type FrontSideView,
+  type FrontView,
   type HumanDetail,
+  type MilitaryCatalog,
   type HumanOrder,
   type InitMessage,
   type OrderResult,
@@ -113,6 +125,76 @@ export function factoryCatalog(): FactoryCatalog {
   };
 }
 
+/** Fronts et unités militaires que la page affiche (05-Fronts §3, §12) : tout vient du moteur. */
+export function militaryCatalog(): MilitaryCatalog {
+  return {
+    units: UNIT_DATA.map((u) => {
+      const config = UNITS[u.id] as { readonly icon: string; readonly description?: string };
+      return {
+        id: u.id,
+        index: u.index,
+        niche: Object.keys(NICHES)[u.niche]!,
+        equipment: ARMAMENT_IDS[u.equipment]!,
+        equipmentCount: u.equipmentCount,
+        population: u.population,
+        icon: config.icon,
+        description: config.description ?? (ARMAMENT.types[ARMAMENT_IDS[u.equipment]!] as { readonly description?: string }).description ?? "",
+        softAttack: u.softAttack,
+        hardAttack: u.hardAttack,
+        frontWidth: u.frontWidth,
+        breakthroughWidth: u.breakthroughWidth,
+        kind: u.kind === KIND_INFANTRY ? "infantry" : u.kind === KIND_ARMOR ? "armor" : "equipment",
+        hitPoints: u.hitPoints,
+        motorized: u.motorized,
+      };
+    }),
+    niches: Object.entries(NICHES).map(([id, units]) => ({ id, units: [...units] })),
+    metersPerConnection: FRONTS.metersPerConnection,
+    priorityPercent: [...FRONTS.priorityPercent],
+    transferTurns: FRONTS.transferTurns,
+    combatTurns: FRONTS.combatTurns,
+    breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
+    breakthroughExhaustionPercent: FRONTS.breakthroughExhaustionPercent,
+  };
+}
+
+/** Un front tel que la page le lit (05-Fronts §13.4). */
+export function frontView(state: GameState, f: Front): FrontView {
+  const side = (i: number): FrontSideView => {
+    const s = f.sides[i]!;
+    const transit = new Array<number>(UNIT_DATA.length).fill(0);
+    for (const tr of s.transfers) if (tr.toFront) transit[tr.unit] = transit[tr.unit]! + tr.count;
+    return {
+      first: s.firstLine.slice(),
+      second: s.secondLine.slice(),
+      transit,
+      priority: s.priorityIndex,
+      reassign: s.reassign,
+      lineMode: s.lineMode.slice(),
+      motorizedOnly: s.motorizedOnly,
+      frontAttack: s.frontAttack,
+      breakthroughs: s.breakthroughs.map((b) => ({
+        id: b.id,
+        city1: b.city1,
+        city2: b.city2,
+        phase: b.phase,
+        startTick: b.startTick,
+        attackers: b.attackers.slice(),
+        defenders1: b.defenders1.slice(),
+        defenders2: b.defenders2.slice(),
+      })),
+    };
+  };
+  return {
+    id: f.id,
+    players: [f.players[0], f.players[1]],
+    groups: [f.groups[0], f.groups[1]],
+    active: isActive(state, f),
+    connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
+    sides: [side(0), side(1)],
+  };
+}
+
 export const DEFAULT_STEP_MS = 100;
 export const MAX_BOTS = 7;
 
@@ -129,6 +211,8 @@ export class SoloGame {
   private readonly sentTileCity: Uint16Array;
   /** Les usines telles qu'envoyées à la page (`factoryMarks`), pour n'envoyer que les changements. */
   private sentMarks = "";
+  /** Les fronts tels qu'envoyés à la page (JSON), pour n'envoyer que les changements. */
+  private sentFronts = "";
 
   private readonly options: SoloOptions;
 
@@ -164,6 +248,7 @@ export class SoloGame {
       controlRadius: CITY.controlRadius,
       stepMs: this.stepMs,
       catalog: factoryCatalog(),
+      military: militaryCatalog(),
     };
   }
 
@@ -188,6 +273,7 @@ export class SoloGame {
     applyTurn(state, { turn: state.tick + 1, intents });
     const t2 = performance.now();
 
+    const captured = state.events.flatMap((e) => (e.type === "city_captured" ? [{ city: e.city, from: e.from, to: e.to }] : []));
     const results: OrderResult[] = human.map(({ id, order }) => ({
       id,
       order,
@@ -200,7 +286,7 @@ export class SoloGame {
     let tiles: Uint32Array;
     let cities: Uint32Array | null = null;
     let roads: Uint16Array | null = null;
-    if (state.cities.length !== citiesBefore) {
+    if (state.cities.length !== citiesBefore || captured.length > 0) {
       const list: number[] = [];
       const now = state.tileCity;
       const sent = this.sentTileCity;
@@ -208,6 +294,17 @@ export class SoloGame {
         if (now[t] !== sent[t]) {
           list.push(t, now[t]!);
           sent[t] = now[t]!;
+        }
+      }
+      // Une ville prise change de joueur sans que `tileCity` change : sa zone est renvoyée pour être repeinte.
+      for (const c of captured) {
+        const tile = state.cities[c.city - 1]!.tile;
+        const r = CITY.controlRadius;
+        const w = state.map.width;
+        for (let y = Math.max(0, Math.floor(tile / w) - r); y <= Math.min(state.map.height - 1, Math.floor(tile / w) + r); y++) {
+          for (let x = Math.max(0, (tile % w) - r); x <= Math.min(w - 1, (tile % w) + r); x++) {
+            if (now[y * w + x] === c.city) list.push(y * w + x, c.city);
+          }
         }
       }
       tiles = Uint32Array.from(list);
@@ -240,6 +337,17 @@ export class SoloGame {
     const factoryMarks = marksKey !== this.sentMarks ? Uint32Array.from(marks) : null;
     this.sentMarks = marksKey;
 
+    // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
+    let fronts: FrontView[] | null = null;
+    if (state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
+      const views = state.fronts.map((f) => frontView(state, f));
+      const key = JSON.stringify(views);
+      if (key !== this.sentFronts) {
+        this.sentFronts = key;
+        fronts = views;
+      }
+    }
+
     const players: PlayerStats[] = state.players.map((p) => {
       // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
       // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
@@ -247,6 +355,9 @@ export class SoloGame {
       const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000);
       return {
       id: p.id,
+      soldiers: p.soldiers,
+      forcedMobilization: p.forcedMobilization,
+      frontEquipment: deployedEquipment(state, p.id),
       population: p.population,
       farmers: p.farmers,
       fishers: p.fishers,
@@ -291,6 +402,8 @@ export class SoloGame {
       players,
       results,
       diplomacy: this.diplomacyView(),
+      fronts,
+      captured,
       paused,
       perf: { bots: t1 - t0, apply: t2 - t1, pack: t3 - t2 },
     };
@@ -301,10 +414,23 @@ export class SoloGame {
    * humain directement, entre deux tours, hors des règles et sans ordre. N'existent
    * qu'en solo : en multijoueur, l'état ne se modifie que par les tours (règle 3).
    */
-  debug(action: "addPopulation", amount: number): void {
-    if (action === "addPopulation" && Number.isInteger(amount)) {
+  debug(action: "addPopulation" | "addArmament" | "armBots", amount: number): void {
+    if (!Number.isInteger(amount)) return;
+    if (action === "addPopulation") {
       const p = this.state.players[HUMAN - 1]!;
       p.population = Math.max(0, p.population + amount);
+    }
+    // Un lot d'armement : de quoi former 100 unités de chaque type (l'équipement de `UNITS`).
+    const grant = (p: GameState["players"][number], lots: number): void => {
+      for (const u of UNIT_DATA) p.armamentReserve[u.equipment] = p.armamentReserve[u.equipment]! + 100 * lots * u.equipmentCount;
+    };
+    if (action === "addArmament") grant(this.state.players[HUMAN - 1]!, amount);
+    if (action === "armBots") {
+      for (const p of this.state.players) {
+        if (p.id === HUMAN) continue;
+        grant(p, amount);
+        p.population += 50_000 * amount;
+      }
     }
   }
 
@@ -324,7 +450,7 @@ export class SoloGame {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: state.events.filter((e) => mine(e.from, e.to)),
+      events: state.events.flatMap((e) => (e.type !== "city_captured" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 
@@ -392,6 +518,13 @@ export class SoloGame {
     return counts;
   }
 
+  /** Le camp du joueur humain dans le front, ou undefined. */
+  private mySide(frontId: number): Front["sides"][number] | undefined {
+    const f = this.state.fronts.find((x) => x.id === frontId);
+    const i = f === undefined ? -1 : f.players.indexOf(HUMAN);
+    return f === undefined || i < 0 ? undefined : f.sides[i];
+  }
+
   /** Le moteur a-t-il appliqué cet ordre humain ? (`applyTurn` ne le dit pas : on regarde l'état.) */
   private wasApplied(order: HumanOrder, citiesBefore: number, linesBefore: Map<string, number> | null): boolean {
     const state = this.state;
@@ -430,6 +563,25 @@ export class SoloGame {
         const answer = order.accept ? "proposal_accepted" : "proposal_refused";
         return state.events.some((e) => e.type === answer && e.from === order.from && e.to === HUMAN);
       }
+      // Fronts : le réglage demandé est dans l'état.
+      case "set_forced_mobilization":
+        return me.forcedMobilization === order.enabled;
+      case "set_front_priority":
+        return this.mySide(order.front)?.priorityIndex === order.priority;
+      case "set_front_reassign":
+        return this.mySide(order.front)?.reassign === order.enabled;
+      case "set_breakthrough_motorized_only":
+        return this.mySide(order.front)?.motorizedOnly === order.enabled;
+      case "set_unit_line_mode":
+        return this.mySide(order.front)?.lineMode[UNIT_DATA.findIndex((u) => u.id === order.unit)] === ["first", "balanced", "second"].indexOf(order.mode);
+      case "start_front_attack":
+        return this.mySide(order.front)?.frontAttack === true;
+      case "stop_front_attack":
+        return this.mySide(order.front)?.frontAttack === false;
+      case "start_breakthrough":
+        return this.mySide(order.front)?.breakthroughs.some((b) => b.city1 === order.city1 && b.city2 === order.city2) === true;
+      case "cancel_breakthrough":
+        return !state.fronts.some((f) => f.sides.some((s) => s.breakthroughs.some((b) => b.id === order.id)));
     }
   }
 }

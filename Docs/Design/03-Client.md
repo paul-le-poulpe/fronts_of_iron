@@ -42,12 +42,15 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, logos d'usine, modes placement et usine |
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
-| `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines (sans DOM) |
+| `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
+| `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, courbe de Catmull-Rom centripète, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
+| `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, courbe, points ; recalculé quand `Mirror.frontsVersion` change |
+| `src/frontpanel.ts` | panneau d'un front (05-Fronts §11.3) : titre, boutons d'attaque, percées, réglages, tableau des unités |
 | `src/protocol.ts` | types des messages page ↔ Worker |
 | `src/engine.worker.ts` | Web Worker : reçoit les messages, tient l'horloge de tour |
 | `src/solo.ts` | `SoloGame` : moteur + bots + fabrication des messages (sans DOM, sans `self`) |
 | `src/bots.ts` | bots (§5) |
-| `test/solo.test.ts` | tests sous Node : partie solo, copie de la page, peinture |
+| `test/solo.test.ts`, `test/fronts.test.ts` | tests sous Node : partie solo, copie de la page, peinture ; géométrie des fronts, message des fronts, double ligne rouge, prise d'une ville |
 | `vite.config.ts` | `server.proxy` pour `/api`, Worker au format module |
 | `public/icons/` | icônes provisoires (00-Game §11), servies telles quelles |
 
@@ -93,6 +96,10 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | Bouton | Action |
 | --- | --- |
 | « +1 000 population » | `population += 1000` (jamais sous 0) |
+| « + armement » | ajoute à la réserve du joueur de quoi former 100 unités de chaque type (`UNITS` : l'équipement de chaque type) ; message `addArmament` |
+| « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (300 unités de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
+
+Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15).
 
 ## 4. Messages
 
@@ -109,6 +116,11 @@ Page → Worker (`ToWorker`) :
   `break_pact { target }`, `propose_peace { target }`, `answer_proposal { from,
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
 - `pause { paused }`.
+- `order` accepte aussi les ordres des fronts (05-Fronts §5, 02-Engine §4) : `set_front_priority { front, priority }`,
+  `set_front_reassign { front, enabled }`, `set_unit_line_mode { front, unit, mode }`, `set_breakthrough_motorized_only
+  { front, enabled }`, `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
+  `start_breakthrough { front, city1, city2 }`, `cancel_breakthrough { id }`.
+- `debug { action: "addPopulation" | "addArmament" | "armBots", amount }` (voir §3).
 
 Worker → page (`FromWorker`) :
 
@@ -120,7 +132,11 @@ Worker → page (`FromWorker`) :
   ouvriers et fer par ligne, par produit), lue dans le moteur par `factoryCatalog()` (`solo.ts`) ;
   `catalog.economy` : les réglages que la barre d'informations utilise
   (consommation par tête, nourriture minimale, `maxMachinesPer1000` de chaque
-  machine, déclin de l'armement en pourcent).
+  machine, déclin de l'armement en pourcent) ; `military` : les unités militaires
+  (clé, niche, équipement, population, icône, description, attaques, largeurs, PV,
+  motorisation) et les réglages des fronts que le panneau affiche (largeur d'une
+  connexion, pourcentages de priorité, délais), lus dans `config/units.ts` et
+  `config/fronts.ts` par `militaryCatalog()` (`solo.ts`).
 - `tick`, à chaque tour :
   - `tick` : numéro du tour ;
   - `tiles` : paires `[case, ville]` des cases dont `tileCity` a changé, pas
@@ -150,6 +166,19 @@ Worker → page (`FromWorker`) :
     diplomatiques du tour où il est l'auteur ou la cible (`state.events` filtré,
     mêmes champs que `DiplomacyEvent`, 02-Engine §4). Pas d'envoi « seulement si
     changé » : c'est petit, et la liste est la source des cartes de proposition (§7) ;
+  - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions
+    avec leur position, et pour chaque camp les unités par type en première ligne, en seconde
+    ligne et en route, les réglages, l'attaque et les percées avec leurs unités engagées), ou
+    `null` si rien n'a changé depuis le dernier envoi. `SoloGame` les reconstruit à chaque
+    round de combat (`combatTurns`), quand le joueur donne un ordre et quand des villes changent,
+    et compare le JSON au dernier envoyé ; positions et effectifs changent à chaque round.
+    Pas de brouillard de guerre : les fronts de tous les joueurs, pas seulement ceux du joueur 1 ;
+  - `captured` : les villes prises pendant le tour (`{ city, from, to }`). Une ville prise
+    change de joueur sans que `tileCity` change : `cities` est alors renvoyé, avec les paires
+    `[case, ville]` de toute sa zone dans `tiles`, pour que la copie de la page la repeigne et
+    refasse ses histogrammes ;
+  - `players` porte aussi `soldiers`, `forcedMobilization` et `frontEquipment` (équipement des
+    unités des fronts, par type d'armement) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
 - `paused { paused }`.
@@ -302,6 +331,21 @@ reconstruction du panneau, qui détruit les sections), et `draw` hachure en blan
 ville, au-dessus des vues et sous les routes et les villes ; le masque de la zone
 est recalculé à chaque changement de ville ou de zones. Une image n'est dessinée que si quelque chose a changé
 (`requestAnimationFrame`).
+
+**Fronts** (05-Fronts §11). `Mirror` garde les `FrontView` (`fronts`, `frontsVersion`), les paires de villes des
+connexions des fronts actifs (`isFrontPair`) et, à la demande, la zone de front de chaque case (`frontZones` : `frontgeom.ts`,
+distance à la ligne du front ≤ le rayon de contrôle, terre seulement, le front le plus proche gagne ; recalculée quand
+`frontsVersion` change). **Double ligne rouge** : `Painter.colorOf` peint en rouge la case de terre dont une voisine est
+la terre d'une ville d'un autre joueur reliée à la sienne par une connexion d'un front actif, et la ligne sombre du joueur
+recule d'une case vers l'intérieur (bande de 4 cases : sombre, rouge, rouge, sombre). La couleur d'une case dépend donc de ses
+voisines à deux cases : `Mirror.applyTick` repeint le losange de rayon 2 autour d'une case modifiée, et les cases des
+villes dont une paire de front change. **Zones** (`frontlayer.ts`, `render.ts`) : hachures de 2 px tous les 8 px à 45° et contour
+de 2 px (segments des côtés de cases qui touchent l'extérieur de la zone), en rouge pour les fronts actifs (case « Zones de
+front » du menu Carte, cochée au départ), en bleu pour un front en paix **au survol seulement** ; la zone survolée s'affiche
+toujours, même case décochée. **Courbe** : une spline de Catmull-Rom centripète (α = 0,5) par chaîne de chaque front actif,
+tracée en surimpression des couleurs avec un point par connexion ; les couleurs ne suivent pas encore la courbe (05-Fronts §11.1).
+**Mode choix d'axe** : après le bouton Percée, chaque clic lance une percée sur la connexion du front la plus proche du clic ;
+la connexion visée est surlignée ; Échap quitte le mode.
 
 ## 7. Interface provisoire
 
@@ -555,11 +599,21 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
      §8.2). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
      ligne de légende.
   4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
-     type d'armement qui a des lignes ou un stock non nul, barre bleue = stock,
-     trait fin = stock cible (`reserveMax`), zone au-delà de la cible **hachurée
-     de rouge**, échelle = max(1,5 × cible, stock) pour que cette zone se voie ;
-     texte « stock / cible · +production par tour ». Légende : l'excès disparaît à
-     `armamentDecayPercent` % par tour.
+     type d'armement qui a des lignes, un stock ou de l'équipement sur les fronts, barre de gauche à droite :
+     **jaune foncé** = l'équipement des unités des fronts, déployé et en route (`PlayerStats.frontEquipment`),
+     **bleu** = stock, **hachures rouges** = au-delà du stock cible ; trait fin = stock cible (`reserveMax`),
+     échelle = max(1,5 × cible, stock + fronts) pour que cette zone se voie ;
+     texte « stock / cible · +production par tour · n sur les fronts ». Légende : l'excès disparaît à
+     `armamentDecayPercent` % par tour ; l'équipement des fronts compte dans le stock, mais seul
+     l'équipement non déployé décline (05-Fronts §4.6).
+  5. **Fronts** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2) : « Fronts n / m » (actifs / tous ceux du
+     joueur). Détail : deux sections, **fronts actifs** puis **fronts en paix**, une ligne par front rangée par île
+     (groupe du joueur) puis par adversaire : pastille de l'adversaire, « Île n° g · Bot k », et en petit l'île adverse et le
+     nombre de connexions. Un clic sur une ligne ouvre le panneau du front (`openFront`, `main.ts`).
+  L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) en dernier, même en mobilisation forcée, et un
+  interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie
+  `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
+  affichée tient compte des soldats.
 
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
@@ -567,6 +621,27 @@ est recalculé à chaque changement de ville ou de zones. Une image n'est dessin
   d'armement par tour (lignes remplies × `productionPerLine` du catalogue). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
+- **Panneau d'un front** (`frontpanel.ts`, 05-Fronts §11.3), posé sur la carte (`#front-panel`, dans `#stage`), ouvert par la
+  liste des fronts ou par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de
+  diplomatie ; hors zone, un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie). N'importe quel front
+  s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages actifs. De haut en bas : titre centré (île, adversaire) ;
+  **boutons d'attaque** (attaque sur tout le front, percée, barrage d'artillerie — sans effet, hors périmètre), ceux du joueur dans
+  sa moitié et les trois mêmes en miroir et gris dans celle de l'adversaire ; rouge clair au repos, **contour rouge foncé épais qui
+  clignote** quand l'attaque est en cours (côté adversaire aussi) ; l'interrupteur « Motorisé seulement » sous la percée ;
+  grisés en paix. Le bouton Percée ferme le panneau et passe la carte en mode choix d'axe. La **section des percées** : un petit
+  tableau par percée en cours, deux par rangée, titre « Percée première ligne » ou « seconde ligne » selon la phase, une colonne
+  par camp, une rangée par type engagé, contour de la couleur du joueur qui perce plus un contour rouge clignotant, une croix pour
+  annuler (ses percées seulement). **Réglages** : priorité (1 · 100 %, 2 · 50 %, 3 · 0 %) et « Autoriser la réassignation à
+  d'autres fronts ». **Tableau des unités** : deux moitiés symétriques autour d'une barre centrale de 8 px (4 px de la couleur de
+  chaque joueur) ; de l'extérieur vers la barre : avions (vide), nom puis icône, seconde ligne, interrupteur à trois positions (1 =
+  priorité première ligne, = équilibré, 2 = priorité seconde ligne ; joueur seulement), première ligne, « % front » ; groupé par
+  niche, un en-tête par niche avec sa couverture puis une rangée par type ; séparateur clair de la couleur de chaque joueur au-dessus
+  de chaque niche. Le titre, les boutons et les réglages restent fixes en haut, le reste défile. Le DOM est construit à
+  l'ouverture ; `update` écrit des textes et des classes, sauf les tableaux de percées (créés et retirés avec leur percée), et les
+  réglages ne sont pas réécrits pendant 600 ms après un clic. L'infobulle d'un nom d'unité donne sa description, sa population et
+  ses attaques.
+- **Notifications des prises de villes** : « Vous avez pris la ville n° k à Bot j. » / « Bot j vous a pris la ville n° k. »
+  (`captured`).
 - **Menu de diplomatie** (`diplomacy.ts`, 00-Game §1). Quand aucun outil n'est armé
   (ni « Créer une ville » ni « Inaugurer une usine »), un clic sans glisser sur une
   case dont `Mirror.ownerOf` est un autre joueur ouvre un petit menu à côté de la
@@ -679,6 +754,15 @@ menu et aux notifications ci-dessus : ni alliance, ni droit de passage, ni comme
   usine absente, curseur bloqué à son ancien maximum). `production.ts` le remet
   aussi à faux sur `pointerup`, `pointercancel` et `blur`. Corrigé le 24 octobre
   2026.
+- **Reconstruire le panneau d'un front à chaque message** : un bouton remplacé entre le `pointerdown` et le `click` perd le
+  clic ; `FrontPanel.update` ne touche que des textes et des classes, et les tableaux de percées sont créés et retirés avec
+  leur percée.
+- **Appeler une classe `sw` dans le tableau des unités** : `.sw` est la pastille de couleur du reste de la page (12 × 12 px) ;
+  l'interrupteur du panneau s'appelle `swt`.
+- **Peindre une ville prise comme une ville fondée** : `tileCity` ne change pas à une prise. `SoloGame` renvoie les cases de
+  sa zone, `Mirror` retire la zone des histogrammes de l'ancien joueur avant de remplacer les villes, et la remet dans ceux du
+  nouveau après ; sans cela, les rayons d'exploitation des deux joueurs seraient faux.
+- **Compiler `frontgeom.ts` avec des dépendances du DOM** : le moteur le charge pour `viz:fronts`, sous Node.
 - **Un Worker à qui on envoie le tableau du moteur** : le transfert détache le
   tableau chez l'expéditeur. `SoloGame.init` envoie des copies ; envoyer
   `map.terrain` lui-même viderait celui du moteur.
