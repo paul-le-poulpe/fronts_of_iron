@@ -47,7 +47,13 @@ interface NicheRow {
 }
 
 const MODE_TITLES = ["Priorité première ligne", "Équilibré : même pourcentage du front dans les deux lignes", "Priorité seconde ligne"];
-const MODE_LABELS = ["1", "=", "2"];
+/**
+ * Interrupteur de chaque type, de gauche à droite dans la moitié du joueur : flèche vers la seconde ligne (côté extérieur),
+ * égal (équilibré), flèche vers la première ligne (côté de la barre centrale). Valeurs de `lineMode` : 0 première ligne,
+ * 1 équilibré, 2 seconde ligne.
+ */
+const MODE_ORDER = [2, 1, 0] as const;
+const MODE_LABELS = ["◀", "=", "▶"];
 const MODE_NAMES = ["first", "balanced", "second"] as const;
 
 export class FrontPanel {
@@ -227,13 +233,19 @@ export class FrontPanel {
     const colorR = rgbCss(playerColor(front.players[R]!));
     const mineSide = this.me >= 0;
     // Colonnes, de l'extérieur gauche à l'extérieur droit : avions, nom, icône, 2e ligne, interrupteur, 1re ligne, % front | barre | % front, 1re ligne, interrupteur, 2e ligne, icône, nom, avions.
-    const cells = (parts: { cls: string; node?: HTMLElement; text?: string }[], light: boolean): void => {
+    const cells = (parts: { cls: string; node?: HTMLElement; text?: string }[]): void => {
       parts.forEach((p, i) => {
         const c = p.node ?? el("div", p.cls, p.text);
-        c.classList.add("fp-cell", ...p.cls.split(" ").filter(Boolean));
-        if (light) c.style.borderTopColor = i < 7 ? colorL : i === 7 ? "transparent" : colorR;
+        // Moitié gauche (colonnes 0 à 6) : alignée vers la barre ; moitié droite (8 à 14) : alignée vers l'extérieur, en miroir.
+        c.classList.add("fp-cell", ...p.cls.split(" ").filter(Boolean), i < 7 ? "l" : i > 7 ? "r" : "m");
         grid.append(c);
       });
+    };
+    /** Trait clair au-dessus d'une niche : un seul élément sur toute la rangée, de la couleur de chaque joueur de son côté de la barre. */
+    const separator = (): void => {
+      const s = el("div", "fp-sep");
+      s.style.background = `linear-gradient(to right, ${colorL} 50%, ${colorR} 50%)`;
+      grid.append(s);
     };
     const bar = (): { cls: string; node: HTMLElement } => {
       const b = el("div", "fp-bar");
@@ -244,18 +256,18 @@ export class FrontPanel {
     cells(
       [
         { cls: "h air", text: "" }, { cls: "h name", text: "" }, { cls: "h icon", text: "" },
-        { cls: "h q", text: "2e ligne" }, { cls: "h swt", text: mineSide ? "Ligne" : "" }, { cls: "h q", text: "1re ligne" }, { cls: "h pct", text: "% front" },
+        { cls: "h q", text: "2e ligne" }, { cls: "h swt", text: mineSide ? "prio" : "" }, { cls: "h q", text: "1re ligne" }, { cls: "h pct", text: "% front" },
         bar(),
         { cls: "h pct", text: "% front" }, { cls: "h q", text: "1re ligne" }, { cls: "h swt", text: "" }, { cls: "h q", text: "2e ligne" },
         { cls: "h icon", text: "" }, { cls: "h name", text: "" }, { cls: "h air", text: "" },
       ],
-      false,
     );
     this.unitRows = [];
     this.nicheRows = [];
     for (const niche of this.military.niches) {
       // Séparateur au-dessus de l'en-tête de chaque niche, puis la niche, ses types.
       const pct: [HTMLElement, HTMLElement] = [el("div"), el("div")];
+      separator();
       cells(
         [
           { cls: "n air" }, { cls: "n name", text: nicheName(niche.id) }, { cls: "n icon" },
@@ -264,7 +276,6 @@ export class FrontPanel {
           { cls: "n pct", node: pct[1] }, { cls: "n q" }, { cls: "n swt" }, { cls: "n q" },
           { cls: "n icon" }, { cls: "n name", text: nicheName(niche.id) }, { cls: "n air" },
         ],
-        true,
       );
       this.nicheRows.push({ units: niche.units.map((id) => this.military.units.findIndex((u) => u.id === id)), pct });
       for (const id of niche.units) {
@@ -272,11 +283,14 @@ export class FrontPanel {
         const q1: [HTMLElement, HTMLElement] = [el("div"), el("div")];
         const q2: [HTMLElement, HTMLElement] = [el("div"), el("div")];
         const upct: [HTMLElement, HTMLElement] = [el("div"), el("div")];
+        // L'image est dans un conteneur : une image qui serait elle-même la cellule de la grille serait écrasée sur la largeur.
         const icon = (): HTMLElement => {
-          const i = el("img", "ib-img");
+          const i = el("img", "fp-icon-img");
           i.src = `icons/${unit.icon}`;
           i.alt = "";
-          return i;
+          const box = el("div");
+          box.append(i);
+          return box;
         };
         const mkName = (): HTMLElement => {
           const n = el("div", "t name", unitName(unit.id));
@@ -288,13 +302,14 @@ export class FrontPanel {
         const modes: HTMLButtonElement[] = [];
         if (mineSide) {
           MODE_LABELS.forEach((label, k) => {
+            const mode = MODE_ORDER[k]!;
             const b = el("button", "fp-mode", label);
             b.type = "button";
-            b.title = MODE_TITLES[k]!;
+            b.title = MODE_TITLES[mode]!;
             b.addEventListener("click", () => {
               this.hold();
               modes.forEach((x, j) => x.setAttribute("aria-pressed", String(j === k)));
-              this.hooks.send({ type: "set_unit_line_mode", front: this.frontId, unit: unit.id, mode: MODE_NAMES[k]! });
+              this.hooks.send({ type: "set_unit_line_mode", front: this.frontId, unit: unit.id, mode: MODE_NAMES[mode]! });
             });
             modes.push(b);
             sw.append(b);
@@ -308,7 +323,6 @@ export class FrontPanel {
             { cls: "t pct", node: upct[1] }, { cls: "t q", node: q1[1] }, { cls: "t swt" }, { cls: "t q", node: q2[1] },
             { cls: "t icon", node: icon() }, { cls: "t name", node: mkName() }, { cls: "t air" },
           ],
-          false,
         );
         this.unitRows.push({ unit, q1, q2, pct: upct, modes });
       }
@@ -370,7 +384,7 @@ export class FrontPanel {
         r.q2[h]!.title = s.transit[t]! > 0 ? `${numFmt.format(s.transit[t]!)} en route vers le front` : "";
         setText(r.pct[h]!, `${pctFmt.format(frontWidth(r.unit, s.first[t]!))} %`);
       }
-      if (mineSide && Date.now() >= this.holdUntil) r.modes.forEach((b, k) => b.setAttribute("aria-pressed", String(k === sides[0]!.lineMode[t])));
+      if (mineSide && Date.now() >= this.holdUntil) r.modes.forEach((b, k) => b.setAttribute("aria-pressed", String(MODE_ORDER[k] === sides[0]!.lineMode[t])));
     }
     for (const n of this.nicheRows) {
       for (let h = 0; h < 2; h++) {

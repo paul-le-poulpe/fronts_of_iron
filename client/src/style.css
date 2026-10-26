@@ -596,7 +596,7 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  width: min(100%, 980px);
+  width: min(100%, 1320px);
   max-height: 100%;
   background: var(--card);
   border: 1px solid var(--line);
@@ -639,21 +639,22 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
 /* Tableau des unités : deux moitiés symétriques autour d'une barre centrale de 8 px. */
 .fp-units {
   display: grid;
-  grid-template-columns: 14px minmax(96px, 1fr) 18px 44px 76px 44px 46px 8px 46px 44px 76px 44px 18px minmax(96px, 1fr) 14px;
+  grid-template-columns: 14px minmax(110px, 1fr) 22px 56px 84px 56px 60px 8px 60px 56px 84px 56px 22px minmax(110px, 1fr) 14px;
   align-items: center;
   column-gap: 0;
   font-variant-numeric: tabular-nums;
 }
-.fp-cell { min-height: 24px; padding: 2px 4px; display: flex; align-items: center; border-top: 2px solid transparent; }
+.fp-cell { min-height: 24px; padding: 2px 4px; display: flex; align-items: center; }
+.fp-sep { grid-column: 1 / -1; height: 2px; margin-top: 6px; }
+.fp-icon-img { width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
 .fp-cell.h { font-size: 11px; color: var(--muted); border-top: 0; }
 .fp-cell.n { font-weight: 700; padding-top: 6px; }
 .fp-cell.t.name, .fp-cell.t.icon { font-size: 13px; }
 .fp-cell.name { overflow: hidden; }
-/* Moitié gauche : noms alignés à droite ; moitié droite : à gauche. */
-.fp-cell:nth-child(15n+2), .fp-cell:nth-child(15n+3), .fp-cell:nth-child(15n+4), .fp-cell:nth-child(15n+5), .fp-cell:nth-child(15n+6), .fp-cell:nth-child(15n+7) { justify-content: flex-end; }
-.fp-cell:nth-child(15n+9), .fp-cell:nth-child(15n+10), .fp-cell:nth-child(15n+11), .fp-cell:nth-child(15n+12) { justify-content: flex-start; }
-.fp-cell:nth-child(15n+14), .fp-cell:nth-child(15n+13) { justify-content: flex-start; }
-.fp-cell:nth-child(15n+8) { padding: 0; border-top-color: transparent !important; }
+/* Moitié gauche : alignée vers la barre ; moitié droite : en miroir (classes posées par frontpanel.ts). */
+.fp-cell.l { justify-content: flex-end; }
+.fp-cell.r { justify-content: flex-start; }
+.fp-cell.m { padding: 0; }
 .fp-barcell { align-self: stretch; }
 .fp-bar { width: 8px; height: 100%; min-height: 24px; }
 .fp-cell.t.pct, .fp-cell.n.pct { color: var(--muted); font-size: 12px; }

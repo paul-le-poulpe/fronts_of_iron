@@ -633,10 +633,10 @@ la connexion visée est surlignée ; Échap quitte le mode.
   par camp, une rangée par type engagé, contour de la couleur du joueur qui perce plus un contour rouge clignotant, une croix pour
   annuler (ses percées seulement). **Réglages** : priorité (1 · 100 %, 2 · 50 %, 3 · 0 %) et « Autoriser la réassignation à
   d'autres fronts ». **Tableau des unités** : deux moitiés symétriques autour d'une barre centrale de 8 px (4 px de la couleur de
-  chaque joueur) ; de l'extérieur vers la barre : avions (vide), nom puis icône, seconde ligne, interrupteur à trois positions (1 =
-  priorité première ligne, = équilibré, 2 = priorité seconde ligne ; joueur seulement), première ligne, « % front » ; groupé par
-  niche, un en-tête par niche avec sa couverture puis une rangée par type ; séparateur clair de la couleur de chaque joueur au-dessus
-  de chaque niche. Le titre, les boutons et les réglages restent fixes en haut, le reste défile. Le DOM est construit à
+  chaque joueur) ; de l'extérieur vers la barre : avions (vide), nom puis icône, seconde ligne, interrupteur à trois positions, colonne « prio »
+  (◀ priorité seconde ligne, côté extérieur ; = équilibré ; ▶ priorité première ligne, côté de la barre centrale ; joueur seulement), première ligne, « % front » ; groupé par
+  niche, un en-tête par niche avec sa couverture puis une rangée par type ; séparateur clair d'un seul tenant (un élément `.fp-sep` sur toute la rangée, de la couleur de chaque joueur de son côté de la barre) au-dessus
+  de chaque niche ; le panneau va jusqu'à 1 320 px de large. Le titre, les boutons et les réglages restent fixes en haut, le reste défile. Le DOM est construit à
   l'ouverture ; `update` écrit des textes et des classes, sauf les tableaux de percées (créés et retirés avec leur percée), et les
   réglages ne sont pas réécrits pendant 600 ms après un clic. L'infobulle d'un nom d'unité donne sa description, sa population et
   ses attaques.
