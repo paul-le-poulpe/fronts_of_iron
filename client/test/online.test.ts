@@ -9,6 +9,7 @@ import type { LobbyEntry } from "@fronts-of-iron/shared";
 import {
   forgetToken,
   gameAction,
+  httpErrorText,
   loadPlayerName,
   loadToken,
   parseLobbyList,
@@ -149,5 +150,17 @@ describe("graine saisie", () => {
     assert.equal(parseSeedInput("0"), 0);
     assert.equal(parseSeedInput("4294967295"), 4294967295);
     for (const bad of ["", "-1", "1.5", "4294967296", "abc", "99999999999"]) assert.equal(parseSeedInput(bad), null, bad);
+  });
+});
+
+describe("texte d'une erreur du Worker", () => {
+  test("le message envoyé par le serveur est affiché tel quel", () => {
+    assert.equal(httpErrorText(401, { error: "wrong_password", message: "Mot de passe de création incorrect." }), "Mot de passe de création incorrect.");
+  });
+
+  test("sans message (proxy, panne) : le code HTTP", () => {
+    assert.equal(httpErrorText(502, null), "Serveur injoignable (HTTP 502).");
+    assert.equal(httpErrorText(500, { error: "x" }), "Erreur du serveur (HTTP 500).");
+    assert.equal(httpErrorText(500, { message: "" }), "Erreur du serveur (HTTP 500).");
   });
 });

@@ -2,7 +2,7 @@
 // garde (nom, jetons), textes des erreurs de la salle, liste du lobby. Testé sous
 // Node (`test/online.test.ts`). Docs/Design/03-Client.md §7, 01-Architecture §4 et §6.
 
-import { MAP_IDS, type LobbyEntry, type MapId, type RoomErrorCode } from "@fronts-of-iron/shared";
+import { MAP_IDS, type LobbyEntry, type MapId } from "@fronts-of-iron/shared";
 
 // ---- adresse du WebSocket ----
 
@@ -107,29 +107,19 @@ export function forgetToken(store: KeyValueStore | null, gameId: string): void {
 
 // ---- textes ----
 
-/** Message affiché pour un code d'erreur de la salle (`error` du relais). */
-export function roomErrorText(code: RoomErrorCode): string {
-  switch (code) {
-    case "game_full":
-      return "La partie est pleine.";
-    case "game_started":
-      return "La partie est déjà lancée.";
-    case "invalid_name":
-      return "Nom invalide : 1 à 24 caractères.";
-    case "not_host":
-      return "Seul l'hôte peut faire cela.";
-    case "invalid_map":
-      return "Carte inconnue.";
-    case "invalid_seed":
-      return "Graine invalide : un entier de 0 à 4 294 967 295.";
-    case "replaced":
-      return "Vous êtes connecté à cette partie depuis un autre onglet.";
-    case "already_joined":
-    case "not_joined":
-    case "invalid_message":
-      return "Message refusé par le serveur.";
-  }
+/**
+ * Texte d'une réponse d'erreur du Worker (`{ error, message }`, 01-Architecture §4) : le `message`
+ * envoyé par le serveur, ou, s'il n'y en a pas (proxy, panne), le code HTTP.
+ */
+export function httpErrorText(status: number, body: unknown): string {
+  const message = typeof body === "object" && body !== null ? (body as { message?: unknown }).message : undefined;
+  if (typeof message === "string" && message !== "") return message;
+  if (status === 502 || status === 503 || status === 504) return `Serveur injoignable (HTTP ${status}).`;
+  return `Erreur du serveur (HTTP ${status}).`;
 }
+
+/** Texte d'un `fetch` qui n'a pas reçu de réponse. */
+export const NETWORK_ERROR_TEXT = "Serveur injoignable : pas de réponse.";
 
 const MAP_NAMES: Readonly<Record<MapId, string>> = { test: "Carte de test (générée)" };
 

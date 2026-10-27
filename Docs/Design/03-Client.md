@@ -23,7 +23,7 @@ Depuis la racine du dépôt, après `npm install` :
   à part). L'accueil appelle `GET /api/games` au chargement : sans `wrangler dev`
   la liste affiche « Liste indisponible » et le solo marche quand même.
 - Essayer une partie en ligne en local : `npm run build -w client` (le Worker
-  sert `client/dist` et refuse de démarrer sans lui), `cd worker && npx wrangler
+  sert `client/dist` et refuse de démarrer sans lui), `cd worker; npx wrangler
   dev`, puis `npm run dev -w client` ; deux onglets (ou deux navigateurs) font
   deux joueurs. Un onglet par joueur partage le même `localStorage`, donc le
   même nom et les mêmes jetons : utiliser un navigateur différent, ou une
@@ -757,7 +757,8 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   navigateur). **Créer** (`#lb-create`) : nom de la partie (1 à 40), nom du
   joueur et mot de passe de création (01-Architecture §4, Requêtes) ;
   `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu. Un
-  refus `401` ou `503` s'affiche sous le formulaire.
+  refus s'affiche sous le formulaire, avec le texte du serveur (mot de passe
+  faux, ou création fermée faute de `CREATE_PASSWORD` sur le Worker).
 - **Connexion.** L'adresse du WebSocket vient de l'`address` de l'entrée du lobby
   (`wsUrl`, 01-Architecture §6, Client, point 2) : chemin relatif → `wss://` +
   hôte de la page (`ws://` si la page est en `http`), `https://…` → `wss://…`.
@@ -783,7 +784,10 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   destinataire, liste des joueurs. « Reprendre » à l'accueil rouvre cet écran avec
   le jeton gardé.
 - **Erreurs.** Un refus à l'arrivée (partie pleine, déjà lancée, nom invalide)
-  ramène à l'écran d'où l'on vient avec le texte (`roomErrorText`). Une erreur
+  ramène à l'écran d'où l'on vient avec le texte envoyé par le relais (`message`
+  de `error`, 01-Architecture §4) ; un refus HTTP du Worker affiche son
+  `message` (`httpErrorText`), et un serveur sans réponse « Serveur
+  injoignable ». Une erreur
   pendant la salle (graine invalide, lancement refusé) s'affiche dans un bandeau.
   Une connexion perdue affiche « Connexion perdue » et « Se reconnecter » (même
   nom, jeton gardé) ; `replaced` (même jeton dans un autre onglet) n'offre pas de

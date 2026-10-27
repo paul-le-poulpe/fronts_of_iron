@@ -187,6 +187,14 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
 | `POST /api/games/cloudflare` | mot de passe de création | `{name, password}` | `201 {"id","hostToken"}` ; `401 {"error":"wrong_password"}` ; `503 {"error":"create_password_not_configured"}` ; `400 {"error":"invalid_game"}` |
 | `GET /api/games/:id/ws` | non | — | WebSocket (101) ; `426` sans en-tête `Upgrade` ; `404` si la partie n'a pas été créée |
 
+- **Toute réponse d'erreur du Worker est `{error, message}`** (demandé par
+  l'auteur le 28 octobre 2026) : `error` est le code de la table ci-dessus,
+  `message` le texte que la page affiche tel quel (`ERROR_TEXT`,
+  `worker/src/index.ts`). Le texte dit si l'erreur vient de la requête (nom,
+  mot de passe) ou de la configuration du Worker (secret absent). Même
+  principe pour les erreurs de la salle (`error {code, message}`, ci-dessous).
+  La page n'écrit un texte elle-même que quand aucune réponse n'arrive
+  (serveur injoignable) ou que la réponse n'a pas de `message`.
 - Entrée de la liste (`LobbyEntry`, `packages/shared`) : `mode` vaut `cloudflare`
   ou `host` ; `address` est `https://…` (tunnel d'un hôte) ou le chemin relatif
   `/api/games/:id/ws` (partie Cloudflare) ; `state` vaut `waiting` ou `started` ;
@@ -311,7 +319,7 @@ foi pour les champs) :
 | relais → client | `welcome {token}` | à l'arrivée d'un nouveau joueur : le jeton à garder |
 | relais → client | `room {you, players, map, seed}` | état de la salle, à chaque changement, à chaque joueur avec son propre `you` |
 | relais → client | `start {you, map, seed, players}` | message de départ, au lancement et à chaque reconnexion après le lancement |
-| relais → client | `error {code}` | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced` |
+| relais → client | `error {code, message}` (`message` : le texte à afficher, `ROOM_ERROR_TEXT` de `packages/shared`) | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced` |
 
 Choix faits à l'implémentation, **provisoires** eux aussi :
 

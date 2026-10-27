@@ -8,6 +8,7 @@ import "./lobby.css";
 import {
   MAP_IDS,
   MAX_ONLINE_PLAYERS,
+  ROOM_ERROR_TEXT,
   cloudflareGamePath,
   normalizeGameName,
   normalizePlayerName,
@@ -29,7 +30,8 @@ import {
   mapSummary,
   parseLobbyList,
   parseSeedInput,
-  roomErrorText,
+  httpErrorText,
+  NETWORK_ERROR_TEXT,
   saveCreatePassword,
   saveToken,
   savePlayerName,
@@ -95,15 +97,20 @@ async function refresh(): Promise<void> {
   button.disabled = true;
   setStatus("Chargement…");
   try {
-    const response = await fetch("/api/games");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    let response: Response;
+    try {
+      response = await fetch("/api/games");
+    } catch {
+      throw new Error(NETWORK_ERROR_TEXT);
+    }
+    if (!response.ok) throw new Error(httpErrorText(response.status, await response.json().catch(() => null)));
     games = parseLobbyList(await response.json());
     renderGames();
     setStatus(games.length === 0 ? "Aucune partie ouverte." : "");
   } catch (error) {
     games = [];
     renderGames();
-    setStatus(`Liste indisponible (${error instanceof Error ? error.message : "erreur"}).`, true);
+    setStatus(`Liste indisponible. ${error instanceof Error ? error.message : ""}`, true);
   } finally {
     button.disabled = false;
   }
@@ -278,29 +285,31 @@ function onMessage(c: Connection, message: ServerMessage): void {
       show("lb-started");
       return;
     case "error":
-      onRoomError(c, message.code);
+      onRoomError(c, message);
       return;
   }
 }
 
-function onRoomError(c: Connection, code: Extract<ServerMessage, { type: "error" }>["code"]): void {
+/** Le texte vient du relais (`message`) ; le code ne sert qu'à décider quoi faire. */
+function onRoomError(c: Connection, error: Extract<ServerMessage, { type: "error" }>): void {
+  const text = typeof error.message === "string" && error.message !== "" ? error.message : `Erreur du serveur (${error.code}).`;
   if (!c.joined) {
     // Refus à l'arrivée : partie pleine, déjà lancée, nom invalide. On retourne à l'écran d'où l'on vient.
     if (c.resuming) forgetToken(store, c.target.id);
     c.failed = true;
-    failBeforeJoin(c.origin, c.resuming ? "Impossible de reprendre cette partie." : roomErrorText(code));
+    failBeforeJoin(c.origin, c.resuming ? `Impossible de reprendre cette partie : ${text}` : text);
     disconnect();
     return;
   }
-  if (code === "replaced") {
+  if (error.code === "replaced") {
     // Un autre onglet a repris notre place : ne pas se reconnecter, on le chasserait à son tour.
     c.failed = true;
-    showNotice(roomErrorText(code), false);
+    showNotice(text, false);
     return;
   }
   // Erreur sur un message de l'hôte (graine invalide, lancement refusé…) : affichée dans la salle.
   startButton.disabled = false;
-  showNotice(roomErrorText(code), false);
+  showNotice(text, false);
 }
 
 function onClosed(c: Connection): void {
@@ -461,25 +470,23 @@ $<HTMLFormElement>("lb-create-form").addEventListener("submit", (e) => {
   void createGame(gameName, name, createPassword.value);
 });
 
-/** Texte affiché pour un refus de `POST /api/games/cloudflare`, selon son code HTTP. */
-const CREATE_ERRORS: Readonly<Record<number, string>> = {
-  400: "Nom de partie refusé par le serveur.",
-  401: "Mot de passe de création incorrect.",
-  503: "La création de parties n'est pas configurée sur ce serveur (mot de passe absent).",
-};
-
-/** `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu. */
+/** `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu. Un refus affiche le `message` du serveur. */
 async function createGame(gameName: string, playerName: string, password: string): Promise<void> {
   setBusy("lb-create", true);
   try {
-    const response = await fetch("/api/games/cloudflare", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: gameName, password }),
-    });
-    if (!response.ok) throw new Error(CREATE_ERRORS[response.status] ?? "Création impossible.");
+    let response: Response;
+    try {
+      response = await fetch("/api/games/cloudflare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: gameName, password }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_TEXT);
+    }
+    if (!response.ok) throw new Error(httpErrorText(response.status, await response.json().catch(() => null)));
     const body = (await response.json()) as { id?: unknown; hostToken?: unknown };
-    if (typeof body.id !== "string" || typeof body.hostToken !== "string") throw new Error("Création impossible.");
+    if (typeof body.id !== "string" || typeof body.hostToken !== "string") throw new Error("Réponse inattendue du serveur.");
     // Le mot de passe n'est gardé qu'une fois accepté par le serveur.
     saveCreatePassword(store, password);
     saveToken(store, body.id, body.hostToken);
@@ -487,7 +494,7 @@ async function createGame(gameName: string, playerName: string, password: string
     connect(target, playerName, body.hostToken, "lb-create");
   } catch (error) {
     setBusy("lb-create", false);
-    showError("lb-create-error", error instanceof Error && Object.values(CREATE_ERRORS).includes(error.message) ? error.message : "Création impossible.");
+    showError("lb-create-error", `Création impossible. ${error instanceof Error ? error.message : ""}`);
   }
 }
 
@@ -564,7 +571,7 @@ $<HTMLFormElement>("lb-seed-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const seed = parseSeedInput(seedInput.value);
   if (seed === null) {
-    showNotice(roomErrorText("invalid_seed"), false);
+    showNotice(ROOM_ERROR_TEXT.invalid_seed, false);
     return;
   }
   hideNotice();

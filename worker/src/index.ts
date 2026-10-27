@@ -28,21 +28,21 @@ export default {
         const denied = checkSecret(request, env);
         if (denied) return denied;
         const game = parseGame(await readJson(request));
-        if (!game) return json(400, { error: "invalid_game" });
+        if (!game) return fail(400, "invalid_game");
         return json(201, { id: await lobby.register(game) });
       }
-      return json(405, { error: "method_not_allowed" });
+      return fail(405, "method_not_allowed");
     }
 
     if (url.pathname === "/api/games/cloudflare") {
-      if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+      if (request.method !== "POST") return fail(405, "method_not_allowed");
       // Mot de passe de création (01-Architecture §4) : sans lui, n'importe quel visiteur pourrait épuiser les quotas du compte.
-      if (!env.CREATE_PASSWORD) return json(503, { error: "create_password_not_configured" });
+      if (!env.CREATE_PASSWORD) return fail(503, "create_password_not_configured");
       const body = await readJson(request);
       const password = isRecord(body) && typeof body.password === "string" ? body.password : "";
-      if (!sameSecret(password, env.CREATE_PASSWORD)) return json(401, { error: "wrong_password" });
+      if (!sameSecret(password, env.CREATE_PASSWORD)) return fail(401, "wrong_password");
       const name = normalizeGameName(isRecord(body) ? body.name : undefined);
-      if (name === null) return json(400, { error: "invalid_game" });
+      if (name === null) return fail(400, "invalid_game");
       const id = crypto.randomUUID();
       const hostToken = await env.GAME.getByName(id).create(id, name);
       return json(201, { id, hostToken });
@@ -50,32 +50,32 @@ export default {
 
     const socket = /^\/api\/games\/([^/]+)\/ws$/.exec(url.pathname);
     if (socket) {
-      if (request.method !== "GET") return json(405, { error: "method_not_allowed" });
+      if (request.method !== "GET") return fail(405, "method_not_allowed");
       // Le Durable Object répond 404 si cette partie n'a pas été créée, 426 sans en-tête Upgrade.
       return env.GAME.getByName(decodeURIComponent(socket[1])).fetch(request);
     }
 
     const heartbeat = /^\/api\/games\/([^/]+)\/heartbeat$/.exec(url.pathname);
     if (heartbeat) {
-      if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+      if (request.method !== "POST") return fail(405, "method_not_allowed");
       const denied = checkSecret(request, env);
       if (denied) return denied;
       const update = parseUpdate(await readJson(request));
-      if (!update) return json(400, { error: "invalid_players" });
+      if (!update) return fail(400, "invalid_players");
       const known = await lobby.heartbeat(decodeURIComponent(heartbeat[1]), update);
       // 404 : partie inconnue ou expirée. L'hôte se réinscrit avec POST /api/games.
-      return known ? json(200, { ok: true }) : json(404, { error: "unknown_game" });
+      return known ? json(200, { ok: true }) : fail(404, "unknown_game");
     }
 
-    return json(404, { error: "not_found" });
+    return fail(404, "not_found");
   },
 } satisfies ExportedHandler<Env>;
 
 /** Renvoie une réponse d'erreur si le secret est absent ou faux, sinon null. */
 function checkSecret(request: Request, env: Env): Response | null {
-  if (!env.LOBBY_SECRET) return json(503, { error: "lobby_secret_not_configured" });
+  if (!env.LOBBY_SECRET) return fail(503, "lobby_secret_not_configured");
   const header = request.headers.get("Authorization") ?? "";
-  return sameSecret(header.startsWith("Bearer ") ? header.slice(7) : "", env.LOBBY_SECRET) ? null : json(401, { error: "unauthorized" });
+  return sameSecret(header.startsWith("Bearer ") ? header.slice(7) : "", env.LOBBY_SECRET) ? null : fail(401, "unauthorized");
 }
 
 /** Comparaison en temps constant d'un secret reçu et du secret attendu. */
@@ -153,6 +153,27 @@ async function readJson(request: Request): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Texte de chaque erreur, envoyé avec son code (`{ error, message }`) : la page affiche `message` tel
+ * quel. Il dit si l'erreur vient de la requête (nom, mot de passe) ou de la configuration du Worker.
+ */
+const ERROR_TEXT = {
+  method_not_allowed: "Méthode HTTP non acceptée pour cette adresse.",
+  not_found: "Adresse inconnue.",
+  invalid_game: "Partie refusée : le nom doit faire de 1 à 40 caractères, sans caractère de contrôle (et, pour un hôte, une adresse https et des nombres de joueurs valides).",
+  invalid_players: "Signal refusé : nombre de joueurs, état, nom d'hôte, carte ou graine invalide.",
+  unknown_game: "Partie inconnue ou expirée : l'hôte doit la réinscrire.",
+  wrong_password: "Mot de passe de création incorrect.",
+  create_password_not_configured:
+    "Création de parties fermée : le serveur n'a pas de mot de passe de création configuré (secret CREATE_PASSWORD du Worker). Ce n'est pas votre mot de passe qui est en cause.",
+  unauthorized: "Secret du lobby absent ou faux.",
+  lobby_secret_not_configured: "Inscription fermée : le serveur n'a pas de secret du lobby configuré (secret LOBBY_SECRET du Worker).",
+} as const;
+
+function fail(status: number, code: keyof typeof ERROR_TEXT): Response {
+  return json(status, { error: code, message: ERROR_TEXT[code] });
 }
 
 function json(status: number, body: unknown): Response {

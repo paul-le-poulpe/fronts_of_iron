@@ -124,6 +124,23 @@ export type RoomErrorCode =
   /** Le même jeton vient d'être utilisé par une autre connexion, qui remplace celle-ci. */
   | "replaced";
 
+/**
+ * Texte de chaque erreur de la salle, envoyé par le relais avec le code (`message`) : la page
+ * l'affiche tel quel. La page s'en sert aussi pour une vérification faite avant l'envoi (graine).
+ */
+export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
+  invalid_message: "Message refusé par le serveur : forme inattendue.",
+  not_joined: "Message refusé par le serveur : vous n'êtes pas encore dans la salle.",
+  already_joined: "Message refusé par le serveur : vous êtes déjà dans la salle.",
+  game_full: "La partie est pleine (100 joueurs).",
+  game_started: "La partie est déjà lancée : on ne peut plus la rejoindre.",
+  invalid_name: "Nom invalide : 1 à 24 caractères, sans caractère de contrôle.",
+  not_host: "Seul l'hôte peut faire cela.",
+  invalid_map: "Carte inconnue.",
+  invalid_seed: "Graine invalide : un entier de 0 à 4 294 967 295.",
+  replaced: "Vous êtes connecté à cette partie depuis un autre onglet ou un autre appareil.",
+};
+
 export type ServerMessage =
   /** Seulement à l'arrivée d'un nouveau joueur : le jeton à garder pour revenir. */
   | { readonly type: "welcome"; readonly token: string }
@@ -146,4 +163,5 @@ export type ServerMessage =
       readonly seed: number;
       readonly players: readonly StartPlayer[];
     }
-  | { readonly type: "error"; readonly code: RoomErrorCode };
+  /** `message` : le texte à afficher (`ROOM_ERROR_TEXT`). */
+  | { readonly type: "error"; readonly code: RoomErrorCode; readonly message: string };

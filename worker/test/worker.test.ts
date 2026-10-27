@@ -310,7 +310,8 @@ describe("création d'une partie Cloudflare", () => {
     for (const bad of [{ name: "Essai" }, { name: "Essai", password: "" }, { name: "Essai", password: "faux" }, { name: "Essai", password: 5 }, "pas du json", "[]"]) {
       const response = await call(env, "POST", "/api/games/cloudflare", bad);
       assert.equal(response.status, 401, JSON.stringify(bad));
-      assert.deepEqual(response.json, { error: "wrong_password" });
+      assert.equal(response.json!.error, "wrong_password");
+      assert.equal(response.json!.message, "Mot de passe de création incorrect.");
     }
   });
 
@@ -319,7 +320,8 @@ describe("création d'une partie Cloudflare", () => {
     delete env.CREATE_PASSWORD;
     const response = await call(env, "POST", "/api/games/cloudflare", { name: "Essai", password: PASSWORD });
     assert.equal(response.status, 503);
-    assert.deepEqual(response.json, { error: "create_password_not_configured" });
+    assert.equal(response.json!.error, "create_password_not_configured");
+    assert.match(response.json!.message, /CREATE_PASSWORD/, "le message dit que c'est la configuration du Worker");
   });
 });
 

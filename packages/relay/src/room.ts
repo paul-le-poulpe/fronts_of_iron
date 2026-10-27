@@ -9,6 +9,7 @@ import {
   DEFAULT_MAP,
   DEFAULT_SEED,
   MAX_ONLINE_PLAYERS,
+  ROOM_ERROR_TEXT,
   isMapId,
   isSeed,
   normalizePlayerName,
@@ -205,7 +206,7 @@ export class Room {
 }
 
 function error(to: string, code: RoomErrorCode): Outgoing {
-  return { to, message: { type: "error", code } };
+  return { to, message: { type: "error", code, message: ROOM_ERROR_TEXT[code] } };
 }
 
 /** Vérifie la forme d'un message ; les valeurs (nom, graine, carte) sont vérifiées par la salle, qui répond par un code précis. */

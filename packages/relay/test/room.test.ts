@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_MAP, DEFAULT_SEED, MAX_ONLINE_PLAYERS, type ServerMessage } from "@fronts-of-iron/shared";
+import { DEFAULT_MAP, DEFAULT_SEED, MAX_ONLINE_PLAYERS, ROOM_ERROR_TEXT, type ServerMessage } from "@fronts-of-iron/shared";
 
 import { Room, type Outgoing, type RoomEnv } from "../src/index.ts";
 
@@ -189,7 +189,10 @@ describe("salle d'attente : réglages de l'hôte", () => {
     const room = hostedRoom();
     room.handle("a", { type: "join", name: "Léa" });
     assert.equal(errorOf(room.handle("a", { type: "set_map", seed: 5 }), "a"), "not_host");
-    assert.equal(errorOf(room.handle("a", { type: "start" }), "a"), "not_host");
+    const refused = room.handle("a", { type: "start" });
+    assert.equal(errorOf(refused, "a"), "not_host");
+    // Le texte à afficher accompagne le code.
+    assert.deepEqual(last(refused, "a"), { type: "error", code: "not_host", message: ROOM_ERROR_TEXT.not_host });
     assert.equal(room.summary().seed, DEFAULT_SEED);
     assert.equal(room.summary().state, "waiting");
   });
