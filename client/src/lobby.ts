@@ -23,6 +23,7 @@ import {
 import {
   forgetToken,
   gameAction,
+  gameToResume,
   loadCreatePassword,
   loadPlayerName,
   loadToken,
@@ -588,4 +589,9 @@ startButton.addEventListener("click", () => {
 
 // ---- démarrage ----
 
-void refresh();
+// Reprise automatique (01-Architecture §4) : une partie lancée dont le navigateur a le jeton est
+// reprise dès le chargement, sans passer par le bouton « Reprendre ».
+void refresh().then(() => {
+  const game = gameToResume(games, (id) => loadToken(store, id) !== undefined);
+  if (game !== null) resume(game);
+});

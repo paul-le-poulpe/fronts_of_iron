@@ -183,6 +183,14 @@ export type GameAction = "join" | "resume" | "full" | "closed";
  * Partie en attente : « Rejoindre » (« Pleine » si elle l'est) ; lancée : « Reprendre » si le navigateur a un jeton
  * de cette partie, sinon « Commencée ».
  */
+/**
+ * Partie à reprendre d'elle-même au chargement de la page (01-Architecture §4) : la première partie
+ * lancée de la liste dont le navigateur a le jeton, ou null.
+ */
+export function gameToResume(entries: readonly LobbyEntry[], hasToken: (gameId: string) => boolean): LobbyEntry | null {
+  return entries.find((e) => gameAction(e, hasToken(e.id)) === "resume") ?? null;
+}
+
 export function gameAction(entry: LobbyEntry, hasToken: boolean): GameAction {
   if (entry.state === "waiting") return entry.players >= entry.maxPlayers ? "full" : "join";
   return hasToken ? "resume" : "closed";

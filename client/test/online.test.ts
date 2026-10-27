@@ -9,6 +9,7 @@ import type { LobbyEntry } from "@fronts-of-iron/shared";
 import {
   forgetToken,
   gameAction,
+  gameToResume,
   httpErrorText,
   loadPlayerName,
   loadToken,
@@ -141,6 +142,14 @@ describe("liste du lobby", () => {
     assert.equal(gameAction(entry({ players: 100 }), false), "full");
     assert.equal(gameAction(entry({ state: "started" }), true), "resume");
     assert.equal(gameAction(entry({ state: "started" }), false), "closed");
+  });
+
+  test("reprise automatique : la première partie lancée dont le navigateur a le jeton", () => {
+    const entry = (patch: Partial<LobbyEntry>): LobbyEntry => ({ ...parseLobbyList({ games: [valid] })[0]!, ...patch });
+    const games = [entry({ id: "a" }), entry({ id: "b", state: "started" }), entry({ id: "c", state: "started" }), entry({ id: "d", state: "started" })];
+    const tokens = new Set(["a", "c", "d"]);
+    assert.equal(gameToResume(games, (id) => tokens.has(id))?.id, "c", "a : en attente ; b : pas de jeton");
+    assert.equal(gameToResume(games, () => false), null);
   });
 });
 

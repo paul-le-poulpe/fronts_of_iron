@@ -748,7 +748,9 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   01-Architecture §4). Une ligne : nom et « Hôte : X », hébergement
   (Cloudflare / PC de l'hôte), carte et graine, joueurs, état, et une action :
   « Rejoindre » (partie en attente), « Pleine », « Reprendre » (partie lancée
-  dont le navigateur a un jeton), « Commencée » (sinon). À droite : « Créer une
+  dont le navigateur a un jeton), « Commencée » (sinon). Au chargement, la page
+  reprend d'elle-même la première partie « Reprendre » de la liste
+  (`gameToResume`, 01-Architecture §4). À droite : « Créer une
   partie » (Cloudflare), « Héberger sur votre PC » (texte et lien vers le
   README, `server/` n'existe pas encore), « Solo — débogage ». Le solo cache
   `#lobby` et montre `#app`, l'écran de départ solo d'avant, inchangé, avec un

@@ -109,6 +109,12 @@ l'enveloppe le lui demande.
 - Tous les N tours, chaque client envoie au serveur un **hash** de son état. Le
   serveur garde le hash majoritaire et signale aux clients divergents qu'ils
   sont désynchronisés. (Choix de N : ci-dessous.)
+- **Joueur désynchronisé** (décidé par l'auteur le 28 octobre 2026) : sa page
+  abandonne sa copie de la partie et le renvoie à l'accueil, d'où il rejoint de
+  nouveau la partie (« Reprendre », jeton gardé, §4). Il repart du message de
+  départ et rejoue tous les tours depuis le début : son état redevient celui
+  des autres, sauf si la divergence vient du moteur lui-même (règle 2), auquel
+  cas elle se reproduit.
 - **Reconnexion** : le client donne le numéro du dernier tour reçu, le serveur
   lui renvoie les tours suivants, le client les rejoue. Les parties étant
   courtes, rejouer depuis le début reste acceptable.
@@ -154,9 +160,9 @@ Ce que coûte un hash :
   Ce nombre compte pour les parties hébergées par Cloudflare : le Durable
   Object facture les messages qu'il reçoit (§6).
 
-N n'est pas fixé. Les calculs de ce document prennent N = 10 (un hash par
-seconde). Ne pas descendre à N = 1 « pour détecter plus tôt » : cela multiplie
-les messages par 7 sans rien apporter au joueur.
+**N = 10** (un hash par seconde), décidé par l'auteur le 28 octobre 2026. Ne
+pas descendre à N = 1 « pour détecter plus tôt » : cela multiplie les messages
+par 7 sans rien apporter au joueur.
 
 ## 4. Le lobby
 
@@ -301,6 +307,11 @@ renvoie. Choix techniques, **provisoires** (non tranchés par l'auteur) :
   envoie le jeton et le numéro du dernier tour reçu ; le relais renvoie le
   message de départ puis les tours manquants. La liste des parties affiche
   « Reprendre » pour une partie lancée dont le navigateur a un jeton.
+  **Reprise automatique** (décidé par l'auteur le 28 octobre 2026) : au
+  chargement de la page, si la liste contient une partie lancée dont le
+  navigateur a le jeton, la page la reprend d'elle-même, sans clic (la
+  première de la liste s'il y en a plusieurs). Un autre navigateur ou appareil
+  n'a pas le jeton : il ne peut pas reprendre la partie.
 - **Hôte d'une partie sur un PC** : `server/` crée le jeton de l'hôte au
   démarrage et affiche dans sa console un lien vers la page qui le contient ;
   l'hôte ouvre ce lien pour entrer dans la salle comme hôte.
@@ -504,7 +515,7 @@ client`, Vite redirige `/api/*` vers `wrangler dev`, **WebSocket compris**
 
 ## 8. À vérifier ou à décider
 
-- Fréquence N des hashes : analyse au §3 ; valeur non fixée.
+- ~~Fréquence N des hashes~~ Décidé : N = 10 (§3).
 - ~~Requêtes du lobby pour les parties hébergées par Cloudflare~~ Faites (§4).
 - ~~Qui peut créer une partie Cloudflare~~ Décidé : un mot de passe de
   création, secret du Worker (§4, Requêtes).
@@ -600,7 +611,15 @@ Ordre prévu :
 
    **Avant le premier déploiement de ce point** : créer le secret
    `CREATE_PASSWORD` du Worker (`npx wrangler secret put CREATE_PASSWORD` dans
-   `worker/`), sinon la création de parties répond `503`.
+   `worker/`), sinon la création de parties répond `503`. Fait le 28 octobre
+   2026.
+7. **À faire plus tard : une entrée pour le jeu dans la vitrine** (décidé par
+   l'auteur le 28 octobre 2026). Un simple lien vers
+   `https://fronts-of-iron.paul-raynaud.workers.dev`, l'adresse du jeu, qui ne
+   change pas. Pas de domaine propre ni de route : le jeu reste son propre
+   Worker. Le changement est dans le dépôt de la vitrine
+   (`Projets code/Vitrine/vitrine`), pas dans celui-ci : il se commite et se
+   déploie là-bas.
 
 ## 10. Pièges
 
