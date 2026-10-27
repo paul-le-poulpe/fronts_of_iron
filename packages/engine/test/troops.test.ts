@@ -43,40 +43,52 @@ describe("répartition de parts entières", () => {
 describe("remplissage d'un front (05-Fronts §4.2)", () => {
   it("l'équipement est plafonné par l'infanterie, niche par niche ; le reste reste en stock", () => {
     const s = duel();
-    // 300 infanteries = 3 000 m sur 5 000 m ; mitrailleuses (10 m) : au plus 300 ; artillerie (100 m) : au plus 30.
+    // Front de 1 000 m (une connexion) : 100 infanteries de 10 m en première ligne, 200 en seconde ligne (2 × la largeur).
+    // Mitrailleuses (10 m) : au plus autant que l'infanterie de la ligne ; artillerie (100 m) : au plus 10.
     arm(s, 1, { infantry: 300, machineGun: 400, artillery: 10 });
     settle(s);
-    assert.deepEqual(lines(s, "infantry"), [300, 0]);
-    assert.deepEqual(lines(s, "machineGun"), [300, 0], "plafond : autant de mètres que l'infanterie");
+    assert.deepEqual(lines(s, "infantry"), [100, 200]);
+    assert.deepEqual(lines(s, "machineGun"), [100, 200], "plafond : autant de mètres que l'infanterie, dans chaque ligne");
     assert.deepEqual(lines(s, "artillery"), [10, 0]);
-    // 100 mitrailleuses n'ont pas de place : seconde ligne plafonnée par l'infanterie de la seconde ligne (aucune), donc en stock
+    // 100 mitrailleuses n'ont pas de place : les deux lignes sont pleines, donc en stock
     // (où elles déclinent : l'équipement déployé compte dans le stock, l'excès est grand).
     assert.ok(s.players[0]!.armamentReserve[1]! <= 100);
     assert.equal(countSoldiers(s, 1), s.players[0]!.soldiers);
   });
 
-  it("l'infanterie en trop passe en seconde ligne, sans limite de nombre", () => {
+  it("l'infanterie en trop passe en seconde ligne", () => {
     const s = duel();
-    arm(s, 1, { infantry: 700, machineGun: 400 });
+    arm(s, 1, { infantry: 250, machineGun: 100 });
     settle(s);
-    assert.deepEqual(lines(s, "infantry"), [500, 200], "500 × 10 m = la largeur du front, le reste en seconde ligne");
-    assert.deepEqual(lines(s, "machineGun"), [400, 0]);
+    assert.deepEqual(lines(s, "infantry"), [100, 150], "100 × 10 m = la largeur du front, le reste en seconde ligne");
+    assert.deepEqual(lines(s, "machineGun"), [100, 0]);
+  });
+
+  it("la seconde ligne est plafonnée à maxSecondLineOvercrowding × la largeur du front ; le reste reste en stock", () => {
+    const s = duel();
+    arm(s, 1, { infantry: 700 });
+    settle(s);
+    // 2 × 1 000 m / 10 m = 200 infanteries en seconde ligne : les 400 autres restent dans la réserve (où elles déclinent).
+    assert.equal(FRONTS.maxSecondLineOvercrowding, 2);
+    assert.deepEqual(lines(s, "infantry"), [100, 200]);
+    assert.ok(s.players[0]!.armamentReserve[0]! > 0);
+    assert.equal(countSoldiers(s, 1), s.players[0]!.soldiers);
   });
 
   it("interrupteur : priorité seconde ligne, équilibré", () => {
     const s = duel();
     const id = front(s).id;
     assert.ok(order(s, { type: "set_unit_line_mode", player: 1, front: id, unit: "infantry", mode: "second" }));
-    arm(s, 1, { infantry: 300, machineGun: 400 });
+    arm(s, 1, { infantry: 150, machineGun: 400 });
     settle(s);
-    assert.deepEqual(lines(s, "infantry"), [0, 300]);
-    // Plus d'infanterie en première ligne : aucun équipement en première ligne ; seconde ligne plafonnée par 300 × 10 m.
-    assert.deepEqual(lines(s, "machineGun"), [0, 300]);
-    // Équilibré : a = floor(u × w2 / (w1 + w2)) = 150 dans chaque ligne (largeurs de front et de percée égales à 10 m).
+    assert.deepEqual(lines(s, "infantry"), [0, 150]);
+    // Plus d'infanterie en première ligne : aucun équipement en première ligne ; seconde ligne plafonnée par 150 × 10 m.
+    assert.deepEqual(lines(s, "machineGun"), [0, 150]);
+    // Équilibré : a = floor(u × w2 / (w1 + w2)) = 75 dans chaque ligne (largeurs de front et de percée égales à 10 m).
     assert.ok(order(s, { type: "set_unit_line_mode", player: 1, front: id, unit: "infantry", mode: "balanced" }));
-    assert.deepEqual(lines(s, "infantry"), [150, 150], "changement d'interrupteur sans délai");
-    // Le camp est recalé : l'infanterie de la première ligne plafonne maintenant l'équipement (150 × 10 m).
-    assert.deepEqual(lines(s, "machineGun"), [150, 150]);
+    assert.deepEqual(lines(s, "infantry"), [75, 75], "changement d'interrupteur sans délai");
+    // Le camp est recalé : l'infanterie de la première ligne plafonne maintenant l'équipement (75 × 10 m).
+    assert.deepEqual(lines(s, "machineGun"), [75, 75]);
   });
 
   it("une unité en route compte déjà comme présente ; elle arrive après transferTurns tours", () => {
@@ -132,17 +144,18 @@ describe("priorités et paliers (05-Fronts §4.3)", () => {
     assert.ok(Math.abs(own[0]! - own[2]!) <= 1, "les fronts de même priorité reçoivent la même chose");
   });
 
-  it("seconde ligne : cible proportionnelle à pourcentage × largeur (150 chenillettes, 100 %, 50 %, 0 % → 100, 50, 0)", () => {
+  it("seconde ligne : cible proportionnelle à pourcentage × largeur (60 chenillettes, 100 %, 50 %, 0 % → 40, 20, 0)", () => {
     const s = star();
     const ids = s.fronts.map((f) => f.id);
     ids.forEach((id, k) => {
       assert.ok(order(s, { type: "set_front_priority", player: 1, front: id, priority: k }));
       assert.ok(order(s, { type: "set_unit_line_mode", player: 1, front: id, unit: "tankette", mode: "second" }));
     });
-    arm(s, 1, { tankette: 150 });
+    // Plafond de la seconde ligne d'un front : 2 × 1 000 m / 50 m (largeur de percée) = 40 chenillettes ; 60 reste en dessous.
+    arm(s, 1, { tankette: 60 });
     settle(s);
     const second = s.fronts.map((f) => f.sides[f.players[0] === 1 ? 0 : 1]!.secondLine[U.tankette]!);
-    assert.deepEqual(second, [100, 50, 0]);
+    assert.deepEqual(second, [40, 20, 0]);
   });
 
   it("tous les fronts à 0 % : partage égal", () => {
@@ -151,9 +164,9 @@ describe("priorités et paliers (05-Fronts §4.3)", () => {
       assert.ok(order(s, { type: "set_front_priority", player: 1, front: f.id, priority: 2 }));
       assert.ok(order(s, { type: "set_unit_line_mode", player: 1, front: f.id, unit: "tankette", mode: "second" }));
     });
-    arm(s, 1, { tankette: 150 });
+    arm(s, 1, { tankette: 60 });
     settle(s);
-    assert.deepEqual(s.fronts.map((f) => f.sides[f.players[0] === 1 ? 0 : 1]!.secondLine[U.tankette]!), [50, 50, 50]);
+    assert.deepEqual(s.fronts.map((f) => f.sides[f.players[0] === 1 ? 0 : 1]!.secondLine[U.tankette]!), [20, 20, 20]);
   });
 });
 
@@ -188,12 +201,12 @@ describe("réassignation et mobilisation forcée (05-Fronts §4.1, §4.4)", () =
 
   it("mobilisation forcée : recrutement avant l'économie, premier palier de la première ligne seulement", () => {
     const s = duel();
-    stock(s, 1, { infantry: 700 });
+    stock(s, 1, { infantry: 300 });
     const p = s.players[0]!;
-    assert.equal(assignTroops(s, p, 10_000, true), 5000, "500 infanteries (première ligne à 100 %), pas de seconde ligne");
-    assert.equal(p.soldiers, 5000);
+    assert.equal(assignTroops(s, p, 10_000, true), 1000, "100 infanteries (première ligne à 100 %), pas de seconde ligne");
+    assert.equal(p.soldiers, 1000);
     assert.equal(p.armamentReserve[0], 2000, "200 infanteries restent en stock");
-    // Le recrutement normal prend le reste, seconde ligne comprise.
+    // Le recrutement normal prend le reste, seconde ligne comprise (200 infanteries : son plafond).
     assert.equal(assignTroops(s, p, 10_000, false), 2000);
     assert.equal(p.armamentReserve[0], 0);
   });

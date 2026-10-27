@@ -81,6 +81,9 @@ Worker n'est pas dans `packages/engine`.
 4. fabrique le message du tour (§4).
 
 Les ordres humains passent avant ceux des bots : à case égale, l'humain gagne.
+Cette règle disparaîtra quand le solo passera par `packages/relay`
+(01-Architecture §1, §9) : le solo sert au débogage et doit créer ses tours
+comme une partie en ligne, avec la règle d'ordre du relais.
 
 **Pause** : bouton « Pause (outil de développement) ». Le Worker saute alors les
 tours, sans arrêter la minuterie ; les ordres reçus attendent. Le jeu n'a pas de
@@ -723,10 +726,22 @@ menu et aux notifications ci-dessus : ni alliance, ni droit de passage, ni comme
 ## 8. Pas fait
 
 - Écran de lobby (liste des parties, `fetch("/api/games")`), multijoueur : le
-  client n'ouvre aucun WebSocket. Il faudra un second « moteur de tours » côté
-  page qui reçoit les tours du serveur au lieu de les fabriquer ; `SoloGame` et
-  `engine.worker.ts` sont séparés pour que ce changement ne touche que la source
-  des tours.
+  client n'ouvre aucun WebSocket. Les trois façons de jouer (solo, hébergé par
+  un joueur, hébergé par Cloudflare : 01-Architecture §1) passent par le même
+  Web Worker, découpé ainsi :
+  - **la partie** : applique un tour au moteur et fabrique le message `tick` de
+    la page. C'est la seconde moitié de `SoloGame.step` (à partir de
+    `applyTurn`) ; elle ne dépend pas du mode ;
+  - **une source de tours**, choisie au lancement :
+    - locale (solo) : la minuterie d'`engine.worker.ts`, les bots, et
+      `packages/relay`, qui reçoit les ordres de l'humain (joueur 1) et des
+      bots (leur identifiant) et crée le tour ;
+    - WebSocket (en ligne) : envoie les ordres au serveur, reçoit les tours,
+      envoie un hash tous les N tours (01-Architecture §3). L'adresse vient du
+      lobby (01-Architecture §6, Client, point 2).
+
+  La page ne sait pas quelle source est utilisée, sauf pour l'écran de lobby et
+  la barre de debug (solo seulement, §3).
 - Hash de l'état envoyé au serveur (01-Architecture §3) : sans objet en solo.
 - Routes maritimes : pas de règle, donc pas d'ordre ni d'interface.
 - Bots et usines : les bots ne construisent pas d'usine (rien ne les y oblige ; une

@@ -989,8 +989,10 @@ d'avant les usines :
   3 000 tours, 177 villes (1,8 par joueur) : tour moyen 34 µs, étape de
   nourriture comprise (rayons 25 et 10, coût fixe : 1 037 villes, 44 à 45 µs) ;
 - hash de l'état complet : 0,7 à 0,9 ms (`owner` et `tileCity`, 200 000 mots
-  chacun ; la fertilité est dans le hash de la carte, calculé une fois). Envoyé tous les N tours (§8 de 01-Architecture), c'est un coût
-  négligeable à côté des 100 ms d'un tour ;
+  chacun ; la fertilité est dans le hash de la carte, calculé une fois). Moins
+  de 1 % d'un pas de 100 ms : le calcul ne limite pas la fréquence des hashes,
+  le nombre de messages la limite (01-Architecture §3, « Fréquence des
+  hashes ») ;
 - fondation d'une ville, ordre complet (zones, routes, ports, groupes), avec les
   villes posées au plus serré (pour un rayon de contrôle R : lignes tous les
   0,9 R cases, villes tous les 1,1 R, une ligne sur deux décalée de 0,5 R,

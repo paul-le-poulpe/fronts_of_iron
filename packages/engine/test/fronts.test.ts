@@ -91,7 +91,7 @@ describe("détection des fronts (05-Fronts §2)", () => {
 
   it("la largeur d'un front est son nombre de connexions × metersPerConnection", () => {
     const { s } = crowded();
-    for (const f of s.fronts) assert.equal(f.connections.length * FRONTS.metersPerConnection, f.connections.length * 5000);
+    for (const f of s.fronts) assert.equal(f.connections.length * FRONTS.metersPerConnection, f.connections.length * 1000);
   });
 
   it("en paix : pas de position ; le front reste ; il n'y a rien d'actif", () => {

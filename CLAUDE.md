@@ -48,9 +48,12 @@ contient `.git`), pas le dossier parent.
 packages/
   shared/    formats des messages (ordre, tour, hash) — lus par client et serveur
   engine/    simulation déterministe ; ses règles viennent de Docs/Design/00-Game.md
+  relay/     relais d'une partie (file d'ordres, création des tours), sans API
+             de plateforme ; utilisé par le solo, server/ et worker/
 client/      page du jeu (Vite + TypeScript) : interface + engine dans un Web Worker
 worker/      Worker Cloudflare : sert client/ compilé + lobby (Durable Object)
-server/      Node : relais des tours d'une partie, lancé sur le PC de l'hôte
+             + parties hébergées par Cloudflare (un Durable Object par partie)
+server/      Node : parties hébergées par un joueur, sur son PC, via un tunnel
 .github/workflows/deploy.yml   build, puis wrangler deploy dans worker/
 Docs/Design/                   documents de conception
 README.md                      lancer et jouer en local ; héberger une partie
@@ -62,6 +65,12 @@ partie existe, il est mis à jour dans le même tour (règle 8).
 
 Les dossiers sont créés au fur et à mesure des parties ; ce qui n'existe pas
 encore est listé dans `Docs/Design/01-Architecture.md` §9.
+
+Trois façons de jouer coexistent : solo, hébergé par un joueur, hébergé par
+Cloudflare (`01-Architecture.md` §1). La logique du relais n'est écrite que
+dans `packages/relay` ; `server/`, le Durable Object de partie et le solo n'en
+sont que des enveloppes (minuterie, transport). `packages/relay` n'importe rien
+de Node, de Cloudflare ni du navigateur.
 
 ---
 

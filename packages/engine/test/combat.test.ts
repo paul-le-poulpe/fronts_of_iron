@@ -271,9 +271,9 @@ describe("percée (05-Fronts §7.2)", () => {
     play(s, FRONTS.breakthroughDelayTurns);
     playToRound(s);
     assert.equal(bt.phase, 1);
-    // 5 000 m de percée : au plus 500 infanteries de 10 m de chaque côté.
-    assert.ok(bt.attackers[U.infantry]! > 400 && bt.attackers[U.infantry]! <= 500);
-    assert.ok(bt.defenders1[U.infantry]! > 0 && bt.defenders1[U.infantry]! <= 500);
+    // 1 000 m de percée (une connexion) : au plus 100 infanteries de 10 m de chaque côté.
+    assert.ok(bt.attackers[U.infantry]! > 80 && bt.attackers[U.infantry]! <= 100);
+    assert.ok(bt.defenders1[U.infantry]! > 0 && bt.defenders1[U.infantry]! <= 100);
   });
 
   it("première ligne percée : saut de N × vitesse × facteur de réaction (seconde ligne à pied : × 3) ; puis phase 2", () => {

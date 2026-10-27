@@ -898,7 +898,8 @@ front, fronts par joueur (île, adversaire, connexions), chaînes du §11.4.
   joueur change (§13.6).
 - Affectation : niches du meilleur au moins bon, plafond par l'infanterie,
   interrupteur à trois positions, paliers et proportions (exemple 1/3 – 2/3),
-  seconde ligne (exemple 100, 50, 0), délai, unités en route comptées.
+  seconde ligne (exemple 100, 50, 0 ; le test en prend 60 : 40, 20, 0, sous le plafond de
+  40 par front), délai, unités en route comptées, plafond de la seconde ligne.
 - Combat : dégâts, multiplicateurs selon la phase, répartition des blindés
   (exemple du §6.1), arrondi, équipement au pourcentage de l'infanterie.
 - Avancée : formule de l'assaut, cas `d = 0` et `a = 0` ; percée : saut,
@@ -1017,6 +1018,20 @@ document ne tranchait pas ; à valider avec l'auteur :
 
 ## 16. Hors périmètre et pistes
 
+- **Problème connu, à reprendre avec le système de combat (l'auteur le
+  refait ; observé le 27 octobre 2026)** : une percée d'infanterie ne tue
+  personne. Une percée engage au plus une connexion (`metersPerConnection` =
+  1 000 m), soit 100 infanteries de 10 m. Ses dégâts valent 100 × 10 × 0,2
+  (`breakthroughMultiplier`) = 200 par round ; `lossesFrom` (`units.ts`) arrondit
+  les pertes à `dégâts / PV` = 200 / 500 = 0,4, soit 0 mort par round, quel que
+  soit le nombre d'unités de la tranche. La phase 1 ne se termine alors jamais :
+  la tranche n'est pas éliminée et l'essoufflement ne se déclenche pas (400 tours
+  joués sans changement). Il faut au moins 250 de dégâts par round pour tuer une
+  infanterie. Avec l'ancienne largeur (5 000 m, 500 attaquants) la percée tuait
+  2 unités par round. Deux tests le montrent et sont **laissés rouges**
+  (`combat.test.ts`, « première ligne percée : saut… » et « sans force de
+  contre-attaque… la ville tombe »). À ne pas réécrire pour qu'ils passent : à
+  reprendre quand les règles de combat auront changé.
 - Fronts aériens et maritimes ; avions (colonne vide du panneau) ; attaque
   antiaérienne.
 - Barrage d'artillerie (bouton présent, sans effet).
