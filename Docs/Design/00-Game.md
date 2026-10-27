@@ -29,16 +29,21 @@ guerre.
 
 - **Fin de partie** : hors périmètre pour l'instant. En développement, l'auteur
   arrête la partie lui-même. Aucune condition de victoire n'est implémentée.
-- **Joueurs** : le nombre maximal est réglé dans le lobby, à la création de la
-  partie. Cible : jusqu'à 100 joueurs par partie.
+- **Joueurs** : jusqu'à 100 par partie, sans réglage à la création. Chaque
+  joueur donne son nom en rejoignant. Pas d'arrivée après le lancement ; un
+  joueur déconnecté peut revenir. Salle d'attente et lancement :
+  01-Architecture §4.
 - **Rythme** : temps réel, un tour toutes les 100 ms par défaut, pas réglable.
   Le moteur ne connaît que des tours, et toutes les règles sont exprimées en
   tours. Changer le pas change donc la vitesse de la partie en temps réel, pas
   ses résultats : 100 tours durent 10 s à 100 ms, 20 s à 200 ms.
-- **Pas de pause pour les joueurs.** La pause existe seulement comme outil de
-  développement : l'hôte arrête l'envoi des tours (01-Architecture §3). Ce
-  n'est pas un ordre de joueur.
-- **Joueurs non humains (IA)** : reporté.
+- **Pause : l'hôte seulement.** Toute partie en ligne a un hôte, qui peut la
+  mettre en pause et la reprendre ; les autres joueurs ne le peuvent pas. Ce
+  n'est pas un ordre du moteur : le relais cesse de créer des tours
+  (01-Architecture §3).
+- **Joueurs non humains (IA)** : pas en ligne pour l'instant ; à terme, oui.
+  Les bots arrivent en dernier, une fois le jeu stabilisé. Ceux du solo
+  (`03-Client.md` §5) ne servent qu'au débogage.
 
 Modules prévus :
 

@@ -19,9 +19,14 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
-      # Le build du client (npm ci, puis build Vite) s'ajoutera ici quand
-      # client/ existera. Le Worker n'en a pas besoin : wrangler compile
-      # lui-même src/index.ts.
+      # Le client est compilé dans client/dist, que le Worker sert (`[assets]`
+      # de worker/wrangler.toml). `npm ci` installe aussi les workspaces
+      # (packages/shared, packages/relay) que le Worker importe.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client
+        run: npm run build -w client
 
       - name: Deploy Worker
         run: wrangler deploy

@@ -7,7 +7,9 @@ valeurs d'essai.
 
 Ce qui se joue aujourd'hui : une **partie solo contre des bots**, entièrement
 dans le navigateur (fonder des villes, faire croître sa population). Le
-multijoueur n'existe pas encore.
+multijoueur est commencé : on peut créer une partie, la rejoindre et la lancer
+depuis une salle d'attente, mais la partie en ligne elle-même (les tours) n'existe
+pas encore.
 
 ---
 
@@ -35,7 +37,8 @@ npm run dev -w client
 `npm install` n'est nécessaire qu'une fois, puis après chaque modification de
 `package.json`. La seconde commande démarre un serveur de développement (Vite)
 et affiche son adresse, `http://localhost:5173`. Ouvrir cette adresse dans un
-navigateur. `Ctrl + C` dans le terminal arrête le serveur.
+navigateur. `Ctrl + C` dans le terminal arrête le serveur. La page s'ouvre sur
+l'accueil (liste des parties) ; le solo est dans la carte « Solo — débogage ».
 
 **La page affiche une erreur de connexion** (« connexion refusée », « site
 inaccessible ») : le serveur de développement n'est plus lancé, par exemple
@@ -51,6 +54,8 @@ partie, aucun lobby, aucune connexion réseau pendant la partie.
 
 ### Jouer
 
+- **Accueil** : « Lancer le solo » dans la carte « Solo — débogage » ouvre
+  l'écran de départ.
 - **Écran de départ** : choisir le nombre de bots (1 à 7) et la graine de la
   carte (même graine = même carte), puis « Jouer ».
 - **Fonder une ville** : bouton « Créer une ville » en bas, puis clic sur la
@@ -74,6 +79,30 @@ partie, aucun lobby, aucune connexion réseau pendant la partie.
 
 L'interface est provisoire. Détail du client : `Docs/Design/03-Client.md`.
 
+### Essayer le lobby et la salle d'attente en local
+
+La liste des parties, la création d'une partie et la salle d'attente passent par
+le Worker Cloudflare, qui tourne aussi sur ton PC. Depuis la racine du dépôt,
+une compilation, puis deux terminaux :
+
+```bash
+npm run build -w client          # le Worker sert client/dist : à compiler une fois
+cd worker && npx wrangler dev    # le Worker, à http://127.0.0.1:8787
+npm run dev -w client            # la page, à http://localhost:5173
+```
+
+À faire une fois : copier `worker/.dev.vars.example` vers `worker/.dev.vars` (le
+secret ne sert qu'aux serveurs d'hôte, pas à la création d'une partie depuis la
+page).
+
+Ouvrir `http://localhost:5173`, « Créer une partie », donner un nom de partie et
+ton nom : tu entres dans la salle comme hôte (tu choisis la graine, « Lancer la
+partie »). Pour un deuxième joueur, ouvrir la page dans **un autre navigateur ou
+une fenêtre privée** (deux onglets du même navigateur partagent le nom et les
+jetons gardés, donc le même joueur), puis « Actualiser » et « Rejoindre ».
+Après le lancement, chacun voit un écran « Partie lancée » avec le message de
+départ ; la partie en ligne n'est pas encore jouable.
+
 ### Vérifier
 
 ```bash
@@ -88,14 +117,17 @@ section « Vérifier ».
 
 ## Héberger une partie
 
-**Pas encore possible.** Le multijoueur demande deux pièces qui n'existent pas
-encore : le serveur de partie (`server/`) et l'écran de lobby du client.
+**Hébergée par Cloudflare** : depuis la page, « Créer une partie » (accueil), puis
+la salle d'attente. Aucun serveur à lancer : la partie tourne dans le Worker
+Cloudflare. La page du jeu et le lobby sont servis à
+`https://fronts-of-iron.paul-raynaud.workers.dev` (le workflow de déploiement
+compile le client et le publie avec le Worker). Un déploiement coupe les parties
+Cloudflare en cours.
 
-Ce qui est prévu (`Docs/Design/01-Architecture.md` §2 et §6) :
+**Hébergée sur ton PC : pas encore possible.** Elle demande le serveur de partie
+(`server/`), qui n'existe pas encore. Ce qui est prévu
+(`Docs/Design/01-Architecture.md` §2 et §6) :
 
-- La page du jeu et le lobby (liste des parties ouvertes) sont servis par
-  Cloudflare, à `https://fronts-of-iron.paul-raynaud.workers.dev`. Le lobby y
-  tourne déjà ; la page du jeu n'y est pas encore publiée.
 - L'hôte lance le serveur de partie (Node) sur son PC. Ce serveur ouvre un
   tunnel Cloudflare (`cloudflared`) qui lui donne une adresse publique en
   `https://`, et inscrit la partie au lobby.

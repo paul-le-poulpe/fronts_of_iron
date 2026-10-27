@@ -3,6 +3,8 @@
   "private": true,
   "workspaces": [
     "worker",
+    "packages/shared",
+    "packages/relay",
     "packages/engine",
     "client"
   ],

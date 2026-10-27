@@ -46,13 +46,16 @@ contient `.git`), pas le dossier parent.
 
 ```
 packages/
-  shared/    formats des messages (ordre, tour, hash) — lus par client et serveur
+  shared/    formats des messages — lus par client, relais et serveurs. Fait : salle
+             d'attente, entrée du lobby ; à venir : ordre, tour, hash
   engine/    simulation déterministe ; ses règles viennent de Docs/Design/00-Game.md
-  relay/     relais d'une partie (file d'ordres, création des tours), sans API
-             de plateforme ; utilisé par le solo, server/ et worker/
+  relay/     relais d'une partie, sans API de plateforme ; utilisé par le solo,
+             server/ et worker/. Fait : la salle d'attente (`Room`) ; à venir :
+             file d'ordres, création des tours
 client/      page du jeu (Vite + TypeScript) : interface + engine dans un Web Worker
-worker/      Worker Cloudflare : sert client/ compilé + lobby (Durable Object)
-             + parties hébergées par Cloudflare (un Durable Object par partie)
+worker/      Worker Cloudflare : sert client/dist (le client compilé) + lobby
+             (Durable Object) + parties hébergées par Cloudflare (un Durable
+             Object `Game` par partie : salle d'attente pour l'instant)
 server/      Node : parties hébergées par un joueur, sur son PC, via un tunnel
 .github/workflows/deploy.yml   build, puis wrangler deploy dans worker/
 Docs/Design/                   documents de conception
@@ -84,7 +87,12 @@ Depuis la racine du dépôt, après `npm install` :
   invalides sans effet, et recherche des fonctions interdites par la règle 2
   dans `packages/engine/src`.
   Pour le client : partie solo et affichage (copie locale, peinture) sous Node,
-  sans navigateur.
+  sans navigateur ; `online.ts` (adresse du WebSocket, nom et jetons gardés).
+  Pour `packages/relay` : une règle de la salle d'attente par test, et
+  l'absence d'API de plateforme dans `src`. Pour `worker` : routes, table des
+  parties (migration d'une base de la version précédente comprise) et Durable
+  Object `Game`, avec des remplaçants de `cloudflare:workers`, SQLite, WebSocket
+  et minuterie (`node:sqlite`, `node:test`) — pas de `wrangler dev`.
 - `npm run dev -w client` — le client (mode solo contre des bots) sur
   `http://localhost:5173` ; `npm run build -w client` le compile dans
   `client/dist/`. Détail : `Docs/Design/03-Client.md`.
@@ -104,15 +112,22 @@ Depuis la racine du dépôt, après `npm install` :
   routes, connexions colorées par front, points du front, chaînes, fronts de
   chaque joueur, écrite dans `packages/engine/out/fronts.html`. Réglages en
   argument : `npm run viz:fronts -- --seed=7 --turns=5000 --every=250`.
-- `cd worker && npx wrangler dev` — Worker et lobby en local sur
-  `http://127.0.0.1:8787`. Le secret local vient de `worker/.dev.vars`
-  (copier `worker/.dev.vars.example` ; fichier ignoré par git).
+- `cd worker && npx wrangler dev` — Worker, lobby et parties Cloudflare en local
+  sur `http://127.0.0.1:8787`, qui sert aussi la page : **compiler le client
+  d'abord** (`npm run build -w client`), `[assets]` pointe sur `client/dist`.
+  Pour modifier le client sans le recompiler : `npm run dev -w client`, qui
+  redirige `/api/*`, WebSocket compris, vers `wrangler dev`. Le secret local
+  vient de `worker/.dev.vars` (copier `worker/.dev.vars.example` ; fichier
+  ignoré par git) ; il ne sert qu'aux requêtes des serveurs d'hôte.
 - Requêtes du lobby (format complet : `Docs/Design/01-Architecture.md` §4) :
   ```
   curl http://127.0.0.1:8787/api/games
   curl -X POST http://127.0.0.1:8787/api/games -H "Authorization: Bearer dev-secret" -H "Content-Type: application/json" -d '{"name":"Test","address":"https://a.trycloudflare.com","players":1,"maxPlayers":8}'
   curl -X POST http://127.0.0.1:8787/api/games/<id>/heartbeat -H "Authorization: Bearer dev-secret" -H "Content-Type: application/json" -d '{"players":2}'
+  curl -X POST http://127.0.0.1:8787/api/games/cloudflare -H "Content-Type: application/json" -d '{"name":"Test"}'
   ```
+  La dernière (partie Cloudflare, sans secret) répond `{"id","hostToken"}` ; le
+  WebSocket est `ws://127.0.0.1:8787/api/games/<id>/ws`.
 - Après une modification de `worker/wrangler.toml` :
   `cd worker && npm run types` (régénère `worker-configuration.d.ts`).
 

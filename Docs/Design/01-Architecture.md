@@ -39,8 +39,8 @@ chaque mode l'entoure d'une enveloppe qui fournit la minuterie et le transport.
 | Module | Contenu | Dépend de |
 | --- | --- | --- |
 | `packages/engine` | le moteur (`02-Engine.md`) | rien |
-| `packages/shared` | formats des messages : ordres, tours, hashes, entrée du lobby | rien |
-| `packages/relay` (à créer) | le relais : file d'ordres, création du tour, expéditeur réécrit, liste des tours, tours manqués pour la reconnexion, hash majoritaire. Reçoit des messages, renvoie les messages à envoyer et à qui | `shared` |
+| `packages/shared` | formats des messages et réglages communs. **Construit** : messages de la salle d'attente, entrée du lobby, réglages (100 joueurs, longueur des noms, cartes). À venir : ordres, tours, hashes | rien |
+| `packages/relay` | le relais : file d'ordres, création du tour, expéditeur réécrit, liste des tours, tours manqués pour la reconnexion, hash majoritaire. Reçoit des messages, renvoie les messages à envoyer et à qui. **Construit** : la salle d'attente (`Room`, §4). Pas encore : tours, ordres, hashes | `shared` |
 | `client/` (Web Worker) | applique les tours au moteur et fabrique les messages de la page ; reçoit ses tours d'une **source de tours** : locale (solo) ou WebSocket (en ligne) — `03-Client.md` §8 | `engine`, `shared`, `relay` (solo) |
 | `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby | `relay`, `shared` |
 | `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval`, inscription et signaux au lobby | `relay`, `shared` |
@@ -72,16 +72,19 @@ l'enveloppe le lui demande.
    - Hébergée par un joueur : le serveur Node démarre, lance `cloudflared`,
      obtient une adresse publique, et l'envoie au lobby avec le nom de la
      partie et le secret du lobby.
-   - Hébergée par Cloudflare : un joueur la crée depuis la page ; le Worker
-     crée le Durable Object de la partie, qui s'inscrit au lobby par un appel
-     interne au Worker (pas de secret). Son adresse est le chemin relatif
-     `/api/games/:id/ws`.
+   - Hébergée par Cloudflare : un joueur la crée depuis la page
+     (`POST /api/games/cloudflare`) ; le Worker crée le Durable Object de la
+     partie, qui crée le jeton d'hôte. Quand l'hôte entre dans la salle, le
+     Durable Object s'inscrit au lobby par un appel interne au Worker (pas de
+     secret). Son adresse est le chemin relatif `/api/games/:id/ws`. Détail :
+     §4.
 
    Dans les deux cas, l'enveloppe renvoie un signal environ toutes les 30 s,
-   avec le nombre de joueurs ; sans signal, le lobby retire la partie de la
-   liste. Un même mécanisme pour les deux : un Durable Object de partie
-   redémarré par un déploiement n'exécute aucun code de fin, et seule
-   l'absence de signal le retire du lobby.
+   avec le nombre de joueurs et l'état (`waiting` ou `started`) ; sans signal,
+   le lobby retire la partie de la liste. Un même mécanisme pour les deux : un
+   Durable Object de partie redémarré par un déploiement n'exécute aucun code
+   de fin, et seule l'absence de signal le retire du lobby. Un Durable Object
+   de partie n'envoie de signal que tant qu'une connexion est ouverte.
 3. **Arrivée d'un joueur.** Le navigateur charge la page depuis le Worker,
    demande au lobby la liste des parties, reçoit pour chacune son nom, son
    nombre de joueurs et son adresse.
@@ -109,11 +112,12 @@ l'enveloppe le lui demande.
 - **Reconnexion** : le client donne le numéro du dernier tour reçu, le serveur
   lui renvoie les tours suivants, le client les rejoue. Les parties étant
   courtes, rejouer depuis le début reste acceptable.
-- **Pause, outil de développement seulement** : l'enveloppe cesse de demander
-  des tours au relais ; elle prend effet à la fin d'un tour. Jamais par un
-  ordre de joueur : le jeu n'a pas de pause (`00-Game.md` §1.1). Commandée sur
-  le PC de l'hôte pour `server/`, par le bouton de pause en solo
-  (`03-Client.md` §3). Une partie hébergée par Cloudflare n'a pas de pause.
+- **Pause, par l'hôte seulement** (`00-Game.md` §1.1) : le relais cesse de
+  créer des tours ; elle prend effet à la fin d'un tour. Elle est commandée
+  par un message de pause ou de reprise que le relais n'accepte que de la
+  connexion de l'hôte. Ce n'est pas un ordre du moteur : il n'entre dans aucun
+  tour. Même mécanisme dans les trois modes ; en solo, le joueur est l'hôte
+  (bouton de pause, `03-Client.md` §3).
 
 Conséquence voulue : le serveur ne calcule rien, ne connaît pas l'état, et
 reste léger. Conséquence acceptée : chaque client a l'état complet, donc pas de
@@ -157,7 +161,9 @@ les messages par 7 sans rien apporter au joueur.
 ## 4. Le lobby
 
 Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
-(classe `Lobby`), `worker/wrangler.toml`.
+(classe `Lobby`), `worker/src/game.ts` (classe `Game`, une partie Cloudflare),
+`worker/wrangler.toml`. La salle d'attente elle-même est dans `packages/relay`
+(`Room`), les formats dans `packages/shared`.
 
 - **Un seul Durable Object** pour tout le jeu : le Worker obtient toujours la
   même instance par `env.LOBBY.getByName("lobby")`.
@@ -175,31 +181,153 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
 
 | Requête | Secret | Corps | Réponse |
 | --- | --- | --- | --- |
-| `GET /api/games` | non | — | `200 {"games":[{id,name,address,players,maxPlayers}]}` |
-| `POST /api/games` | oui | `{name, address, players, maxPlayers}` | `201 {"id"}` |
-| `POST /api/games/:id/heartbeat` | oui | `{players}` | `200 {"ok":true}`, ou `404 {"error":"unknown_game"}` |
+| `GET /api/games` | non | — | `200 {"games":[{id,name,hostName,mode,address,map,seed,players,maxPlayers,state}]}` (les deux modes) |
+| `POST /api/games` | oui | `{name, address, players, maxPlayers}`, et facultatifs `hostName, map, seed` | `201 {"id"}` |
+| `POST /api/games/:id/heartbeat` | oui | `{players}`, et facultatifs `state, hostName, map, seed` | `200 {"ok":true}`, ou `404 {"error":"unknown_game"}` |
+| `POST /api/games/cloudflare` | non | `{name}` | `201 {"id","hostToken"}`, ou `400 {"error":"invalid_game"}` |
+| `GET /api/games/:id/ws` | non | — | WebSocket (101) ; `426` sans en-tête `Upgrade` ; `404` si la partie n'a pas été créée |
 
+- Entrée de la liste (`LobbyEntry`, `packages/shared`) : `mode` vaut `cloudflare`
+  ou `host` ; `address` est `https://…` (tunnel d'un hôte) ou le chemin relatif
+  `/api/games/:id/ws` (partie Cloudflare) ; `state` vaut `waiting` ou `started` ;
+  `seed` vaut `null` si l'hôte ne l'a pas donnée. Une inscription ou un signal à
+  l'ancien format (sans les champs facultatifs) reste valide : l'entrée a alors
+  `hostName` vide, `map` `test`, `seed` `null`, `state` `waiting`.
 - Secret : en-tête `Authorization: Bearer <LOBBY_SECRET>`. Absent ou faux :
   `401`. Si le Worker n'a pas de `LOBBY_SECRET`, `503` : rien ne s'inscrit.
-  Comparaison en temps constant (`crypto.subtle.timingSafeEqual`).
-- Validation : nom de 1 à 40 caractères ; adresse en `https://` (une page
-  `https` ne joint l'hôte qu'en `wss`, §10) ; `0 ≤ players ≤ maxPlayers ≤ 1000`.
-  Sinon `400`.
+  Comparaison en temps constant (`crypto.subtle.timingSafeEqual`). La création
+  d'une partie Cloudflare et le WebSocket n'ont pas de secret.
+- Validation : nom de partie de 1 à 40 caractères ; nom d'hôte de 1 à 24 ;
+  adresse en `https://` (une page `https` ne joint l'hôte qu'en `wss`, §10) ;
+  `0 ≤ players ≤ maxPlayers ≤ 1000` ; `state` `waiting` ou `started` ; `map` une
+  carte connue ; `seed` un entier de 0 à 2³² − 1. Sinon `400`. Les noms sont
+  vérifiés par `normalizeGameName` et `normalizePlayerName` (`packages/shared`),
+  les mêmes que ceux de la page et du relais.
 - L'hôte envoie un signal environ toutes les 30 s. Une partie dont le dernier
   signal date de plus de 90 s (`GAME_TTL_MS`) n'est plus listée.
 - **Un `404` au signal veut dire : se réinscrire.** Il arrive quand la partie a
   expiré (hôte injoignable plus de 90 s) ou que l'identifiant est inconnu. Le
   serveur de partie (`server/`) doit alors refaire `POST /api/games` et garder
-  le nouvel identifiant.
+  le nouvel identifiant. Une partie Cloudflare se réinscrit de la même façon,
+  sous le même identifiant, par appel interne.
 
-Ces requêtes sont celles des parties hébergées par un joueur. Pour les parties
-hébergées par Cloudflare, il reste à concevoir la requête de création depuis la
-page et l'appel interne par lequel le Durable Object s'inscrit. Contraintes
-déjà fixées : une seule liste `GET /api/games` pour les deux modes ; même
-signal, même délai d'expiration (`GAME_TTL_MS`) et même réinscription sur
-`404` ; seules changent la forme de l'adresse (chemin relatif au lieu de
-`https://`) et l'authentification (appel interne au lieu du secret). Coût du
-signal d'une partie Cloudflare : environ 60 requêtes pour 30 min.
+### Parties hébergées par Cloudflare
+
+- Un Durable Object `Game` par partie, nommé par l'identifiant de la partie
+  (`env.GAME.getByName(id)`). `POST /api/games/cloudflare` génère
+  l'identifiant (UUID), appelle `create(id, name)` sur le Durable Object (appel
+  RPC, pas de HTTP) et renvoie l'identifiant et le jeton d'hôte. Le Durable
+  Object garde dans son stockage `{id, name, hostToken}`, de quoi retrouver la
+  partie s'il quitte la mémoire ; il répond `404` à un WebSocket si ce
+  stockage est vide, donc une adresse inventée ne crée rien.
+- Le WebSocket est un WebSocket **standard** (`accept()`), pas l'API
+  d'hibernation : le Durable Object reste en mémoire tant qu'une connexion est
+  ouverte, ce qu'il lui faut pour son `setInterval`. Chaque message reçu (au
+  plus 1 024 caractères, du JSON) est passé à `Room.handle` ; les messages
+  renvoyés partent vers les connexions indiquées.
+- **Inscription et signaux.** Le Durable Object s'inscrit au lobby
+  (`registerCloudflare`, appel RPC sur le stub `env.LOBBY`, sans secret) dès que
+  l'hôte est entré dans la salle : une partie sans hôte n'est pas listée. Il
+  signale ensuite (`heartbeat`, avec `players`, `state`, `hostName`, `map`,
+  `seed`) toutes les 30 s tant qu'au moins une connexion est ouverte, et tout de
+  suite au lancement. Si le lobby répond « inconnue », il réinscrit la partie
+  sous le même identifiant. Quand la dernière connexion se ferme, le
+  `setInterval` s'arrête : plus de signal, le lobby retire la partie après 90 s,
+  et la prochaine connexion la réinscrit. Un seul signal à la fois ; un
+  signal demandé pendant un autre est rejoué ensuite avec l'état courant.
+- **La salle est en mémoire.** Seuls l'identifiant, le nom et le jeton d'hôte
+  sont dans le stockage. Une partie dont le Durable Object quitte la mémoire
+  (plus aucune connexion) ou qu'un déploiement redémarre perd sa salle : joueurs,
+  jetons des joueurs, lancement (§6). Sans tours en ligne, il n'y a rien d'autre
+  à perdre ; quand les tours existeront, la liste des tours devra être
+  persistée.
+- Coût du signal : environ 60 requêtes pour 30 min.
+- **Pas de limite** au nombre de créations (§8).
+
+### Salle d'attente et lancement
+
+Décidé par l'auteur le 27 octobre 2026. Fonctionnellement proche du lobby
+d'OpenFront ; visuellement, pas forcément. Maquette : artifact « Fronts of
+Iron — lobby » (accueil, rejoindre, créer, salle d'attente de l'hôte et d'un
+joueur).
+
+- **Toute partie en ligne a un hôte** : celui qui la crée depuis la page
+  (partie Cloudflare) ou celui qui lance `server/` (partie sur son PC). Seul
+  l'hôte choisit la carte et la graine, lance la partie, et la met en pause
+  (§3).
+- **Aucune partie ne se lance seule** : pas de partie créée ni lancée à
+  intervalle régulier, contrairement à OpenFront.
+- **Jusqu'à 100 joueurs**, sans réglage à la création. Chaque joueur donne son
+  nom en rejoignant.
+- **Pas d'arrivée après le lancement** (l'auteur : « si ça a un coût, ça ne
+  vaut pas la peine »). Un joueur déjà inscrit qui s'est déconnecté revient
+  par la reconnexion du §3.
+- **Pas de bots en ligne** pour l'instant (`00-Game.md` §1.1).
+
+Construit (octobre 2026), dans `packages/relay` (`Room`) et `packages/shared`
+(messages) ; chaque enveloppe lui passe les messages reçus et envoie ce qu'elle
+renvoie. Choix techniques, **provisoires** (non tranchés par l'auteur) :
+
+- Le relais attribue les identifiants de joueur dans l'ordre d'arrivée dans
+  la salle ; l'hôte est le joueur 1. Un joueur qui quitte la salle avant le
+  lancement libère sa place ; les identifiants sont renumérotés au lancement,
+  sans trou (le moteur attend `1..n`).
+- Tant que la partie n'est pas lancée, le relais envoie à chaque changement
+  l'état de la salle : joueurs (identifiant, nom, hôte), carte, graine.
+- **Message de départ** : envoyé par le relais à tous les clients au
+  lancement, avant le tour 1 : graine, réglages de la carte, liste des
+  joueurs (identifiant, nom), identifiant du destinataire. Chaque client
+  appelle `createGame` avec ces valeurs. C'est ce qui garantit que tous les
+  moteurs partent du même état.
+- **Reconnexion** : à l'arrivée dans la salle, le relais remet au joueur un
+  jeton, que le navigateur garde (`localStorage`). Pour revenir, le client
+  envoie le jeton et le numéro du dernier tour reçu ; le relais renvoie le
+  message de départ puis les tours manquants. La liste des parties affiche
+  « Reprendre » pour une partie lancée dont le navigateur a un jeton.
+- **Hôte d'une partie sur un PC** : `server/` crée le jeton de l'hôte au
+  démarrage et affiche dans sa console un lien vers la page qui le contient ;
+  l'hôte ouvre ce lien pour entrer dans la salle comme hôte.
+- **Entrée du lobby** : gagne un champ `state` (`waiting` ou `started`),
+  envoyé avec le signal. Une partie lancée reste listée (pour « Reprendre »)
+  mais ne peut pas être rejointe.
+
+Messages de la salle (JSON, types dans `packages/shared/src/index.ts`, qui fait
+foi pour les champs) :
+
+| Sens | Message | Rôle |
+| --- | --- | --- |
+| client → relais | `join {name, token?}` | entrer dans la salle ; le jeton d'hôte, ou le jeton reçu à l'arrivée pour revenir (le nom est alors ignoré) |
+| client → relais | `set_map {map?, seed?}` | hôte seulement ; `seed` : un entier, ou `"random"` (graine tirée par l'enveloppe) |
+| client → relais | `start` | hôte seulement |
+| relais → client | `welcome {token}` | à l'arrivée d'un nouveau joueur : le jeton à garder |
+| relais → client | `room {you, players, map, seed}` | état de la salle, à chaque changement, à chaque joueur avec son propre `you` |
+| relais → client | `start {you, map, seed, players}` | message de départ, au lancement et à chaque reconnexion après le lancement |
+| relais → client | `error {code}` | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced` |
+
+Choix faits à l'implémentation, **provisoires** eux aussi :
+
+- Le jeton d'hôte est créé avec la salle (`Room.hostToken`, par la fonction
+  `newToken` de l'enveloppe) et sert de jeton au joueur 1 : le joueur qui entre
+  avec lui est l'hôte, premier de la liste ; il revient avec lui, même après
+  avoir quitté la salle. Sa place est réservée : les autres ne comptent que 99
+  places tant qu'il est absent. Les autres joueurs reçoivent leur propre jeton.
+- Avant le lancement, `id` est le rang dans la liste (hôte en premier, puis
+  ordre d'arrivée) et change quand un joueur part : un client se reconnaît par
+  `you`, jamais par un `id` gardé. Au lancement, ces rangs sont figés.
+- Un joueur ordinaire qui quitte la salle avant le lancement perd sa place et
+  son jeton : en revenant, il arrive comme un nouveau joueur. Après le
+  lancement, ses place et jeton restent. Une deuxième connexion avec le même
+  jeton remplace la première, qui reçoit `error replaced` et est fermée.
+- Nom d'un joueur : 1 à 24 caractères après `trim` (comptés en points de
+  code), sans caractère de contrôle. Graine : entier de 0 à 2³² − 1 ; celle
+  d'une salle neuve est 12345. L'hôte peut lancer seul.
+- Le `seed` du message de départ est la graine de la carte ; la graine de la
+  partie (`createGame`) s'en déduit comme en solo (`03-Client.md` §4), côté
+  client, quand le jeu en ligne existera.
+- Les colonnes ajoutées à la table `games` pour ces champs (`mode`,
+  `host_name`, `map`, `seed`, `state`) le sont par `ALTER TABLE` au démarrage
+  du Durable Object si une lecture de la colonne échoue : une base créée par la
+  version précédente est migrée sans perdre ses lignes.
 
 ### Mémoire du Durable Object : la liste est dans le stockage
 
@@ -220,6 +348,13 @@ chaque inscription et de chaque signal.
 
 Vérifié en local (`wrangler dev`) : la liste survit à l'arrêt et au redémarrage
 du Worker.
+
+Tests (`npm test -w worker`, sous Node, sans `wrangler dev`) : les routes, la
+table des parties (dont la migration d'une table de la version précédente,
+sur `node:sqlite`) et le Durable Object `Game` (WebSocket factices, minuterie
+et heure de `node:test`) avec un `cloudflare:workers` remplacé. Ils ne
+remplacent pas un essai avec `wrangler dev` et deux onglets : à faire à la
+main (`CLAUDE.md`, section Vérifier).
 
 ### Quotas gratuits concernés
 
@@ -320,11 +455,14 @@ que le passage de l'un à l'autre ne demande aucune modification du code :
 3. **Le moteur tourne dans un Web Worker créé par
    `new Worker(new URL("…", import.meta.url), { type: "module" })`** : Vite
    compile ce Worker de la même façon en développement et au build.
-4. **Au premier build du client**, `[assets] directory` passe de `public` au
-   dossier compilé du client, et la page d'accueil actuelle
-   (`worker/public/index.html`, liste des parties) devient un écran du client.
-   Le workflow ajoute `npm ci` puis le build Vite avant `wrangler deploy`
-   (règle 7 du `CLAUDE.md`).
+4. **Fait (octobre 2026).** `[assets] directory` de `worker/wrangler.toml` est
+   `../client/dist`, le dossier compilé du client (`npm run build -w client`,
+   ignoré par git) ; `worker/public/index.html` n'existe plus, son rôle (liste
+   des parties) est l'accueil du client. Le workflow lance `npm ci` puis le
+   build Vite avant `wrangler deploy` (règle 7 du `CLAUDE.md`).
+   `run_worker_first = [ "/api/*" ]` couvre les requêtes du lobby et le
+   WebSocket de `/api/games/:id/ws`. Sans `client/dist`, `wrangler dev` et
+   `wrangler deploy` échouent : compiler le client d'abord.
 
 **Mode solo contre des bots** (construit, `Docs/Design/03-Client.md`) : le
 Web Worker du moteur crée lui-même un tour toutes les 100 ms avec les ordres du
@@ -334,7 +472,9 @@ Cloudflare. Il passera par `packages/relay` quand ce module existera (§1).
 
 **Développement des deux modes en ligne** : `npx wrangler dev` exécute le
 Worker, le lobby et les Durable Objects des parties, WebSocket compris, sur
-le PC. Le serveur Node se lance sur le PC sans tunnel.
+le PC. Le serveur Node se lance sur le PC sans tunnel. Avec `npm run dev -w
+client`, Vite redirige `/api/*` vers `wrangler dev`, **WebSocket compris**
+(`ws: true` dans `vite.config.ts`).
 
 ## 7. Décisions écartées, et pourquoi
 
@@ -348,7 +488,7 @@ le PC. Le serveur Node se lance sur le PC sans tunnel.
 ## 8. À vérifier ou à décider
 
 - Fréquence N des hashes : analyse au §3 ; valeur non fixée.
-- Requêtes du lobby pour les parties hébergées par Cloudflare (§4).
+- ~~Requêtes du lobby pour les parties hébergées par Cloudflare~~ Faites (§4).
 - Qui peut créer une partie Cloudflare depuis la page, et combien à la fois :
   sans limite, n'importe quel visiteur peut épuiser le quota du jour (§6).
 - Les Quick Tunnels (`*.trycloudflare.com`, sans compte) : limites, et prise en
@@ -368,9 +508,11 @@ Ordre prévu :
    - `package.json` racine, workspaces npm (`worker`) ;
    - `worker/` : `wrangler.toml`, `src/index.ts`, `src/lobby.ts`,
      `src/env.ts`, `public/index.html` (page d'accueil statique : liste des
-     parties, joueurs, adresse de l'hôte ; pas de jeu) ;
+     parties, joueurs, adresse de l'hôte ; pas de jeu). Ce dossier `public`
+     a été supprimé depuis : le client le remplace (point 6) ;
    - `.github/workflows/deploy.yml` : sur le modèle de vitrine, `wrangler
-     deploy` dans `worker/`. Pas encore d'étape de build du client.
+     deploy` dans `worker/`. L'étape de build du client a été ajoutée depuis
+     (point 6).
 
    Déployé le 20 octobre 2026 sur
    `https://fronts-of-iron.paul-raynaud.workers.dev`. En place : les secrets
@@ -398,12 +540,16 @@ Ordre prévu :
 4. Multijoueur (§1, Modules). Ne dépend pas des règles : le relais transmet
    des ordres sans les lire. Ordre de construction :
    1. `packages/shared` (formats) et `packages/relay` (relais), avec leurs
-      tests sous Node ;
+      tests sous Node. **Fait pour la salle d'attente** (point 6) ; les tours,
+      les ordres et les hashes restent à faire ;
    2. le mode solo passe par `packages/relay` (source de tours locale,
       `03-Client.md` §8) : premier utilisateur du relais, sans réseau ;
-   3. la source de tours WebSocket du client, et l'écran de lobby ;
+   3. la source de tours WebSocket du client, et l'écran de lobby. **Écran de
+      lobby fait** (point 6) ; la source de tours WebSocket reste à faire ;
    4. les deux enveloppes : `server/` (Node, tunnel) et le Durable Object de
-      partie dans `worker/`, dans l'ordre que l'auteur choisira ;
+      partie dans `worker/`, dans l'ordre que l'auteur choisira. **Le
+      Durable Object `Game` est fait pour la salle d'attente** (pas de tours) ;
+      `server/` n'existe pas encore ;
    5. un test qui joue la même suite d'ordres à travers les deux enveloppes et
       vérifie que les tours envoyés sont identiques.
 5. Client (`client/`). **Fait : le mode solo** (octobre 2026), workspace npm,
@@ -414,8 +560,25 @@ Ordre prévu :
    provisoires (carrés gris), que l'auteur remplace par ses dessins sous le
    même nom (00-Game §11). Les règles de §6, Client, sont suivies (chemins
    `/api` relatifs, `server.proxy` de Vite, Worker créé par `new URL`) ; le
-   point 4 (`[assets]`, page d'accueil du lobby, étape de build du workflow) et
-   le multijoueur (écran de lobby, WebSocket) ne sont pas faits.
+   point 4 (`[assets]`, page d'accueil du lobby, étape de build du workflow) est
+   fait depuis (point 6) ; le jeu en ligne (tours par WebSocket) ne l'est pas.
+6. **Fait (octobre 2026) : lobby et salle d'attente en ligne, jusqu'au message
+   de départ** (pas encore de tours). Existe :
+   - `packages/shared` (messages de la salle, `LobbyEntry`, réglages) et
+     `packages/relay` (`Room`), avec leurs tests sous Node ;
+   - `worker/src/game.ts` (Durable Object `Game`, une partie Cloudflare),
+     `POST /api/games/cloudflare`, `GET /api/games/:id/ws`, table `games` étendue
+     (§4), tests sous Node (`worker/test/`) ;
+   - le client : accueil (liste, rejoindre, créer, solo), salle d'attente de
+     l'hôte et d'un joueur, écran provisoire « Partie lancée »
+     (`03-Client.md` §7) ;
+   - `[assets]` sur `client/dist`, `worker/public` supprimé, étape de build du
+     client dans le workflow (§6, Client, point 4).
+
+   Pas fait : les tours en ligne (relais, source de tours WebSocket du client),
+   `server/` (partie hébergée sur un PC), la pause, la limite de créations de
+   parties Cloudflare (§8), l'aperçu de la carte (un emplacement vide), un essai
+   de bout en bout avec `wrangler dev` et deux navigateurs.
 
 ## 10. Pièges
 
@@ -441,3 +604,19 @@ Ordre prévu :
   `ws://localhost:…`) fonctionne en développement et casse une fois la page
   servie par Cloudflare. Chemins relatifs pour le lobby, adresse du lobby pour
   le serveur de partie (§6, Client).
+- `id` d'un joueur dans la salle : c'est son rang, renuméroté à chaque départ
+  avant le lancement. Un client qui garde l'`id` d'un `room` précédent désigne
+  un autre joueur ; il utilise `you` du dernier message.
+- Le proxy de Vite sans `ws: true` laisse passer les requêtes `/api/*` mais pas
+  le WebSocket : la salle d'attente échoue en développement, et fonctionne une
+  fois déployée. Ne pas retirer l'option.
+- `client/dist` est ignoré par git : un clone neuf sans `npm run build -w
+  client` fait échouer `wrangler dev` et `wrangler deploy` (`[assets]` pointe
+  dessus).
+- Une colonne ajoutée à la table `games` ailleurs que dans `ADDED_COLUMNS`
+  (`worker/src/lobby.ts`) plante le Durable Object du lobby sur une base
+  existante (déploiement, `.wrangler/state` local) : `CREATE TABLE IF NOT
+  EXISTS` ne modifie pas une table qui existe.
+- Passer `Game` à l'API d'hibernation des WebSocket arrêterait son
+  `setInterval` quand le Durable Object s'endort : plus de signal, la partie
+  disparaîtrait du lobby avec ses joueurs encore connectés.

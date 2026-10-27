@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@fronts-of-iron/engine": "*"
+    "@fronts-of-iron/engine": "*",
+    "@fronts-of-iron/shared": "*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

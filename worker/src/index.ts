@@ -1,15 +1,19 @@
-import type { Env } from "./env";
-import type { GameInput } from "./lobby";
+import { isMapId, isSeed, normalizeGameName, normalizePlayerName } from "@fronts-of-iron/shared";
+import type { Env } from "./env.ts";
+import type { GameInput, GameUpdate } from "./lobby.ts";
 
-export { Lobby } from "./lobby";
+export { Game } from "./game.ts";
+export { Lobby } from "./lobby.ts";
 
 /**
- * Requêtes du lobby. Tout le reste (/, index.html…) est servi depuis public/
- * sans passer par ce code (voir [assets] dans wrangler.toml).
+ * Requêtes du lobby. Tout le reste (/, index.html, scripts…) est servi depuis le
+ * client compilé sans passer par ce code (voir [assets] dans wrangler.toml).
  *
- *   GET  /api/games                  liste publique des parties ouvertes
- *   POST /api/games                  inscrire une partie      (secret requis)
- *   POST /api/games/:id/heartbeat    signal « toujours active » (secret requis)
+ *   GET  /api/games                  liste publique des parties (les deux modes)
+ *   POST /api/games                  inscrire une partie d'hôte  (secret requis)
+ *   POST /api/games/:id/heartbeat    signal « toujours active »  (secret requis)
+ *   POST /api/games/cloudflare       créer une partie Cloudflare (sans secret) → { id, hostToken }
+ *   GET  /api/games/:id/ws           WebSocket d'une partie Cloudflare (salle d'attente)
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -30,15 +34,32 @@ export default {
       return json(405, { error: "method_not_allowed" });
     }
 
+    if (url.pathname === "/api/games/cloudflare") {
+      if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+      // Pas de secret : n'importe quel visiteur peut créer une partie. La limite du nombre de créations reste à décider (01-Architecture §8).
+      const body = await readJson(request);
+      const name = normalizeGameName(isRecord(body) ? body.name : undefined);
+      if (name === null) return json(400, { error: "invalid_game" });
+      const id = crypto.randomUUID();
+      const hostToken = await env.GAME.getByName(id).create(id, name);
+      return json(201, { id, hostToken });
+    }
+
+    const socket = /^\/api\/games\/([^/]+)\/ws$/.exec(url.pathname);
+    if (socket) {
+      if (request.method !== "GET") return json(405, { error: "method_not_allowed" });
+      // Le Durable Object répond 404 si cette partie n'a pas été créée, 426 sans en-tête Upgrade.
+      return env.GAME.getByName(decodeURIComponent(socket[1])).fetch(request);
+    }
+
     const heartbeat = /^\/api\/games\/([^/]+)\/heartbeat$/.exec(url.pathname);
     if (heartbeat) {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
       const denied = checkSecret(request, env);
       if (denied) return denied;
-      const body = await readJson(request);
-      const players = isRecord(body) ? body.players : undefined;
-      if (!isCount(players, 0, 1000)) return json(400, { error: "invalid_players" });
-      const known = await lobby.heartbeat(decodeURIComponent(heartbeat[1]), players);
+      const update = parseUpdate(await readJson(request));
+      if (!update) return json(400, { error: "invalid_players" });
+      const known = await lobby.heartbeat(decodeURIComponent(heartbeat[1]), update);
       // 404 : partie inconnue ou expirée. L'hôte se réinscrit avec POST /api/games.
       return known ? json(200, { ok: true }) : json(404, { error: "unknown_game" });
     }
@@ -58,15 +79,47 @@ function checkSecret(request: Request, env: Env): Response | null {
   return ok ? null : json(401, { error: "unauthorized" });
 }
 
+/** Inscription d'une partie d'hôte. `hostName`, `map` et `seed` sont facultatifs : les anciennes requêtes restent valides. */
 function parseGame(body: unknown): GameInput | null {
   if (!isRecord(body)) return null;
   const { name, address, players, maxPlayers } = body;
-  if (typeof name !== "string") return null;
-  const trimmed = name.trim();
-  if (trimmed.length < 1 || trimmed.length > 40) return null;
+  const trimmed = normalizeGameName(name);
+  if (trimmed === null) return null;
   if (typeof address !== "string" || !isHttpsUrl(address)) return null;
   if (!isCount(maxPlayers, 1, 1000) || !isCount(players, 0, maxPlayers)) return null;
-  return { name: trimmed, address, players, maxPlayers };
+  const extra = parseOptional(body);
+  if (extra === null) return null;
+  return { name: trimmed, address, players, maxPlayers, ...extra };
+}
+
+/** Signal d'un hôte : `players` obligatoire, `state`, `hostName`, `map` et `seed` facultatifs. */
+function parseUpdate(body: unknown): GameUpdate | null {
+  if (!isRecord(body)) return null;
+  const { players, state } = body;
+  if (!isCount(players, 0, 1000)) return null;
+  if (state !== undefined && state !== "waiting" && state !== "started") return null;
+  const extra = parseOptional(body);
+  if (extra === null) return null;
+  return { players, ...(state !== undefined ? { state } : {}), ...extra };
+}
+
+/** `hostName`, `map` et `seed`, s'ils sont présents ; null s'ils sont présents et invalides. */
+function parseOptional(body: Record<string, unknown>): { hostName?: string; map?: "test"; seed?: number } | null {
+  const out: { hostName?: string; map?: "test"; seed?: number } = {};
+  if (body.hostName !== undefined) {
+    const hostName = normalizePlayerName(body.hostName);
+    if (hostName === null) return null;
+    out.hostName = hostName;
+  }
+  if (body.map !== undefined) {
+    if (!isMapId(body.map)) return null;
+    out.map = body.map;
+  }
+  if (body.seed !== undefined) {
+    if (!isSeed(body.seed)) return null;
+    out.seed = body.seed;
+  }
+  return out;
 }
 
 /** L'adresse doit être en https : une page https ne peut joindre l'hôte qu'en wss (§10 de la doc). */

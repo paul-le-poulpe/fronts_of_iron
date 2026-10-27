@@ -4,10 +4,10 @@ account_id = "2808dbbc2de69c79fa846846b70c00ef"
 workers_dev = true
 compatibility_date = "2026-10-15"
 
-# Page d'accueil : fichiers de public/. Les chemins /api/* passent d'abord par
-# le Worker (src/index.ts).
+# La page du jeu : le client compilé (`npm run build -w client`). Les chemins
+# /api/* passent d'abord par le Worker (src/index.ts), WebSocket compris.
 [assets]
-directory = "public"
+directory = "../client/dist"
 binding = "ASSETS"
 run_worker_first = [ "/api/*" ]
 
@@ -16,10 +16,20 @@ run_worker_first = [ "/api/*" ]
 name = "LOBBY"
 class_name = "Lobby"
 
-# Déclaration de la classe. Sur le plan gratuit, seul le stockage SQLite est
+# Une instance de la classe Game par partie hébergée par Cloudflare, nommée par
+# l'identifiant de la partie (src/game.ts).
+[[durable_objects.bindings]]
+name = "GAME"
+class_name = "Game"
+
+# Déclaration des classes. Sur le plan gratuit, seul le stockage SQLite est
 # disponible. `exports` remplace l'ancien tableau `migrations` (les deux sont
 # incompatibles) ; voir Docs/Design/01-Architecture.md §4.
 [exports.Lobby]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.Game]
 type = "durable-object"
 storage = "sqlite"
 

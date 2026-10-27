@@ -5,9 +5,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "types": "wrangler types --include-env=false",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "@fronts-of-iron/relay": "*",
+    "@fronts-of-iron/shared": "*"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "typescript": "^7.0.2",
     "wrangler": "^4.151.3"
   }

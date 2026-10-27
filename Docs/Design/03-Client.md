@@ -2,8 +2,10 @@
 
 Le client (`client/`) est la page du jeu : une interface provisoire, et le moteur
 dans un Web Worker. Ce qui existe : le **mode solo** (un humain contre des bots,
-tout dans le navigateur, sans serveur ni lobby). Pas de multijoueur, pas d'écran
-de lobby, pas de build pour Cloudflare (§8).
+tout dans le navigateur, sans serveur ni lobby), et l'**accueil, la salle
+d'attente et l'écran de lancement** des parties en ligne (§7, dernière
+sous-section), jusqu'au message de départ. Pas de partie en ligne : le client ne
+reçoit pas encore de tours (§8).
 
 **L'interface est provisoire.** L'auteur la définit (00-Game §1) ; la page ne
 contient que ce qu'il faut pour essayer le moteur, et l'affiche
@@ -17,8 +19,15 @@ le moteur calcule.
 Depuis la racine du dépôt, après `npm install` :
 
 - `npm run dev -w client` : Vite sur `http://localhost:5173`. `/api/*` est
-  redirigé vers `http://127.0.0.1:8787` (`wrangler dev`) ; le mode solo n'appelle
-  pas le lobby.
+  redirigé, WebSocket compris, vers `http://127.0.0.1:8787` (`wrangler dev`, lancé
+  à part). L'accueil appelle `GET /api/games` au chargement : sans `wrangler dev`
+  la liste affiche « Liste indisponible » et le solo marche quand même.
+- Essayer une partie en ligne en local : `npm run build -w client` (le Worker
+  sert `client/dist` et refuse de démarrer sans lui), `cd worker && npx wrangler
+  dev`, puis `npm run dev -w client` ; deux onglets (ou deux navigateurs) font
+  deux joueurs. Un onglet par joueur partage le même `localStorage`, donc le
+  même nom et les mêmes jetons : utiliser un navigateur différent, ou une
+  fenêtre de navigation privée, pour le second joueur.
 - `npm run build -w client` : compilation dans `client/dist/` (ignoré par git).
   `npm run preview -w client` sert ce dossier.
 - `npm run typecheck`, `npm test` : le client y est (trois projets TypeScript :
@@ -31,7 +40,9 @@ Depuis la racine du dépôt, après `npm install` :
 
 | Fichier (`client/`) | Rôle |
 | --- | --- |
-| `index.html`, `src/style.css` | page : écran de départ, barre d'informations, carte, barre de boutons, panneau latéral, panneau de production |
+| `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau latéral, panneau de production |
+| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran « Partie lancée » ; connexion WebSocket au relais (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
+| `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
 | `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock) ; DOM construit une fois, pas de règle |
@@ -51,7 +62,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/solo.ts` | `SoloGame` : moteur + bots + fabrication des messages (sans DOM, sans `self`) |
 | `src/bots.ts` | bots (§5) |
 | `test/solo.test.ts`, `test/fronts.test.ts` | tests sous Node : partie solo, copie de la page, peinture ; géométrie des fronts, message des fronts, double ligne rouge, prise d'une ville |
-| `vite.config.ts` | `server.proxy` pour `/api`, Worker au format module |
+| `test/online.test.ts` | tests sous Node de `online.ts` : adresse du WebSocket, nom et jetons gardés (stockage qui lève compris), liste du lobby |
+| `vite.config.ts` | `server.proxy` pour `/api` (`ws: true`), Worker au format module |
 | `public/icons/` | icônes provisoires (00-Game §11), servies telles quelles |
 
 Le moteur est importé par `@fronts-of-iron/engine` (workspace npm ; il exporte
@@ -86,8 +98,9 @@ Cette règle disparaîtra quand le solo passera par `packages/relay`
 comme une partie en ligne, avec la règle d'ordre du relais.
 
 **Pause** : bouton « Pause (outil de développement) ». Le Worker saute alors les
-tours, sans arrêter la minuterie ; les ordres reçus attendent. Le jeu n'a pas de
-pause (00-Game §1.1) : ce n'est pas un ordre, et le bouton est étiqueté ainsi.
+tours, sans arrêter la minuterie ; les ordres reçus attendent. Ce n'est pas un
+ordre. En ligne, seul l'hôte a ce bouton (00-Game §1.1, 01-Architecture §3) ;
+en solo, le joueur est l'hôte.
 
 **Barre de debug** (demandée par l'auteur, 24 octobre 2026) : à droite de la
 barre de boutons, encadrée en pointillé orange, étiquetée « Debug ». Ses
@@ -723,12 +736,64 @@ La section maritime de la barre (00-Game §1) n'existe pas. La diplomatie se lim
 menu et aux notifications ci-dessus : ni alliance, ni droit de passage, ni commerce
 (00-Game §1).
 
+### Écrans en ligne : accueil, salle d'attente, partie lancée
+
+Code : `lobby.ts` (DOM), `online.ts` (sans DOM, testé). Maquette validée par
+l'auteur (octobre 2026) : accueil, rejoindre, créer, salle de l'hôte, salle d'un
+joueur ; structure, textes et couleurs sont repris, les polices Barlow viennent
+de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
+
+- **Accueil** (`#lb-home`) : la liste des parties (`GET /api/games`), chargée à
+  l'ouverture de la page et au clic sur « Actualiser » seulement (quota,
+  01-Architecture §4). Une ligne : nom et « Hôte : X », hébergement
+  (Cloudflare / PC de l'hôte), carte et graine, joueurs, état, et une action :
+  « Rejoindre » (partie en attente), « Pleine », « Reprendre » (partie lancée
+  dont le navigateur a un jeton), « Commencée » (sinon). À droite : « Créer une
+  partie » (Cloudflare), « Héberger sur votre PC » (texte et lien vers le
+  README, `server/` n'existe pas encore), « Solo — débogage ». Le solo cache
+  `#lobby` et montre `#app`, l'écran de départ solo d'avant, inchangé, avec un
+  bouton « Retour à l'accueil ».
+- **Rejoindre** (`#lb-join`) : nom du joueur (1 à 24 caractères, gardé dans le
+  navigateur). **Créer** (`#lb-create`) : nom de la partie (1 à 40) et nom du
+  joueur ; `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu.
+- **Connexion.** L'adresse du WebSocket vient de l'`address` de l'entrée du lobby
+  (`wsUrl`, 01-Architecture §6, Client, point 2) : chemin relatif → `wss://` +
+  hôte de la page (`ws://` si la page est en `http`), `https://…` → `wss://…`.
+  Aucune adresse n'est écrite dans le code. À l'ouverture, la page envoie
+  `join {name, token?}` ; le jeton est celui que le navigateur a gardé pour cette
+  partie, s'il y en a un.
+- **Ce que le navigateur garde** (`localStorage`, chaque lecture et écriture dans
+  un `try/catch` : stockage bloqué ou navigation privée ne cassent rien) :
+  `foi.playerName` (le nom), `foi.tokens` (un jeton par identifiant de partie, les
+  20 plus récents). Le jeton arrive dans `welcome` (nouveau joueur) ; celui de
+  l'hôte vient de la réponse de `POST /api/games/cloudflare`.
+- **Salle d'attente** (`#lb-room`) : joueurs (couleur de `playerColor`, celle de
+  la partie), compteur sur 100, carte. L'hôte voit la liste des cartes (une :
+  « Carte de test (générée) »), le champ de la graine (envoyée à Entrée ou en
+  quittant le champ), « Au hasard » (`set_map {seed: "random"}`), « Lancer la
+  partie » ; un joueur voit la carte et la graine en lecture seule. L'aperçu de
+  la carte est un emplacement vide. Le champ de la graine n'est pas écrasé par un
+  message `room` pendant qu'il a le focus. « Quitter la salle » ferme le
+  WebSocket.
+- **Partie lancée** (`#lb-started`) : écran provisoire, le jeu en ligne n'existe
+  pas encore. Affiche le message de départ reçu : carte, graine, joueur du
+  destinataire, liste des joueurs. « Reprendre » à l'accueil rouvre cet écran avec
+  le jeton gardé.
+- **Erreurs.** Un refus à l'arrivée (partie pleine, déjà lancée, nom invalide)
+  ramène à l'écran d'où l'on vient avec le texte (`roomErrorText`). Une erreur
+  pendant la salle (graine invalide, lancement refusé) s'affiche dans un bandeau.
+  Une connexion perdue affiche « Connexion perdue » et « Se reconnecter » (même
+  nom, jeton gardé) ; `replaced` (même jeton dans un autre onglet) n'offre pas de
+  reconnexion. Une reprise dont le serveur répond `welcome` au lieu de `start`
+  (la partie n'existe plus, par exemple après un déploiement) oublie le jeton.
+
 ## 8. Pas fait
 
-- Écran de lobby (liste des parties, `fetch("/api/games")`), multijoueur : le
-  client n'ouvre aucun WebSocket. Les trois façons de jouer (solo, hébergé par
-  un joueur, hébergé par Cloudflare : 01-Architecture §1) passent par le même
-  Web Worker, découpé ainsi :
+- Jeu en ligne : l'écran de lobby et la salle d'attente existent (§7), mais le
+  client n'ouvre le WebSocket que jusqu'au message de départ ; il ne reçoit
+  pas de tours. Les trois façons de jouer (solo, hébergé par un joueur, hébergé
+  par Cloudflare : 01-Architecture §1) passent par le même Web Worker, découpé
+  ainsi :
   - **la partie** : applique un tour au moteur et fabrique le message `tick` de
     la page. C'est la seconde moitié de `SoloGame.step` (à partir de
     `applyTurn`) ; elle ne dépend pas du mode ;
@@ -758,10 +823,9 @@ menu et aux notifications ci-dessus : ni alliance, ni droit de passage, ni comme
   quand le bien n'a pas d'icône. Les types d'usine, le fer et les icônes de la
   population sont encore à part (texte provisoire ou chemin écrit dans le code).
   Les noms de ville (« Ville n° N ») sont leur identifiant.
-- Build pour Cloudflare : `[assets] directory` de `worker/wrangler.toml` pointe
-  toujours sur `worker/public`, la page d'accueil du lobby n'est pas reprise, et
-  `.github/workflows/deploy.yml` n'a pas l'étape `npm ci` + build du client
-  (01-Architecture §6, Client, point 4). Aucun des trois n'est fait.
+- Build pour Cloudflare : fait (01-Architecture §6, Client, point 4).
+- Aperçu de la carte dans la salle d'attente : un emplacement vide.
+- Pause par l'hôte en ligne (01-Architecture §3) : pas de bouton, pas de message.
 - Couleurs de joueur, textures et tailles : provisoires, choisies à la main.
 - Rendu mobile / tactile : la mise en page s'adapte, mais le zoom au pincement
   n'existe pas.
@@ -824,6 +888,14 @@ menu et aux notifications ci-dessus : ni alliance, ni droit de passage, ni comme
 - **Relancer une partie sans remplacer le canvas** : les écouteurs de la
   partie précédente resteraient sur l'ancien. `main.ts` remplace le canvas à
   chaque partie.
+- **Écrire un nom de joueur avec `innerHTML`** : les noms viennent d'autres joueurs.
+  `lobby.ts` crée les éléments (`el`) et fixe `textContent`.
+- **Deux onglets du même navigateur pour deux joueurs** : ils partagent
+  `localStorage`, donc le même jeton pour une même partie. Le second onglet
+  « remplace » le premier (`error replaced`). Pour tester à deux, un autre
+  navigateur ou une fenêtre privée.
+- **Importer `lobby.ts` ou `main.ts` depuis un test** : ils lisent `document` à
+  l'import. Ce qui se teste sous Node est dans `online.ts` (sans DOM).
 - **Mesures du navigateur** : `performance.now()` y est arrondi (environ 0,1 ms
   ou plus selon le navigateur) : les durées de moins de 0,1 ms affichées dans le
   bloc développement sont à lire comme « sous la résolution ».

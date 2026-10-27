@@ -3,6 +3,8 @@
 // Worker (engine.worker.ts) et la page affiche ce qu'il envoie.
 
 import "./style.css";
+// Accueil et salle d'attente des parties en ligne ; le mode solo ci-dessous s'ouvre depuis l'accueil.
+import "./lobby.ts";
 
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";

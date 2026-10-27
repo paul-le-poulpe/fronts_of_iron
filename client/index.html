@@ -3,10 +3,221 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fronts of Iron — solo</title>
+    <title>Fronts of Iron</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Barlow:wght@400;500;600&amp;display=swap"
+    />
   </head>
   <body>
-    <div id="app">
+    <!-- Accueil, salle d'attente et lancement des parties en ligne (src/lobby.ts). Le mode solo est dans #app. -->
+    <div id="lobby">
+      <!-- Accueil : liste des parties -->
+      <section id="lb-home" class="lb-screen">
+        <div class="lb-page">
+          <header class="lb-header">
+            <h1 class="lb-title">Fronts of Iron</h1>
+            <p class="lb-muted">Stratégie multijoueur, parties courtes</p>
+          </header>
+          <div class="lb-cols">
+            <section class="lb-main">
+              <div class="lb-row">
+                <h2 class="lb-h2">Parties ouvertes</h2>
+                <button id="lb-refresh" type="button" class="lb-btn lb-btn-outline">Actualiser</button>
+              </div>
+              <p id="lb-status" class="lb-status" role="status"></p>
+              <div class="lb-table-wrap">
+                <table class="lb-table">
+                  <thead>
+                    <tr>
+                      <th>Partie</th>
+                      <th>Hébergement</th>
+                      <th>Carte</th>
+                      <th>Joueurs</th>
+                      <th>État</th>
+                      <th><span class="lb-sr">Action</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="lb-games"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside class="lb-side">
+              <div class="lb-card lb-card-accent">
+                <h2 class="lb-h3">Créer une partie</h2>
+                <p class="lb-muted">Hébergée par Cloudflare. Vous en êtes l'hôte : vous choisissez la carte et lancez la partie.</p>
+                <button id="lb-create-open" type="button" class="lb-btn lb-btn-primary">Créer une partie</button>
+              </div>
+              <div class="lb-card">
+                <h2 class="lb-h3">Héberger sur votre PC</h2>
+                <p class="lb-muted">
+                  Lancez le serveur de partie sur votre PC : la partie apparaît dans cette liste, et vous en êtes l'hôte.
+                  La marche à suivre est dans le
+                  <a href="https://github.com/paul-le-poulpe/fronts_of_iron#readme" target="_blank" rel="noopener">README</a>
+                  du dépôt, section « Héberger une partie ».
+                </p>
+              </div>
+              <div class="lb-card lb-card-dashed">
+                <h2 class="lb-h3">Solo — débogage</h2>
+                <p class="lb-muted">Contre des bots, sans réseau.</p>
+                <button id="lb-solo" type="button" class="lb-btn lb-btn-outline">Lancer le solo</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- Rejoindre : nom du joueur -->
+      <section id="lb-join" class="lb-screen lb-center" hidden>
+        <form id="lb-join-form" class="lb-card lb-card-accent lb-form">
+          <div class="lb-stack">
+            <p class="lb-kicker">Rejoindre</p>
+            <h1 id="lb-join-title" class="lb-h1"></h1>
+            <p id="lb-join-info" class="lb-muted"></p>
+          </div>
+          <div class="lb-field">
+            <label for="lb-join-name">Votre nom</label>
+            <input id="lb-join-name" type="text" maxlength="24" autocomplete="nickname" />
+            <p class="lb-hint">Affiché aux autres joueurs. Gardé pour la prochaine fois.</p>
+          </div>
+          <p id="lb-join-error" class="lb-error" role="alert" hidden></p>
+          <div class="lb-actions">
+            <button id="lb-join-cancel" type="button" class="lb-btn lb-btn-outline">Annuler</button>
+            <button id="lb-join-submit" type="submit" class="lb-btn lb-btn-primary">Rejoindre</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Créer une partie Cloudflare -->
+      <section id="lb-create" class="lb-screen lb-center" hidden>
+        <form id="lb-create-form" class="lb-card lb-card-accent lb-form">
+          <div class="lb-stack">
+            <h1 class="lb-h1">Créer une partie</h1>
+            <p class="lb-muted">Hébergée par Cloudflare. Vous en êtes l'hôte ; vous choisirez la carte dans la salle d'attente.</p>
+          </div>
+          <div class="lb-field">
+            <label for="lb-create-game">Nom de la partie</label>
+            <input id="lb-create-game" type="text" maxlength="40" autocomplete="off" />
+          </div>
+          <div class="lb-field">
+            <label for="lb-create-name">Votre nom</label>
+            <input id="lb-create-name" type="text" maxlength="24" autocomplete="nickname" />
+          </div>
+          <p id="lb-create-error" class="lb-error" role="alert" hidden></p>
+          <div class="lb-actions">
+            <button id="lb-create-cancel" type="button" class="lb-btn lb-btn-outline">Annuler</button>
+            <button id="lb-create-submit" type="submit" class="lb-btn lb-btn-primary">Créer la partie</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Salle d'attente (hôte ou joueur) -->
+      <section id="lb-room" class="lb-screen" hidden>
+        <div class="lb-page">
+          <header class="lb-header lb-header-room">
+            <div class="lb-stack">
+              <button id="lb-room-leave" type="button" class="lb-link">Quitter la salle</button>
+              <h1 id="lb-room-title" class="lb-h1 lb-h1-big"></h1>
+              <div class="lb-badges">
+                <span id="lb-room-mode" class="lb-badge"></span>
+                <span id="lb-room-you-host" class="lb-badge lb-badge-ink" hidden>Vous êtes l'hôte</span>
+                <span id="lb-room-host" class="lb-muted"></span>
+              </div>
+            </div>
+            <p class="lb-muted">En attente du lancement</p>
+          </header>
+          <div id="lb-room-notice" class="lb-notice" role="alert" hidden>
+            <span id="lb-room-notice-text"></span>
+            <button id="lb-room-reconnect" type="button" class="lb-btn lb-btn-outline" hidden>Se reconnecter</button>
+          </div>
+          <div class="lb-cols">
+            <section class="lb-panel lb-players">
+              <div class="lb-panel-head">
+                <h2 class="lb-h3">Joueurs</h2>
+                <span id="lb-room-count" class="lb-num"></span>
+              </div>
+              <ul id="lb-room-players" class="lb-list"></ul>
+            </section>
+            <section id="lb-room-map" class="lb-panel lb-panel-body">
+              <h2 class="lb-h3">Carte</h2>
+              <div class="lb-host-only">
+                <div class="lb-fields">
+                  <div class="lb-field">
+                    <label for="lb-map-select">Carte</label>
+                    <select id="lb-map-select"></select>
+                  </div>
+                  <form id="lb-seed-form" class="lb-field">
+                    <label for="lb-seed-input">Graine</label>
+                    <div class="lb-inline">
+                      <input id="lb-seed-input" type="text" inputmode="numeric" autocomplete="off" />
+                      <button id="lb-seed-random" type="button" class="lb-btn lb-btn-outline">Au hasard</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <dl class="lb-player-only lb-facts">
+                <div><dt>Carte</dt><dd id="lb-room-map-name"></dd></div>
+                <div><dt>Graine</dt><dd id="lb-room-seed" class="lb-num"></dd></div>
+              </dl>
+              <div class="lb-preview" role="img" aria-label="Aperçu de la carte">[Aperçu de la carte]</div>
+              <div class="lb-host-only lb-launch">
+                <p class="lb-hint">Une fois la partie lancée, plus personne ne peut la rejoindre. Un joueur déconnecté peut revenir.</p>
+                <button id="lb-start" type="button" class="lb-btn lb-btn-launch">Lancer la partie</button>
+              </div>
+              <div class="lb-player-only lb-info">
+                <span class="lb-info-mark" aria-hidden="true"></span>
+                <p>L'hôte lancera la partie. La carte peut encore changer d'ici là.</p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- Partie lancée : écran provisoire, le jeu en ligne n'existe pas encore -->
+      <section id="lb-started" class="lb-screen" hidden>
+        <div class="lb-page">
+          <header class="lb-header lb-header-room">
+            <div class="lb-stack">
+              <h1 class="lb-h1 lb-h1-big">Partie lancée</h1>
+              <p id="lb-started-game" class="lb-muted"></p>
+            </div>
+          </header>
+          <div id="lb-started-notice" class="lb-notice" role="alert" hidden>
+            <span id="lb-started-notice-text"></span>
+            <button id="lb-started-reconnect" type="button" class="lb-btn lb-btn-outline" hidden>Se reconnecter</button>
+          </div>
+          <div class="lb-cols">
+            <section class="lb-panel lb-panel-body">
+              <h2 class="lb-h3">Message de départ</h2>
+              <p class="lb-muted">
+                Écran provisoire : le jeu en ligne n'existe pas encore. Voici ce que le serveur a envoyé à ce joueur ; chaque
+                client créera sa partie avec ces valeurs.
+              </p>
+              <dl class="lb-facts">
+                <div><dt>Carte</dt><dd id="lb-started-map"></dd></div>
+                <div><dt>Graine</dt><dd id="lb-started-seed" class="lb-num"></dd></div>
+                <div><dt>Vous êtes</dt><dd id="lb-started-you"></dd></div>
+              </dl>
+              <div class="lb-actions lb-actions-start">
+                <button id="lb-started-home" type="button" class="lb-btn lb-btn-outline">Retour à l'accueil</button>
+              </div>
+            </section>
+            <section class="lb-panel lb-players">
+              <div class="lb-panel-head">
+                <h2 class="lb-h3">Joueurs</h2>
+                <span id="lb-started-count" class="lb-num"></span>
+              </div>
+              <ul id="lb-started-players" class="lb-list"></ul>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Mode solo (débogage) : écran de départ, puis la partie -->
+    <div id="app" hidden>
       <header id="top">
         <strong>Fronts of Iron</strong>
         <span class="muted">mode solo contre des bots</span>
@@ -25,6 +236,7 @@
             <input id="seed" type="number" min="0" max="4294967295" step="1" value="12345" required />
           </label>
           <button id="play" type="submit">Jouer</button>
+          <button id="solo-back" type="button">Retour à l'accueil</button>
           <p id="start-note" class="muted">
             La partie tourne entièrement dans cette page : aucun serveur, aucun lobby. Les règles du jeu sont
             encore en cours d'écriture ; les valeurs utilisées sont des valeurs d'essai.
