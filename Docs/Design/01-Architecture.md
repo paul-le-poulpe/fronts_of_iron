@@ -184,7 +184,7 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
 | `GET /api/games` | non | — | `200 {"games":[{id,name,hostName,mode,address,map,seed,players,maxPlayers,state}]}` (les deux modes) |
 | `POST /api/games` | oui | `{name, address, players, maxPlayers}`, et facultatifs `hostName, map, seed` | `201 {"id"}` |
 | `POST /api/games/:id/heartbeat` | oui | `{players}`, et facultatifs `state, hostName, map, seed` | `200 {"ok":true}`, ou `404 {"error":"unknown_game"}` |
-| `POST /api/games/cloudflare` | non | `{name}` | `201 {"id","hostToken"}`, ou `400 {"error":"invalid_game"}` |
+| `POST /api/games/cloudflare` | mot de passe de création | `{name, password}` | `201 {"id","hostToken"}` ; `401 {"error":"wrong_password"}` ; `503 {"error":"create_password_not_configured"}` ; `400 {"error":"invalid_game"}` |
 | `GET /api/games/:id/ws` | non | — | WebSocket (101) ; `426` sans en-tête `Upgrade` ; `404` si la partie n'a pas été créée |
 
 - Entrée de la liste (`LobbyEntry`, `packages/shared`) : `mode` vaut `cloudflare`
@@ -195,8 +195,16 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
   `hostName` vide, `map` `test`, `seed` `null`, `state` `waiting`.
 - Secret : en-tête `Authorization: Bearer <LOBBY_SECRET>`. Absent ou faux :
   `401`. Si le Worker n'a pas de `LOBBY_SECRET`, `503` : rien ne s'inscrit.
-  Comparaison en temps constant (`crypto.subtle.timingSafeEqual`). La création
-  d'une partie Cloudflare et le WebSocket n'ont pas de secret.
+  Comparaison en temps constant (`crypto.subtle.timingSafeEqual`). Le WebSocket
+  n'a pas de secret : rejoindre une partie est libre.
+- **Mot de passe de création** (décidé par l'auteur le 28 octobre 2026) : créer
+  une partie Cloudflare demande le champ `password` du corps, comparé en temps
+  constant au secret du Worker `CREATE_PASSWORD`. Absent ou faux : `401`. Si le
+  Worker n'a pas de `CREATE_PASSWORD`, `503` : la création est fermée. Sans ce
+  mot de passe, n'importe quel visiteur pourrait ouvrir des parties et épuiser
+  les quotas du compte, partagés avec vitrine (§6). Il se partage entre
+  joueurs ; la page le garde dans le navigateur après une création réussie.
+  Le changer : `npx wrangler secret put CREATE_PASSWORD` dans `worker/`.
 - Validation : nom de partie de 1 à 40 caractères ; nom d'hôte de 1 à 24 ;
   adresse en `https://` (une page `https` ne joint l'hôte qu'en `wss`, §10) ;
   `0 ≤ players ≤ maxPlayers ≤ 1000` ; `state` `waiting` ou `started` ; `map` une
@@ -242,7 +250,8 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
   à perdre ; quand les tours existeront, la liste des tours devra être
   persistée.
 - Coût du signal : environ 60 requêtes pour 30 min.
-- **Pas de limite** au nombre de créations (§8).
+- Création protégée par le mot de passe de création (Requêtes, ci-dessus) ;
+  pas de plafond du nombre de parties ouvertes.
 
 ### Salle d'attente et lancement
 
@@ -489,8 +498,8 @@ client`, Vite redirige `/api/*` vers `wrangler dev`, **WebSocket compris**
 
 - Fréquence N des hashes : analyse au §3 ; valeur non fixée.
 - ~~Requêtes du lobby pour les parties hébergées par Cloudflare~~ Faites (§4).
-- Qui peut créer une partie Cloudflare depuis la page, et combien à la fois :
-  sans limite, n'importe quel visiteur peut épuiser le quota du jour (§6).
+- ~~Qui peut créer une partie Cloudflare~~ Décidé : un mot de passe de
+  création, secret du Worker (§4, Requêtes).
 - Les Quick Tunnels (`*.trycloudflare.com`, sans compte) : limites, et prise en
   charge des WebSocket — non vérifiées.
 - ~~Le compte Cloudflare utilisé~~ Décidé : le même que vitrine,
@@ -576,9 +585,14 @@ Ordre prévu :
      client dans le workflow (§6, Client, point 4).
 
    Pas fait : les tours en ligne (relais, source de tours WebSocket du client),
-   `server/` (partie hébergée sur un PC), la pause, la limite de créations de
-   parties Cloudflare (§8), l'aperçu de la carte (un emplacement vide), un essai
-   de bout en bout avec `wrangler dev` et deux navigateurs.
+   `server/` (partie hébergée sur un PC, en attente du feu vert de l'auteur),
+   la pause, l'aperçu de la carte (un emplacement vide). Essayé de bout en bout
+   avec `wrangler dev` (deux connexions scriptées, puis deux navigateurs par
+   l'auteur) le 28 octobre 2026.
+
+   **Avant le premier déploiement de ce point** : créer le secret
+   `CREATE_PASSWORD` du Worker (`npx wrangler secret put CREATE_PASSWORD` dans
+   `worker/`), sinon la création de parties répond `503`.
 
 ## 10. Pièges
 

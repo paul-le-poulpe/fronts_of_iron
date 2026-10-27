@@ -8,4 +8,6 @@ export interface Env {
   GAME: DurableObjectNamespace<Game>;
   /** Secret partagé avec les serveurs d'hôte. `wrangler secret put LOBBY_SECRET` en production, `.dev.vars` en local. */
   LOBBY_SECRET?: string;
+  /** Mot de passe de création des parties Cloudflare, partagé entre joueurs. `wrangler secret put CREATE_PASSWORD` en production, `.dev.vars` en local. */
+  CREATE_PASSWORD?: string;
 }

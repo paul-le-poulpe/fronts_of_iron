@@ -754,8 +754,10 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   `#lobby` et montre `#app`, l'écran de départ solo d'avant, inchangé, avec un
   bouton « Retour à l'accueil ».
 - **Rejoindre** (`#lb-join`) : nom du joueur (1 à 24 caractères, gardé dans le
-  navigateur). **Créer** (`#lb-create`) : nom de la partie (1 à 40) et nom du
-  joueur ; `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu.
+  navigateur). **Créer** (`#lb-create`) : nom de la partie (1 à 40), nom du
+  joueur et mot de passe de création (01-Architecture §4, Requêtes) ;
+  `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu. Un
+  refus `401` ou `503` s'affiche sous le formulaire.
 - **Connexion.** L'adresse du WebSocket vient de l'`address` de l'entrée du lobby
   (`wsUrl`, 01-Architecture §6, Client, point 2) : chemin relatif → `wss://` +
   hôte de la page (`ws://` si la page est en `http`), `https://…` → `wss://…`.
@@ -764,8 +766,9 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   partie, s'il y en a un.
 - **Ce que le navigateur garde** (`localStorage`, chaque lecture et écriture dans
   un `try/catch` : stockage bloqué ou navigation privée ne cassent rien) :
-  `foi.playerName` (le nom), `foi.tokens` (un jeton par identifiant de partie, les
-  20 plus récents). Le jeton arrive dans `welcome` (nouveau joueur) ; celui de
+  `foi.playerName` (le nom), `foi.createPassword` (le mot de passe de création,
+  gardé seulement après une création acceptée), `foi.tokens` (un jeton par
+  identifiant de partie, les 20 plus récents). Le jeton arrive dans `welcome` (nouveau joueur) ; celui de
   l'hôte vient de la réponse de `POST /api/games/cloudflare`.
 - **Salle d'attente** (`#lb-room`) : joueurs (couleur de `playerColor`, celle de
   la partie), compteur sur 100, carte. L'hôte voit la liste des cartes (une :

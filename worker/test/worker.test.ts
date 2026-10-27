@@ -97,8 +97,12 @@ function sqlOf(db: DatabaseSync) {
   };
 }
 
+/** Mot de passe de création des parties Cloudflare dans les tests. */
+const PASSWORD = "mot-de-passe";
+
 interface TestEnv {
   LOBBY_SECRET: string;
+  CREATE_PASSWORD?: string;
   LOBBY: { getByName(name: string): any };
   GAME: { getByName(name: string): any };
   db: DatabaseSync;
@@ -113,6 +117,7 @@ function makeEnv(db = new DatabaseSync(":memory:")): TestEnv {
   const storages = new Map<string, Map<string, unknown>>();
   const env: TestEnv = {
     LOBBY_SECRET: "s3cret",
+    CREATE_PASSWORD: PASSWORD,
     db,
     storages,
     LOBBY: { getByName: () => lobby },
@@ -197,7 +202,7 @@ async function connect(env: TestEnv, id: string): Promise<Client> {
 }
 
 async function createCloudflareGame(env: TestEnv, name = "Soirée du jeudi") {
-  const created = await call(env, "POST", "/api/games/cloudflare", { name });
+  const created = await call(env, "POST", "/api/games/cloudflare", { name, password: PASSWORD });
   assert.equal(created.status, 201);
   return created.json as { id: string; hostToken: string };
 }
@@ -282,7 +287,7 @@ describe("lobby : table créée par une version précédente", () => {
 });
 
 describe("création d'une partie Cloudflare", () => {
-  it("sans secret : renvoie l'identifiant et le jeton d'hôte", async () => {
+  it("avec le mot de passe : renvoie l'identifiant et le jeton d'hôte", async () => {
     const env = makeEnv();
     const { id, hostToken } = await createCloudflareGame(env);
     assert.match(id, /^[0-9a-f-]{36}$/);
@@ -293,11 +298,28 @@ describe("création d'une partie Cloudflare", () => {
 
   it("valide le nom : 1 à 40 caractères après trim", async () => {
     const env = makeEnv();
-    for (const bad of [{ name: "" }, { name: "   " }, { name: "x".repeat(41) }, { name: 5 }, {}, "pas du json", "[]"]) {
-      assert.equal((await call(env, "POST", "/api/games/cloudflare", bad)).status, 400, JSON.stringify(bad));
+    for (const bad of [{ name: "" }, { name: "   " }, { name: "x".repeat(41) }, { name: 5 }, {}]) {
+      assert.equal((await call(env, "POST", "/api/games/cloudflare", { ...bad, password: PASSWORD })).status, 400, JSON.stringify(bad));
     }
-    assert.equal((await call(env, "POST", "/api/games/cloudflare", { name: "x".repeat(40) })).status, 201);
+    assert.equal((await call(env, "POST", "/api/games/cloudflare", { name: "x".repeat(40), password: PASSWORD })).status, 201);
     assert.equal((await call(env, "GET", "/api/games/cloudflare")).status, 405);
+  });
+
+  it("mot de passe absent ou faux : 401, rien n'est créé", async () => {
+    const env = makeEnv();
+    for (const bad of [{ name: "Essai" }, { name: "Essai", password: "" }, { name: "Essai", password: "faux" }, { name: "Essai", password: 5 }, "pas du json", "[]"]) {
+      const response = await call(env, "POST", "/api/games/cloudflare", bad);
+      assert.equal(response.status, 401, JSON.stringify(bad));
+      assert.deepEqual(response.json, { error: "wrong_password" });
+    }
+  });
+
+  it("sans mot de passe configuré sur le Worker : 503, la création est fermée", async () => {
+    const env = makeEnv();
+    delete env.CREATE_PASSWORD;
+    const response = await call(env, "POST", "/api/games/cloudflare", { name: "Essai", password: PASSWORD });
+    assert.equal(response.status, 503);
+    assert.deepEqual(response.json, { error: "create_password_not_configured" });
   });
 });
 

@@ -1,2 +1,3 @@
 # Copier en .dev.vars pour wrangler dev. Ne jamais commiter .dev.vars.
 LOBBY_SECRET=dev-secret
+CREATE_PASSWORD=dev-password

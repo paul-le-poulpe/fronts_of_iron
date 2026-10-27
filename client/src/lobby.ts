@@ -22,6 +22,7 @@ import {
 import {
   forgetToken,
   gameAction,
+  loadCreatePassword,
   loadPlayerName,
   loadToken,
   mapName,
@@ -29,6 +30,7 @@ import {
   parseLobbyList,
   parseSeedInput,
   roomErrorText,
+  saveCreatePassword,
   saveToken,
   savePlayerName,
   wsUrl,
@@ -429,9 +431,11 @@ function resume(game: LobbyEntry): void {
 
 const createGameName = $<HTMLInputElement>("lb-create-game");
 const createName = $<HTMLInputElement>("lb-create-name");
+const createPassword = $<HTMLInputElement>("lb-create-password");
 
 $("lb-create-open").addEventListener("click", () => {
   createName.value = loadPlayerName(store);
+  createPassword.value = loadCreatePassword(store);
   clearError("lb-create-error");
   setBusy("lb-create", false);
   show("lb-create");
@@ -454,27 +458,36 @@ $<HTMLFormElement>("lb-create-form").addEventListener("submit", (e) => {
   }
   clearError("lb-create-error");
   savePlayerName(store, name);
-  void createGame(gameName, name);
+  void createGame(gameName, name, createPassword.value);
 });
 
+/** Texte affiché pour un refus de `POST /api/games/cloudflare`, selon son code HTTP. */
+const CREATE_ERRORS: Readonly<Record<number, string>> = {
+  400: "Nom de partie refusé par le serveur.",
+  401: "Mot de passe de création incorrect.",
+  503: "La création de parties n'est pas configurée sur ce serveur (mot de passe absent).",
+};
+
 /** `POST /api/games/cloudflare`, puis connexion avec le jeton d'hôte reçu. */
-async function createGame(gameName: string, playerName: string): Promise<void> {
+async function createGame(gameName: string, playerName: string, password: string): Promise<void> {
   setBusy("lb-create", true);
   try {
     const response = await fetch("/api/games/cloudflare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: gameName }),
+      body: JSON.stringify({ name: gameName, password }),
     });
-    if (!response.ok) throw new Error(response.status === 400 ? "invalid" : `HTTP ${response.status}`);
+    if (!response.ok) throw new Error(CREATE_ERRORS[response.status] ?? "Création impossible.");
     const body = (await response.json()) as { id?: unknown; hostToken?: unknown };
-    if (typeof body.id !== "string" || typeof body.hostToken !== "string") throw new Error("réponse inattendue");
+    if (typeof body.id !== "string" || typeof body.hostToken !== "string") throw new Error("Création impossible.");
+    // Le mot de passe n'est gardé qu'une fois accepté par le serveur.
+    saveCreatePassword(store, password);
     saveToken(store, body.id, body.hostToken);
     const target: Target = { id: body.id, name: gameName, mode: "cloudflare", address: cloudflareGamePath(body.id), hostName: playerName };
     connect(target, playerName, body.hostToken, "lb-create");
   } catch (error) {
     setBusy("lb-create", false);
-    showError("lb-create-error", error instanceof Error && error.message === "invalid" ? "Nom de partie refusé par le serveur." : "Création impossible.");
+    showError("lb-create-error", error instanceof Error && Object.values(CREATE_ERRORS).includes(error.message) ? error.message : "Création impossible.");
   }
 }
 

@@ -12,7 +12,7 @@ export { Lobby } from "./lobby.ts";
  *   GET  /api/games                  liste publique des parties (les deux modes)
  *   POST /api/games                  inscrire une partie d'hôte  (secret requis)
  *   POST /api/games/:id/heartbeat    signal « toujours active »  (secret requis)
- *   POST /api/games/cloudflare       créer une partie Cloudflare (sans secret) → { id, hostToken }
+ *   POST /api/games/cloudflare       créer une partie Cloudflare (mot de passe de création) → { id, hostToken }
  *   GET  /api/games/:id/ws           WebSocket d'une partie Cloudflare (salle d'attente)
  */
 export default {
@@ -36,8 +36,11 @@ export default {
 
     if (url.pathname === "/api/games/cloudflare") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
-      // Pas de secret : n'importe quel visiteur peut créer une partie. La limite du nombre de créations reste à décider (01-Architecture §8).
+      // Mot de passe de création (01-Architecture §4) : sans lui, n'importe quel visiteur pourrait épuiser les quotas du compte.
+      if (!env.CREATE_PASSWORD) return json(503, { error: "create_password_not_configured" });
       const body = await readJson(request);
+      const password = isRecord(body) && typeof body.password === "string" ? body.password : "";
+      if (!sameSecret(password, env.CREATE_PASSWORD)) return json(401, { error: "wrong_password" });
       const name = normalizeGameName(isRecord(body) ? body.name : undefined);
       if (name === null) return json(400, { error: "invalid_game" });
       const id = crypto.randomUUID();
@@ -72,11 +75,15 @@ export default {
 function checkSecret(request: Request, env: Env): Response | null {
   if (!env.LOBBY_SECRET) return json(503, { error: "lobby_secret_not_configured" });
   const header = request.headers.get("Authorization") ?? "";
-  const given = new TextEncoder().encode(header.startsWith("Bearer ") ? header.slice(7) : "");
-  const expected = new TextEncoder().encode(env.LOBBY_SECRET);
+  return sameSecret(header.startsWith("Bearer ") ? header.slice(7) : "", env.LOBBY_SECRET) ? null : json(401, { error: "unauthorized" });
+}
+
+/** Comparaison en temps constant d'un secret reçu et du secret attendu. */
+function sameSecret(givenText: string, expectedText: string): boolean {
+  const given = new TextEncoder().encode(givenText);
+  const expected = new TextEncoder().encode(expectedText);
   // timingSafeEqual exige deux tampons de même taille.
-  const ok = given.byteLength === expected.byteLength && crypto.subtle.timingSafeEqual(given, expected);
-  return ok ? null : json(401, { error: "unauthorized" });
+  return given.byteLength === expected.byteLength && crypto.subtle.timingSafeEqual(given, expected);
 }
 
 /** Inscription d'une partie d'hôte. `hostName`, `map` et `seed` sont facultatifs : les anciennes requêtes restent valides. */

@@ -87,16 +87,16 @@ une compilation, puis deux terminaux :
 
 ```bash
 npm run build -w client          # le Worker sert client/dist : à compiler une fois
-cd worker && npx wrangler dev    # le Worker, à http://127.0.0.1:8787
-npm run dev -w client            # la page, à http://localhost:5173
+cd worker; npx wrangler dev      # le Worker, à http://127.0.0.1:8787 (PowerShell : « ; », pas « && »)
+npm run dev -w client            # la page, à http://localhost:5173, depuis la racine
 ```
 
-À faire une fois : copier `worker/.dev.vars.example` vers `worker/.dev.vars` (le
-secret ne sert qu'aux serveurs d'hôte, pas à la création d'une partie depuis la
-page).
+À faire une fois : copier `worker/.dev.vars.example` vers `worker/.dev.vars`. Il
+contient le secret des serveurs d'hôte et le mot de passe de création des
+parties en local (`dev-password`).
 
-Ouvrir `http://localhost:5173`, « Créer une partie », donner un nom de partie et
-ton nom : tu entres dans la salle comme hôte (tu choisis la graine, « Lancer la
+Ouvrir `http://localhost:5173`, « Créer une partie », donner un nom de partie,
+ton nom et le mot de passe de création : tu entres dans la salle comme hôte (tu choisis la graine, « Lancer la
 partie »). Pour un deuxième joueur, ouvrir la page dans **un autre navigateur ou
 une fenêtre privée** (deux onglets du même navigateur partagent le nom et les
 jetons gardés, donc le même joueur), puis « Actualiser » et « Rejoindre ».

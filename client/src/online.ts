@@ -33,6 +33,7 @@ export interface KeyValueStore {
 
 const NAME_KEY = "foi.playerName";
 const TOKENS_KEY = "foi.tokens";
+const PASSWORD_KEY = "foi.createPassword";
 /** Nombre de jetons gardés ; les plus anciens sont oubliés. */
 const MAX_TOKENS = 20;
 
@@ -59,6 +60,15 @@ export function loadPlayerName(store: KeyValueStore | null): string {
 
 export function savePlayerName(store: KeyValueStore | null, name: string): void {
   write(store, NAME_KEY, name);
+}
+
+/** Mot de passe de création des parties Cloudflare, gardé après une création réussie. */
+export function loadCreatePassword(store: KeyValueStore | null): string {
+  return read(store, PASSWORD_KEY) ?? "";
+}
+
+export function saveCreatePassword(store: KeyValueStore | null, password: string): void {
+  write(store, PASSWORD_KEY, password);
 }
 
 /** Jetons par identifiant de partie. Un contenu illisible est ignoré. */

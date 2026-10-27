@@ -116,17 +116,18 @@ Depuis la racine du dépôt, après `npm install` :
   sur `http://127.0.0.1:8787`, qui sert aussi la page : **compiler le client
   d'abord** (`npm run build -w client`), `[assets]` pointe sur `client/dist`.
   Pour modifier le client sans le recompiler : `npm run dev -w client`, qui
-  redirige `/api/*`, WebSocket compris, vers `wrangler dev`. Le secret local
-  vient de `worker/.dev.vars` (copier `worker/.dev.vars.example` ; fichier
-  ignoré par git) ; il ne sert qu'aux requêtes des serveurs d'hôte.
+  redirige `/api/*`, WebSocket compris, vers `wrangler dev`. Les secrets locaux
+  viennent de `worker/.dev.vars` (copier `worker/.dev.vars.example` ; fichier
+  ignoré par git) : `LOBBY_SECRET` pour les serveurs d'hôte,
+  `CREATE_PASSWORD` pour créer une partie Cloudflare.
 - Requêtes du lobby (format complet : `Docs/Design/01-Architecture.md` §4) :
   ```
   curl http://127.0.0.1:8787/api/games
   curl -X POST http://127.0.0.1:8787/api/games -H "Authorization: Bearer dev-secret" -H "Content-Type: application/json" -d '{"name":"Test","address":"https://a.trycloudflare.com","players":1,"maxPlayers":8}'
   curl -X POST http://127.0.0.1:8787/api/games/<id>/heartbeat -H "Authorization: Bearer dev-secret" -H "Content-Type: application/json" -d '{"players":2}'
-  curl -X POST http://127.0.0.1:8787/api/games/cloudflare -H "Content-Type: application/json" -d '{"name":"Test"}'
+  curl -X POST http://127.0.0.1:8787/api/games/cloudflare -H "Content-Type: application/json" -d '{"name":"Test","password":"dev-password"}'
   ```
-  La dernière (partie Cloudflare, sans secret) répond `{"id","hostToken"}` ; le
+  La dernière (partie Cloudflare, mot de passe de création) répond `{"id","hostToken"}` ; le
   WebSocket est `ws://127.0.0.1:8787/api/games/<id>/ws`.
 - Après une modification de `worker/wrangler.toml` :
   `cd worker && npm run types` (régénère `worker-configuration.d.ts`).
@@ -185,8 +186,9 @@ C'est ce qui permettra de l'héberger sur une vraie machine sans le remanier.
 
 Jetons Cloudflare dans les secrets GitHub (`CLOUDFLARE_API_TOKEN`,
 `CLOUDFLARE_ACCOUNT_ID`), secret du lobby dans un secret du Worker et dans un
-`.env` ignoré par git côté serveur. Un `account_id` dans `wrangler.toml` n'est
-pas un secret.
+`.env` ignoré par git côté serveur, mot de passe de création des parties
+Cloudflare dans le secret du Worker `CREATE_PASSWORD`. Un `account_id` dans
+`wrangler.toml` n'est pas un secret.
 
 ### 7. Déploiement : suivre vitrine, ne rien inventer
 
