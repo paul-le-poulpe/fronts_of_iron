@@ -1106,6 +1106,7 @@ fusils                       production de base de l'usine
 | Régler la priorité d'un front | le front, le niveau (1, 2, 3) | le joueur est un camp du front | `set_front_priority` (`05-Fronts.md` §4.3, §5) |
 | Autoriser la réassignation | le front, oui / non | idem | `set_front_reassign` (§4.4) |
 | Régler une unité sur un front | le front, le type d'unité, première ligne / équilibré / seconde ligne | idem | `set_unit_line_mode` (§4.2) |
+| Autoriser un type d'unité sur un front | le front, le type d'unité, oui / non | idem | `set_unit_allowed` (`05-Fronts.md` §4.2) |
 | Régler « Motorisé seulement » | le front, oui / non | idem | `set_breakthrough_motorized_only` (§7.2) |
 | Mobilisation forcée | oui / non | toujours | `set_forced_mobilization` (§4.1) |
 | Lancer ou arrêter l'attaque sur tout le front | le front | front actif ; le joueur en est un camp | `start_front_attack`, `stop_front_attack` (§5) |
@@ -1216,7 +1217,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
-- Fronts : double ligne rouge, zones hachurées, courbe, liste et panneau des
+- Fronts : double ligne rouge, zones hachurées, soldats sur les connexions, liste et panneau des
   fronts, mobilisation forcée, barre jaune de l'armement : `05-Fronts.md` §11.
 - Diplomatie : petit menu à côté de la souris, au clic sur le territoire d'un
   autre joueur (§1) ; les propositions et les changements de statut arrivent

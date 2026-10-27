@@ -26,19 +26,39 @@ function setText(e: HTMLElement, text: string): void {
   if (e.textContent !== text) e.textContent = text;
 }
 
+/** Pertes du dernier round de combat, sous l'effectif ; rien s'il n'y en a pas. */
+const lossText = (n: number): string => (n > 0 ? `−${numFmt.format(n)}` : "");
+
 export interface FrontPanelHooks {
   send(order: HumanOrder): void;
   /** « Percée » : la page ferme le panneau et passe la carte en mode choix d'axe (05-Fronts §11.1). */
   chooseAxis(frontId: number): void;
 }
 
+/** Cellule d'effectif : le nombre d'unités, et dessous, en rouge, les pertes du dernier round de combat. */
+interface Count {
+  readonly root: HTMLElement;
+  readonly n: HTMLElement;
+  readonly loss: HTMLElement;
+}
+
+function countCell(): Count {
+  const root = el("div", "fp-count");
+  const n = el("span");
+  const loss = el("span", "fp-loss");
+  root.append(n, loss);
+  return { root, n, loss };
+}
+
 /** Cellules d'une rangée du tableau des unités, pour la mise à jour. */
 interface UnitRow {
   readonly unit: UnitInfo;
-  readonly q1: [HTMLElement, HTMLElement];
-  readonly q2: [HTMLElement, HTMLElement];
+  readonly q1: [Count, Count];
+  readonly q2: [Count, Count];
   readonly pct: [HTMLElement, HTMLElement];
   readonly modes: HTMLButtonElement[];
+  /** Case « autorisé sur ce front », seulement pour le joueur. */
+  readonly allowed: HTMLInputElement | null;
 }
 
 interface NicheRow {
@@ -67,6 +87,8 @@ export class FrontPanel {
   private body: HTMLElement | null = null;
   private frontal: [HTMLButtonElement, HTMLButtonElement] | null = null;
   private pierce: [HTMLButtonElement, HTMLButtonElement] | null = null;
+  /** Cadre de chaque bouton « Percée » (bouton + interrupteur) : il porte l'aspect actif ou grisé. */
+  private pierceBox: [HTMLElement, HTMLElement] | null = null;
   private barrage: [HTMLButtonElement, HTMLButtonElement] | null = null;
   private motorized: HTMLInputElement | null = null;
   private priorities: HTMLButtonElement[] = [];
@@ -134,7 +156,9 @@ export class FrontPanel {
 
     // Boutons d'attaque : ceux du joueur dans sa moitié, les trois mêmes en miroir et gris dans celle de l'adversaire.
     const attacks = el("div", "fp-attacks");
-    const half = (mine: boolean): { root: HTMLElement; frontal: HTMLButtonElement; pierce: HTMLButtonElement; barrage: HTMLButtonElement } => {
+    const half = (
+      mine: boolean,
+    ): { root: HTMLElement; frontal: HTMLButtonElement; pierce: HTMLButtonElement; pierceBox: HTMLElement; barrage: HTMLButtonElement; motorBox: HTMLInputElement } => {
       const root = el("div", `fp-half${mine ? "" : " mirror"}`);
       const mk = (label: string, title: string): HTMLButtonElement => {
         const b = el("button", "fp-atk", label);
@@ -146,28 +170,36 @@ export class FrontPanel {
       const frontal = mk("Attaque sur tout le front", "Assaut généralisé : toute la première ligne des deux camps, avance sur toutes les routes du front. Un second clic l'arrête.");
       const pierce = mk("Percée", "Percée de la seconde ligne sur une route choisie sur la carte. Plusieurs percées possibles sur des routes différentes.");
       const barrage = mk("Barrage d'artillerie", "Hors du périmètre de la version 1 : sans effet.");
+      // Le bouton « Percée » est dans un cadre qui a l'aspect d'un bouton d'attaque, et l'interrupteur « Motorisé
+      // seulement » est dans ce cadre : il se rapporte à la percée.
+      const pierceBox = el("div", "fp-atk fp-atk-group");
+      pierce.classList.remove("fp-atk");
+      pierce.classList.add("fp-atk-main");
+      // Interrupteur « Motorisé seulement » : dans le cadre du joueur seulement. Dans celui de l'adversaire, une copie invisible
+      // garde la même hauteur pour que les deux moitiés restent symétriques.
+      const motor = el("label", mine ? "fp-motor" : "fp-motor ghost");
+      const motorBox = el("input");
+      motorBox.type = "checkbox";
+      motorBox.disabled = !mine || !mineSide;
+      motor.append(motorBox, el("span", "ib-switch"), document.createTextNode("Motorisé seulement"));
+      if (mine) motor.title = "Allumé : seules les unités motorisées font la percée. Éteint : les motorisées d'abord, puis les autres.";
+      else motor.setAttribute("aria-hidden", "true");
+      pierceBox.append(pierce, motor);
       const row = el("div", "fp-atk-row");
-      row.append(frontal, pierce, barrage);
+      row.append(frontal, pierceBox, barrage);
       root.append(row);
-      return { root, frontal, pierce, barrage };
+      return { root, frontal, pierce, pierceBox, barrage, motorBox };
     };
     const mine = half(true);
     const theirs = half(false);
     this.frontal = [mine.frontal, theirs.frontal];
     this.pierce = [mine.pierce, theirs.pierce];
+    this.pierceBox = [mine.pierceBox, theirs.pierceBox];
     this.barrage = [mine.barrage, theirs.barrage];
-    // Interrupteur « Motorisé seulement » juste sous le bouton percée.
-    const motor = el("label", "fp-motor");
-    const motorBox = el("input");
-    motorBox.type = "checkbox";
-    motorBox.disabled = !mineSide;
-    motor.append(motorBox, el("span", "ib-switch"), document.createTextNode("Motorisé seulement"));
-    motor.title = "Allumé : seules les unités motorisées font la percée. Éteint : les motorisées d'abord, puis les autres.";
-    this.motorized = motorBox;
-    mine.root.append(motor);
-    motorBox.addEventListener("change", () => {
+    this.motorized = mine.motorBox;
+    mine.motorBox.addEventListener("change", () => {
       this.hold();
-      this.hooks.send({ type: "set_breakthrough_motorized_only", front: this.frontId, enabled: motorBox.checked });
+      this.hooks.send({ type: "set_breakthrough_motorized_only", front: this.frontId, enabled: mine.motorBox.checked });
     });
     attacks.append(mine.root, theirs.root);
     mine.frontal.addEventListener("click", () => {
@@ -175,7 +207,11 @@ export class FrontPanel {
       if (f === undefined || this.me < 0) return;
       this.hooks.send({ type: f.sides[this.me]!.frontAttack ? "stop_front_attack" : "start_front_attack", front: this.frontId });
     });
-    mine.pierce.addEventListener("click", () => this.hooks.chooseAxis(this.frontId));
+    // Tout le cadre est cliquable (pas seulement le mot « Percée »), sauf l'interrupteur.
+    mine.pierceBox.addEventListener("click", (e) => {
+      if (mine.pierce.disabled || (e.target as HTMLElement).closest(".fp-motor") !== null) return;
+      this.hooks.chooseAxis(this.frontId);
+    });
 
     // Réglages : priorité et réassignation.
     const settings = el("div", "fp-settings");
@@ -280,8 +316,8 @@ export class FrontPanel {
       this.nicheRows.push({ units: niche.units.map((id) => this.military.units.findIndex((u) => u.id === id)), pct });
       for (const id of niche.units) {
         const unit = this.military.units.find((u) => u.id === id)!;
-        const q1: [HTMLElement, HTMLElement] = [el("div"), el("div")];
-        const q2: [HTMLElement, HTMLElement] = [el("div"), el("div")];
+        const q1: [Count, Count] = [countCell(), countCell()];
+        const q2: [Count, Count] = [countCell(), countCell()];
         const upct: [HTMLElement, HTMLElement] = [el("div"), el("div")];
         // L'image est dans un conteneur : une image qui serait elle-même la cellule de la grille serait écrasée sur la largeur.
         const icon = (): HTMLElement => {
@@ -292,6 +328,20 @@ export class FrontPanel {
           box.append(i);
           return box;
         };
+        // Moitié du joueur : une case à droite de l'icône, « type autorisé sur ce front ».
+        const mineIcon = icon();
+        let allowed: HTMLInputElement | null = null;
+        if (mineSide) {
+          allowed = el("input", "fp-allowed");
+          allowed.type = "checkbox";
+          allowed.title = `${unitName(unit.id)} autorisé sur ce front. Décoché : les unités de ce type quittent le front et il n'en reçoit plus.`;
+          const box = allowed;
+          box.addEventListener("change", () => {
+            this.hold();
+            this.hooks.send({ type: "set_unit_allowed", front: this.frontId, unit: unit.id, enabled: box.checked });
+          });
+          mineIcon.append(box);
+        }
         const mkName = (): HTMLElement => {
           const n = el("div", "t name", unitName(unit.id));
           n.title = this.unitTip(unit);
@@ -317,14 +367,14 @@ export class FrontPanel {
         }
         cells(
           [
-            { cls: "t air" }, { cls: "t name", node: mkName() }, { cls: "t icon", node: icon() },
-            { cls: "t q", node: q2[0] }, { cls: "t swt", node: sw }, { cls: "t q", node: q1[0] }, { cls: "t pct", node: upct[0] },
+            { cls: "t air" }, { cls: "t name", node: mkName() }, { cls: "t icon", node: mineIcon },
+            { cls: "t q", node: q2[0].root }, { cls: "t swt", node: sw }, { cls: "t q", node: q1[0].root }, { cls: "t pct", node: upct[0] },
             bar(),
-            { cls: "t pct", node: upct[1] }, { cls: "t q", node: q1[1] }, { cls: "t swt" }, { cls: "t q", node: q2[1] },
+            { cls: "t pct", node: upct[1] }, { cls: "t q", node: q1[1].root }, { cls: "t swt" }, { cls: "t q", node: q2[1].root },
             { cls: "t icon", node: icon() }, { cls: "t name", node: mkName() }, { cls: "t air" },
           ],
         );
-        this.unitRows.push({ unit, q1, q2, pct: upct, modes });
+        this.unitRows.push({ unit, q1, q2, pct: upct, modes, allowed });
       }
     }
     return grid;
@@ -361,10 +411,12 @@ export class FrontPanel {
     ] as const;
     for (let h = 0; h < 2; h++) {
       const buttons = [this.frontal![h]!, this.pierce![h]!, this.barrage![h]!];
+      // L'aspect (actif, grisé) est porté par le cadre de la percée, pas par son bouton.
+      const looks = [this.frontal![h]!, this.pierceBox![h]!, this.barrage![h]!];
       buttons.forEach((b, k) => {
-        b.classList.toggle("on", states[h]![k]!);
+        looks[k]!.classList.toggle("on", states[h]![k]!);
         b.disabled = h === 1 || !mineSide || !front.active;
-        b.classList.toggle("grey", h === 1 || !front.active);
+        looks[k]!.classList.toggle("grey", h === 1 || !front.active);
       });
     }
     if (Date.now() >= this.holdUntil && mineSide) {
@@ -380,11 +432,14 @@ export class FrontPanel {
       const t = r.unit.index;
       for (let h = 0; h < 2; h++) {
         const s = sides[h]!;
-        setText(r.q1[h]!, numFmt.format(s.first[t]!));
-        setText(r.q2[h]!, numFmt.format(s.second[t]!));
-        r.q2[h]!.title = s.transit[t]! > 0 ? `${numFmt.format(s.transit[t]!)} en route vers le front` : "";
+        setText(r.q1[h]!.n, numFmt.format(s.first[t]!));
+        setText(r.q2[h]!.n, numFmt.format(s.second[t]!));
+        setText(r.q1[h]!.loss, lossText(s.lostFirst[t]!));
+        setText(r.q2[h]!.loss, lossText(s.lostSecond[t]!));
+        r.q2[h]!.root.title = s.transit[t]! > 0 ? `${numFmt.format(s.transit[t]!)} en route vers le front` : "";
         setText(r.pct[h]!, `${pctFmt.format(frontWidth(r.unit, s.first[t]!))} %`);
       }
+      if (r.allowed !== null && Date.now() >= this.holdUntil) r.allowed.checked = sides[0]!.allowed[t] !== false;
       if (mineSide && Date.now() >= this.holdUntil) r.modes.forEach((b, k) => b.setAttribute("aria-pressed", String(MODE_ORDER[k] === sides[0]!.lineMode[t])));
     }
     for (const n of this.nicheRows) {
@@ -429,23 +484,37 @@ export class FrontPanel {
       }
       setText(t.head, bt.phase === 2 ? "Percée seconde ligne" : "Percée première ligne");
       const wait = Math.max(0, bt.startTick + this.military.breakthroughDelayTurns - tick);
-      setText(t.note, bt.phase === 0 ? `Début dans ${Math.ceil(wait / 10)} s` : "");
-      const attackers = bt.attackers;
-      const defenders = bt.phase === 2 ? bt.defenders2 : bt.defenders1;
+      setText(
+        t.note,
+        bt.phase === 0 ? `Début dans ${Math.ceil(wait / 10)} s · effectifs prévus` : bt.phase === 1 ? "Défense de seconde ligne : prévue" : "",
+      );
+      // Colonnes, de gauche à droite : le camp qui perce à gauche, attaque puis défense de première puis de seconde ligne ;
+      // à droite, la même suite en miroir. Les effectifs sont ceux que le moteur engagera (prévus avant la phase 2).
+      const cols = owner === L ? (["a", "i", "d1", "d2"] as const) : (["d2", "d1", "i", "a"] as const);
+      t.rows.style.setProperty("--bt-cols", owner === L ? "1fr 22px 1fr 1fr" : "1fr 1fr 22px 1fr");
       const lines: HTMLElement[] = [];
-      const head = el("div", "fp-bt-row h");
-      head.append(el("span", undefined, playerName(front.players[L]!)), el("span"), el("span", undefined, playerName(front.players[R]!)));
-      lines.push(head);
+      const names = el("div", "fp-bt-row h");
+      const mine = el("span", "name", playerName(front.players[owner]!));
+      const theirs = el("span", "name", playerName(front.players[1 - owner]!));
+      mine.style.gridColumn = owner === L ? "1" : "4";
+      theirs.style.gridColumn = owner === L ? "3 / 5" : "1 / 3";
+      names.append(mine, theirs);
+      lines.push(names);
+      const labels = el("div", "fp-bt-row h");
+      for (const c of cols) labels.append(el("span", undefined, c === "a" ? "Attaque" : c === "d1" ? "Déf. 1re" : c === "d2" ? "Déf. 2e" : ""));
+      lines.push(labels);
       for (const u of this.military.units) {
-        const a = attackers[u.index]!;
-        const d = defenders[u.index]!;
-        if (a === 0 && d === 0) continue;
-        const [l, r] = owner === L ? [a, d] : [d, a];
+        const counts = { a: bt.attackers[u.index]!, d1: bt.defenders1[u.index]!, d2: bt.defenders2[u.index]! };
+        if (counts.a === 0 && counts.d1 === 0 && counts.d2 === 0) continue;
         const row = el("div", "fp-bt-row");
-        const icon = el("img", "ib-img");
-        icon.src = `icons/${u.icon}`;
-        icon.alt = unitName(u.id);
-        row.append(el("span", "cnt", numFmt.format(l)), icon, el("span", "cnt", numFmt.format(r)));
+        for (const c of cols) {
+          if (c === "i") {
+            const icon = el("img", "ib-img");
+            icon.src = `icons/${u.icon}`;
+            icon.alt = unitName(u.id);
+            row.append(icon);
+          } else row.append(el("span", "cnt", numFmt.format(counts[c])));
+        }
         lines.push(row);
       }
       t.rows.replaceChildren(...lines);

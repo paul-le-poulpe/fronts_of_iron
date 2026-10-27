@@ -31,6 +31,13 @@ const signed = (n: number): string => (n > 0 ? "+" : "") + num(n);
 /** Part de `x` dans `total`, en pourcentage de largeur, bornée à 0…100. */
 const pct = (x: number, total: number): number => (total > 0 ? Math.min(100, Math.max(0, (100 * x) / total)) : 0);
 
+/**
+ * Travailleurs qui manquent pour couvrir `tiles` cases à la mécanisation `milli` (millièmes de case par travailleur) :
+ * le requis du moteur (`harvest`), arrondi vers le haut, moins ceux qui travaillent.
+ */
+const missingWorkers = (tiles: number, milli: number, working: number): number =>
+  tiles > 0 && milli > 0 ? Math.max(0, Math.ceil((tiles * 1000) / milli) - working) : 0;
+
 /** Nourriture par travailleur : deux décimales au plus. */
 const perHeadFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
 
@@ -318,8 +325,24 @@ export class InfoBar {
     const occupations = [
       { label: "Ouvriers d'usine", icon: "pop-worker", color: "var(--occ-factory)", read: (s: PlayerStats) => s.factoryWorkers },
       { label: "Mineurs", icon: "pop-miner", color: "var(--occ-mine)", read: (s: PlayerStats) => s.miners, machine: "miningMachine" },
-      { label: "Fermiers", icon: "pop-farmer", color: "var(--occ-farm)", read: (s: PlayerStats) => s.farmers, machine: "tractor" },
-      { label: "Pêcheurs", icon: "pop-fisherman", color: "var(--occ-fish)", read: (s: PlayerStats) => s.fishers, machine: "fishingBoat" },
+      {
+        label: "Fermiers",
+        icon: "pop-farmer",
+        color: "var(--occ-farm)",
+        read: (s: PlayerStats) => s.farmers,
+        machine: "tractor",
+        missing: (s: PlayerStats) => missingWorkers(s.farmTiles, s.mechanization.tractor ?? 0, s.farmers),
+        missingTip: "champs",
+      },
+      {
+        label: "Pêcheurs",
+        icon: "pop-fisherman",
+        color: "var(--occ-fish)",
+        read: (s: PlayerStats) => s.fishers,
+        machine: "fishingBoat",
+        missing: (s: PlayerStats) => missingWorkers(s.seaTiles, s.mechanization.fishingBoat ?? 0, s.fishers),
+        missingTip: "eaux",
+      },
       // Par ordre de priorité (05-Fronts §11.5) : les soldats, même en mobilisation forcée, passent après les emplois et avant l'inactivité.
       { label: "Soldats", icon: "pop-soldier", color: "var(--occ-soldier)", read: (s: PlayerStats) => s.soldiers },
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
@@ -337,6 +360,10 @@ export class InfoBar {
       sw.style.background = o.color;
       const t = track("flow");
       t.fill.style.background = o.color;
+      // Fermiers et pêcheurs : zone hachurée à la suite du remplissage, les personnes qui manquent pour travailler toute la surface.
+      const need = el("i", "ib-need");
+      need.style.background = `repeating-linear-gradient(45deg, ${o.color} 0 2px, transparent 2px 5px)`;
+      t.root.append(need);
       const value = el("span", "ib-value");
       value.title = "Personnes · part";
       const label = el("span", "ib-label");
@@ -344,7 +371,7 @@ export class InfoBar {
       // L'engrenage dit que ce métier se mécanise ; son infobulle est celle de la machine.
       if (o.machine !== undefined) label.append(gearIcon(o.machine));
       r.append(sw, label, t.root, value);
-      return { r, fill: t.fill, value };
+      return { r, fill: t.fill, need, track: t.root, value };
     });
     const note = el("p", "muted small ib-note", "Répartition de la population au début du dernier tour.");
     // Mobilisation forcée (05-Fronts §4.1, §11.5) : interrupteur rouge, éteint par défaut.
@@ -372,12 +399,19 @@ export class InfoBar {
         if (Date.now() >= this.forcedUntil) forcedBox.checked = s.forcedMobilization;
         const counts = occupations.map((o) => o.read(s));
         const sum = counts.reduce((a, b) => a + b, 0);
+        const missing = occupations.map((o) => o.missing?.(s) ?? 0);
+        // Échelle des barres : la population, ou plus large si le hachuré dépasserait la barre (les tailles restent comparables).
+        const scale = counts.reduce((m, n, i) => Math.max(m, n + missing[i]!), sum);
         let from = 0;
         counts.forEach((n, i) => {
-          const w = pct(n, sum);
-          span(parts[i]!, from, from + w);
-          from += w;
+          span(parts[i]!, from, from + pct(n, sum));
+          from += pct(n, sum);
+          const w = pct(n, scale);
           span(rows[i]!.fill, 0, w);
+          span(rows[i]!.need, w, w + pct(missing[i]!, scale));
+          const job = occupations[i]!.missingTip;
+          rows[i]!.track.title =
+            job === undefined ? "" : `Hachuré : ${num(missing[i]!)} personnes manquent pour travailler 100 % des ${job}, avec la mécanisation actuelle.`;
           rows[i]!.value.textContent = `${num(n)} · ${share(n, sum)}`;
         });
       },

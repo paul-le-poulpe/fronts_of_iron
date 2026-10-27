@@ -61,8 +61,11 @@ function hashFront(h: number, f: Front): number {
     h = mixWord(h, s.priorityIndex);
     h = mixWord(h, s.reassign ? 1 : 0);
     h = mixList(h, s.lineMode);
+    for (const a of s.allowed) h = mixWord(h, a ? 1 : 0);
     h = mixWord(h, s.motorizedOnly ? 1 : 0);
     h = mixWord(h, s.frontAttack ? 1 : 0);
+    h = mixList(h, s.lostFirst);
+    h = mixList(h, s.lostSecond);
     h = mixWord(h, s.breakthroughs.length);
     for (const b of s.breakthroughs) {
       h = mixWord(h, b.id);

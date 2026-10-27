@@ -1,6 +1,6 @@
 // Géométrie des fronts, côté page seulement (Docs/Design/05-Fronts.md §11.1, §11.4) :
-// point du front de chaque connexion, voisinage des connexions et chaînes, courbe de
-// Catmull-Rom centripète, zones de front. Calculs en flottants : ils ne touchent jamais
+// point du front de chaque connexion, voisinage des connexions et chaînes, zones de
+// front. Calculs en flottants : ils ne touchent jamais
 // l'état de la partie. Pas d'accès au DOM (testable sous Node, utilisé aussi par
 // `npm run viz:fronts` du moteur).
 
@@ -105,53 +105,6 @@ export function frontChains(world: GeomWorld, f: FrontView): { readonly order: n
   for (let i = 0; i < n; i++) if (!seen[i] && adjacent[i]!.size <= 1) walk(i);
   for (let i = 0; i < n; i++) if (!seen[i]) walk(i);
   return chains;
-}
-
-/** Un morceau de la courbe : de P1 (point précédent) à `to`, avec les points de contrôle `c1` et `c2`. */
-export interface BezierSegment {
-  readonly c1: Pt;
-  readonly c2: Pt;
-  readonly to: Pt;
-}
-
-/**
- * Spline de Catmull-Rom centripète (α = 0,5) qui passe par chaque point (05-Fronts §11.4), en
- * courbes de Bézier. Aux bouts d'une chaîne, le point du bout est répété ; une boucle
- * (`closed`) est refermée. Renvoie le premier point et les morceaux.
- */
-export function catmullRom(points: readonly Pt[], closed = false): { start: Pt; segments: BezierSegment[] } | null {
-  if (points.length === 0) return null;
-  const at = (i: number): Pt => (closed ? points[(i + points.length) % points.length]! : points[Math.min(points.length - 1, Math.max(0, i))]!);
-  const segments: BezierSegment[] = [];
-  const count = closed ? points.length : points.length - 1;
-  for (let i = 0; i < count; i++) {
-    const p0 = at(i - 1);
-    const p1 = at(i);
-    const p2 = at(i + 1);
-    const p3 = at(i + 2);
-    const d1 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const d2 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    const d3 = Math.hypot(p3.x - p2.x, p3.y - p2.y);
-    if (d2 === 0) continue;
-    const [a1, a2, a3] = [Math.sqrt(d1), Math.sqrt(d2), Math.sqrt(d3)];
-    const [b1, b2, b3] = [d1, d2, d3];
-    const c1: Pt =
-      d1 === 0
-        ? p1
-        : {
-            x: (b1 * p2.x - b2 * p0.x + (2 * b1 + 3 * a1 * a2 + b2) * p1.x) / (3 * a1 * (a1 + a2)),
-            y: (b1 * p2.y - b2 * p0.y + (2 * b1 + 3 * a1 * a2 + b2) * p1.y) / (3 * a1 * (a1 + a2)),
-          };
-    const c2: Pt =
-      d3 === 0
-        ? p2
-        : {
-            x: (b3 * p1.x - b2 * p3.x + (2 * b3 + 3 * a3 * a2 + b2) * p2.x) / (3 * a3 * (a3 + a2)),
-            y: (b3 * p1.y - b2 * p3.y + (2 * b3 + 3 * a3 * a2 + b2) * p2.y) / (3 * a3 * (a3 + a2)),
-          };
-    segments.push({ c1, c2, to: p2 });
-  }
-  return { start: points[0]!, segments };
 }
 
 /** Distance au carré du point (x, y) au segment [a, b]. */

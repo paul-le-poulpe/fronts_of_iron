@@ -9,7 +9,7 @@
 import { FRONTS } from "./config.ts";
 import { captureCity } from "./conquest.ts";
 import { ROUTE, clipBreakthroughs, isActive, type Breakthrough, type Front, type FrontSide } from "./fronts.ts";
-import { currentTurn, loseUnits } from "./troops.ts";
+import { currentTurn, loseUnits, reinforceFirstLine } from "./troops.ts";
 import type { GameState } from "./state.ts";
 import {
   UNIT_COUNT,
@@ -89,16 +89,25 @@ function engagedAttackers(side: FrontSide, except?: Breakthrough): number[] {
   return out;
 }
 
-/** Début d'une percée, à la fin du délai (05-Fronts §7.2, points 3 et 4). Faux : aucune force, la percée échoue. */
-function beginBreakthrough(front: Front, x: number, bt: Breakthrough): boolean {
+/**
+ * Forces que la percée `bt` du camp `x` engagerait maintenant (05-Fronts §7.2, points 3 et 4) : la force de l'attaquant,
+ * prise dans sa seconde ligne disponible, et la tranche de la première ligne du défenseur qui lui fait face.
+ */
+function engagement(front: Front, x: number, bt: Breakthrough): { force: number[]; slice: number[] } {
   const mine = front.sides[x]!;
   const other = front.sides[1 - x]!;
   const engaged = engagedAttackers(mine, bt);
   const force = fillWidth(mine.secondLine.map((n, t) => n - engaged[t]!), BREAKTHROUGH_METERS, true, mine.motorizedOnly ? "only" : "first");
-  if (sum(force) === 0) return false;
   const taken = zeros();
   for (const b of mine.breakthroughs) if (b !== bt && b.phase >= 1) add(taken, b.defenders1);
   const slice = fillWidth(other.firstLine.map((n, t) => n - taken[t]!), BREAKTHROUGH_METERS, false, "all");
+  return { force, slice };
+}
+
+/** Début d'une percée, à la fin du délai (05-Fronts §7.2, points 3 et 4). Faux : aucune force, la percée échoue. */
+function beginBreakthrough(front: Front, x: number, bt: Breakthrough): boolean {
+  const { force, slice } = engagement(front, x, bt);
+  if (sum(force) === 0) return false;
   bt.attackers = force;
   bt.defenders1 = slice;
   bt.defenders2 = zeros();
@@ -108,22 +117,39 @@ function beginBreakthrough(front: Front, x: number, bt: Breakthrough): boolean {
 }
 
 /**
- * Forces de contre-attaque des percées en phase 2 lancées par le camp `x` (05-Fronts
- * §7.2, point 7) : la seconde ligne du défenseur qui ne mène pas sa propre percée,
- * partagée équitablement entre ces percées (le reste aux identifiants les plus
- * petits), dans la largeur d'une percée, motorisées d'abord.
+ * Force de contre-attaque de la `j`-ième des `count` percées en phase 2 du camp `x` (05-Fronts §7.2, point 7) : la seconde
+ * ligne du défenseur qui ne mène pas sa propre percée, partagée équitablement (le reste aux plus petits rangs), dans la
+ * largeur d'une percée, motorisées d'abord.
  */
-function assignCounterForces(front: Front, x: number): void {
-  const mine = front.sides[x]!;
+function counterForce(front: Front, x: number, count: number, j: number): number[] {
   const defender = front.sides[1 - x]!;
-  const phase2 = mine.breakthroughs.filter((b) => b.phase === 2);
-  if (phase2.length === 0) return;
   const engaged = engagedAttackers(defender);
   const free = defender.secondLine.map((n, t) => n - engaged[t]!);
+  const share = free.map((n) => Math.floor(n / count) + (j < n % count ? 1 : 0));
+  return fillWidth(share, BREAKTHROUGH_METERS, true, "first");
+}
+
+/** Forces de contre-attaque des percées en phase 2 lancées par le camp `x`, réparties entre elles. */
+function assignCounterForces(front: Front, x: number): void {
+  const phase2 = front.sides[x]!.breakthroughs.filter((b) => b.phase === 2);
   phase2.forEach((b, j) => {
-    const share = free.map((n) => Math.floor(n / phase2.length) + (j < n % phase2.length ? 1 : 0));
-    b.defenders2 = fillWidth(share, BREAKTHROUGH_METERS, true, "first");
+    b.defenders2 = counterForce(front, x, phase2.length, j);
   });
+}
+
+/**
+ * Prévision pour la page (05-Fronts §11.3) : les forces engagées par la percée `bt` du camp `x`, calculées comme au début
+ * de la percée avec les effectifs d'aujourd'hui. Avant la phase 2, `defenders2` est la force de contre-attaque qu'elle
+ * aurait, en partageant la seconde ligne avec les percées déjà en phase 2. Ne change rien à l'état. En phase 2, les
+ * valeurs réelles de la percée.
+ */
+export function previewBreakthrough(front: Front, x: number, bt: Breakthrough): { attackers: number[]; defenders1: number[]; defenders2: number[] } {
+  if (bt.phase === 2) return { attackers: bt.attackers.slice(), defenders1: bt.defenders1.slice(), defenders2: bt.defenders2.slice() };
+  const others = front.sides[x]!.breakthroughs.filter((b) => b !== bt && b.phase === 2).length;
+  const defenders2 = counterForce(front, x, others + 1, others);
+  if (bt.phase === 1) return { attackers: bt.attackers.slice(), defenders1: bt.defenders1.slice(), defenders2 };
+  const { force, slice } = engagement(front, x, bt);
+  return { attackers: force, defenders1: slice, defenders2 };
 }
 
 /** Une connexion arrivée au bout de sa route : le camp `x` tient la ville de l'autre bout. */
@@ -152,6 +178,11 @@ function fightFront(state: GameState, front: Front, turn: number): Arrival[] {
       return false;
     });
     assignCounterForces(front, x);
+  }
+  // Les pertes affichées sont celles de ce round : remises à zéro, puis remplies par l'application des dégâts.
+  for (const s of sides) {
+    s.lostFirst = zeros();
+    s.lostSecond = zeros();
   }
   if (!sides.some((s) => s.frontAttack || s.breakthroughs.length > 0)) return arrivals;
 
@@ -195,8 +226,10 @@ function fightFront(state: GameState, front: Front, turn: number): Arrival[] {
   // leurs propres pertes, puis ramenées aux lignes.
   for (let x = 0; x < 2; x++) {
     const side = sides[x]!;
-    loseUnits(state, front.players[x]!, remove(side.firstLine, first[x]!));
-    loseUnits(state, front.players[x]!, remove(side.secondLine, second[x]!));
+    side.lostFirst = remove(side.firstLine, first[x]!);
+    side.lostSecond = remove(side.secondLine, second[x]!);
+    loseUnits(state, front.players[x]!, side.lostFirst);
+    loseUnits(state, front.players[x]!, side.lostSecond);
   }
   for (let x = 0; x < 2; x++) {
     for (const bt of sides[x]!.breakthroughs) {
@@ -209,6 +242,10 @@ function fightFront(state: GameState, front: Front, turn: number): Arrival[] {
     }
   }
   clipBreakthroughs(front);
+
+  // Les pertes de la première ligne sont comblées aussitôt par la seconde (« priorité première ligne », 05-Fronts §4.2),
+  // avant les vérifications de percée et l'avancée de ce round.
+  for (let x = 0; x < 2; x++) reinforceFirstLine(state, front, x);
 
   // Percées : première ligne percée, seconde ligne percée, essoufflement.
   for (let x = 0; x < 2; x++) {

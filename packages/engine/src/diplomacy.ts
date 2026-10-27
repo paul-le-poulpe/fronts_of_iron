@@ -67,6 +67,15 @@ export type DiplomacyEvent =
       readonly to: number;
       readonly city: number;
       readonly turn: number;
+    }
+  | {
+      /** La prise de `city` par `from` encercle des troupes de `to` (05-Fronts §10.2) ; `lost` : unités perdues, tous fronts confondus. */
+      readonly type: "encirclement";
+      readonly from: number;
+      readonly to: number;
+      readonly city: number;
+      readonly lost: number;
+      readonly turn: number;
     };
 
 /** Case de `GameState.diplomacy` pour la paire (a, b). a et b valides. */

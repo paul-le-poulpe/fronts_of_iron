@@ -187,6 +187,8 @@ input[type="number"] {
   background: var(--card);
 }
 #bar button { padding: 8px 20px; font-weight: 600; }
+.btn-cost { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.btn-cost[hidden] { display: none; }
 #bar { position: relative; z-index: 5; }
 /* Barre de debug : à droite de la barre de boutons, bordure pointillée orange pour
    la distinguer de l'interface du jeu. */
@@ -234,6 +236,8 @@ input[type="number"] {
 .fsec { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
 .fsec.dragging, .grow.dragging { opacity: 0.5; }
 .fsec.drop, .grow.drop { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Trait très léger entre deux lignes de l'usine (la première n'en a pas : l'en-tête la précède). */
+.fsec > :is(.grow, .unlocked, .locked) ~ :is(.grow, .unlocked, .locked) { border-top: 1px solid #0000001f; padding-top: 6px; }
 .fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
 .grow { display: grid; grid-template-columns: auto minmax(0, 7.5em) minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
@@ -513,6 +517,9 @@ tr.me td { font-weight: 600; }
   pointer-events: auto;
 }
 .notif.dismissable { cursor: pointer; }
+.notif-text { padding-right: 18px; }
+.notif-close { position: absolute; top: 2px; right: 3px; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; font-size: 15px; line-height: 1; color: var(--muted); }
+.notif-close:hover:not(:disabled) { color: var(--fg); border: 0; }
 .notif-buttons { display: flex; gap: 6px; margin-top: 6px; }
 .notif-buttons button { padding: 3px 12px; font-size: 12px; }
 .notif-buttons button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -620,6 +627,17 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
 .fp-atk.grey.on:disabled { border-color: var(--front-dark); }
 @keyframes fp-blink { 50% { border-color: transparent; } }
 .fp-motor { font-size: 13px; }
+/* Cadre du bouton « Percée » : l'aspect d'un bouton d'attaque, avec le bouton et l'interrupteur « Motorisé seulement » dedans. */
+.fp-atk-group { border-radius: 6px; cursor: pointer; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.fp-atk-group > .fp-atk-main { all: unset; box-sizing: border-box; font-weight: 600; }
+.fp-atk-group.grey, .fp-atk-group.grey .fp-motor { cursor: default; }
+.fp-atk-group.grey { opacity: 0.6; }
+.fp-motor.ghost { visibility: hidden; }
+/* Moitié de l'adversaire : symétrique de la nôtre par rapport à la verticale centrale (à droite, ordre inversé). */
+.fp-half.mirror { align-items: flex-end; }
+.fp-half.mirror .fp-atk-row { flex-direction: row-reverse; }
+.fp-atk-group > .fp-atk-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fp-atk-group.grey .fp-motor { color: #777; }
 
 .fp-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 10px; }
 .fp-prio { display: inline-flex; align-items: center; gap: 6px; }
@@ -632,20 +650,26 @@ input:focus-visible + .ib-switch { outline: 2px solid var(--accent); outline-off
 @keyframes fp-bt-blink { 50% { outline-color: transparent; } }
 .fp-bt-head { font-weight: 600; text-align: center; margin: 0 22px; }
 .fp-bt-cancel { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px; padding: 0; line-height: 1; }
-.fp-bt-row { display: grid; grid-template-columns: 1fr 24px 1fr; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
-.fp-bt-row > :first-child { text-align: right; }
+.fp-bt-row { display: grid; grid-template-columns: var(--bt-cols, 1fr 22px 1fr 1fr); align-items: center; gap: 6px; font-variant-numeric: tabular-nums; text-align: center; }
 .fp-bt-row.h { color: var(--muted); font-size: 12px; }
+.fp-bt-row.h .name { font-weight: 600; color: var(--fg); }
 
 /* Tableau des unités : deux moitiés symétriques autour d'une barre centrale de 8 px. */
 .fp-units {
   display: grid;
-  grid-template-columns: 14px minmax(110px, 1fr) 22px 56px 84px 56px 60px 8px 60px 56px 84px 56px 22px minmax(110px, 1fr) 14px;
+  grid-template-columns: 14px minmax(110px, 1fr) 42px 56px 84px 56px 60px 8px 60px 56px 84px 56px 22px minmax(110px, 1fr) 14px;
   align-items: center;
   column-gap: 0;
   font-variant-numeric: tabular-nums;
 }
+/* Effectif d'une ligne, avec dessous les pertes du dernier round en rouge ; la hauteur est réservée pour que la rangée ne saute pas. */
+.fp-count { display: flex; flex-direction: column; line-height: 1.15; }
+.fp-cell.l .fp-count { align-items: flex-end; }
+.fp-cell.r .fp-count { align-items: flex-start; }
+.fp-loss { min-height: 12px; font-size: 11px; color: var(--bad); }
 .fp-cell { min-height: 24px; padding: 2px 4px; display: flex; align-items: center; }
 .fp-sep { grid-column: 1 / -1; height: 2px; margin-top: 6px; }
+.fp-allowed { margin: 0 0 0 4px; flex: none; }
 .fp-icon-img { width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
 .fp-cell.h { font-size: 11px; color: var(--muted); border-top: 0; }
 .fp-cell.n { font-weight: 700; padding-top: 6px; }

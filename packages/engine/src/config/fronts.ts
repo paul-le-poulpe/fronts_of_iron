@@ -16,7 +16,14 @@ export const FRONTS = {
    * Valeur de l'auteur. Repère : le rayon de contrôle d'une ville vaut environ
    * 10 000 m (00-Game §3.1).
    */
-  metersPerConnection: 5000,
+  metersPerConnection: 1000,
+  /**
+   * Plafond de la seconde ligne : `N` fois la largeur du front, comptée en largeurs
+   * de percée des unités (05-Fronts §4.2). 2 : au moins deux fois la première ligne
+   * (davantage pour les unités dont la largeur de percée est plus petite que la
+   * largeur de première ligne). Valeur de l'auteur (provisoire : à régler).
+   */
+  maxSecondLineOvercrowding: 2,
   /**
    * Pourcentage de chaque niveau de priorité d'un front : niveau 1, 2, 3
    * (indices 0, 1, 2). Les règles lisent le pourcentage, jamais le niveau : un

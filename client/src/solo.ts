@@ -35,6 +35,7 @@ import {
   NICHES,
   POPULATION,
   PRODUCT_IDS,
+  previewBreakthrough,
   productConfig,
   UNITS,
   RESOURCES,
@@ -168,10 +169,13 @@ export function frontView(state: GameState, f: Front): FrontView {
     return {
       first: s.firstLine.slice(),
       second: s.secondLine.slice(),
+      lostFirst: s.lostFirst.slice(),
+      lostSecond: s.lostSecond.slice(),
       transit,
       priority: s.priorityIndex,
       reassign: s.reassign,
       lineMode: s.lineMode.slice(),
+      allowed: s.allowed.slice(),
       motorizedOnly: s.motorizedOnly,
       frontAttack: s.frontAttack,
       breakthroughs: s.breakthroughs.map((b) => ({
@@ -180,9 +184,7 @@ export function frontView(state: GameState, f: Front): FrontView {
         city2: b.city2,
         phase: b.phase,
         startTick: b.startTick,
-        attackers: b.attackers.slice(),
-        defenders1: b.defenders1.slice(),
-        defenders2: b.defenders2.slice(),
+        ...previewBreakthrough(f, i, b),
       })),
     };
   };
@@ -406,6 +408,7 @@ export class SoloGame {
       fronts,
       failedBreakthroughs: state.events.filter((e) => e.type === "breakthrough_failed" && e.from === HUMAN).length,
       captured,
+      encircled: state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, lost: e.lost }] : [])),
       paused,
       perf: { bots: t1 - t0, apply: t2 - t1, pack: t3 - t2 },
     };
@@ -452,7 +455,7 @@ export class SoloGame {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "breakthrough_failed" && mine(e.from, e.to) ? [e] : [])),
+      events: state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "breakthrough_failed" && e.type !== "encirclement" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 
@@ -576,6 +579,8 @@ export class SoloGame {
         return this.mySide(order.front)?.motorizedOnly === order.enabled;
       case "set_unit_line_mode":
         return this.mySide(order.front)?.lineMode[UNIT_DATA.findIndex((u) => u.id === order.unit)] === ["first", "balanced", "second"].indexOf(order.mode);
+      case "set_unit_allowed":
+        return this.mySide(order.front)?.allowed[UNIT_DATA.findIndex((u) => u.id === order.unit)] === order.enabled;
       case "start_front_attack":
         return this.mySide(order.front)?.frontAttack === true;
       case "stop_front_attack":

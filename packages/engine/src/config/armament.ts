@@ -41,7 +41,7 @@ export const ARMAMENT = {
     // Mêmes valeurs que la ligne de tracteurs, sauf la production (auteur).
     tankette: {
       productionPerLine: 1, workersPerLine: 200, ironPerLine: 5,
-      icon: "miscellaneous/misc-dev-icon.png",
+      icon: "armament/armament-tankette.png",
       description: "Aucune chance face à un char d'assaut. Mais redoutable contre l'infanterie s'il n'y a pas de réponse appropriée.",
     },
   },

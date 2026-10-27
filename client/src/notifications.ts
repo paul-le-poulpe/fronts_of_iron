@@ -2,7 +2,7 @@
 // plus récente en bas. Ce module ne connaît aucun système du jeu : il affiche un
 // texte, une couleur, éventuellement des boutons, et retire la carte.
 //
-// Une carte sans bouton disparaît toute seule après `durationMs` (ou au clic).
+// Toute carte a une petite croix qui la retire. Une carte sans bouton disparaît toute seule après `durationMs` (ou au clic).
 // Une carte avec boutons reste jusqu'à ce que l'appelant la retire (`dismiss`),
 // ou jusqu'au tour `lifetime.endTurn`. Si `lifetime` est donné, une barre fine
 // montre le temps restant, recalculé à chaque appel d'`updateNotifications` (un
@@ -14,7 +14,7 @@
 // Le conteneur (`#notifs`) est un enfant de `#stage` : voir style.css.
 
 /** Durée d'affichage d'une carte sans bouton, en ms. Valeur provisoire. */
-const DEFAULT_DURATION_MS = 7000;
+const DEFAULT_DURATION_MS = 30_000;
 /** Nombre de cartes au-delà duquel les plus anciennes cartes sans bouton sont retirées. Valeur provisoire. */
 const MAX_CARDS = 6;
 
@@ -120,6 +120,16 @@ export function notify(options: NotificationOptions): void {
   }
 
   const card: Card = { key: options.key, root, hasButtons: buttons.length > 0, lifetime: options.lifetime, bar, timer: 0 };
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "notif-close";
+  close.textContent = "×";
+  close.title = "Fermer";
+  close.addEventListener("click", (e) => {
+    e.stopPropagation();
+    remove(card);
+  });
+  root.append(close);
   if (!card.hasButtons) {
     root.classList.add("dismissable");
     root.addEventListener("click", () => remove(card));

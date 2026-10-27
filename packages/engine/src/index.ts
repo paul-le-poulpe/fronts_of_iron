@@ -74,7 +74,7 @@ export {
   type Transfer,
 } from "./fronts.ts";
 export { applyTransfers, assignTroops, loseUnits, releaseTroops, splitProportional, trimSide } from "./troops.ts";
-export { combatRound, endOf, forceSpeed, frontAdvance, reactionFactor100 } from "./combat.ts";
+export { combatRound, endOf, forceSpeed, frontAdvance, previewBreakthrough, reactionFactor100 } from "./combat.ts";
 export { captureCity } from "./conquest.ts";
 export {
   FILL_ORDER,
@@ -189,6 +189,7 @@ export {
   type SetFrontPriorityIntent,
   type SetFrontReassignIntent,
   type SetUnitLineModeIntent,
+  type SetUnitAllowedIntent,
   type StartBreakthroughIntent,
   type SetLinePriorityIntent,
 } from "./intents.ts";

@@ -43,8 +43,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
-| `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, courbe de Catmull-Rom centripète, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
-| `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, courbe, points ; recalculé quand `Mirror.frontsVersion` change |
+| `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
+| `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/frontpanel.ts` | panneau d'un front (05-Fronts §11.3) : titre, boutons d'attaque, percées, réglages, tableau des unités |
 | `src/protocol.ts` | types des messages page ↔ Worker |
 | `src/engine.worker.ts` | Web Worker : reçoit les messages, tient l'horloge de tour |
@@ -117,7 +117,7 @@ Page → Worker (`ToWorker`) :
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
 - `pause { paused }`.
 - `order` accepte aussi les ordres des fronts (05-Fronts §5, 02-Engine §4) : `set_front_priority { front, priority }`,
-  `set_front_reassign { front, enabled }`, `set_unit_line_mode { front, unit, mode }`, `set_breakthrough_motorized_only
+  `set_front_reassign { front, enabled }`, `set_unit_line_mode { front, unit, mode }`, `set_unit_allowed { front, unit, enabled }`, `set_breakthrough_motorized_only
   { front, enabled }`, `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
   `start_breakthrough { front, city1, city2 }`, `cancel_breakthrough { id }`.
 - `debug { action: "addPopulation" | "addArmament" | "armBots", amount }` (voir §3).
@@ -342,8 +342,8 @@ voisines à deux cases : `Mirror.applyTick` repeint le losange de rayon 2 autour
 villes dont une paire de front change. **Zones** (`frontlayer.ts`, `render.ts`) : hachures de 2 px tous les 8 px à 45° et contour
 de 2 px (segments des côtés de cases qui touchent l'extérieur de la zone), en rouge pour les fronts actifs (case « Zones de
 front » du menu Carte, cochée au départ), en bleu pour un front en paix **au survol seulement** ; la zone survolée s'affiche
-toujours, même case décochée. **Courbe** : une spline de Catmull-Rom centripète (α = 0,5) par chaîne de chaque front actif,
-tracée en surimpression des couleurs avec un point par connexion ; les couleurs ne suivent pas encore la courbe (05-Fronts §11.1).
+toujours, même case décochée. **Soldats** : pour chaque connexion d'un front actif, le point d'avancement et un rond de la couleur du joueur de chaque côté, de la
+taille d'une ville (`render.ts`, `FrontLayer.marks`) ; la courbe de Catmull-Rom est abandonnée (05-Fronts §11.1).
 **Mode choix d'axe** : après le bouton Percée, chaque clic lance une percée sur la connexion du front la plus proche du clic ;
 la connexion visée est surlignée ; **le mode se désactive dès la première percée placée** (pour en lancer une seconde, on rouvre le
 panneau) ; Échap le quitte sans percée. **Percées affichées** (`render.ts`, `drawBreakthroughs`) : pour chaque percée des deux
@@ -357,7 +357,10 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
 
 - **Écran de départ** : nombre de bots (1 à 7, 3 par défaut), graine de la carte
   (12345 par défaut), « Jouer ».
-- **Barre de boutons**, en bas (00-Game §1) : « Créer une ville ». Active le mode
+- **Barre de boutons**, en bas (00-Game §1) : « Créer une ville », suivi du
+  coût de la prochaine ville (`foundingCost`, mis à jour à chaque tour) avec
+  l'icône de population neutre ; caché tant que le joueur n'a pas de capitale
+  (première ville gratuite). Active le mode
   placement (échap : quitte). Sans ville : rien de particulier, toute terre libre
   est valide. Avec des villes : le rayon d'expansion de chacune est dessiné ; la
   case survolée est verte si la fondation respecte 00-Game §3.3 (terre,
@@ -544,7 +547,14 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
      `foodPerHead`. Détail : une barre empilée de la population par occupation
      (ouvriers d'usine, mineurs, fermiers, pêcheurs, inactifs), puis une ligne par
      occupation : couleur, nom, rectangle proportionnel, « n · x % ». Les parts
-     sont rapportées à la somme des occupations.
+     sont rapportées à la somme des occupations. Sur les lignes fermiers et
+     pêcheurs, une zone hachurée de la couleur du métier suit le remplissage :
+     les personnes qui manquent pour travailler toute la surface avec la
+     mécanisation actuelle, `⌈cases × 1000 ÷ M⌉ − travailleurs` (le requis de
+     `harvest`). Remplissage et hachuré ont la même échelle : si la moitié des
+     cases est travaillée, les deux ont la même largeur. L'échelle des barres
+     est la population, élargie (pour toutes les lignes) quand un hachuré la
+     dépasserait.
   2. **Nourriture** : « Nourriture f /tour  s », `s` = nourriture − population ×
      `foodPerHead`, coloré. Détail : une jauge Population en trois sections,
      « actuelle / max / tout exploité » : population (vert), `food /
@@ -633,21 +643,23 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages actifs. De haut en bas : titre centré (île, adversaire) ;
   **boutons d'attaque** (attaque sur tout le front, percée, barrage d'artillerie — sans effet, hors périmètre), ceux du joueur dans
   sa moitié et les trois mêmes en miroir et gris dans celle de l'adversaire ; rouge clair au repos, **contour rouge foncé épais qui
-  clignote** quand l'attaque est en cours (côté adversaire aussi) ; l'interrupteur « Motorisé seulement » sous la percée ;
+  clignote** quand l'attaque est en cours (côté adversaire aussi) ; l'interrupteur « Motorisé seulement » à l'intérieur du cadre du bouton Percée ;
   grisés en paix. Le bouton Percée ferme le panneau et passe la carte en mode choix d'axe. La **section des percées** : un petit
-  tableau par percée en cours, deux par rangée, titre « Percée première ligne » ou « seconde ligne » selon la phase, une colonne
-  par camp, une rangée par type engagé, contour de la couleur du joueur qui perce plus un contour rouge clignotant, une croix pour
+  tableau par percée en cours, deux par rangée, titre « Percée première ligne » ou « seconde ligne » selon la phase, trois
+  colonnes (attaque, défense de première ligne, défense de seconde ligne) remplies dès le compte à rebours avec les effectifs
+  prévus par le moteur (`previewBreakthrough`), une rangée par type engagé, contour de la couleur du joueur qui perce plus un contour rouge clignotant, une croix pour
   annuler (ses percées seulement). **Réglages** : priorité (1 · 100 %, 2 · 50 %, 3 · 0 %) et « Autoriser la réassignation à
   d'autres fronts ». **Tableau des unités** : deux moitiés symétriques autour d'une barre centrale de 8 px (4 px de la couleur de
   chaque joueur) ; de l'extérieur vers la barre : avions (vide), nom puis icône, seconde ligne, interrupteur à trois positions, colonne « prio »
-  (◀ priorité seconde ligne, côté extérieur ; = équilibré ; ▶ priorité première ligne, côté de la barre centrale ; joueur seulement), première ligne, « % front » ; groupé par
+  (◀ priorité seconde ligne, côté extérieur ; = équilibré ; ▶ priorité première ligne, côté de la barre centrale ; joueur seulement), première ligne, « % front » ; sous les quantités des deux lignes, en rouge, les pertes du dernier round de combat ; groupé par
   niche, un en-tête par niche avec sa couverture puis une rangée par type ; séparateur clair d'un seul tenant (un élément `.fp-sep` sur toute la rangée, de la couleur de chaque joueur de son côté de la barre) au-dessus
   de chaque niche ; le panneau va jusqu'à 1 320 px de large. Le titre, les boutons et les réglages restent fixes en haut, le reste défile. Le DOM est construit à
   l'ouverture ; `update` écrit des textes et des classes, sauf les tableaux de percées (créés et retirés avec leur percée), et les
   réglages ne sont pas réécrits pendant 600 ms après un clic. L'infobulle d'un nom d'unité donne sa description, sa population et
   ses attaques.
 - **Notifications des prises de villes** : « Vous avez pris la ville n° k à Bot j. » / « Bot j vous a pris la ville n° k. »
-  (`captured`).
+  (`captured`). **Encerclements** (`encircled`, événement `encirclement` du moteur) : une carte du même module
+  (`notifications.ts`) pour le joueur qui encercle ou qui est encerclé, avec le nombre d'unités perdues.
 - **Menu de diplomatie** (`diplomacy.ts`, 00-Game §1). Quand aucun outil n'est armé
   (ni « Créer une ville » ni « Inaugurer une usine »), un clic sans glisser sur une
   case dont `Mirror.ownerOf` est un autre joueur ouvre un petit menu à côté de la
@@ -674,8 +686,9 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   lignes). Le coin n'est occupé par rien d'autre : la barre d'informations est en
   haut, la barre de boutons sous la carte, le panneau de production à droite. Le
   message court `#toast` est centré en bas et peut passer sous la pile sur une carte
-  étroite. Chaque carte a un trait de la couleur du joueur à gauche. Sans bouton, elle
-  disparaît après 7 s (`DEFAULT_DURATION_MS`, valeur provisoire) ou au clic ; plus de 6
+  étroite. Chaque carte a un trait de la couleur du joueur à gauche. Toute carte a une
+  petite croix qui la retire. Sans bouton, elle
+  disparaît après 30 s (`DEFAULT_DURATION_MS`, valeur provisoire) ou au clic ; plus de 6
   cartes (`MAX_CARDS`, provisoire) : les plus anciennes sans bouton partent. Avec des
   boutons, elle reste jusqu'à `dismiss(clé)` ou jusqu'à son tour de fin, et une barre
   fine donne le temps restant, recalculé à chaque tour (`updateNotifications(tour)`,

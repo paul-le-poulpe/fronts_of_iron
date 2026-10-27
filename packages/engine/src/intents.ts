@@ -20,6 +20,7 @@ import {
   setFrontPriority,
   setFrontReassign,
   setUnitLineMode,
+  setUnitAllowed,
   startWar,
 } from "./fronts.ts";
 import { cancelBreakthrough, startBreakthrough, startFrontAttack, stopFrontAttack } from "./attacks.ts";
@@ -164,6 +165,15 @@ export interface SetUnitLineModeIntent {
   readonly mode: "first" | "balanced" | "second";
 }
 
+/** Case à cocher d'un type d'unité sur un front : autorisé ou non (05-Fronts §4.2). */
+export interface SetUnitAllowedIntent {
+  readonly type: "set_unit_allowed";
+  readonly player: number;
+  readonly front: number;
+  readonly unit: string;
+  readonly enabled: boolean;
+}
+
 /** Interrupteur « Motorisé seulement » des percées d'un front (05-Fronts §7.2). */
 export interface SetBreakthroughMotorizedOnlyIntent {
   readonly type: "set_breakthrough_motorized_only";
@@ -206,6 +216,7 @@ export type Intent =
   | SetFrontPriorityIntent
   | SetFrontReassignIntent
   | SetUnitLineModeIntent
+  | SetUnitAllowedIntent
   | SetBreakthroughMotorizedOnlyIntent
   | SetForcedMobilizationIntent
   | FrontAttackIntent
@@ -286,6 +297,8 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
       return setFrontReassign(state, player, fields["front"], fields["enabled"]);
     case "set_unit_line_mode":
       return setUnitLineMode(state, player, fields["front"], fields["unit"], fields["mode"]);
+    case "set_unit_allowed":
+      return setUnitAllowed(state, player, fields["front"], fields["unit"], fields["enabled"]);
     case "set_breakthrough_motorized_only":
       return setBreakthroughMotorizedOnly(state, player, fields["front"], fields["enabled"]);
     case "set_forced_mobilization":

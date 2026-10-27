@@ -288,7 +288,7 @@ export const NO_LIMIT = Number.MAX_SAFE_INTEGER;
 /**
  * Nombre maximal d'unités du type `t` que la ligne peut porter, d'après les unités
  * de `counts` rangées avant lui dans sa niche (05-Fronts §4.2). `width` : mètres de
- * la ligne, `Infinity` en seconde ligne (sans limite de nombre). Les mètres de
+ * la ligne (seconde ligne : `FRONTS.maxSecondLineOvercrowding` fois la largeur du front, en largeurs de percée). Les mètres de
  * chaque niche d'équipement ne dépassent pas ceux de l'infanterie de la ligne.
  * Ne dépend pas de `counts[t]` lui-même.
  */

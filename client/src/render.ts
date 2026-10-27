@@ -5,7 +5,7 @@
 // canvas que pour la partie repeinte.
 
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
-import { type Painter, playerDark, rgbCss } from "./painter.ts";
+import { type Painter, playerColor, playerDark, rgbCss } from "./painter.ts";
 import { productIconPath } from "./icons.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
 import { factoryInitial } from "./names.ts";
@@ -598,18 +598,25 @@ export class MapView {
     }
     ctx.setLineDash([]);
 
-    // Courbe des fronts actifs, en surimpression des couleurs (05-Fronts §11.4).
-    if (mirror.fronts.some((f) => f.active)) {
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "#7a0c0c";
-      ctx.lineWidth = 2.5 * px;
-      ctx.stroke(this.frontLayer.curves());
+    // Taille d'une ville, aussi celle des soldats du front.
+    const s0 = Math.min(6.5, Math.max(3, zoom * 1.6)) * px;
+
+    // Fronts actifs (05-Fronts §11.4) : le point d'avancement du front sur chaque connexion, et de chaque côté un rond de la
+    // couleur du joueur de ce côté (deux soldats qui se battent), de la taille d'une ville.
+    ctx.lineWidth = 1.5 * px;
+    for (const m of this.frontLayer.marks()) {
       ctx.fillStyle = "#7a0c0c";
-      for (const p of this.frontLayer.points()) {
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 2.5 * px, 0, Math.PI * 2);
+      ctx.fill();
+      const d = s0 + 3 * px;
+      for (const [sign, player] of [[-1, m.player1], [1, m.player2]] as const) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.5 * px, 0, Math.PI * 2);
+        ctx.arc(m.x + sign * m.ux * d, m.y + sign * m.uy * d, s0, 0, Math.PI * 2);
+        ctx.fillStyle = rgbCss(playerColor(player));
+        ctx.strokeStyle = "#fff";
         ctx.fill();
+        ctx.stroke();
       }
     }
 
@@ -630,7 +637,6 @@ export class MapView {
     }
 
     // Villes : un point, une étoile pour la capitale, un carré bleu pour le port.
-    const s0 = Math.min(6.5, Math.max(3, zoom * 1.6)) * px;
     ctx.lineWidth = 1.5 * px;
     for (const city of cities) {
       const x = cx(city.tile);

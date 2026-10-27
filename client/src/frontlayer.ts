@@ -1,11 +1,21 @@
 // Ce que la carte dessine pour les fronts (Docs/Design/05-Fronts.md §11.1, §11.4) :
-// masques des zones de front (pour les hachures), contours, courbe de Catmull-Rom.
-// Tout est recalculé quand les fronts changent (`Mirror.frontsVersion`), pas à chaque
-// image. Les zones sont un calcul du client seulement.
+// masques des zones de front (pour les hachures), contours, points d'avancement du front
+// sur chaque connexion. Tout est recalculé quand les fronts changent
+// (`Mirror.frontsVersion`), pas à chaque image. Les zones sont un calcul du client seulement.
 
-import { catmullRom, connectionPoint, frontChains, frontPoints } from "./frontgeom.ts";
+import { cityPoint, connectionPoint } from "./frontgeom.ts";
 import type { Mirror } from "./mirror.ts";
 import type { FrontView } from "./protocol.ts";
+
+/** Point d'avancement du front sur une connexion : position, sens ville 1 → ville 2, joueur de chaque ville. */
+export interface FrontMark {
+  readonly x: number;
+  readonly y: number;
+  readonly ux: number;
+  readonly uy: number;
+  readonly player1: number;
+  readonly player2: number;
+}
 
 /** Un masque de cases (un pixel opaque par case) et le contour de ces cases. */
 export interface ZoneShape {
@@ -18,7 +28,7 @@ export class FrontLayer {
   private zones: Uint16Array = new Uint16Array(0);
   private active: ZoneShape | null = null;
   private single = new Map<number, ZoneShape>();
-  private curvePath: Path2D | null = null;
+  private markList: FrontMark[] | null = null;
   private readonly mirror: Mirror;
 
   constructor(mirror: Mirror) {
@@ -32,7 +42,7 @@ export class FrontLayer {
     this.zones = this.mirror.frontZones();
     this.active = null;
     this.single.clear();
-    this.curvePath = null;
+    this.markList = null;
   }
 
   /** Front dont la zone contient la case, ou undefined. */
@@ -108,37 +118,35 @@ export class FrontLayer {
     return s;
   }
 
-  /** Courbe de Catmull-Rom de chaque front actif, en cases (05-Fronts §11.4). */
-  curves(): Path2D {
+  /**
+   * Point du front de chaque connexion d'un front actif (05-Fronts §11.4), avec le sens de la ville 1 vers la ville 2
+   * (vecteur unitaire) et le joueur de chacune : le dessin place un soldat de chaque côté du point.
+   */
+  marks(): FrontMark[] {
     this.sync();
-    if (this.curvePath === null) {
+    if (this.markList === null) {
       const world = this.mirror.world();
-      const path = new Path2D();
+      const cities = this.mirror.cities;
+      const out: FrontMark[] = [];
       for (const f of this.mirror.fronts) {
         if (!f.active) continue;
-        const points = frontPoints(world, f);
-        for (const chain of frontChains(world, f)) {
-          const curve = catmullRom(chain.order.map((i) => points[i]!), chain.closed);
-          if (curve === null) continue;
-          path.moveTo(curve.start.x, curve.start.y);
-          for (const s of curve.segments) path.bezierCurveTo(s.c1.x, s.c1.y, s.c2.x, s.c2.y, s.to.x, s.to.y);
-          if (chain.closed) path.closePath();
-        }
+        f.connections.forEach((c, i) => {
+          const p = connectionPoint(world, f, i);
+          const a = cityPoint(world, c.city1);
+          const b = cityPoint(world, c.city2);
+          const len = Math.hypot(b.x - a.x, b.y - a.y);
+          out.push({
+            x: p.x,
+            y: p.y,
+            ux: len === 0 ? 1 : (b.x - a.x) / len,
+            uy: len === 0 ? 0 : (b.y - a.y) / len,
+            player1: cities[c.city1 - 1]!.player,
+            player2: cities[c.city2 - 1]!.player,
+          });
+        });
       }
-      this.curvePath = path;
+      this.markList = out;
     }
-    return this.curvePath;
-  }
-
-  /** Point du front de chaque connexion d'un front actif : de petits repères sur la courbe. */
-  points(): { x: number; y: number }[] {
-    this.sync();
-    const world = this.mirror.world();
-    const out: { x: number; y: number }[] = [];
-    for (const f of this.mirror.fronts) {
-      if (!f.active) continue;
-      f.connections.forEach((_, i) => out.push(connectionPoint(world, f, i)));
-    }
-    return out;
+    return this.markList;
   }
 }

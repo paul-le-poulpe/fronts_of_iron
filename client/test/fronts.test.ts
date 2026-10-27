@@ -1,5 +1,4 @@
-// Fronts côté page (Docs/Design/05-Fronts.md §11, §13.4) : géométrie (chaînes, courbe de
-// Catmull-Rom, zones), message des fronts, double ligne rouge, copie de la page après une
+// Fronts côté page (Docs/Design/05-Fronts.md §11, §13.4) : géométrie (chaînes, zones), message des fronts, double ligne rouge, copie de la page après une
 // prise de ville. Sous Node, sans navigateur.
 
 import assert from "node:assert/strict";
@@ -7,7 +6,7 @@ import { test } from "node:test";
 
 import { CITY, FRONTS } from "@fronts-of-iron/engine";
 
-import { catmullRom, computeFrontZones, connectionPoint, frontChains, type GeomWorld } from "../src/frontgeom.ts";
+import { computeFrontZones, connectionPoint, frontChains, type GeomWorld } from "../src/frontgeom.ts";
 import { Mirror } from "../src/mirror.ts";
 import { Painter } from "../src/painter.ts";
 import { HUMAN, type FrontView, type TickMessage } from "../src/protocol.ts";
@@ -28,7 +27,7 @@ function world(cities: [number, number][], roads: [number, number][]): GeomWorld
 
 /** Un front à la main, en paix ou en guerre. */
 function view(connections: [number, number, number][], active: boolean, id = 1): FrontView {
-  const empty = { first: [], second: [], transit: [], priority: 0, reassign: false, lineMode: [], motorizedOnly: true, frontAttack: false, breakthroughs: [] };
+  const empty = { first: [], second: [], lostFirst: [], lostSecond: [], transit: [], priority: 0, reassign: false, lineMode: [], allowed: [], motorizedOnly: true, frontAttack: false, breakthroughs: [] };
   return {
     id,
     players: [1, 2],
@@ -56,21 +55,6 @@ test("chaînes : les connexions consécutives autour d'une ville, dans l'ordre l
   const forward = [0, 1, 2, 3];
   assert.ok(JSON.stringify(order) === JSON.stringify(forward) || JSON.stringify(order) === JSON.stringify([...forward].reverse()), `ordre ${order}`);
   assert.equal(chains[0]!.closed, false);
-});
-
-test("courbe de Catmull-Rom centripète : passe par les points, point du bout répété", () => {
-  const pts = [{ x: 0, y: 0 }, { x: 10, y: 5 }, { x: 20, y: 0 }, { x: 30, y: 8 }];
-  const curve = catmullRom(pts)!;
-  assert.deepEqual(curve.start, pts[0]);
-  assert.deepEqual(curve.segments.map((s) => s.to), pts.slice(1));
-  // Aux bouts, P0 = P1 : d1 = 0, donc B1 = P1.
-  assert.deepEqual(curve.segments[0]!.c1, pts[0]);
-  assert.deepEqual(curve.segments[curve.segments.length - 1]!.c2, pts[3]);
-  // Une courbe sur des points alignés reste sur la droite.
-  const straight = catmullRom([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }])!;
-  for (const s of straight.segments) for (const c of [s.c1, s.c2]) assert.ok(Math.abs(c.x - c.y) < 1e-9);
-  assert.equal(catmullRom([]), null);
-  assert.deepEqual(catmullRom([{ x: 3, y: 4 }])!.segments, []);
 });
 
 test("zones de front : cases de terre à moins d'un demi-rayon de contrôle de la ligne, le plus proche gagne", () => {

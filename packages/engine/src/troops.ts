@@ -12,7 +12,7 @@
 // des fronts, des camps et des types (`FILL_ORDER`).
 
 import { FRONTS } from "./config.ts";
-import { clipBreakthroughs, frontWidth, frontsByPlayer, giveBack, priorityPercent, sideIndex, type Front, type FrontSide, type Transfer } from "./fronts.ts";
+import { clipBreakthroughs, frontWidth, frontsByPlayer, secondLineWidth, giveBack, priorityPercent, sideIndex, type Front, type FrontSide, type Transfer } from "./fronts.ts";
 import type { GameState, Player } from "./state.ts";
 import {
   FILL_ORDER,
@@ -82,17 +82,57 @@ export function trimSide(state: GameState, front: Front, i: number): void {
   const first = zeros();
   const second = zeros();
   const width = frontWidth(front);
+  const secondWidth = secondLineWidth(front);
   for (const t of FILL_ORDER) {
     const u = UNIT_DATA[t]!;
     const total = side.firstLine[t]! + side.secondLine[t]!;
+    if (!side.allowed[t]) {
+      // Type refusé sur ce front : tout repart vers la réserve.
+      sendOut(state, side, t, total);
+      continue;
+    }
     const [a, b] = splitLines(side.lineMode[t]!, total, lineRoom(t, first, false, width), u.frontWidth, u.breakthroughWidth);
-    const keep = Math.min(b, lineRoom(t, second, true, Infinity));
+    const keep = Math.min(b, lineRoom(t, second, true, secondWidth));
     sendOut(state, side, t, b - keep);
     first[t] = a;
     second[t] = keep;
   }
   side.firstLine = first;
   side.secondLine = second;
+  clipBreakthroughs(front);
+}
+
+/**
+ * Renfort de la première ligne par la seconde, sans délai (05-Fronts §4.2) : pour chaque type dont l'interrupteur est sur
+ * « priorité première ligne » ou « équilibré », des unités de la seconde ligne passent en première ligne pour combler les
+ * pertes du round, avant que l'affectation (§4.3) demande du matériel à la réserve. Priorité première ligne : jusqu'à la place
+ * libre ; équilibré : jusqu'à la part de la première ligne que donne `splitLines` sur le total du type (même pourcentage du
+ * front dans les deux lignes). Les unités qu'une percée engage restent en seconde ligne. L'équipement de la seconde ligne que l'infanterie restante ne couvre plus repart vers la réserve.
+ */
+export function reinforceFirstLine(state: GameState, front: Front, i: number): void {
+  const side = front.sides[i]!;
+  const lock = locked(front, i);
+  const width = frontWidth(front);
+  const secondWidth = secondLineWidth(front);
+  let moved = false;
+  for (const t of FILL_ORDER) {
+    const mode = side.lineMode[t]!;
+    if (mode === LINE_SECOND) continue;
+    const u = UNIT_DATA[t]!;
+    const total = side.firstLine[t]! + side.secondLine[t]!;
+    const [target] = splitLines(mode, total, lineRoom(t, side.firstLine, false, width), u.frontWidth, u.breakthroughWidth);
+    const move = Math.min(target - side.firstLine[t]!, side.secondLine[t]! - lock.second[t]!);
+    if (move <= 0) continue;
+    side.firstLine[t] = side.firstLine[t]! + move;
+    side.secondLine[t] = side.secondLine[t]! - move;
+    moved = true;
+  }
+  if (!moved) return;
+  for (const t of FILL_ORDER) {
+    const keep = Math.max(lock.second[t]!, Math.min(side.secondLine[t]!, lineRoom(t, side.secondLine, true, secondWidth)));
+    sendOut(state, side, t, side.secondLine[t]! - keep);
+    side.secondLine[t] = keep;
+  }
   clipBreakthroughs(front);
 }
 
@@ -105,6 +145,8 @@ interface Slot {
   readonly side: FrontSide;
   readonly id: number;
   readonly width: number;
+  /** Largeur de la seconde ligne, en mètres de percée. */
+  readonly secondWidth: number;
   readonly percent: number;
   first: number[];
   second: number[];
@@ -138,7 +180,7 @@ function buildSlots(fronts: readonly Front[], playerId: number): Slot[] {
     const first = side.firstLine.slice();
     const second = side.secondLine.slice();
     for (const tr of side.transfers) if (tr.toFront) (tr.line === 0 ? first : second)[tr.unit] += tr.count;
-    slots.push({ front, i, side, id: front.id, width: frontWidth(front), percent: priorityPercent(side), first, second });
+    slots.push({ front, i, side, id: front.id, width: frontWidth(front), secondWidth: secondLineWidth(front), percent: priorityPercent(side), first, second });
   }
   return slots;
 }
@@ -173,7 +215,7 @@ function distribute(slots: Slot[], pool: Pool, tier1Only: boolean): Grant[] {
       // Pour chaque camp : ce qu'il a et ce qu'il vise pour ce type.
       const gaps = slots.map((s) => {
         const mode = s.side.lineMode[t]!;
-        if (mode === LINE_SECOND) return 0;
+        if (mode === LINE_SECOND || !s.side.allowed[t]) return 0;
         const space = lineRoom(t, s.first, false, s.width);
         const balanced = mode === LINE_BALANCED;
         const have = balanced ? s.first[t]! + s.second[t]! : s.first[t]!;
@@ -195,7 +237,7 @@ function distribute(slots: Slot[], pool: Pool, tier1Only: boolean): Grant[] {
           const a = Math.min(Math.floor((total * u.breakthroughWidth) / (u.frontWidth + u.breakthroughWidth)), space);
           firstPart = Math.min(g, Math.max(0, a - s.first[t]!));
         } else firstPart = Math.min(g, Math.max(0, space - s.first[t]!));
-        const secondPart = Math.min(g - firstPart, Math.max(0, lineRoom(t, s.second, true, Infinity) - s.second[t]!));
+        const secondPart = Math.min(g - firstPart, Math.max(0, lineRoom(t, s.second, true, s.secondWidth) - s.second[t]!));
         give(s, t, 0, firstPart);
         give(s, t, 1, secondPart);
       });
@@ -203,16 +245,16 @@ function distribute(slots: Slot[], pool: Pool, tier1Only: boolean): Grant[] {
   }
   if (tier1Only) return grants;
 
-  // Seconde ligne : sans limite de nombre, sauf le plafond de l'infanterie pour l'équipement.
+  // Seconde ligne : plafonnée à `maxSecondLineOvercrowding` fois la largeur du front, et par l'infanterie pour l'équipement.
   for (const t of FILL_ORDER) {
     const available = pool.available(t);
     if (available <= 0) continue;
-    // Poids : pourcentage × largeur ; tous les fronts à 0 % : partage égal.
-    let weights = slots.map((s) => s.percent * s.width);
-    if (weights.every((w) => w === 0)) weights = weights.map(() => 1);
+    // Poids : pourcentage × largeur ; tous les fronts à 0 % : partage égal. Un front qui refuse le type n'en reçoit pas.
+    let weights = slots.map((s) => (s.side.allowed[t] ? s.percent * s.width : 0));
+    if (weights.every((w) => w === 0)) weights = slots.map((s) => (s.side.allowed[t] ? 1 : 0));
     const total = slots.reduce((sum, s) => sum + s.second[t]!, 0) + available;
     const targets = splitProportional(total, weights);
-    const gaps = slots.map((s, k) => Math.max(0, Math.min(targets[k]! - s.second[t]!, lineRoom(t, s.second, true, Infinity) - s.second[t]!)));
+    const gaps = slots.map((s, k) => Math.max(0, Math.min(targets[k]! - s.second[t]!, lineRoom(t, s.second, true, s.secondWidth) - s.second[t]!)));
     const shares = splitProportional(Math.min(available, gaps.reduce((a, b) => a + b, 0)), gaps);
     slots.forEach((s, k) => give(s, t, 1, shares[k]!));
   }

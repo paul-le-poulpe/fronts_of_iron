@@ -32,6 +32,8 @@ export function captureCity(
   // côtés ; la route de l'attaque ne compte pas, et une route n'est encerclée que si B en tenait plus de
   // `minEncirclementLengthPercent` % depuis la ville prise.
   const minLength = FRONTS.minEncirclementLengthPercent * 10;
+  let encirclement = false;
+  let lostUnits = 0;
   for (const front of state.fronts) {
     const i: number = front.players[0] === defender && front.players[1] === attacker ? 0 : front.players[1] === defender && front.players[0] === attacker ? 1 : -1;
     if (i < 0) continue;
@@ -43,16 +45,21 @@ export function captureCity(
       if (held > minLength) encircled++;
     }
     if (encircled === 0) continue;
+    encirclement = true;
     // Pertes sur la première ligne de B seulement, front par front, connexions comptées avant la prise.
     const side = front.sides[i]!;
     const lost = zeros();
     for (let t = 0; t < UNIT_COUNT; t++) {
       lost[t] = Math.min(side.firstLine[t]!, roundDiv(side.firstLine[t]! * encircled * FRONTS.encirclementLossPercent, front.connections.length * 100));
       side.firstLine[t] = side.firstLine[t]! - lost[t]!;
+      side.lostFirst[t] = side.lostFirst[t]! + lost[t]!;
+      lostUnits += lost[t]!;
     }
     loseUnits(state, defender, lost);
     clipBreakthroughs(front);
   }
+
+  if (encirclement) state.events.push({ type: "encirclement", from: attacker, to: defender, city: cityId, lost: lostUnits, turn: state.tick + 1 });
 
   // 2. La ville et sa zone passent à l'attaquant.
   city.player = attacker;

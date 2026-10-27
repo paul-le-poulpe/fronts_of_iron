@@ -190,6 +190,18 @@ function onTick(s: Session, msg: TickMessage): void {
       });
     }
   }
+  for (const c of msg.encircled) {
+    if (c.from === HUMAN || c.to === HUMAN) {
+      const other = c.from === HUMAN ? c.to : c.from;
+      notify({
+        text:
+          c.from === HUMAN
+            ? `Encerclement : vos troupes ont coupé la retraite de ${playerName(other)} à la ville n° ${c.city} (${num(c.lost)} unités perdues).`
+            : `Encerclement : vos troupes sont coupées de leur arrière par la perte de la ville n° ${c.city} (${num(c.lost)} unités perdues).`,
+        color: rgbCss(playerColor(other)),
+      });
+    }
+  }
   s.ticks++;
   s.perf = {
     bots: lerp(s.perf.bots, msg.perf.bots),
@@ -248,6 +260,10 @@ function updatePanel(players: readonly PlayerStats[]): void {
     cells[2]!.textContent = num(p.population);
     cells[3]!.textContent = num(p.cities);
   });
+  // Coût de la prochaine ville, en habitants ; la première (sans capitale) est gratuite.
+  const cost = $("found-cost");
+  cost.hidden = me.capital === 0;
+  cost.lastElementChild!.textContent = num(me.foundingCost);
   // Le coût d'une fondation dépend de la population : la case survolée peut changer de couleur.
   if (placement) session?.view?.requestDraw();
 }

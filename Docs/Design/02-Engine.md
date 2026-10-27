@@ -17,7 +17,7 @@ joueurs, propositions), et leurs ordres : `found_city`,
 `break_pact`, `propose_peace`, `answer_proposal`. **Les fronts terrestres (version 1)**
 sont implémentés le 26 octobre 2026 (`05-Fronts.md`, qui fait foi) : détection des fronts, unités et
 affectation des troupes, mobilisation forcée, attaques, combat, avancée, percées, prise de ville et
-encerclement, et leurs ordres : `set_front_priority`, `set_front_reassign`, `set_unit_line_mode`,
+encerclement, et leurs ordres : `set_front_priority`, `set_front_reassign`, `set_unit_line_mode`, `set_unit_allowed`,
 `set_breakthrough_motorized_only`, `set_forced_mobilization`, `start_front_attack`, `stop_front_attack`,
 `start_breakthrough`, `cancel_breakthrough` (§4, « Fronts »). Pas implémenté : coût de création d'une usine ou d'une ligne,
 nombre maximal de lignes, routes maritimes, changement de capitale, commerce, bots qui font la guerre
@@ -47,7 +47,7 @@ nombre maximal de lignes, routes maritimes, changement de capitale, commerce, bo
 | `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
 | `src/units.ts` | unités militaires en entiers : `UNIT_DATA` (multiplicateurs convertis à l'échelle 100), `fillWidth` (remplissage d'une largeur, niche par niche, plafond de l'infanterie), `lineRoom`, `splitLines`, `damageOf`, `lossesFrom` (pertes d'un groupe), `motorization` |
 | `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection`, `Transfer`, `Breakthrough` ; `updateFronts` (détection, identité, répartition des troupes), `startWar`, `endWar`, ordres de réglage, `deployedEquipment`, `activeFrontCities` |
-| `src/troops.ts` | affectation des troupes : `assignTroops` (recrutement et répartition par paliers), `releaseSurplus` (réassignation), `trimSide` (recalage d'un camp), `applyTransfers`, `loseUnits`, `recruitBeforeEconomy`, `recruitAfterEconomy`, `releaseTroops` (retrait des unités quand le pays manque de personnes, 05-Fronts §4.7) |
+| `src/troops.ts` | affectation des troupes : `assignTroops` (recrutement et répartition par paliers), `releaseSurplus` (réassignation), `trimSide` (recalage d'un camp), `reinforceFirstLine` (la seconde ligne comble les pertes de la première (priorité première ligne et équilibré), sans délai, 05-Fronts §4.2), `applyTransfers`, `loseUnits`, `recruitBeforeEconomy`, `recruitAfterEconomy`, `releaseTroops` (retrait des unités quand le pays manque de personnes, 05-Fronts §4.7) |
 | `src/attacks.ts` | ordres d'attaque : `startFrontAttack`, `stopFrontAttack`, `startBreakthrough`, `cancelBreakthrough` |
 | `src/combat.ts` | `combatRound` : un round par front actif (dégâts, pertes, avancée de l'assaut, percées), puis les prises de villes ; `frontAdvance`, `reactionFactor100`, `forceSpeed` |
 | `src/conquest.ts` | `captureCity` : encerclement, changement de propriétaire de la ville et de sa zone, recalcul des fronts |
@@ -323,7 +323,7 @@ mais ne travaille pas ; l'étape d'économie se fait sur `population − soldier
   composition a changé est recalé (`trimSide`).
 - **Troupes** : un `FrontSide` garde `firstLine` et `secondLine` (nombre d'unités par type, dans l'ordre de `UNITS`), les
   mouvements `transfers` (`toFront`, ligne visée, tour d'arrivée), les réglages (`priorityIndex`, `reassign`, `lineMode`,
-  `motorizedOnly`) et les attaques (`frontAttack`, `breakthroughs`). `assignTroops` forme les unités avec l'équipement de
+  `allowed`, `motorizedOnly`) et les attaques (`frontAttack`, `breakthroughs`). `assignTroops` forme les unités avec l'équipement de
   `armamentReserve` et les personnes d'un budget (les inactifs après l'économie ; toute la population qui peut travailler
   pour la mobilisation forcée, premier palier de la première ligne seulement), puis les répartit : première ligne par paliers
   de priorité, seconde ligne par cibles `pourcentage × largeur`. Les unités en route comptent comme présentes.
@@ -341,6 +341,7 @@ mais ne travaille pas ; l'étape d'économie se fait sur `population − soldier
 | `set_front_priority` | `front`, `priority` (indice dans `FRONTS.priorityPercent`) | le joueur est un camp du front | `priorityIndex` |
 | `set_front_reassign` | `front`, `enabled` | idem | `reassign` |
 | `set_unit_line_mode` | `front`, `unit` (clé de `UNITS`), `mode` (`first`, `balanced`, `second`) | idem | `lineMode` du type ; le camp est recalé sans délai |
+| `set_unit_allowed` | `front`, `unit` (clé de `UNITS`), `enabled` | idem | `allowed` du type ; refusé : le camp est recalé, les unités du type repartent vers la réserve (délai de transfert), celles en route font demi-tour |
 | `set_breakthrough_motorized_only` | `front`, `enabled` | idem | `motorizedOnly` |
 | `set_forced_mobilization` | `enabled` | toujours | `forcedMobilization` du joueur |
 | `start_front_attack`, `stop_front_attack` | `front` | front actif ; le joueur en est un camp ; l'attaque n'est pas déjà dans cet état | `frontAttack` |

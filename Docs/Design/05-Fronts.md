@@ -19,9 +19,8 @@ qu'un résumé. Règles décidées avec l'auteur les 25 et 26 octobre 2026.
 et client : détection des fronts, affectation des troupes, mobilisation forcée,
 ordres, guerre et paix, fondation en guerre, attaques, rounds de combat,
 percées, prise de ville, encerclement, interface (liste, panneau, zones, double
-ligne rouge, courbe en surimpression, onglet Population, barre jaune de
-l'armement), `npm run viz:fronts`. **Pas fait** : les bots (étape 4), la courbe
-comme nouvelle frontière (couleurs le long de la courbe, §11.1), le barrage
+ligne rouge, deux ronds de soldats sur chaque connexion, onglet Population, barre jaune de
+l'armement), `npm run viz:fronts`. **Pas fait** : les bots (étape 4), le barrage
 d'artillerie (bouton sans effet), la percée sur plusieurs axes à la fois. Le
 moteur est décrit dans `02-Engine.md` (fichiers, état, hash, tour), le client
 dans `03-Client.md`. Ordre d'implémentation au §14.
@@ -45,7 +44,7 @@ dans `03-Client.md`. Ordre d'implémentation au §14.
   (§11.3).
 - **Non vérifié à l'écran** : les tableaux de percées du panneau (§11.3, point 3) et les couleurs d'un front en paix au
   survol ; vérifiés seulement par lecture du code et par les tests de géométrie.
-- **Pas fait** : bots (§14, étape 4), couleurs de joueur le long de la courbe (§11.1), barrage d'artillerie, percée multi-axes,
+- **Pas fait** : bots (§14, étape 4), barrage d'artillerie, percée multi-axes,
   unités motorisées (aucune dans `config/units.ts`), fronts aériens et maritimes (§16). Les choix provisoires à valider avec
   l'auteur sont au §15.
 - **Tests** : l'auteur demande des tests minimaux (déterminisme avec fronts actifs, un round, une prise) ; ne pas en ajouter
@@ -244,12 +243,28 @@ mètres :
 3. couverture d'une niche ou d'un type = `unités × frontWidth / largeur du
    front`, en %.
 
-**Seconde ligne** — sans limite de nombre. Ce qui ne trouve pas sa place en
-première ligne y va, **toujours plafonné par l'infanterie**, compté en
-largeur de percée : mètres de chaque niche d'équipement ≤ mètres de
-l'infanterie de la seconde ligne (exemple : 30 infanteries, 300 m → au plus 3
-artilleries de 100 m). Ce qui dépasse encore reste **en stock** (réserve
-d'armement, sans population).
+**Seconde ligne** — **plafonnée à `FRONTS.maxSecondLineOvercrowding` fois la
+largeur du front** (`N`, **2** pour commencer, décision de l'auteur, 26 octobre
+2026), comptée en **largeurs de percée** (`breakthroughWidth`) : la seconde
+ligne tient donc `N` fois la population de la première ligne, davantage pour
+les types dont la largeur de percée est plus petite que leur largeur de
+première ligne. Comme la première ligne, chaque niche couvre cette largeur
+(*provisoire* : un plafond par niche, pas un plafond pour toute la seconde
+ligne). Ce qui ne trouve pas sa place en première ligne y va, **toujours
+plafonné par l'infanterie**, compté en largeur de percée : mètres de chaque
+niche d'équipement ≤ mètres de l'infanterie de la seconde ligne (exemple : 30
+infanteries, 300 m → au plus 3 artilleries de 100 m). Ce qui dépasse encore
+reste **en stock** (réserve d'armement, sans population) ; un camp dont la
+seconde ligne dépasse le plafond (largeur du front réduite, interrupteur
+changé) renvoie l'excédent à la réserve avec le délai du §4.5.
+
+**Type autorisé ou non**, par front et par type d'unité (case à cocher du panneau,
+cochée par défaut ; décision de l'auteur, 26 octobre 2026) : un type refusé ne
+reçoit rien sur ce front (ni première ligne, ni seconde ligne) et ses unités
+qui y sont **repartent vers la réserve** avec le délai du §4.5 ; celles qui y
+étaient en route font demi-tour (même délai). Les autres fronts du joueur
+peuvent les recevoir. *Provisoire* : les unités d'une percée en cours partent
+aussi.
 
 **Interrupteur à trois positions**, par front et par type d'unité (réglé par
 le joueur ; par défaut « priorité première ligne ») :
@@ -258,7 +273,20 @@ le joueur ; par défaut « priorité première ligne ») :
 | --- | --- |
 | priorité première ligne | la règle ci-dessus : première ligne d'abord, le surplus en seconde |
 | équilibré | **même pourcentage du front** dans les deux lignes : `a × frontWidth ≈ b × breakthroughWidth` |
-| priorité seconde ligne | tout en seconde ligne (elle n'a pas de limite, rien ne déborde vers la première) |
+| priorité seconde ligne | tout en seconde ligne, jusqu'à son plafond ; rien ne déborde vers la première, l'excédent reste en stock |
+
+**Renfort de la première ligne** (décision de l'auteur, 26 octobre 2026) : pour un
+type sur « priorité première ligne » **ou « équilibré »**, quand la première
+ligne perd des unités au combat, la **seconde ligne les remplace aussitôt**,
+sans délai ; l'affectation du §4.3 ne demande du matériel à la réserve que pour
+ce qui manque ensuite. Priorité première ligne : tant que la seconde ligne en
+a. Équilibré : jusqu'à la part de la première ligne de la formule ci-dessous,
+calculée sur le total du type (les deux lignes gardent le même pourcentage du
+front ; la seconde ligne n'est donc pas vidée). Le renfort se fait à la fin des pertes de chaque round (§6),
+avant les vérifications de percée et l'avancée. *Provisoire* : pour les deux
+camps ; les unités qu'une percée engage restent en seconde ligne ; l'équipement
+de la seconde ligne que l'infanterie restante ne couvre plus (plafond, ci-dessus)
+repart vers la réserve avec le délai du §4.5.
 
 Équilibré, en entiers, pour `u` unités du type sur ce front, `w1` largeur de
 front, `w2` largeur de percée : première ligne `a = floor(u × w2 / (w1 + w2))`,
@@ -380,6 +408,7 @@ fermiers et à ses pêcheurs (les emplois qu'il ferait tourner avec toute sa pop
 | `set_front_priority` | front, pourcentage (indice dans `priorityPercent`) | le joueur est un camp du front |
 | `set_front_reassign` | front, oui / non | idem |
 | `set_unit_line_mode` | front, type d'unité, `first` / `balanced` / `second` | idem |
+| `set_unit_allowed` | front, type d'unité, oui / non | idem |
 | `set_breakthrough_motorized_only` | front, oui / non | idem |
 | `set_forced_mobilization` | oui / non | toujours |
 | `start_front_attack` / `stop_front_attack` | front | front actif ; le joueur en est un camp |
@@ -580,6 +609,8 @@ ville X à B :
   `FRONTS.minEncirclementLengthPercent` = **25** % de la longueur de la route
   depuis X (B en tenait plus d'un quart). Plus près de X, les unités se
   replient en bon ordre, sans perte.
+- **Notification** : le moteur écrit l'événement `encirclement` (prise, camps,
+  unités perdues) ; la page prévient le joueur s'il est l'un des deux camps.
 - **Pertes**, sur la **première ligne** de B seulement, front par front : pour
   chaque type, `arrondi(unités × routes encerclées × encirclementLossPercent /
   (connexions du front × 100))`, `FRONTS.encirclementLossPercent` = **50**,
@@ -624,12 +655,14 @@ voir l'historique.
 - **Clic dans une zone de front, affichée ou non** : ouvre le panneau de ce
   front. Hors zone, un clic sur le territoire adverse ouvre la diplomatie comme
   aujourd'hui (`onMapClick`, `client/src/main.ts`).
-- **Front actif, courbe** : une spline de Catmull-Rom centripète (α = 0,5)
-  passe par le point du front de chaque connexion (§11.4). Décision de
-  l'auteur : elle devient la nouvelle frontière et sépare les couleurs des
-  joueurs ; repli accepté, couleurs au partage de Voronoi et courbe en
-  surimpression. *Provisoire* : surimpression d'abord ; couleurs le long de la
-  courbe ensuite.
+- **Front actif, soldats** (décision de l'auteur, 26 octobre 2026 ; la courbe
+  de Catmull-Rom est abandonnée) : sur chaque connexion, le **point
+  d'avancement** du front (§11.4, petit point rouge foncé) et, de chaque côté
+  sur le segment droit entre les deux villes, **un rond de la couleur du
+  joueur de ce côté** (deux soldats qui se battent). Chaque rond a la taille
+  d'une ville (rayon des villes, hors capitale) et touche le point. Ce sont de
+  simples ronds pour l'instant ; des animations viendront plus tard. Fronts
+  actifs seulement.
 - **Mode choix d'axe** (après le bouton percée) : un clic sur la carte lance
   une percée sur la connexion du front la plus proche du clic (*provisoire*),
   et **le mode se désactive aussitôt** (décision de l'auteur, 26 octobre 2026) ;
@@ -671,14 +704,23 @@ Un panneau = un front ; une bonne partie de l'écran. De haut en bas :
      joueur voit qu'il est attaqué).
    - **Percée** : le clic ferme le panneau et passe la carte en mode choix
      d'axe (§11.1).
-   - Interrupteur **« Motorisé seulement »** juste sous le bouton percée,
-     allumé par défaut.
+   - Interrupteur **« Motorisé seulement »** **à l'intérieur** du bouton
+     percée (même cadre rouge clair, sous le mot « Percée »), allumé par défaut.
    - *Provisoire* : sur un front en paix, les boutons d'attaque sont grisés.
 3. **Section des percées** : un petit tableau par percée en cours, **deux par
    rangée**, puis la rangée suivante. Chaque tableau :
    - en-tête « **Percée première ligne** » ou « **Percée seconde ligne** »
      selon la phase ;
-   - une colonne par camp ; une rangée par type d'unité engagé, sans niches ;
+   - des colonnes, du camp qui perce vers le défenseur : **attaque**,
+     **défense de première ligne**, **défense de seconde ligne** (en miroir si
+     le camp qui perce est à droite) ; une rangée par type d'unité engagé, sans
+     niches ;
+   - **dès le compte à rebours** (5 s avant le début), les effectifs sont ceux
+     que la percée engagerait, calculés comme à son début avec les effectifs du
+     moment (`previewBreakthrough`, lecture seule) ; la défense de seconde
+     ligne est la contre-attaque qu'elle aurait (la seconde ligne libre du
+     défenseur, partagée avec les percées déjà en phase 2) et reste
+     une prévision jusqu'à la phase 2 ;
    - contour de la couleur du joueur qui perce (*provisoire*), plus un second
      contour rouge clignotant ;
    - une petite **croix** en haut pour annuler, seulement sur ses percées.
@@ -690,10 +732,15 @@ Un panneau = un front ; une bonne partie de l'écran. De haut en bas :
    de brouillard de guerre : tout est visible).
    - Colonnes de la moitié du joueur, de l'extérieur vers la barre : avions
      (vide pour l'instant) ; nom du type **aligné à droite** puis son
-     **icône** ; quantité en seconde ligne ; interrupteur à trois positions ;
+     **icône**, puis à droite de l'icône une **case à cocher** « autorisé sur ce
+     front » (§4.2) ; quantité en seconde ligne ; interrupteur à trois positions ;
      quantité en première ligne ; **« % front »** (couverture de la première
      ligne). En miroir pour l'adversaire, **sans interrupteurs**.
-   - Quantités en nombre d'unités.
+   - Quantités en nombre d'unités. Sous chaque quantité de première et de
+     seconde ligne, en **rouge**, les unités perdues au **dernier round de
+     combat** de ce front (pertes de combat et d'encerclement, `lostFirst` /
+     `lostSecond` du camp ; remises à zéro à chaque round) ; rien s'il n'y en
+     a pas.
    - **Groupé par niche** : une rangée d'en-tête par niche avec sa couverture,
      puis une rangée par type avec sa couverture. Le joueur voit pourquoi un
      type moins bon reste en seconde ligne.
@@ -705,7 +752,7 @@ Un panneau = un front ; une bonne partie de l'écran. De haut en bas :
 6. Le panneau **défile** quand il est trop long ; *provisoire* : titre, boutons
    et réglages restent fixes en haut.
 
-### 11.4 Points du front et courbe
+### 11.4 Points du front
 
 - Point d'une connexion : `P = city1 + (city2 − city1) × position / 1000`, en
   flottants (client seulement). En paix, `position` = 500 (milieu).
@@ -714,17 +761,9 @@ Un panneau = un front ; une bonne partie de l'écran. De haut en bas :
   routes de cette ville, avec un angle inférieur à 180°. Les voisinages forment
   des chaînes ou des boucles ; une chaîne peut se couper (face du réseau qui
   n'est pas un triangle).
-- **Courbe** : pour le morceau P1 → P2, avec P0 et P3 ses voisins (aux bouts,
-  répéter le point du bout), `dᵢ` les distances entre points consécutifs,
-  `aᵢ = dᵢ^0,5`, `bᵢ = dᵢ` :
-  ```
-  B1 = (b1·P2 − b2·P0 + (2·b1 + 3·a1·a2 + b2)·P1) / (3·a1·(a1 + a2))
-  B2 = (b3·P1 − b2·P3 + (2·b3 + 3·a3·a2 + b2)·P2) / (3·a3·(a3 + a2))
-  ctx.bezierCurveTo(B1, B2, P2)
-  ```
-  Si `d1 = 0`, `B1 = P1` ; si `d3 = 0`, `B2 = P2`. Un `Path2D` par chaîne,
-  recalculé à la réception des fronts, pas à chaque image.
-- *Provisoire* : la ligne s'arrête au dernier point.
+- Les points (et leur sens ville 1 → ville 2) sont recalculés à la réception des fronts, pas à chaque image. Les chaînes
+  servent aux zones de front (§11.1). La courbe de Catmull-Rom qui les reliait est abandonnée
+  (`05-Fronts-History.md` §14).
 
 ### 11.5 Hors du panneau
 
@@ -749,6 +788,7 @@ valeur : sens, unité, origine). Valeurs données par l'auteur :
 | --- | --- | --- |
 | `metersPerConnection` | 5 000 | largeur ajoutée au front par connexion, en mètres |
 | `priorityPercent` | `[100, 50, 0]` | pourcentage de chaque niveau de priorité (1, 2, 3) |
+| `maxSecondLineOvercrowding` | 2 | `N` : la seconde ligne tient `N` fois la largeur du front, en largeurs de percée (§4.2) |
 | `transferTurns` | 50 | délai d'un mouvement entre la réserve et un front, en tours (5 s) |
 | `combatTurns` | 10 | tours entre deux rounds de combat (1 s) |
 | `capturePercent` | 1 | position du front, en % de la route depuis la ville prise, sur les connexions créées par une prise |
@@ -782,6 +822,7 @@ interface FrontSide {      // un par camp, players[0] puis players[1]
   priorityIndex: number;    // indice dans FRONTS.priorityPercent
   reassign: boolean;
   lineMode: number[];       // par type : 0 première, 1 équilibré, 2 seconde
+  allowed: boolean[];       // par type : autorisé sur ce front (§4.2)
   motorizedOnly: boolean;
   frontAttack: boolean;     // attaque sur tout le front en cours
   breakthroughs: Breakthrough[];
@@ -822,7 +863,7 @@ vérifie que chaque champ change le hash.
 
 - Message `tick` (03-Client §4) : la liste des fronts à plat, `null` si elle
   n'a pas changé ; positions et effectifs changent à chaque round.
-- Zones de front, double ligne rouge, courbe, panneau, liste : client seulement
+- Zones de front, double ligne rouge, soldats du front, panneau, liste : client seulement
   (§11), calculés à la réception.
 
 ### 13.5 Visualisation
@@ -842,7 +883,7 @@ front, fronts par joueur (île, adversaire, connexions), chaînes du §11.4.
 - **Identifiant de groupe** : il change quand sa plus petite ville change de
   main ; ne jamais l'utiliser comme identifiant de front.
 - **Flottants dans le moteur** : positions, dégâts, pourcentages, facteurs :
-  entiers. Seul le client calcule en flottants (points, courbe, zones).
+  entiers. Seul le client calcule en flottants (points, zones).
 - **Unités en route oubliées par la répartition** : voir §4.5.
 - **Diviser avant de multiplier** : multiplier d'abord, diviser une seule fois
   à la fin (arrondi du §1).
@@ -877,7 +918,7 @@ front, fronts par joueur (île, adversaire, connexions), chaînes du §11.4.
    fondation (§8) ; client : liste des fronts, zones et double ligne rouge,
    panneau sans attaques, onglet Population, barre jaune ; `viz:fronts`.
 2. **Combat** : attaques, rounds, pertes (§5, §6), section des percées.
-3. **Avancée, prise, encerclement** (§7, §10), courbe en surimpression.
+3. **Avancée, prise, encerclement** (§7, §10), points du front.
 4. **Bots** : en dernier (hors de ce document pour l'instant).
 
 À chaque étape : mettre à jour 02-Engine, 03-Client, 00-Game §9 (ordres) et
@@ -906,8 +947,10 @@ présenter comme décidés :
   proche du clic en mode choix d'axe (§11.1) ;
 - boutons d'attaque grisés en paix ; contour d'une percée de la couleur du
   joueur qui perce ; en-tête fixe du panneau (§11.3) ;
-- ligne de front arrêtée au dernier point ; surimpression de la courbe avant
-  les couleurs le long de la courbe (§11.1, §11.4) ;
+- plafond de la seconde ligne par niche (§4.2) ;
+- type refusé sur un front : ses unités repartent, y compris celles d'une percée (§4.2) ;
+- renfort de la première ligne par la seconde : les deux camps, sans toucher aux unités
+  d'une percée (§4.2) ;
 - ordre des étapes dans un tour (§13.2).
 
 Choix faits à l'implémentation (26 octobre 2026), pour les points que ce

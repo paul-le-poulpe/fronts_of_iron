@@ -21,7 +21,7 @@ import {
   unitIndex,
   zeros,
 } from "./units.ts";
-import { trimSide } from "./troops.ts";
+import { currentTurn, trimSide } from "./troops.ts";
 
 /** Une route dont les deux villes sont à deux joueurs différents. */
 export interface FrontConnection {
@@ -79,10 +79,15 @@ export interface FrontSide {
   reassign: boolean;
   /** Interrupteur à trois positions de chaque type (`LINE_FIRST`, `LINE_BALANCED`, `LINE_SECOND`). */
   lineMode: number[];
+  /** Case à cocher de chaque type : le type est-il autorisé sur ce front ? Un type refusé n'y reçoit rien et en repart. */
+  allowed: boolean[];
   /** Interrupteur « Motorisé seulement » des percées. */
   motorizedOnly: boolean;
   /** Attaque sur tout le front en cours. */
   frontAttack: boolean;
+  /** Unités perdues par type au dernier round de combat de ce front, par ligne (affichage ; 0 hors combat). */
+  lostFirst: number[];
+  lostSecond: number[];
   /** Percées lancées par ce camp, par identifiant. */
   breakthroughs: Breakthrough[];
 }
@@ -112,14 +117,20 @@ export function newSide(): FrontSide {
     priorityIndex: 0,
     reassign: false,
     lineMode: new Array<number>(UNIT_COUNT).fill(LINE_FIRST),
+    allowed: new Array<boolean>(UNIT_COUNT).fill(true),
     motorizedOnly: true,
     frontAttack: false,
+    lostFirst: zeros(),
+    lostSecond: zeros(),
     breakthroughs: [],
   };
 }
 
 /** Largeur du front en mètres : connexions × `metersPerConnection`. Jamais stockée. */
 export const frontWidth = (front: Front): number => front.connections.length * FRONTS.metersPerConnection;
+
+/** Largeur de la seconde ligne, en mètres de percée : `FRONTS.maxSecondLineOvercrowding` fois la largeur du front (05-Fronts §4.2). */
+export const secondLineWidth = (front: Front): number => frontWidth(front) * FRONTS.maxSecondLineOvercrowding;
 
 /** Les deux joueurs du front sont-ils en guerre ? (front actif) */
 export const isActive = (state: GameState, front: Front): boolean => statusOf(state, front.players[0], front.players[1]) === STATUS_WAR;
@@ -258,8 +269,11 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
         s.priorityIndex = o.priorityIndex;
         s.reassign = o.reassign;
         s.lineMode = o.lineMode.slice();
+        s.allowed = o.allowed.slice();
         s.motorizedOnly = o.motorizedOnly;
         s.frontAttack = o.frontAttack;
+        s.lostFirst = o.lostFirst.slice();
+        s.lostSecond = o.lostSecond.slice();
       }
     }
     return { id: b.id, players: [b.p1, b.p2], groups: [b.g1, b.g2], connections, sides };
@@ -450,6 +464,24 @@ export function setUnitLineMode(state: GameState, player: number, frontId: unkno
   if (k < 0) return false;
   m.side.lineMode[unitIndex(unit)] = k === 0 ? LINE_FIRST : k === 1 ? LINE_BALANCED : LINE_SECOND;
   trimSide(state, m.front, m.i);
+  return true;
+}
+
+/**
+ * Case « autorisé » d'un type sur un front (05-Fronts §4.2). Refusé : les unités du type quittent le front, première et
+ * seconde ligne, vers la réserve avec le délai de transfert ; celles qui y étaient en route font demi-tour (même délai).
+ */
+export function setUnitAllowed(state: GameState, player: number, frontId: unknown, unit: unknown, enabled: unknown): boolean {
+  const m = mySide(state, player, frontId);
+  if (m === undefined || !isUnitId(unit) || typeof enabled !== "boolean") return false;
+  const t = unitIndex(unit);
+  m.side.allowed[t] = enabled;
+  if (!enabled) {
+    m.side.transfers = m.side.transfers.map((tr) =>
+      tr.unit === t && tr.toFront ? { ...tr, toFront: false, arrival: currentTurn(state) + FRONTS.transferTurns } : tr,
+    );
+    trimSide(state, m.front, m.i);
+  }
   return true;
 }
 

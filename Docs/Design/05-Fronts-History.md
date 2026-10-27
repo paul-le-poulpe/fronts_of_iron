@@ -1182,3 +1182,21 @@ rassemble ce qu'elle devra contenir, au fur et à mesure de la conception.
 | Contenu de la seconde ligne, par type d'unité | proposé | §12, 25 octobre |
 | Adversaire en guerre ou en paix ; position du front | proposé | 00-Game §3.8 |
 | Rangée de trois boutons d'attaque entre le titre et la rangée priorité : attaque sur tout le front, percée, barrage d'artillerie (hors périmètre). Percée : ferme le panneau, puis clic sur la carte sur une route du front, qui devient l'axe. Interrupteur « Motorisé seulement » juste sous le bouton percée. Interrupteurs : un clic lance, un second arrête ; un seul type en cours par front et par joueur ; rouge clair au repos, contour rouge foncé épais clignotant quand actif. Boutons dans la moitié du joueur ; les mêmes en gris dans la moitié de l'adversaire, clignotants quand son attaque est active | décidé | §12, 25 octobre |
+
+## 14. Courbe de Catmull-Rom (abandonnée le 26 octobre 2026)
+
+Remplacée par deux ronds de chaque côté du point d'avancement (05-Fronts §11.1, §11.4).
+Ce qui était écrit :
+
+- **Courbe** : une spline de Catmull-Rom centripète (α = 0,5) passait par le point du front de chaque connexion, par chaîne
+  (§11.4), en surimpression des couleurs ; décision de l'auteur : elle devait devenir la nouvelle frontière et séparer les
+  couleurs des joueurs (repli accepté : couleurs au partage de Voronoi, courbe en surimpression). La ligne s'arrêtait au
+  dernier point.
+- Pour le morceau P1 → P2, avec P0 et P3 ses voisins (aux bouts, répéter le point du bout), `dᵢ` les distances entre points
+  consécutifs, `aᵢ = dᵢ^0,5`, `bᵢ = dᵢ` :
+  ```
+  B1 = (b1·P2 − b2·P0 + (2·b1 + 3·a1·a2 + b2)·P1) / (3·a1·(a1 + a2))
+  B2 = (b3·P1 − b2·P3 + (2·b3 + 3·a3·a2 + b2)·P2) / (3·a3·(a3 + a2))
+  ctx.bezierCurveTo(B1, B2, P2)
+  ```
+  Si `d1 = 0`, `B1 = P1` ; si `d3 = 0`, `B2 = P2`.

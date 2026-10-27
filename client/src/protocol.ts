@@ -24,6 +24,7 @@ export type HumanOrder =
   | { readonly type: "set_front_priority"; readonly front: number; readonly priority: number }
   | { readonly type: "set_front_reassign"; readonly front: number; readonly enabled: boolean }
   | { readonly type: "set_unit_line_mode"; readonly front: number; readonly unit: string; readonly mode: "first" | "balanced" | "second" }
+  | { readonly type: "set_unit_allowed"; readonly front: number; readonly unit: string; readonly enabled: boolean }
   | { readonly type: "set_breakthrough_motorized_only"; readonly front: number; readonly enabled: boolean }
   | { readonly type: "set_forced_mobilization"; readonly enabled: boolean }
   | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number }
@@ -199,7 +200,10 @@ export interface FrontConnectionView {
   readonly position: number;
 }
 
-/** Une percée en cours (05-Fronts §7.2). `attackers`, `defenders1`, `defenders2` : unités engagées par type. */
+/**
+ * Une percée en cours (05-Fronts §7.2). `attackers`, `defenders1`, `defenders2` : unités engagées par type. Avant la phase 2,
+ * ce sont les forces prévues (`previewBreakthrough`) : l'attente comme la phase 1 montrent déjà la contre-attaque à venir.
+ */
 export interface BreakthroughView {
   readonly id: number;
   readonly city1: number;
@@ -216,6 +220,9 @@ export interface BreakthroughView {
 export interface FrontSideView {
   readonly first: readonly number[];
   readonly second: readonly number[];
+  /** Unités perdues par type au dernier round de combat, en première et en seconde ligne. */
+  readonly lostFirst: readonly number[];
+  readonly lostSecond: readonly number[];
   /** Unités en route vers le front, par type. */
   readonly transit: readonly number[];
   /** Indice dans `MilitaryCatalog.priorityPercent`. */
@@ -223,6 +230,8 @@ export interface FrontSideView {
   readonly reassign: boolean;
   /** Interrupteur de chaque type : 0 priorité première ligne, 1 équilibré, 2 priorité seconde ligne. */
   readonly lineMode: readonly number[];
+  /** Case « autorisé sur ce front » de chaque type. */
+  readonly allowed: readonly boolean[];
   readonly motorizedOnly: boolean;
   readonly frontAttack: boolean;
   readonly breakthroughs: readonly BreakthroughView[];
@@ -369,6 +378,8 @@ export interface TickMessage {
   readonly failedBreakthroughs: number;
   /** Villes prises pendant ce tour. La page reçoit alors `cities` et les cases de leur zone. */
   readonly captured: readonly { readonly city: number; readonly from: number; readonly to: number }[];
+  /** Encerclements causés par ces prises (05-Fronts §10.2) : `from` encercle des troupes de `to`, qui perdent `lost` unités. */
+  readonly encircled: readonly { readonly city: number; readonly from: number; readonly to: number; readonly lost: number }[];
   readonly paused: boolean;
   /** Durées mesurées dans le Worker, en ms. */
   readonly perf: { readonly bots: number; readonly apply: number; readonly pack: number };
