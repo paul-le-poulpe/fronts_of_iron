@@ -137,9 +137,10 @@
 
 .lb-form { width: 100%; max-width: 460px; padding: 28px; gap: 20px; }
 .lb-form .lb-btn { align-self: auto; }
-.lb-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; }
+.lb-field { display: flex; flex-direction: column; gap: 6px; }
 .lb-field label { font-weight: 600; }
 .lb-fields { display: flex; flex-wrap: wrap; gap: 16px; }
+.lb-fields > .lb-field { flex: 1 1 220px; }
 .lb-inline { display: flex; gap: 8px; }
 .lb-inline input { flex: 1 1 auto; min-width: 0; }
 .lb-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
