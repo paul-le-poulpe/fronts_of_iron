@@ -581,6 +581,7 @@ export class MapView {
 
     // Routes : trait plein foncé entre deux villes d'un même joueur, pointillé gris sinon.
     // Chaque route suit son chemin de cases (00-Game §3.5), calculé quand la liste des routes change.
+    // La partie en mer d'une route qui passe par deux ports (00-Game §3.6) est toujours en pointillé.
     const roads = mirror.roads;
     ctx.lineJoin = "round";
     for (let i = 0; i < roads.length; i += 2) {
@@ -588,13 +589,26 @@ export class MapView {
       const b = cities[roads[i + 1]! - 1]!;
       const same = a.player === b.player;
       const path = mirror.roadTiles[i / 2]!;
-      ctx.beginPath();
-      ctx.setLineDash(same ? [] : [4 * px, 3 * px]);
+      if (path.length === 0) continue;
+      const sea = mirror.seaSpan(path);
       ctx.strokeStyle = same ? rgbCss(playerDark(a.player)) : "rgba(60,60,60,0.8)";
       ctx.lineWidth = (same ? 2 : 1.5) * px;
-      ctx.moveTo(cx(path[0]!), cy(path[0]!));
-      for (let k = 1; k < path.length; k++) ctx.lineTo(cx(path[k]!), cy(path[k]!));
-      ctx.stroke();
+      const stroke = (from: number, to: number, dash: number[]): void => {
+        if (to <= from) return;
+        ctx.beginPath();
+        ctx.setLineDash(dash);
+        ctx.moveTo(cx(path[from]!), cy(path[from]!));
+        for (let k = from + 1; k <= to; k++) ctx.lineTo(cx(path[k]!), cy(path[k]!));
+        ctx.stroke();
+      };
+      const landDash = same ? [] : [4 * px, 3 * px];
+      if (sea === null) {
+        stroke(0, path.length - 1, landDash);
+      } else {
+        stroke(0, sea[0], landDash);
+        stroke(sea[0], sea[1], [5 * px, 4 * px]);
+        stroke(sea[1], path.length - 1, landDash);
+      }
     }
     ctx.setLineDash([]);
 

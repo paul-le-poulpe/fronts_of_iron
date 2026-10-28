@@ -394,7 +394,7 @@ routes passent par les vallées. Ce tracé ne sert qu'à l'affichage ; le moteur
 ne le calcule pas. Choix de l'auteur : le chemin ne passe que par des cases de
 terre ; il se déplace sur 8 voisins, un pas en diagonale coûtant `√2` fois le
 coût de la case d'arrivée. S'il n'existe aucun chemin de terre entre les deux
-villes, la route est dessinée en segment droit. Une case déjà traversée par une
+villes, la route passe par les ports (§3.6), ou n'est pas dessinée. Une case déjà traversée par une
 autre route coûte la moitié (valeur choisie avec l'auteur, constante
 `ROAD_REUSE_COST_FACTOR` de `client/src/roadpaths.ts`) : deux routes vers une
 même ville se superposent au lieu de longer l'une l'autre côte à côte.
@@ -456,6 +456,21 @@ même ville se superposent au lieu de longer l'une l'autre côte à côte.
 - **Affichage** (client seulement) : la route est dessinée par une courbe
   lissée (courbes de Bézier) passant par les zones de son chemin. Le moteur ne
   garde que la suite des zones.
+- **Affichage d'une liaison sans chemin de terre** (décision de l'auteur,
+  28 octobre 2026) : une route du réseau terrestre (§3.5) dont les deux villes
+  ne sont pas reliées par la terre passe par le port de chacune des deux
+  villes. Le tracé va de la ville à son port par la terre (A* du §3.5), puis
+  d'un port à l'autre par un A* sur les cases d'eau, puis du second port à la
+  seconde ville. La partie en mer est en pointillés. Le coût d'une case d'eau
+  augmente près de la côte (`SEA_COAST_CLEARANCE` et `SEA_COAST_COST` de
+  `client/src/roadpaths.ts`) : le tracé longe les côtes en gardant quelques
+  cases de distance quand la mer est assez large. Quand un port disparaît ou
+  change de case (nouvelle ville voisine), le tracé est recalculé. Si une des
+  deux villes n'a pas de port, ou si l'eau ne relie pas les deux ports (lac),
+  (décision de l'auteur, 28 octobre 2026) la route n'est pas dessinée : le
+  trajet passe par les villes voisines. Ce tracé ne sert qu'à l'affichage : le
+  moteur ne le calcule pas, et ce n'est pas la route maritime de groupe
+  décrite ci-dessus.
 
 ### 3.7 Taille des villes (affichage seulement)
 
@@ -1221,6 +1236,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   d'abord, l'auteur dessine la vraie.
 - Port : icône sur la case de côte la plus proche de la ville (§3.6).
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
+  Sans chemin de terre : par les deux ports, en pointillés sur la mer (§3.6).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
 - Fronts : double ligne rouge, zones hachurées, soldats sur les connexions, liste et panneau des
   fronts, mobilisation forcée, barre jaune de l'armement : `05-Fronts.md` §11.

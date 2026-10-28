@@ -41,13 +41,13 @@ test("le cache reprend les chemins connus et oublie ceux qui disparaissent", () 
   assert.ok(other!.length > 0);
 });
 
-test("sans chemin de terre, la route est un segment droit", () => {
+test("sans chemin de terre ni port, la route n'a pas de tracé", () => {
   const t = ridgeMap();
   for (let y = 0; y < H; y++) t[y * W + 10] = 0x20; // un bras de mer coupe la carte
   const rp = new RoadPaths(W, H, t, 5);
   const cities = [city(1, 2, 4), city(2, 18, 4)];
   const [path] = rp.sync(cities, Uint16Array.of(1, 2));
-  assert.deepEqual([...path!], [cities[0]!.tile, cities[1]!.tile]);
+  assert.equal(path!.length, 0);
 });
 
 test("deux routes vers une même ville finissent sur les mêmes cases", () => {
@@ -59,4 +59,39 @@ test("deux routes vers une même ville finissent sur les mêmes cases", () => {
   assert.ok(shared.length > 6, `${shared.length} cases communes`);
   // Un chemin va de la case de ville la plus petite à la plus grande : celui de B part de C, celui de A y arrive.
   assert.deepEqual([...b!.slice(0, 4)], [...a!.slice(-4)].reverse(), "les quatre cases voisines de C sont les mêmes");
+});
+
+/** Terre plate coupée par une mer large de cinq colonnes (x = 8 à 12). */
+function seaMap(): Uint8Array {
+  const t = new Uint8Array(W * H).fill(LAND);
+  for (let y = 0; y < H; y++) for (let x = 8; x <= 12; x++) t[y * W + x] = 0x20;
+  return t;
+}
+
+test("sans chemin de terre, la route passe par les deux ports et traverse l'eau", () => {
+  const rp = new RoadPaths(W, H, seaMap(), 5);
+  const cities = [city(1, 2, 4), city(2, 18, 4)];
+  const ports = new Map([[1, 4 * W + 7], [2, 4 * W + 13]]);
+  const [path] = rp.sync(cities, Uint16Array.of(1, 2), ports);
+  assert.equal(path![0], cities[0]!.tile);
+  assert.equal(path![path!.length - 1], cities[1]!.tile);
+  const span = rp.seaSpan(path!);
+  assert.ok(span !== null, "partie en mer connue");
+  assert.equal(path![span![0]], 4 * W + 7, "le premier port ouvre la partie en mer");
+  assert.equal(path![span![1]], 4 * W + 13, "le second port la ferme");
+  for (let k = span![0] + 1; k < span![1]; k++) assert.equal(path![k]! % W >= 8 && path![k]! % W <= 12, true, "entre les ports, que de l'eau");
+});
+
+test("la route maritime est recalculée quand un port change ou disparaît", () => {
+  const rp = new RoadPaths(W, H, seaMap(), 5);
+  const cities = [city(1, 2, 4), city(2, 18, 4)];
+  const [first] = rp.sync(cities, Uint16Array.of(1, 2), new Map([[1, 4 * W + 7], [2, 4 * W + 13]]));
+  const [same] = rp.sync(cities, Uint16Array.of(1, 2), new Map([[1, 4 * W + 7], [2, 4 * W + 13]]));
+  assert.equal(same, first, "ports inchangés : même objet");
+  const [moved] = rp.sync(cities, Uint16Array.of(1, 2), new Map([[1, 2 * W + 7], [2, 4 * W + 13]]));
+  assert.notEqual(moved, first, "port déplacé : recalculé");
+  assert.equal(moved![moved!.length - 1], cities[1]!.tile);
+  const [none] = rp.sync(cities, Uint16Array.of(1, 2), new Map([[2, 4 * W + 13]]));
+  assert.equal(none!.length, 0, "un port supprimé : plus de tracé");
+  assert.equal(rp.seaSpan(none!), null);
 });

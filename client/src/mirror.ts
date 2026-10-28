@@ -180,6 +180,11 @@ export class Mirror {
     return this.zoneCache.zones;
   }
 
+  /** Indices, dans `path` (un élément de `roadTiles`), du port de départ et du port d'arrivée si la route traverse la mer ; null sinon. */
+  seaSpan(path: Int32Array): readonly [number, number] | null {
+    return this.roadPaths.seaSpan(path);
+  }
+
   /** Case où dessiner l'icône de port de la ville (00-Game §3.6, §11). */
   portTile(cityId: number): number {
     return this.portTiles.get(cityId) ?? this.cities[cityId - 1]!.tile;
@@ -219,7 +224,6 @@ export class Mirror {
     }
     for (const cap of msg.captured) this.countZone(cap.city, +1);
     if (msg.roads !== null) this.roads = msg.roads;
-    if (msg.cities !== null || msg.roads !== null) this.roadTiles = this.roadPaths.sync(this.cities, this.roads);
     if (msg.factoryMarks !== null) {
       const f = msg.factoryMarks;
       this.factoryMarks = new Map();
@@ -255,6 +259,8 @@ export class Mirror {
       this.portTiles.clear();
       for (const city of this.cities) if (city.port) this.portTiles.set(city.id, this.findPortTile(city));
     }
+    // Après les ports : le tracé d'une route sans chemin de terre passe par les ports de ses villes (00-Game §3.6).
+    if (msg.cities !== null || msg.roads !== null) this.roadTiles = this.roadPaths.sync(this.cities, this.roads, this.portTiles);
 
     this.stats = msg.players.slice();
     for (const p of this.stats) {

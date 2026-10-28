@@ -357,8 +357,24 @@ chemin est optimal pour ces coûts. La recherche reste dans le rectangle des deu
 deux cases de villes (et non des identifiants, qui peuvent changer) : une route
 déjà tracée est reprise telle quelle, une route absente de la nouvelle liste
 (coupée par une nouvelle ville) est oubliée. Sans chemin de terre dans le
-rectangle, le chemin est les deux cases de villes : un segment droit. Les calculs
-sont en flottants : ils ne touchent jamais l'état de la partie.
+rectangle, le chemin passe par les ports quand les deux villes en ont un
+(00-Game §3.6) : A* terrestre de la ville à son port (la case de côte de
+`mirror.portTile`), puis A* sur les cases d'eau d'un port à l'autre, puis
+A* terrestre du second port à la seconde ville. La recherche en mer porte sur
+toute la carte ; les deux cases de port sont les seules cases de terre permises,
+et un pas en diagonale ne passe pas entre deux cases de terre. Le coût d'une case
+d'eau est `1 + SEA_COAST_COST × (SEA_COAST_CLEARANCE + 1 − d) / SEA_COAST_CLEARANCE`
+pour une distance `d` à la terre de 1 à `SEA_COAST_CLEARANCE` cases (carte de
+distances par parcours en largeur, calculée à la première route maritime), 1
+au-delà ; la réutilisation d'une case déjà tracée divise toujours le coût par
+deux. `RoadPaths.seaSpan(chemin)` donne les indices des deux ports dans le
+chemin ; `render.ts` dessine cette partie en pointillés. `Mirror` calcule les
+cases de port avant d'appeler `sync`, qui reçoit la table identifiant de ville →
+case de port. Un chemin qui n'est pas entièrement de terre est gardé avec la paire
+de ports qui l'a produit : si l'un des deux ports change de case ou disparaît,
+il est recalculé. Sans port ou sans eau entre les ports, le chemin est vide et
+`render.ts` ne dessine pas la route (les routes voisines portent le trajet). Les calculs sont en flottants : ils ne
+touchent jamais l'état de la partie.
 
 **Canvas** (`render.ts`). Molette : zoom centré sur la souris ; glisser : déplacer
 (sous 4 pixels de mouvement, c'est un clic). À chaque image : le tampon de la

@@ -1,9 +1,10 @@
-// Tracé d'affichage des routes terrestres (00-Game §3.5, « Affichage »). Pour le
+// Tracé d'affichage des routes (00-Game §3.5 et §3.6, « Affichage »). Pour le
 // moteur, une route est une paire de villes ; ici, chaque route reçoit un chemin
 // A* de cases entre ses deux villes, plus cher en altitude, pour que les routes
-// passent par les vallées. Rien de ceci n'entre dans l'état de la partie : le
-// calcul est en flottants, côté page seulement. Pas d'accès au DOM : testable
-// sous Node.
+// passent par les vallées. Sans chemin de terre, la route passe par le port de
+// chacune des deux villes, avec un A* sur l'eau entre les deux ports, plus cher
+// près des côtes. Rien de ceci n'entre dans l'état de la partie : le calcul est
+// en flottants, côté page seulement. Pas d'accès au DOM : testable sous Node.
 
 import type { MirrorCity } from "./mirror.ts";
 
@@ -11,6 +12,10 @@ import type { MirrorCity } from "./mirror.ts";
 export const ROAD_HEIGHT_COST_FACTOR = 1;
 /** Part du coût d'une case déjà traversée par une autre route : deux routes vers une même ville finissent ensemble au lieu de longer l'une l'autre. */
 export const ROAD_REUSE_COST_FACTOR = 0.5;
+/** Distance à la côte, en cases, en dessous de laquelle une case d'eau coûte plus cher pour une route maritime. */
+export const SEA_COAST_CLEARANCE = 4;
+/** Surcoût d'une case d'eau voisine de la terre, en multiple du coût d'une case ; il décroît linéairement jusqu'à `SEA_COAST_CLEARANCE`. */
+export const SEA_COAST_COST = 3;
 
 const LAND = 0x80;
 const ALTITUDE = 0x1f;
@@ -21,9 +26,21 @@ const STEPS: readonly (readonly [number, number, number])[] = [
   [1, 1, 1], [1, -1, 1], [-1, 1, 1], [-1, -1, 1],
 ];
 
+/** Chemin gardé d'une route. `ports` : −1 pour un chemin de terre (valable quels que soient les ports) ; sinon la paire des cases de port au moment du calcul. */
+interface Entry {
+  readonly path: Int32Array;
+  readonly ports: number;
+}
+
+const straight = (a: number, b: number): Int32Array => (a === b ? Int32Array.of(a) : Int32Array.of(a, b));
+
 export class RoadPaths {
   /** Chemin de chaque paire de cases de villes, par clé `min × taille + max`. Remplacé à chaque `sync`. */
-  private cache = new Map<number, Int32Array>();
+  private cache = new Map<number, Entry>();
+  /** Partie en mer des chemins qui passent par deux ports : indices du premier et du dernier port dans le chemin. */
+  private readonly seaSpans = new WeakMap<Int32Array, readonly [number, number]>();
+  /** Distance de chaque case d'eau à la terre, en cases, jusqu'à `SEA_COAST_CLEARANCE` ; 255 au-delà. Calculée à la première route maritime. */
+  private coast: Uint8Array | null = null;
   // Tableaux de travail de l'A*, réutilisés d'une route à l'autre : `stamp[t] === run` dit que `cost[t]` et `from[t]` sont ceux du calcul en cours.
   private readonly cost: Float32Array;
   private readonly from: Int32Array;
@@ -60,55 +77,132 @@ export class RoadPaths {
    * ordre : `result[i]` est la suite des cases de la route `roads[2i]`–`roads[2i+1]`.
    * Un chemin déjà calculé pour les mêmes deux cases est repris ; les autres sont
    * calculés ; ceux des routes qui ne sont plus dans la liste sont oubliés.
-   * Sans chemin de terre, le chemin est les deux cases de villes seules (segment droit).
+   *
+   * `ports` donne la case de port de chaque ville à port (identifiant de ville →
+   * case). Sans chemin de terre entre les deux villes, la route va de chaque
+   * ville à son port par la terre, et d'un port à l'autre par l'eau (`seaSpan`
+   * donne la partie en mer). Si l'une des villes n'a pas de port, ou si l'eau
+   * ne relie pas les deux ports, la route n'a pas de tracé : le chemin est vide
+   * et rien n'est dessiné (le trajet passe par les villes voisines). Un chemin qui n'est pas de terre est recalculé quand un
+   * des deux ports change ou disparaît (nouvelle ville voisine).
    */
-  sync(cities: readonly MirrorCity[], roads: Uint16Array): Int32Array[] {
+  sync(cities: readonly MirrorCity[], roads: Uint16Array, ports: ReadonlyMap<number, number> = new Map()): Int32Array[] {
     const size = this.width * this.height;
-    const next = new Map<number, Int32Array>();
+    const next = new Map<number, Entry>();
     const keys: number[] = [];
+    const portKeys: number[] = [];
     // Cases portant déjà une route : on repart des chemins conservés, les nouveaux s'y ajoutent à mesure.
     this.used.fill(0);
     for (let i = 0; i < roads.length; i += 2) {
-      const a = cities[roads[i]! - 1]!.tile;
-      const b = cities[roads[i + 1]! - 1]!.tile;
-      const key = a < b ? a * size + b : b * size + a;
+      const a = cities[roads[i]! - 1]!;
+      const b = cities[roads[i + 1]! - 1]!;
+      const [lo, hi] = a.tile < b.tile ? [a, b] : [b, a];
+      const key = lo.tile * size + hi.tile;
+      const portKey = ((ports.get(lo.id) ?? -1) + 1) * (size + 1) + (ports.get(hi.id) ?? -1) + 1;
       keys.push(key);
+      portKeys.push(portKey);
       const kept = this.cache.get(key);
-      if (kept !== undefined && !next.has(key)) {
+      if (kept !== undefined && (kept.ports === -1 || kept.ports === portKey) && !next.has(key)) {
         next.set(key, kept);
-        for (const t of kept) this.used[t] = 1;
+        for (const t of kept.path) this.used[t] = 1;
       }
     }
     const out: Int32Array[] = [];
     for (let i = 0; i < roads.length; i += 2) {
       const key = keys[i / 2]!;
-      let path = next.get(key);
-      if (path === undefined) {
-        const a = cities[roads[i]! - 1]!.tile;
-        const b = cities[roads[i + 1]! - 1]!.tile;
-        const lo = Math.min(a, b);
-        const hi = Math.max(a, b);
-        path = this.search(lo, hi) ?? Int32Array.of(lo, hi);
-        next.set(key, path);
-        for (const t of path) this.used[t] = 1;
+      let entry = next.get(key);
+      if (entry === undefined) {
+        const a = cities[roads[i]! - 1]!;
+        const b = cities[roads[i + 1]! - 1]!;
+        const [lo, hi] = a.tile < b.tile ? [a, b] : [b, a];
+        entry = this.route(lo.tile, hi.tile, ports.get(lo.id) ?? -1, ports.get(hi.id) ?? -1, portKeys[i / 2]!);
+        next.set(key, entry);
+        for (const t of entry.path) this.used[t] = 1;
       }
-      out.push(path);
+      out.push(entry.path);
     }
     this.cache = next;
     return out;
   }
 
-  /** A* de la case `from` à la case `to`, sur la terre, dans le rectangle des deux cases agrandi de la marge. Null si aucun chemin. */
-  private search(from: number, to: number): Int32Array | null {
+  /** Indices, dans `path`, du port de départ et du port d'arrivée si le chemin traverse la mer ; null sinon. `path` vient du dernier `sync`. */
+  seaSpan(path: Int32Array): readonly [number, number] | null {
+    return this.seaSpans.get(path) ?? null;
+  }
+
+  /** Chemin de la route entre les villes de cases `lo` < `hi` ; `portLo` et `portHi` : leurs cases de port, −1 sans port. Vide sans chemin de terre ni de mer. */
+  private route(lo: number, hi: number, portLo: number, portHi: number, portKey: number): Entry {
+    const land = this.search(lo, hi);
+    if (land !== null) return { path: land, ports: -1 };
+    if (portLo >= 0 && portHi >= 0) {
+      const sea = this.search(portLo, portHi, true);
+      if (sea !== null) {
+        const head = this.search(lo, portLo) ?? straight(lo, portLo);
+        const tail = this.search(hi, portHi) ?? straight(hi, portHi);
+        const path = new Int32Array(head.length + sea.length - 2 + tail.length);
+        path.set(head);
+        path.set(sea.subarray(1, sea.length - 1), head.length);
+        for (let k = 0; k < tail.length; k++) path[path.length - 1 - k] = tail[k]!;
+        this.seaSpans.set(path, [head.length - 1, head.length + sea.length - 2]);
+        return { path, ports: portKey };
+      }
+    }
+    return { path: new Int32Array(0), ports: portKey };
+  }
+
+  /** Distance à la terre de chaque case d'eau (parcours en largeur parti de toute la terre, 8 voisins), plafonnée à `SEA_COAST_CLEARANCE`. */
+  private coastDistance(): Uint8Array {
+    if (this.coast !== null) return this.coast;
+    const w = this.width;
+    const h = this.height;
+    const size = w * h;
+    const dist = new Uint8Array(size).fill(255);
+    const queue = new Int32Array(size);
+    let tail = 0;
+    for (let t = 0; t < size; t++) {
+      if ((this.terrain[t]! & LAND) !== 0) {
+        dist[t] = 0;
+        queue[tail++] = t;
+      }
+    }
+    for (let head = 0; head < tail; head++) {
+      const t = queue[head]!;
+      const d = dist[t]!;
+      if (d >= SEA_COAST_CLEARANCE) continue;
+      const x = t % w;
+      const y = (t - x) / w;
+      for (const [dx, dy] of STEPS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+        const n = ny * w + nx;
+        if (dist[n] !== 255) continue;
+        dist[n] = d + 1;
+        queue[tail++] = n;
+      }
+    }
+    this.coast = dist;
+    return dist;
+  }
+
+  /**
+   * A* de la case `from` à la case `to`. Sur la terre (défaut), dans le rectangle
+   * des deux cases agrandi de la marge ; null si aucun chemin. En mer (`sea`),
+   * sur toute la carte : `from` et `to` sont des cases de port (de la terre), les
+   * seules cases de terre permises, et le chemin ne passe que par l'eau entre
+   * elles. Une case d'eau proche de la côte coûte plus cher (`SEA_COAST_COST`).
+   */
+  private search(from: number, to: number, sea = false): Int32Array | null {
     const w = this.width;
     const tx = to % w;
     const ty = (to - tx) / w;
     const fx = from % w;
     const fy = (from - fx) / w;
-    const x0 = Math.max(0, Math.min(fx, tx) - this.margin);
-    const x1 = Math.min(w - 1, Math.max(fx, tx) + this.margin);
-    const y0 = Math.max(0, Math.min(fy, ty) - this.margin);
-    const y1 = Math.min(this.height - 1, Math.max(fy, ty) + this.margin);
+    const x0 = sea ? 0 : Math.max(0, Math.min(fx, tx) - this.margin);
+    const x1 = sea ? w - 1 : Math.min(w - 1, Math.max(fx, tx) + this.margin);
+    const y0 = sea ? 0 : Math.max(0, Math.min(fy, ty) - this.margin);
+    const y1 = sea ? this.height - 1 : Math.min(this.height - 1, Math.max(fy, ty) + this.margin);
+    const coast = sea ? this.coastDistance() : null;
     const run = ++this.run;
     const { cost, stamp, terrain } = this;
     const heuristic = (x: number, y: number): number => {
@@ -134,8 +228,21 @@ export class RoadPaths {
         if (nx < x0 || nx > x1 || ny < y0 || ny > y1) continue;
         const n = ny * w + nx;
         const b = terrain[n]!;
-        if ((b & LAND) === 0) continue;
-        const step = (1 + this.heightCostFactor * (b & ALTITUDE)) * (this.used[n] === 1 ? ROAD_REUSE_COST_FACTOR : 1) * (diagonal === 1 ? SQRT2 : 1);
+        let factor: number;
+        if (coast !== null) {
+          const isLand = (b & LAND) !== 0;
+          if (isLand && n !== to) continue;
+          // Un pas en diagonale ne passe pas entre deux cases de terre.
+          if (diagonal === 1 && t !== from && n !== to) {
+            if ((terrain[y * w + nx]! & LAND) !== 0 && (terrain[ny * w + x]! & LAND) !== 0) continue;
+          }
+          const d = coast[n]!;
+          factor = isLand || d > SEA_COAST_CLEARANCE ? 1 : 1 + (SEA_COAST_COST * (SEA_COAST_CLEARANCE + 1 - d)) / SEA_COAST_CLEARANCE;
+        } else {
+          if ((b & LAND) === 0) continue;
+          factor = 1 + this.heightCostFactor * (b & ALTITUDE);
+        }
+        const step = factor * (this.used[n] === 1 ? ROAD_REUSE_COST_FACTOR : 1) * (diagonal === 1 ? SQRT2 : 1);
         const c = base + step;
         if (stamp[n] === run && c >= cost[n]!) continue;
         stamp[n] = run;
