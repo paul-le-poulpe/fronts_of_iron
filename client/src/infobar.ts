@@ -20,9 +20,9 @@
 
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
-import { playerName, productName } from "./names.ts";
+import { localPlayer, playerName, productName } from "./names.ts";
 import { playerColor, rgbCss } from "./painter.ts";
-import { HUMAN, type FactoryCatalog, type FrontView, type HumanDetail, type PlayerStats } from "./protocol.ts";
+import { type FactoryCatalog, type FrontView, type HumanDetail, type PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
@@ -687,7 +687,7 @@ export class InfoBar {
     const peaceList = el("div", "fl-list");
     const empty = el("p", "muted", "Aucun front : aucune de vos routes ne touche un autre joueur.");
     const pane = this.pane("fronts", el("h3", undefined, "Fronts"), activeTitle, activeList, peaceTitle, peaceList, empty);
-    const mine = (f: FrontView): number => f.players.indexOf(HUMAN);
+    const mine = (f: FrontView): number => f.players.indexOf(localPlayer());
     const render = (): void => {
       const list = this.fronts
         .filter((f) => mine(f) >= 0)

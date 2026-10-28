@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@fronts-of-iron/engine": "*",
+    "@fronts-of-iron/relay": "*",
     "@fronts-of-iron/shared": "*"
   },
   "devDependencies": {

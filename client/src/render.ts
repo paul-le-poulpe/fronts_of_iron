@@ -8,8 +8,8 @@ import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./
 import { type Painter, playerColor, playerDark, rgbCss } from "./painter.ts";
 import { productIconPath } from "./icons.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
-import { factoryInitial } from "./names.ts";
-import { HUMAN, type FrontView } from "./protocol.ts";
+import { factoryInitial, localPlayer } from "./names.ts";
+import { type FrontView } from "./protocol.ts";
 
 export interface MapViewHooks {
   /** Case sous la souris, ou -1 hors de la carte. */
@@ -562,10 +562,10 @@ export class MapView {
     }
 
     // Rayon d'expansion des villes du joueur, en mode placement (00-Game §3.1, §3.3).
-    if (this.placement && mirror.cityIds[HUMAN - 1]!.length > 0) {
+    if (this.placement && mirror.cityIds[localPlayer() - 1]!.length > 0) {
       const r = mirror.expansionRadius;
       ctx.beginPath();
-      for (const id of mirror.cityIds[HUMAN - 1]!) {
+      for (const id of mirror.cityIds[localPlayer() - 1]!) {
         const t = cities[id - 1]!.tile;
         ctx.moveTo(cx(t) + r, cy(t));
         ctx.arc(cx(t), cy(t), r, 0, Math.PI * 2);

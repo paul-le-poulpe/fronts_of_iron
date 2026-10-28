@@ -6,7 +6,13 @@ import type { Env } from "./env.ts";
 /** Intervalle des signaux au lobby, tant qu'au moins une connexion est ouverte (01-Architecture §2). */
 export const SIGNAL_INTERVAL_MS = 30_000;
 
-/** Un message client plus long que ceci est refusé : les messages de la salle font moins de 100 caractères. */
+/**
+ * Durée d'un pas : un tour toutes les 100 ms (01-Architecture §3). Réglage de l'enveloppe, jamais du relais
+ * ni du moteur. Changer ce nombre change la vitesse de la partie en temps réel, pas ses résultats.
+ */
+export const TURN_STEP_MS = 100;
+
+/** Un message client plus long que ceci est refusé : les messages de la salle et les ordres font moins de 1 000 caractères. */
 const MAX_MESSAGE_CHARS = 1024;
 
 /** Ce que le Durable Object garde dans son stockage : de quoi retrouver la partie s'il quitte la mémoire. */
@@ -31,17 +37,22 @@ const roomEnv: RoomEnv = {
  * passe chaque message à la salle (`packages/relay`), envoie les réponses, et
  * signale la partie au lobby par appel interne (pas de secret).
  *
- * Pas de tours en ligne pour l'instant : seulement la salle d'attente et le
- * message de départ. La salle est en mémoire ; seuls l'identifiant, le nom et
- * le jeton d'hôte sont dans le stockage. Une partie dont le Durable Object
- * quitte la mémoire (plus aucune connexion) ou qu'un déploiement redémarre
- * perd sa salle, et les joueurs avec elle (01-Architecture §6).
+ * Une fois la partie lancée, un `setInterval` de `TURN_STEP_MS` demande un tour
+ * au relais et l'envoie à tous (pas d'alarme par tour : elles sont facturées,
+ * 01-Architecture §6). La salle et la liste des tours sont en mémoire ; seuls
+ * l'identifiant, le nom et le jeton d'hôte sont dans le stockage. Une partie dont
+ * le Durable Object quitte la mémoire (plus aucune connexion) ou qu'un déploiement
+ * redémarre perd sa salle, ses tours, et les joueurs avec eux (01-Architecture §6).
+ * Sans connexion ouverte, plus aucun tour n'est créé : la partie reprend quand un
+ * joueur revient.
  */
 export class Game extends DurableObject<Env> {
   #stored: StoredGame | null = null;
   #room: Room | null = null;
   readonly #sockets = new Map<string, WebSocket>();
   #timer: ReturnType<typeof setInterval> | undefined;
+  /** Cadence des tours : démarrée une fois la partie lancée, tant qu'au moins une connexion est ouverte. */
+  #turnTimer: ReturnType<typeof setInterval> | undefined;
   /** Vrai quand le lobby a accepté un signal ou une inscription de cette partie. */
   #listed = false;
   #lastState: RoomState | undefined;
@@ -105,9 +116,11 @@ export class Game extends DurableObject<Env> {
     if (!this.#sockets.delete(conn)) return;
     if (this.#room !== null) this.#dispatch(this.#room.disconnect(conn));
     if (this.#sockets.size === 0 && this.#timer !== undefined) {
-      // Plus de connexion : plus de signal, le lobby retire la partie après GAME_TTL_MS.
+      // Plus de connexion : plus de signal, le lobby retire la partie après GAME_TTL_MS, et plus de tour.
       clearInterval(this.#timer);
       this.#timer = undefined;
+      if (this.#turnTimer !== undefined) clearInterval(this.#turnTimer);
+      this.#turnTimer = undefined;
       // Sans signal, le lobby peut retirer la partie : à la prochaine connexion elle sera réinscrite.
       this.#listed = false;
       return;
@@ -116,11 +129,18 @@ export class Game extends DurableObject<Env> {
   }
 
   #dispatch(out: readonly Outgoing[]): void {
+    // Un tour part au même objet message vers tous les joueurs : une seule sérialisation.
+    let last: unknown;
+    let text = "";
     for (const { to, message } of out) {
       const ws = this.#sockets.get(to);
       if (ws === undefined) continue;
       try {
-        ws.send(JSON.stringify(message));
+        if (message !== last) {
+          last = message;
+          text = JSON.stringify(message);
+        }
+        ws.send(text);
         // La connexion remplacée par une autre du même joueur n'a plus de rôle : on la ferme.
         if (message.type === "error" && message.code === "replaced") {
           this.#sockets.delete(to);
@@ -132,10 +152,19 @@ export class Game extends DurableObject<Env> {
     }
   }
 
+  /** Un pas : le relais crée le tour suivant (rien en pause) et on l'envoie à tous les joueurs connectés. */
+  #step(): void {
+    if (this.#room !== null) this.#dispatch(this.#room.step());
+  }
+
   /** Signale tout de suite la première salle avec un hôte et le lancement ; le reste attend le signal régulier. */
   #afterChange(): void {
     const summary = this.#room?.summary();
     if (summary === undefined) return;
+    // La partie est lancée et quelqu'un est connecté : les tours tournent.
+    if (summary.state === "started" && this.#turnTimer === undefined && this.#sockets.size > 0) {
+      this.#turnTimer = setInterval(() => this.#step(), TURN_STEP_MS);
+    }
     if ((!this.#listed && summary.hostName !== "") || (this.#listed && summary.state !== this.#lastState)) void this.#signal();
   }
 

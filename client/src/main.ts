@@ -3,14 +3,15 @@
 // Worker (engine.worker.ts) et la page affiche ce qu'il envoie.
 
 import "./style.css";
-// Accueil et salle d'attente des parties en ligne ; le mode solo ci-dessous s'ouvre depuis l'accueil.
-import "./lobby.ts";
+// Accueil et salle d'attente des parties en ligne ; le mode solo ci-dessous s'ouvre depuis l'accueil,
+// et une partie en ligne lancée par le relais est confiée à `startOnline` ci-dessous.
+import { setGameLauncher, showHome } from "./lobby.ts";
 
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";
-import { HUMAN, type FrontView, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
+import { type EndedMessage, type FrontView, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
 import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
-import { factoryName, playerName, productSymbol } from "./names.ts";
+import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
 import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
 import { FrontPanel } from "./frontpanel.ts";
@@ -67,6 +68,10 @@ startForm.addEventListener("submit", (e) => {
 
 interface Session {
   readonly worker: Worker;
+  /** Partie en ligne (source de tours WebSocket) ou solo (relais local). */
+  readonly online: boolean;
+  /** Seul l'hôte met en pause en ligne ; en solo le joueur est l'hôte. */
+  host: boolean;
   mirror: Mirror | null;
   painter: Painter | null;
   view: MapView | null;
@@ -86,10 +91,13 @@ function post(msg: ToWorker): void {
   session?.worker.postMessage(msg);
 }
 
-function startGame(mapSeed: number, bots: number): void {
+/** Crée le Web Worker du moteur et la session qui l'écoute ; l'appelant lui envoie `start` (solo) ou `online`. */
+function openSession(online: boolean): Session {
   const worker = new Worker(new URL("./engine.worker.ts", import.meta.url), { type: "module" });
   const s: Session = {
     worker,
+    online,
+    host: true,
     mirror: null,
     painter: null,
     view: null,
@@ -105,25 +113,83 @@ function startGame(mapSeed: number, bots: number): void {
   worker.onmessage = (e: MessageEvent<FromWorker>) => {
     if (session !== s) return;
     const msg = e.data;
-    if (msg.type === "init") onInit(s, msg);
-    else if (msg.type === "tick") onTick(s, msg);
-    else {
-      s.paused = msg.paused;
-      $("pause").textContent = s.paused ? "Reprendre (outil de développement)" : "Pause (outil de développement)";
+    switch (msg.type) {
+      case "init":
+        onInit(s, msg);
+        break;
+      case "tick":
+        onTick(s, msg);
+        break;
+      case "paused":
+        onPaused(s, msg.paused);
+        break;
+      case "notice":
+        toast(msg.text, 6000);
+        break;
+      case "ended":
+        onEnded(msg);
+        break;
     }
   };
   worker.onerror = (e) => {
     toast(`Erreur du moteur : ${e.message}`, 10000);
   };
+  return s;
+}
+
+function startGame(mapSeed: number, bots: number): void {
+  const s = openSession(false);
   const step = stepFromUrl();
-  post({ type: "start", mapSeed, bots, ...(step !== undefined ? { stepMs: step } : {}) });
+  s.worker.postMessage({ type: "start", mapSeed, bots, ...(step !== undefined ? { stepMs: step } : {}) } satisfies ToWorker);
+}
+
+/** Partie en ligne lancée par le relais : le Worker ouvre son propre WebSocket et rejoue la partie depuis le message de départ. */
+function startOnline(launch: { readonly url: string; readonly name: string; readonly token: string }): void {
+  endSession();
+  const s = openSession(true);
+  s.worker.postMessage({ type: "online", url: launch.url, name: launch.name, token: launch.token } satisfies ToWorker);
+}
+
+setGameLauncher({ start: startOnline, cancel: endSession });
+
+/** Texte du bouton de pause : outil de développement en solo, bouton de l'hôte en ligne (00-Game §1.1). */
+function pauseLabel(s: Session): string {
+  if (s.online) return s.paused ? "Reprendre la partie" : "Mettre en pause";
+  return s.paused ? "Reprendre (outil de développement)" : "Pause (outil de développement)";
+}
+
+function onPaused(s: Session, paused: boolean): void {
+  const changed = s.paused !== paused;
+  s.paused = paused;
+  $("pause").textContent = pauseLabel(s);
+  // En ligne, tous les joueurs voient la pause, pas seulement l'hôte qui l'a demandée.
+  if (s.online && changed) toast(paused ? "La partie est en pause." : "La partie reprend.");
+}
+
+/** La source de tours en ligne s'est arrêtée. Une connexion perdue laisse la partie affichée ; le reste ramène à l'accueil avec le texte. */
+function onEnded(msg: EndedMessage): void {
+  if (msg.reason === "lost") {
+    toast(msg.message, 600000);
+    return;
+  }
+  endSession();
+  showHome(msg.message, true);
 }
 
 function onInit(s: Session, init: InitMessage): void {
+  setRoster(init.you, init.playerNames);
+  s.host = !s.online || init.you === 1;
+  $("lobby").hidden = true;
+  $("app").hidden = false;
   startScreen.hidden = true;
   gameScreen.hidden = false;
   playButton.disabled = false;
   playButton.textContent = "Jouer";
+  // Barre de debug : solo seulement (en ligne l'état ne change que par les tours, règle 3). Pause : l'hôte seulement en ligne.
+  $("debug-bar").hidden = s.online;
+  $("pause").hidden = !s.host;
+  $("pause").textContent = pauseLabel(s);
+  $("mode-label").textContent = s.online ? "partie en ligne" : "mode solo contre des bots";
 
   // Un canvas neuf à chaque partie : les écouteurs de la partie précédente restent sur l'ancien.
   const oldCanvas = $<HTMLCanvasElement>("map");
@@ -160,7 +226,7 @@ function onInit(s: Session, init: InitMessage): void {
   $("production").setAttribute("aria-pressed", "false");
   setFactoryArmed(null);
   buildPlayersTable(mirror);
-  $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(HUMAN))}"></span>`;
+  $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(localPlayer()))}"></span>`;
   setPlacement(false);
   clearNotifications();
   diplomacy.reset();
@@ -184,20 +250,20 @@ function onTick(s: Session, msg: TickMessage): void {
     toast("Percée arrêtée : aucune unité à engager (seconde ligne vide, ou « Motorisé seulement » sans unité motorisée).", 6000);
   }
   for (const c of msg.captured) {
-    if (c.from === HUMAN || c.to === HUMAN) {
-      const other = c.from === HUMAN ? c.to : c.from;
+    if (c.from === localPlayer() || c.to === localPlayer()) {
+      const other = c.from === localPlayer() ? c.to : c.from;
       notify({
-        text: c.from === HUMAN ? `Vous avez pris la ville n° ${c.city} à ${playerName(other)}.` : `${playerName(other)} vous a pris la ville n° ${c.city}.`,
+        text: c.from === localPlayer() ? `Vous avez pris la ville n° ${c.city} à ${playerName(other)}.` : `${playerName(other)} vous a pris la ville n° ${c.city}.`,
         color: rgbCss(playerColor(other)),
       });
     }
   }
   for (const c of msg.encircled) {
-    if (c.from === HUMAN || c.to === HUMAN) {
-      const other = c.from === HUMAN ? c.to : c.from;
+    if (c.from === localPlayer() || c.to === localPlayer()) {
+      const other = c.from === localPlayer() ? c.to : c.from;
       notify({
         text:
-          c.from === HUMAN
+          c.from === localPlayer()
             ? `Encerclement : vos troupes ont coupé la retraite de ${playerName(other)} à la ville n° ${c.city} (${num(c.lost)} unités perdues).`
             : `Encerclement : vos troupes sont coupées de leur arrière par la perte de la ville n° ${c.city} (${num(c.lost)} unités perdues).`,
         color: rgbCss(playerColor(other)),
@@ -213,9 +279,9 @@ function onTick(s: Session, msg: TickMessage): void {
   };
 
   updatePanel(msg.players);
-  s.production?.update(msg.human, msg.players[HUMAN - 1]!);
-  s.infobar?.update(msg.human, msg.players[HUMAN - 1]!);
-  setGoodTipStats(msg.players[HUMAN - 1]!);
+  s.production?.update(msg.human, msg.players[localPlayer() - 1]!);
+  s.infobar?.update(msg.human, msg.players[localPlayer() - 1]!);
+  setGoodTipStats(msg.players[localPlayer() - 1]!);
   refreshTip();
   // Les barres de temps restant d'abord, puis les cartes créées par ce tour (elles lisent le tour courant).
   updateNotifications(msg.tick);
@@ -246,7 +312,7 @@ const lerp = (avg: number, x: number): number => (avg === 0 ? x : avg * 0.9 + x 
 // ---- panneau latéral ----
 
 function updatePanel(players: readonly PlayerStats[]): void {
-  const me = players[HUMAN - 1]!;
+  const me = players[localPlayer() - 1]!;
   $("s-pop").textContent = num(me.population);
   $("s-farmers").textContent = num(me.farmers);
   $("s-fishers").textContent = num(me.fishers);
@@ -275,10 +341,17 @@ function buildPlayersTable(mirror: Mirror): void {
   body.innerHTML = "";
   for (let id = 1; id <= mirror.playerCount; id++) {
     const tr = document.createElement("tr");
-    if (id === HUMAN) tr.className = "me";
-    tr.innerHTML =
-      `<td><span class="sw" style="background:${rgbCss(playerColor(id))}"></span></td>` +
-      `<td>${id === HUMAN ? "Vous" : `Bot ${id - 1}`}</td><td>0</td><td>0</td>`;
+    if (id === localPlayer()) tr.className = "me";
+    const swatch = document.createElement("span");
+    swatch.className = "sw";
+    swatch.style.background = rgbCss(playerColor(id));
+    // Les noms viennent des autres joueurs : textContent, jamais innerHTML.
+    const cells = [document.createElement("td"), document.createElement("td"), document.createElement("td"), document.createElement("td")];
+    cells[0]!.append(swatch);
+    cells[1]!.textContent = playerName(id);
+    cells[2]!.textContent = "0";
+    cells[3]!.textContent = "0";
+    tr.append(...cells);
     body.appendChild(tr);
   }
 }
@@ -362,7 +435,8 @@ $("dbg-bots").addEventListener("click", () => {
   if (session !== null) post({ type: "debug", action: "armBots", amount: 3 });
 });
 
-$("quit").addEventListener("click", () => {
+/** Ferme la session en cours (Worker compris, donc le WebSocket d'une partie en ligne) et remet l'écran de départ du solo. */
+function endSession(): void {
   const s = session;
   if (s === null) return;
   s.worker.terminate();
@@ -375,6 +449,15 @@ $("quit").addEventListener("click", () => {
   setFactoryArmed(null);
   gameScreen.hidden = true;
   startScreen.hidden = false;
+  playButton.disabled = false;
+  playButton.textContent = "Jouer";
+}
+
+$("quit").addEventListener("click", () => {
+  const online = session?.online === true;
+  endSession();
+  // Une partie en ligne se quitte vers l'accueil du lobby ; le solo, vers son écran de départ.
+  if (online) showHome();
 });
 
 // ---- case survolée ----
@@ -398,7 +481,7 @@ function showHover(tile: number): void {
     $("h-iron").textContent = (m.resources[tile]! & RESOURCE_IRON) !== 0 ? "oui" : "non";
     $("h-aluminium").textContent = (m.resources[tile]! & RESOURCE_ALUMINIUM) !== 0 ? "oui" : "non";
     const owner = m.ownerOf(tile);
-    $("h-owner").textContent = owner === 0 ? "personne" : owner === HUMAN ? "Vous" : `Bot ${owner - 1}`;
+    $("h-owner").textContent = owner === 0 ? "personne" : playerName(owner);
     const id = m.tileCity[tile]!;
     $("h-city").textContent =
       id === 0
@@ -442,7 +525,7 @@ function setPlacement(on: boolean): void {
     view.refresh();
   }
   const m = session?.mirror;
-  const me = m?.stats[HUMAN - 1];
+  const me = m?.stats[localPlayer() - 1];
   $("bar-hint").textContent = on
     ? m && me?.capital
       ? `Placement : dans le rayon d'expansion d'une de vos villes (${m.expansionRadius} cases), en dehors de toute zone, coût ${num(me.foundingCost)} habitants.`
@@ -467,8 +550,8 @@ document.addEventListener("keydown", (e) => {
 function foundingProblem(m: Mirror, tile: number): string | null {
   if (!m.isLand(tile)) return "Une ville se fonde sur la terre.";
   if (m.tileCity[tile] !== 0) return "Cette case est déjà dans la zone d'une ville.";
-  const me = m.stats[HUMAN - 1];
-  const mine = m.cityIds[HUMAN - 1]!;
+  const me = m.stats[localPlayer() - 1];
+  const mine = m.cityIds[localPlayer() - 1]!;
   if (mine.length === 0) return null;
   if (me && me.population < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} habitants nécessaires).`;
   const w = m.width;
@@ -587,7 +670,7 @@ function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; pr
   const city = m.tileCity[tile]!;
   let problem: string | null = null;
   if (city === 0) problem = "Cette case n'est dans la zone d'aucune ville.";
-  else if (m.cities[city - 1]!.player !== HUMAN) problem = "Cette zone appartient à un autre joueur.";
+  else if (m.cities[city - 1]!.player !== localPlayer()) problem = "Cette zone appartient à un autre joueur.";
   else if (m.factoryMarks.has(city)) problem = `La ville n° ${city} a déjà une usine.`;
   return { city, ok: problem === null, problem };
 }

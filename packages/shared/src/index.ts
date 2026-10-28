@@ -18,6 +18,15 @@ export const MAP_IDS = ["test"] as const;
 export type MapId = (typeof MAP_IDS)[number];
 export const DEFAULT_MAP: MapId = "test";
 
+/** Un hash de l'état de la partie est envoyé tous les N tours (01-Architecture §3, décidé par l'auteur : N = 10). */
+export const HASH_EVERY_TURNS = 10;
+/**
+ * Ordres qu'un joueur peut faire entrer dans un même tour ; les suivants sont refusés (`too_many_orders`).
+ * Un joueur n'en envoie jamais autant en 100 ms : cette borne protège la mémoire du relais, qui garde tous
+ * les tours. Provisoire (non tranché par l'auteur).
+ */
+export const MAX_ORDERS_PER_TURN = 20;
+
 /** Plus grande graine (le moteur accepte un entier de 0 à 2³² − 1). */
 export const MAX_SEED = 0xffffffff;
 /** Graine d'une salle neuve (la valeur par défaut de l'écran de départ solo). Provisoire. */
@@ -27,8 +36,13 @@ export function isMapId(value: unknown): value is MapId {
   return typeof value === "string" && (MAP_IDS as readonly string[]).includes(value);
 }
 
-export function isSeed(value: unknown): value is number {
+/** Entier de 0 à 2³² − 1 : une graine, un hash du moteur. */
+export function isUint32(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= MAX_SEED;
+}
+
+export function isSeed(value: unknown): value is number {
+  return isUint32(value);
 }
 
 /** Caractères de contrôle (U+0000 à U+001F, U+007F à U+009F) : refusés dans les noms. */
@@ -81,6 +95,28 @@ export function cloudflareGamePath(id: string): string {
   return `/api/games/${encodeURIComponent(id)}/ws`;
 }
 
+// ---- ordres et tours (lockstep, 01-Architecture §3) ----
+
+/**
+ * Un ordre tel qu'un client l'envoie : un objet JSON dont `type` est une chaîne. Le relais ne lit rien d'autre ;
+ * c'est le moteur qui valide les champs. Un champ `player` éventuel est écrasé par le relais (règle 4 du CLAUDE.md).
+ */
+export interface Order {
+  readonly type: string;
+  readonly [key: string]: unknown;
+}
+
+/** Un ordre dans un tour : celui du client, avec l'identifiant du joueur écrit par le relais. */
+export interface TurnOrder extends Order {
+  readonly player: number;
+}
+
+/** Un tour : son numéro (à partir de 1, sans trou) et ses ordres dans l'ordre d'arrivée au relais. */
+export interface TurnData {
+  readonly turn: number;
+  readonly orders: readonly TurnOrder[];
+}
+
 // ---- salle d'attente : client → relais ----
 
 export type ClientMessage =
@@ -92,7 +128,14 @@ export type ClientMessage =
   /** Hôte seulement, avant le lancement. `seed: "random"` : le relais tire une graine. */
   | { readonly type: "set_map"; readonly map?: MapId; readonly seed?: number | "random" }
   /** Hôte seulement : lance la partie. */
-  | { readonly type: "start" };
+  | { readonly type: "start" }
+  // ---- partie lancée ----
+  /** Un ordre du joueur, pour le prochain tour. */
+  | { readonly type: "order"; readonly order: Order }
+  /** Hash de l'état du client après le tour `turn`, multiple de `HASH_EVERY_TURNS` (`hashState` du moteur, entier 32 bits). */
+  | { readonly type: "hash"; readonly turn: number; readonly hash: number }
+  /** Hôte seulement : met la partie en pause ou la reprend. Ce n'est pas un ordre : il n'entre dans aucun tour. */
+  | { readonly type: "pause"; readonly paused: boolean };
 
 // ---- salle d'attente : relais → client ----
 
@@ -122,7 +165,11 @@ export type RoomErrorCode =
   | "invalid_map"
   | "invalid_seed"
   /** Le même jeton vient d'être utilisé par une autre connexion, qui remplace celle-ci. */
-  | "replaced";
+  | "replaced"
+  /** Ordre, hash ou pause avant le lancement. */
+  | "not_started"
+  /** Plus de `MAX_ORDERS_PER_TURN` ordres du même joueur pour le même tour. */
+  | "too_many_orders";
 
 /**
  * Texte de chaque erreur de la salle, envoyé par le relais avec le code (`message`) : la page
@@ -139,6 +186,8 @@ export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
   invalid_map: "Carte inconnue.",
   invalid_seed: "Graine invalide : un entier de 0 à 4 294 967 295.",
   replaced: "Vous êtes connecté à cette partie depuis un autre onglet ou un autre appareil.",
+  not_started: "Message refusé par le serveur : la partie n'est pas encore lancée.",
+  too_many_orders: "Trop d'ordres envoyés en même temps : l'ordre est ignoré.",
 };
 
 export type ServerMessage =
@@ -164,4 +213,16 @@ export type ServerMessage =
       readonly players: readonly StartPlayer[];
     }
   /** `message` : le texte à afficher (`ROOM_ERROR_TEXT`). */
-  | { readonly type: "error"; readonly code: RoomErrorCode; readonly message: string };
+  | { readonly type: "error"; readonly code: RoomErrorCode; readonly message: string }
+  // ---- partie lancée ----
+  /** Le tour suivant, envoyé à tous les clients connectés à chaque pas (même contenu que `TurnData`). */
+  | { readonly type: "turn"; readonly turn: number; readonly orders: readonly TurnOrder[] }
+  /**
+   * Tous les tours créés jusqu'ici, du premier au dernier, envoyés à la reconnexion après le message de départ
+   * (le client rejoue depuis le début, 01-Architecture §3). Absent s'il n'y en a encore aucun.
+   */
+  | { readonly type: "turns"; readonly turns: readonly TurnData[] }
+  /** Le hash du client au tour `turn` diffère du hash majoritaire : sa copie de la partie a divergé. */
+  | { readonly type: "desync"; readonly turn: number }
+  /** État de la pause : à chaque changement demandé par l'hôte, et à la reconnexion si la partie est en pause. */
+  | { readonly type: "paused"; readonly paused: boolean };

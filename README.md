@@ -7,9 +7,10 @@ valeurs d'essai.
 
 Ce qui se joue aujourd'hui : une **partie solo contre des bots**, entièrement
 dans le navigateur (fonder des villes, faire croître sa population). Le
-multijoueur est commencé : on peut créer une partie, la rejoindre et la lancer
-depuis une salle d'attente, mais la partie en ligne elle-même (les tours) n'existe
-pas encore.
+multijoueur est jouable pour les parties hébergées par Cloudflare : on crée une
+partie, on la rejoint, l'hôte la lance depuis une salle d'attente, et chaque joueur
+joue la partie dans son navigateur (tours synchronisés par le serveur). Les
+parties hébergées sur un PC n'existent pas encore.
 
 ---
 
@@ -100,8 +101,12 @@ ton nom et le mot de passe de création : tu entres dans la salle comme hôte (t
 partie »). Pour un deuxième joueur, ouvrir la page dans **un autre navigateur ou
 une fenêtre privée** (deux onglets du même navigateur partagent le nom et les
 jetons gardés, donc le même joueur), puis « Actualiser » et « Rejoindre ».
-Après le lancement, chacun voit un écran « Partie lancée » avec le message de
-départ ; la partie en ligne n'est pas encore jouable.
+Après le lancement, chacun voit « Partie lancée » le temps du chargement, puis le
+jeu : même carte, mêmes tours pour tous (un tour toutes les 100 ms). Seul l'hôte a
+le bouton de pause. Recharger la page reprend la partie (le navigateur garde un
+jeton) : elle est rejouée depuis le début. Si la copie d'un joueur ne correspond
+plus à celle des autres (désynchronisation), il revient à l'accueil avec un
+message et peut cliquer sur « Reprendre ». Les parties en ligne n'ont pas de bots.
 
 ### Vérifier
 

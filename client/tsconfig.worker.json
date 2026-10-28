@@ -4,6 +4,6 @@
     "lib": ["es2024", "WebWorker"],
     "types": []
   },
-  "include": ["src/engine.worker.ts", "src/solo.ts", "src/bots.ts", "src/protocol.ts"],
+  "include": ["src/engine.worker.ts", "src/game.ts", "src/solo.ts", "src/online-game.ts", "src/bots.ts", "src/protocol.ts"],
   "exclude": []
 }

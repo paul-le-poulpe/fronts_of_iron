@@ -1,78 +1,22 @@
-// Partie solo : le moteur, les bots, et la fabrication des messages vers la page.
-// Aucun accès au DOM ni à `self` ici : engine.worker.ts le fait tourner dans un
-// Web Worker, et les tests (client/test) le font tourner dans Node.
+// Source de tours locale (Docs/Design/03-Client.md §3, §8) : le mode solo. Le solo sert au débogage
+// et doit créer ses tours comme une partie en ligne (01-Architecture §1) : il passe donc par le même
+// relais (`packages/relay`, compilé dans le Web Worker). L'humain est l'hôte de la salle, les bots
+// ajoutent leurs ordres au nom de leur identifiant. Aucun accès au DOM ni à `self` ici :
+// engine.worker.ts le fait tourner dans un Web Worker, et les tests (client/test) dans Node.
 //
-// Une horloge extérieure appelle `step` une fois par tour (100 ms). Le serveur
-// d'une partie en ligne ferait la même chose : rassembler les ordres du tour
-// avec l'identifiant de l'expéditeur écrit par lui (règle 4 du CLAUDE.md), puis
-// appeler `applyTurn`.
+// Une horloge extérieure appelle `tick` une fois par tour (100 ms).
 
-import {
-  applyTurn,
-  ARMAMENT,
-  ARMAMENT_IDS,
-  armamentReserveMax,
-  CITY,
-  createGame,
-  deployedEquipment,
-  DIPLOMACY,
-  FACTORY,
-  FACTORY_TYPE_IDS,
-  FACTORY_TYPES,
-  factoryLevel,
-  factoryOf,
-  FARMING,
-  FISHING,
-  FOOD,
-  FRONTS,
-  foundingCost,
-  generateTestMap,
-  GOOD_IDS,
-  isActive,
-  KIND_ARMOR,
-  KIND_INFANTRY,
-  MINING,
-  NICHES,
-  POPULATION,
-  PRODUCT_IDS,
-  previewBreakthrough,
-  productConfig,
-  UNITS,
-  RESOURCES,
-  STATUS_PACT,
-  STATUS_WAR,
-  statusOf,
-  UNIT_DATA,
-  waterYieldMilli,
-  workersForLines,
-  machineReference,
-  type Front,
-  type GameState,
-  type ProductId,
-  type Intent,
-} from "@fronts-of-iron/engine";
-
-/** Case de `Player.goods` des bateaux de pêche. */
-const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
-/** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
-const IRON = Object.keys(RESOURCES).indexOf("iron");
+import { Room, type Outgoing, type RoomEnv } from "@fronts-of-iron/relay";
+import type { Order, TurnData } from "@fronts-of-iron/shared";
+import type { GameState, Intent } from "@fronts-of-iron/engine";
 
 import { createBot, type Bot } from "./bots.ts";
-import { dominantGood } from "./names.ts";
-import {
-  HUMAN,
-  type DiplomacyView,
-  type FactoryCatalog,
-  type FrontSideView,
-  type FrontView,
-  type HumanDetail,
-  type MilitaryCatalog,
-  type HumanOrder,
-  type InitMessage,
-  type OrderResult,
-  type PlayerStats,
-  type TickMessage,
-} from "./protocol.ts";
+import { DEFAULT_STEP_MS, Game, type PendingOrder } from "./game.ts";
+import { HUMAN, type InitMessage, type TickMessage } from "./protocol.ts";
+
+export { DEFAULT_STEP_MS, type PendingOrder };
+
+export const MAX_BOTS = 7;
 
 export interface SoloOptions {
   readonly mapSeed: number;
@@ -81,514 +25,103 @@ export interface SoloOptions {
   readonly stepMs?: number;
 }
 
-export interface PendingOrder {
-  readonly id: number;
-  readonly order: HumanOrder;
-}
+/** La seule connexion du relais du solo : celle de l'humain, qui est l'hôte. */
+const CONN = "humain";
 
-/** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */
-export function factoryCatalog(): FactoryCatalog {
-  return {
-    factoryTypes: FACTORY_TYPE_IDS.map((id) => ({
-      id,
-      tree: FACTORY_TYPES[id].tree.map((n) => ({ good: n.good, parent: n.parent })),
-    })),
-    unlockTurns: FACTORY.unlockTurns,
-    growthTurns: FACTORY.growthTurns,
-    goodIds: GOOD_IDS,
-    armamentIds: ARMAMENT_IDS,
-    productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).productionPerLine])),
-    workersPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).workersPerLine])),
-    workersFloor: Object.fromEntries(
-      PRODUCT_IDS.map((id) => [id, Math.floor((productConfig(id).workersPerLine * FACTORY.specialization.floorPercent) / 100)]),
-    ),
-    ironPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).ironPerLine])),
-    icons: Object.fromEntries(PRODUCT_IDS.flatMap((id) => {
-      const icon = productConfig(id).icon;
-      return icon === undefined ? [] : [[id, icon]];
-    })),
-    economy: {
-      foodPerHead: POPULATION.foodPerHead,
-      foodMinimum: FOOD.minimum,
-      machinesPer1000: {
-        tractor: FARMING.maxMachinesPer1000,
-        fishingBoat: FISHING.maxMachinesPer1000,
-        miningMachine: MINING.maxMachinesPer1000,
-      },
-      armamentDecayPercent: ARMAMENT.decayRate / 100,
-      mechanization: {
-        tractor: { base: FARMING.mechanizationBase, max: FARMING.mechanizationMax },
-        fishingBoat: { base: FISHING.mechanizationBase, max: FISHING.mechanizationMax },
-        miningMachine: { base: MINING.mechanizationBase, max: MINING.mechanizationMax },
-      },
-      waterYield: { base: FISHING.tileYield, max: FISHING.tileYieldMax },
-    },
-  };
-}
-
-/** Fronts et unités militaires que la page affiche (05-Fronts §3, §12) : tout vient du moteur. */
-export function militaryCatalog(): MilitaryCatalog {
-  return {
-    units: UNIT_DATA.map((u) => {
-      const config = UNITS[u.id] as { readonly icon: string; readonly description?: string };
-      return {
-        id: u.id,
-        index: u.index,
-        niche: Object.keys(NICHES)[u.niche]!,
-        equipment: ARMAMENT_IDS[u.equipment]!,
-        equipmentCount: u.equipmentCount,
-        population: u.population,
-        icon: config.icon,
-        description: config.description ?? (ARMAMENT.types[ARMAMENT_IDS[u.equipment]!] as { readonly description?: string }).description ?? "",
-        softAttack: u.softAttack,
-        hardAttack: u.hardAttack,
-        frontWidth: u.frontWidth,
-        breakthroughWidth: u.breakthroughWidth,
-        kind: u.kind === KIND_INFANTRY ? "infantry" : u.kind === KIND_ARMOR ? "armor" : "equipment",
-        hitPoints: u.hitPoints,
-        motorized: u.motorized,
-        releasePriority: u.releasePriority,
-      };
-    }),
-    niches: Object.entries(NICHES).map(([id, units]) => ({ id, units: [...units] })),
-    metersPerConnection: FRONTS.metersPerConnection,
-    priorityPercent: [...FRONTS.priorityPercent],
-    transferTurns: FRONTS.transferTurns,
-    combatTurns: FRONTS.combatTurns,
-    breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
-    breakthroughExhaustionPercent: FRONTS.breakthroughExhaustionPercent,
-  };
-}
-
-/** Un front tel que la page le lit (05-Fronts §13.4). */
-export function frontView(state: GameState, f: Front): FrontView {
-  const side = (i: number): FrontSideView => {
-    const s = f.sides[i]!;
-    const transit = new Array<number>(UNIT_DATA.length).fill(0);
-    for (const tr of s.transfers) if (tr.toFront) transit[tr.unit] = transit[tr.unit]! + tr.count;
-    return {
-      first: s.firstLine.slice(),
-      second: s.secondLine.slice(),
-      lostFirst: s.lostFirst.slice(),
-      lostSecond: s.lostSecond.slice(),
-      transit,
-      priority: s.priorityIndex,
-      reassign: s.reassign,
-      lineMode: s.lineMode.slice(),
-      allowed: s.allowed.slice(),
-      motorizedOnly: s.motorizedOnly,
-      frontAttack: s.frontAttack,
-      breakthroughs: s.breakthroughs.map((b) => ({
-        id: b.id,
-        city1: b.city1,
-        city2: b.city2,
-        phase: b.phase,
-        startTick: b.startTick,
-        ...previewBreakthrough(f, i, b),
-      })),
-    };
-  };
-  return {
-    id: f.id,
-    players: [f.players[0], f.players[1]],
-    groups: [f.groups[0], f.groups[1]],
-    active: isActive(state, f),
-    connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
-    sides: [side(0), side(1)],
-  };
-}
-
-export const DEFAULT_STEP_MS = 100;
-export const MAX_BOTS = 7;
-
-/** Graine de la partie, tirée de celle de la carte (pas de réglage séparé en solo). */
-export function gameSeedFor(mapSeed: number): number {
-  return (mapSeed ^ 0x5eed5eed) >>> 0;
+/** Le relais du solo n'a besoin ni de hasard ni de jetons difficiles à deviner : personne d'autre ne se connecte. */
+function soloEnv(): RoomEnv {
+  let tokens = 0;
+  return { newToken: () => `solo-${++tokens}`, randomSeed: () => 0 };
 }
 
 export class SoloGame {
-  readonly state: GameState;
+  readonly game: Game;
   readonly stepMs: number;
+  /** Le relais : file d'ordres, numérotation des tours, pause (l'humain est l'hôte). */
+  private readonly room: Room;
   private readonly bots: Bot[] = [];
-  /** `tileCity` tel qu'envoyé à la page : sert à trouver les cases qui ont changé. */
-  private readonly sentTileCity: Uint16Array;
-  /** Les usines telles qu'envoyées à la page (`factoryMarks`), pour n'envoyer que les changements. */
-  private sentMarks = "";
-  /** Les fronts tels qu'envoyés à la page (JSON), pour n'envoyer que les changements. */
-  private sentFronts = "";
-
-  private readonly options: SoloOptions;
+  /** Identifiants donnés par la page aux ordres de l'humain, dans l'ordre où ils sont entrés dans le relais. */
+  private readonly ids: number[] = [];
 
   constructor(options: SoloOptions) {
-    this.options = options;
     if (!Number.isInteger(options.bots) || options.bots < 1 || options.bots > MAX_BOTS) {
       throw new Error(`nombre de bots invalide : ${options.bots}`);
     }
     this.stepMs = options.stepMs ?? DEFAULT_STEP_MS;
-    const map = generateTestMap(options.mapSeed);
-    this.state = createGame({
-      seed: gameSeedFor(options.mapSeed),
-      map,
-      playerCount: 1 + options.bots,
-    });
-    this.sentTileCity = new Uint16Array(this.state.tileCity.length);
-    for (let id = HUMAN + 1; id <= 1 + options.bots; id++) this.bots.push(createBot(id, options.mapSeed));
+    const players = [{ id: HUMAN, name: "Vous" }];
+    for (let id = HUMAN + 1; id <= 1 + options.bots; id++) {
+      players.push({ id, name: `Bot ${id - 1}` });
+      this.bots.push(createBot(id, options.mapSeed));
+    }
+    this.game = new Game({ mapSeed: options.mapSeed, players, you: HUMAN, stepMs: this.stepMs });
+    // Comme en ligne : l'humain entre dans la salle avec le jeton d'hôte, puis lance la partie.
+    this.room = new Room(soloEnv());
+    this.room.handle(CONN, { type: "join", name: "Vous", token: this.room.hostToken });
+    this.room.handle(CONN, { type: "start" });
+  }
+
+  get state(): GameState {
+    return this.game.state;
   }
 
   /** Copies de la carte (le moteur garde ses tableaux) : la page peut les recevoir par transfert. */
   init(): InitMessage {
-    const { map } = this.state;
-    return {
-      type: "init",
-      width: map.width,
-      height: map.height,
-      terrain: map.terrain.slice(),
-      resources: map.resources.slice(),
-      fertility: map.fertility.slice(),
-      mapSeed: this.options.mapSeed,
-      playerCount: this.state.players.length,
-      expansionRadius: CITY.expansionRadius,
-      controlRadius: CITY.controlRadius,
-      stepMs: this.stepMs,
-      catalog: factoryCatalog(),
-      military: militaryCatalog(),
-    };
+    return this.game.init();
   }
 
   /**
-   * Un tour : les ordres de l'humain (joueur 1, champ `player` écrit ici), puis
-   * ceux des bots dans l'ordre de leurs identifiants, puis `applyTurn`.
+   * Un ordre de l'humain, tel que la page l'envoie : il entre dans le relais à son arrivée, avant ceux
+   * que les bots y ajouteront au prochain `tick`. Le champ `player` est écrit par le relais d'après la
+   * connexion (règle 4 du CLAUDE.md), jamais lu du message.
    */
-  step(human: readonly PendingOrder[], paused = false): TickMessage {
-    const state = this.state;
+  submit(pending: PendingOrder): void {
+    const out = this.room.handle(CONN, { type: "order", order: pending.order });
+    if (!out.some((o) => o.message.type === "error")) this.ids.push(pending.id);
+  }
+
+  /** Pause ou reprise, par le relais (l'humain est l'hôte). Renvoie l'état de la pause. */
+  setPaused(paused: boolean): boolean {
+    this.room.handle(CONN, { type: "pause", paused });
+    return this.room.paused;
+  }
+
+  get paused(): boolean {
+    return this.room.paused;
+  }
+
+  /**
+   * Un tour : les bots ajoutent leurs ordres dans l'ordre de leurs identifiants, le relais crée le tour
+   * (ordres dans l'ordre d'arrivée), la partie l'applique. `null` en pause : ni bots ni tour.
+   */
+  tick(): TickMessage | null {
+    if (this.room.paused) return null;
     const t0 = performance.now();
     const intents: Intent[] = [];
-    // Les chaînes du message (type d'usine, bien) ne sont pas typées côté page : le moteur les vérifie comme un ordre venu du réseau.
-    for (const { order } of human) intents.push({ ...order, player: HUMAN } as Intent);
-    for (const bot of this.bots) bot.step(state, intents);
-    const t1 = performance.now();
-
-    const citiesBefore = state.cities.length;
-    // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
-    const linesBefore = human.length > 0 ? this.lineCounts() : null;
-    // Les machines que l'étape va utiliser : celles produites au tour d'avant, remplacées par `applyTurn`.
-    const machinesUsed = state.players.map((p) => Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goods[i]!])));
-    applyTurn(state, { turn: state.tick + 1, intents });
-    const t2 = performance.now();
-
-    const captured = state.events.flatMap((e) => (e.type === "city_captured" ? [{ city: e.city, from: e.from, to: e.to }] : []));
-    const results: OrderResult[] = human.map(({ id, order }) => ({
-      id,
-      order,
-      applied: this.wasApplied(order, citiesBefore, linesBefore),
-    }));
-
-    // `tileCity` ne change que quand une ville est fondée : sinon, rien à comparer.
-    // `applyTurn` ne renvoie pas les cases qui passent d'une ville à une autre
-    // du même joueur ; la comparaison avec ce qui a été envoyé les trouve.
-    let tiles: Uint32Array;
-    let cities: Uint32Array | null = null;
-    let roads: Uint16Array | null = null;
-    if (state.cities.length !== citiesBefore || captured.length > 0) {
-      const list: number[] = [];
-      const now = state.tileCity;
-      const sent = this.sentTileCity;
-      for (let t = 0; t < now.length; t++) {
-        if (now[t] !== sent[t]) {
-          list.push(t, now[t]!);
-          sent[t] = now[t]!;
-        }
-      }
-      // Une ville prise change de joueur sans que `tileCity` change : sa zone est renvoyée pour être repeinte.
-      for (const c of captured) {
-        const tile = state.cities[c.city - 1]!.tile;
-        const r = CITY.controlRadius;
-        const w = state.map.width;
-        for (let y = Math.max(0, Math.floor(tile / w) - r); y <= Math.min(state.map.height - 1, Math.floor(tile / w) + r); y++) {
-          for (let x = Math.max(0, (tile % w) - r); x <= Math.min(w - 1, (tile % w) + r); x++) {
-            if (now[y * w + x] === c.city) list.push(y * w + x, c.city);
-          }
-        }
-      }
-      tiles = Uint32Array.from(list);
-      cities = new Uint32Array(state.cities.length * 4);
-      state.cities.forEach((c, i) => {
-        cities![4 * i] = c.player;
-        cities![4 * i + 1] = c.tile;
-        cities![4 * i + 2] = c.port ? 1 : 0;
-        cities![4 * i + 3] = c.group;
-      });
-      roads = new Uint16Array(state.roads.length * 2);
-      state.roads.forEach(([a, b], i) => {
-        roads![2 * i] = a;
-        roads![2 * i + 1] = b;
-      });
-    } else {
-      tiles = new Uint32Array(0);
-    }
-
-    // Usines de tous les joueurs (marqueurs de la carte) : envoyées seulement quand elles changent.
-    const marks: number[] = [];
-    for (const p of state.players) {
-      for (const f of p.factories) {
-        const tree = FACTORY_TYPES[f.type].tree;
-        const good = dominantGood(tree, f.groups);
-        marks.push(f.city, FACTORY_TYPE_IDS.indexOf(f.type), factoryLevel(f), tree.findIndex((n) => n.good === good));
-      }
-    }
-    const marksKey = marks.join(",");
-    const factoryMarks = marksKey !== this.sentMarks ? Uint32Array.from(marks) : null;
-    this.sentMarks = marksKey;
-
-    // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
-    let fronts: FrontView[] | null = null;
-    if (state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
-      const views = state.fronts.map((f) => frontView(state, f));
-      const key = JSON.stringify(views);
-      if (key !== this.sentFronts) {
-        this.sentFronts = key;
-        fronts = views;
-      }
-    }
-
-    const players: PlayerStats[] = state.players.map((p) => {
-      // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
-      // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
-      const fishRef = machineReference(FISHING, p.farmers + p.fishers + p.idle, p.seaTiles);
-      const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000);
-      return {
-      id: p.id,
-      soldiers: p.soldiers,
-      forcedMobilization: p.forcedMobilization,
-      frontEquipment: deployedEquipment(state, p.id),
-      population: p.population,
-      farmers: p.farmers,
-      fishers: p.fishers,
-      idle: p.idle,
-      food: p.food,
-      wheat: p.wheat,
-      fish: p.fish,
-      cultivated: p.cultivated,
-      mechanization: { tractor: p.farmMechanization, fishingBoat: p.fishMechanization, miningMachine: p.mineMechanization },
-      machinesUsed: machinesUsed[p.id - 1]!,
-      ironTiles: p.resourceTiles[IRON]!,
-      farmTiles: p.farmTiles,
-      fished: p.fished,
-      seaTiles: p.seaTiles,
-      farmPercent: p.farmPercent,
-      capital: p.capital,
-      cities: p.cityIds.length,
-      foundingCost: foundingCost(p.cityIds.length),
-      factoryWorkers: p.factoryWorkers,
-      miners: p.miners,
-      minedTiles: p.minedTiles,
-      ironExtracted: p.ironExtracted,
-      // Nourriture si toutes les cases fertiles et toutes les cases d'eau étaient travaillées,
-      // avec le rendement de l'eau des bateaux actuels (00-Game §6.4, §6.5).
-      foodPotential: Math.max(FOOD.minimum, p.fertilitySum + fishMax),
-      wheatMax: p.fertilitySum,
-      fishMax,
-      // Demande calculée par le moteur (goodsDemand) : la même que celle qui arrête la croissance des lignes.
-      fullMachines: Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsDemand[i]!])),
-      };
-    });
-    const t3 = performance.now();
-
-    return {
-      type: "tick",
-      tick: state.tick,
-      tiles,
-      cities,
-      roads,
-      factoryMarks,
-      human: this.humanDetail(),
-      players,
-      results,
-      diplomacy: this.diplomacyView(),
-      fronts,
-      failedBreakthroughs: state.events.filter((e) => e.type === "breakthrough_failed" && e.from === HUMAN).length,
-      captured,
-      encircled: state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, lost: e.lost }] : [])),
-      paused,
-      perf: { bots: t1 - t0, apply: t2 - t1, pack: t3 - t2 },
-    };
+    for (const bot of this.bots) bot.step(this.game.state, intents);
+    // Un ordre du moteur est un objet JSON avec un `type` : le relais ne lit rien d'autre.
+    for (const intent of intents) this.room.submit(intent.player, intent as unknown as Order);
+    const turn = turnOf(this.room.step());
+    const botsMs = performance.now() - t0;
+    if (turn === null) return null;
+    return this.game.applyTurn(turn, { ids: this.ids.splice(0), botsMs });
   }
 
-  /**
-   * Outils de développement (barre de debug, 03-Client) : modifient l'état du joueur
-   * humain directement, entre deux tours, hors des règles et sans ordre. N'existent
-   * qu'en solo : en multijoueur, l'état ne se modifie que par les tours (règle 3).
-   */
+  /** Un tour avec ces ordres humains (tests) : `submit` de chacun, puis `tick`. Hors pause. */
+  step(human: readonly PendingOrder[]): TickMessage {
+    for (const pending of human) this.submit(pending);
+    const msg = this.tick();
+    if (msg === null) throw new Error("la partie est en pause");
+    return msg;
+  }
+
+  /** Outils de développement : voir `Game.debug`. */
   debug(action: "addPopulation" | "addArmament" | "armBots", amount: number): void {
-    if (!Number.isInteger(amount)) return;
-    if (action === "addPopulation") {
-      const p = this.state.players[HUMAN - 1]!;
-      p.population = Math.max(0, p.population + amount);
-    }
-    // Un lot d'armement : de quoi former 100 unités de chaque type (l'équipement de `UNITS`).
-    const grant = (p: GameState["players"][number], lots: number): void => {
-      for (const u of UNIT_DATA) p.armamentReserve[u.equipment] = p.armamentReserve[u.equipment]! + 100 * lots * u.equipmentCount;
-    };
-    if (action === "addArmament") grant(this.state.players[HUMAN - 1]!, amount);
-    if (action === "armBots") {
-      for (const p of this.state.players) {
-        if (p.id === HUMAN) continue;
-        grant(p, amount);
-        p.population += 50_000 * amount;
-      }
-    }
+    this.game.debug(action, amount);
   }
+}
 
-  /**
-   * Statuts du joueur humain envers chaque joueur, propositions et événements du
-   * dernier tour qui le concernent. Envoyé à chaque tour : une dizaine de valeurs.
-   */
-  diplomacyView(): DiplomacyView {
-    const state = this.state;
-    const mine = (a: number, b: number): boolean => a === HUMAN || b === HUMAN;
-    return {
-      status: state.players.map((p) => {
-        if (p.id === HUMAN) return "neutral";
-        const s = statusOf(state, HUMAN, p.id);
-        return s === STATUS_WAR ? "war" : s === STATUS_PACT ? "pact" : "neutral";
-      }),
-      proposals: state.proposals
-        .filter((p) => mine(p.from, p.to))
-        .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "breakthrough_failed" && e.type !== "encirclement" && mine(e.from, e.to) ? [e] : [])),
-    };
-  }
-
-  /** Le détail des usines du joueur humain (panneau de production). */
-  humanDetail(): HumanDetail {
-    const p = this.state.players[HUMAN - 1]!;
-    // Lignes utiles de chaque groupe de biens (00-Game §8.2) : dans l'ordre de
-    // remplissage du moteur, celles dont la production reste sous la demande.
-    const before = new Array<number>(GOOD_IDS.length).fill(0);
-    const useful = (good: string, lines: number, active: number): number => {
-      const b = GOOD_IDS.indexOf(good as (typeof GOOD_IDS)[number]);
-      if (b < 0) return lines;
-      const per = productConfig(good as (typeof GOOD_IDS)[number]).productionPerLine;
-      const n = Math.min(lines, Math.ceil(Math.max(0, p.goodsDemand[b]! - before[b]!) / per));
-      before[b] = before[b]! + Math.min(active, n) * per;
-      return n;
-    };
-    const factories = p.factories.map((f) => ({
-        city: f.city,
-        type: f.type,
-        level: factoryLevel(f),
-        groups: f.groups.map((g) => {
-          const b = GOOD_IDS.indexOf(g.good as (typeof GOOD_IDS)[number]);
-          const usefulLines = useful(g.good, g.lines, g.active);
-          // Capacité du joueur pour ce bien : toutes ses lignes, toutes usines (00-Game §8.2).
-          let capacity = 0;
-          for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productConfig(h.good).productionPerLine;
-          return {
-            good: g.good,
-            lines: g.lines,
-            active: g.active,
-            filled: g.filled,
-            workers: workersForLines(g.good as ProductId, g.filled),
-            growth: g.growth,
-            demandMet: b < 0 || capacity >= p.goodsDemand[b]!,
-            usefulLines,
-          };
-        }),
-        progress: f.progress.slice(),
-      }));
-    return {
-      factories,
-      goods: p.goods.slice(),
-      reserve: p.armamentReserve.slice(),
-      reserveMax: ARMAMENT_IDS.map((id) => armamentReserveMax(p, id)),
-      ironCapacity: p.resourceTiles[Object.keys(RESOURCES).indexOf("iron")]! * RESOURCES.iron.capacityPerTile,
-      // Fer requis : celui des lignes en service (réglage du joueur ramené aux lignes
-      // utiles, 00-Game §8.2). Les lignes arrêtées parce que la demande est atteinte
-      // ne demandent pas de fer : le rouge de la barre ne montre qu'un vrai manque.
-      ironRequired: factories.reduce(
-        (sum, f) =>
-          sum + f.groups.reduce((s, g) => s + Math.min(g.active, g.usefulLines) * productConfig(g.good as ProductId).ironPerLine, 0),
-        0,
-      ),
-    };
-  }
-
-  /** Lignes du joueur humain par « ville:bien », et « ville: » pour chaque usine. */
-  private lineCounts(): Map<string, number> {
-    const counts = new Map<string, number>();
-    for (const f of this.state.players[HUMAN - 1]!.factories) {
-      counts.set(`${f.city}:`, 0);
-      for (const g of f.groups) counts.set(`${f.city}:${g.good}`, g.lines);
-    }
-    return counts;
-  }
-
-  /** Le camp du joueur humain dans le front, ou undefined. */
-  private mySide(frontId: number): Front["sides"][number] | undefined {
-    const f = this.state.fronts.find((x) => x.id === frontId);
-    const i = f === undefined ? -1 : f.players.indexOf(HUMAN);
-    return f === undefined || i < 0 ? undefined : f.sides[i];
-  }
-
-  /** Le moteur a-t-il appliqué cet ordre humain ? (`applyTurn` ne le dit pas : on regarde l'état.) */
-  private wasApplied(order: HumanOrder, citiesBefore: number, linesBefore: Map<string, number> | null): boolean {
-    const state = this.state;
-    const me = state.players[HUMAN - 1]!;
-    switch (order.type) {
-      case "set_farm_share":
-        return Number.isInteger(order.percent) && me.farmPercent === order.percent;
-      case "found_city":
-        for (let i = citiesBefore; i < state.cities.length; i++) {
-          const c = state.cities[i]!;
-          if (c.player === HUMAN && c.tile === order.tile) return true;
-        }
-        return false;
-      case "build_factory":
-        return !linesBefore?.has(`${order.city}:`) && factoryOf(me, order.city)?.type === order.factoryType;
-      case "create_line": {
-        const lines = factoryOf(me, order.city)?.groups.find((g) => g.good === order.good)?.lines ?? 0;
-        return lines > (linesBefore?.get(`${order.city}:${order.good}`) ?? 0);
-      }
-      case "set_active_lines":
-        return factoryOf(me, order.city)?.groups.find((g) => g.good === order.good)?.active === order.count;
-      case "set_city_priority":
-        return me.factories[order.position]?.city === order.city;
-      case "set_line_priority":
-        return factoryOf(me, order.city)?.groups[order.position]?.good === order.good;
-      // Diplomatie : `applyTurn` vide les événements au début du tour, donc ceux de `state.events` sont de ce tour.
-      case "declare_war":
-        return state.events.some((e) => e.type === "war_declared" && e.from === HUMAN && e.to === order.target);
-      case "break_pact":
-        return state.events.some((e) => e.type === "pact_broken" && e.from === HUMAN && e.to === order.target);
-      case "propose_pact":
-        return state.events.some((e) => e.type === "proposal_sent" && e.kind === "pact" && e.from === HUMAN && e.to === order.target);
-      case "propose_peace":
-        return state.events.some((e) => e.type === "proposal_sent" && e.kind === "peace" && e.from === HUMAN && e.to === order.target);
-      case "answer_proposal": {
-        const answer = order.accept ? "proposal_accepted" : "proposal_refused";
-        return state.events.some((e) => e.type === answer && e.from === order.from && e.to === HUMAN);
-      }
-      // Fronts : le réglage demandé est dans l'état.
-      case "set_forced_mobilization":
-        return me.forcedMobilization === order.enabled;
-      case "set_front_priority":
-        return this.mySide(order.front)?.priorityIndex === order.priority;
-      case "set_front_reassign":
-        return this.mySide(order.front)?.reassign === order.enabled;
-      case "set_breakthrough_motorized_only":
-        return this.mySide(order.front)?.motorizedOnly === order.enabled;
-      case "set_unit_line_mode":
-        return this.mySide(order.front)?.lineMode[UNIT_DATA.findIndex((u) => u.id === order.unit)] === ["first", "balanced", "second"].indexOf(order.mode);
-      case "set_unit_allowed":
-        return this.mySide(order.front)?.allowed[UNIT_DATA.findIndex((u) => u.id === order.unit)] === order.enabled;
-      case "start_front_attack":
-        return this.mySide(order.front)?.frontAttack === true;
-      case "stop_front_attack":
-        return this.mySide(order.front)?.frontAttack === false;
-      case "start_breakthrough":
-        return this.mySide(order.front)?.breakthroughs.some((b) => b.city1 === order.city1 && b.city2 === order.city2) === true;
-      case "cancel_breakthrough":
-        return !state.fronts.some((f) => f.sides.some((s) => s.breakthroughs.some((b) => b.id === order.id)));
-    }
-  }
+/** Le tour que le relais vient de créer pour l'humain, ou `null` (pause). */
+function turnOf(out: readonly Outgoing[]): TurnData | null {
+  for (const { message } of out) if (message.type === "turn") return message;
+  return null;
 }

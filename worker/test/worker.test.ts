@@ -79,6 +79,7 @@ Object.defineProperty(crypto.subtle, "timingSafeEqual", {
 });
 
 const { default: worker, Game, Lobby } = await import("../src/index.ts");
+const { TURN_STEP_MS } = await import("../src/game.ts");
 
 // ---- Durable Objects de test ----
 
@@ -465,5 +466,145 @@ describe("partie Cloudflare : WebSocket", () => {
     client.send(JSON.stringify({ type: "join", name: "x".repeat(5000) }));
     assert.equal(client.messages.filter((m) => m.type === "error").length, 2);
     assert.equal(client.last("error").code, "invalid_message");
+  });
+});
+
+describe("partie Cloudflare : tours", () => {
+  beforeEach(() => mock.timers.enable({ apis: ["setInterval", "Date"], now: 1_000_000 }));
+  afterEach(() => mock.timers.reset());
+
+  /** Marc (hôte), Léa et Sam dans la salle ; rien n'est lancé. */
+  async function room() {
+    const env = makeEnv();
+    const { id, hostToken } = await createCloudflareGame(env);
+    const host = await connect(env, id);
+    host.send({ type: "join", name: "Marc", token: hostToken });
+    const lea = await connect(env, id);
+    lea.send({ type: "join", name: "Léa" });
+    const sam = await connect(env, id);
+    sam.send({ type: "join", name: "Sam" });
+    await settle();
+    return { env, id, host, lea, sam };
+  }
+
+  /** Une salle lancée par l'hôte. */
+  async function started() {
+    const r = await room();
+    r.host.send({ type: "start" });
+    await settle();
+    return r;
+  }
+
+  const turns = (client: Client): Json[] => client.of("turn");
+
+  it("la durée du pas est un réglage de l'enveloppe : 100 ms", () => {
+    assert.equal(TURN_STEP_MS, 100);
+  });
+
+  it("aucun tour avant le lancement", async () => {
+    const { host } = await room();
+    mock.timers.tick(5 * TURN_STEP_MS);
+    assert.deepEqual(turns(host), []);
+  });
+
+  it("après le lancement, un tour numéroté toutes les 100 ms est envoyé à tous les joueurs", async () => {
+    const { host, lea, sam } = await started();
+    assert.deepEqual(turns(host), []);
+    mock.timers.tick(TURN_STEP_MS);
+    for (const client of [host, lea, sam]) assert.deepEqual(turns(client), [{ type: "turn", turn: 1, orders: [] }]);
+    mock.timers.tick(9 * TURN_STEP_MS);
+    for (const client of [host, lea, sam]) assert.deepEqual(turns(client).map((t) => t.turn), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it("les ordres entrent dans le tour suivant, dans l'ordre d'arrivée, avec le joueur de la connexion", async () => {
+    const { host, lea, sam } = await started();
+    lea.send({ type: "order", order: { type: "found_city", tile: 10, player: 1 } });
+    sam.send({ type: "order", order: { type: "set_farm_share", percent: 30 } });
+    host.send({ type: "order", order: { type: "found_city", tile: 20 } });
+    mock.timers.tick(TURN_STEP_MS);
+    const expected = [
+      { type: "found_city", tile: 10, player: 2 },
+      { type: "set_farm_share", percent: 30, player: 3 },
+      { type: "found_city", tile: 20, player: 1 },
+    ];
+    for (const client of [host, lea, sam]) assert.deepEqual(client.last("turn").orders, expected);
+    mock.timers.tick(TURN_STEP_MS);
+    assert.deepEqual(host.last("turn"), { type: "turn", turn: 2, orders: [] });
+  });
+
+  it("un ordre trop long, ou avant le lancement, n'entre dans aucun tour", async () => {
+    const { host, lea } = await room();
+    lea.send({ type: "order", order: { type: "found_city", tile: 1 } });
+    assert.equal(lea.last("error").code, "not_started");
+    host.send({ type: "start" });
+    lea.send(JSON.stringify({ type: "order", order: { type: "x", texte: "y".repeat(2000) } }));
+    assert.equal(lea.last("error").code, "invalid_message");
+    mock.timers.tick(TURN_STEP_MS);
+    assert.deepEqual(host.last("turn").orders, []);
+  });
+
+  it("une reconnexion renvoie le message de départ puis tous les tours depuis le premier", async () => {
+    const { env, id, host, sam } = await started();
+    mock.timers.tick(5 * TURN_STEP_MS);
+    const samToken = sam.last("welcome").token;
+    sam.socket.close();
+    mock.timers.tick(3 * TURN_STEP_MS);
+    const back = await connect(env, id);
+    back.send({ type: "join", name: "", token: samToken });
+    assert.equal(back.messages[0]!.type, "start");
+    assert.equal(back.messages[0]!.you, 3);
+    assert.deepEqual(back.last("turns").turns.map((t: Json) => t.turn), [1, 2, 3, 4, 5, 6, 7, 8]);
+    // Puis les tours suivants, sans trou.
+    mock.timers.tick(TURN_STEP_MS);
+    assert.deepEqual(back.last("turn"), { type: "turn", turn: 9, orders: [] });
+    assert.equal(host.last("turn").turn, 9);
+  });
+
+  it("un client dont le hash diverge reçoit « desync » ; les autres rien", async () => {
+    const { host, lea, sam } = await started();
+    mock.timers.tick(10 * TURN_STEP_MS);
+    host.send({ type: "hash", turn: 10, hash: 111 });
+    lea.send({ type: "hash", turn: 10, hash: 111 });
+    sam.send({ type: "hash", turn: 10, hash: 222 });
+    assert.deepEqual(sam.last("desync"), { type: "desync", turn: 10 });
+    assert.deepEqual(host.of("desync"), []);
+    assert.deepEqual(lea.of("desync"), []);
+  });
+
+  it("la pause est réservée à l'hôte : plus de tour tant qu'elle dure, numérotation sans trou à la reprise", async () => {
+    const { host, lea, sam } = await started();
+    mock.timers.tick(2 * TURN_STEP_MS);
+    lea.send({ type: "pause", paused: true });
+    assert.equal(lea.last("error").code, "not_host");
+    host.send({ type: "pause", paused: true });
+    for (const client of [host, lea, sam]) assert.deepEqual(client.last("paused"), { type: "paused", paused: true });
+    mock.timers.tick(5 * TURN_STEP_MS);
+    assert.equal(turns(host).length, 2);
+    lea.send({ type: "order", order: { type: "x" } });
+    host.send({ type: "pause", paused: false });
+    mock.timers.tick(TURN_STEP_MS);
+    assert.deepEqual(host.last("turn"), { type: "turn", turn: 3, orders: [{ type: "x", player: 2 }] });
+  });
+
+  it("plus de connexion : plus de tour ; quand un joueur revient, les tours reprennent à la suite", async () => {
+    const { env, id, host, lea, sam } = await started();
+    mock.timers.tick(3 * TURN_STEP_MS);
+    const hostToken = host.last("welcome").token;
+    for (const client of [host, lea, sam]) client.socket.close();
+    mock.timers.tick(20 * TURN_STEP_MS);
+    const back = await connect(env, id);
+    back.send({ type: "join", name: "", token: hostToken });
+    assert.deepEqual(back.last("turns").turns.map((t: Json) => t.turn), [1, 2, 3], "aucun tour créé sans connexion");
+    mock.timers.tick(TURN_STEP_MS);
+    assert.equal(back.last("turn").turn, 4);
+  });
+
+  it("un joueur déconnecté ne reçoit rien ; la fermeture de sa connexion ne gêne pas les tours", async () => {
+    const { host, lea, sam } = await started();
+    lea.socket.close();
+    mock.timers.tick(3 * TURN_STEP_MS);
+    assert.equal(turns(host).length, 3);
+    assert.equal(turns(sam).length, 3);
+    assert.equal(turns(lea).length, 0);
   });
 });

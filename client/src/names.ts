@@ -2,8 +2,6 @@
 // symboles provisoires des biens. Les icônes n'existent pas encore (00-Game §11) : un texte entre
 // crochets les remplace. Rien ici n'est une règle.
 
-import { HUMAN } from "./protocol.ts";
-
 const PRODUCT_NAMES: Readonly<Record<string, string>> = {
   rifle: "fusil",
   machineGun: "mitrailleuse",
@@ -44,8 +42,20 @@ const NICHE_NAMES: Readonly<Record<string, string>> = {
 export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;
 export const nicheName = (id: string): string => NICHE_NAMES[id] ?? id;
 
-/** Nom d'un joueur de la partie solo : le joueur humain, puis les bots dans l'ordre de leur identifiant. */
-export const playerName = (id: number): string => (id === HUMAN ? "Vous" : `Bot ${id - 1}`);
+let localId = 1;
+let rosterNames: readonly string[] = [];
+
+/** Les joueurs de la partie en cours : le joueur de cette page, et le nom de chacun (`InitMessage.you`, `playerNames`). */
+export function setRoster(you: number, names: readonly string[]): void {
+  localId = you;
+  rosterNames = names;
+}
+
+/** Identifiant du joueur de cette page : 1 en solo, `you` du message de départ en ligne. */
+export const localPlayer = (): number => localId;
+
+/** Nom d'un joueur : « Vous » pour le joueur de la page, sinon le nom du message de départ (« Bot n » en solo). */
+export const playerName = (id: number): string => (id === localId ? "Vous" : (rosterNames[id - 1] ?? `Joueur ${id}`));
 
 export const productName = (id: string): string => PRODUCT_NAMES[id] ?? id;
 export const factoryName = (id: string): string => FACTORY_NAMES[id] ?? id;

@@ -3,10 +3,13 @@
 // cases dont la ville a changé, les villes et routes quand une ville est fondée,
 // et quelques totaux par joueur.
 
-/** Identifiant du joueur humain en mode solo. Les bots ont les identifiants suivants. */
+/**
+ * Identifiant du joueur humain en mode solo. Les bots ont les identifiants suivants. En ligne, le joueur
+ * local est `you` du message de départ : la page lit `InitMessage.you`, jamais cette constante.
+ */
 export const HUMAN = 1;
 
-/** Ordre du joueur humain. Le champ `player` est écrit par le Worker (règle 4 du CLAUDE.md). */
+/** Ordre du joueur local. Le champ `player` est écrit par le relais (règle 4 du CLAUDE.md), jamais par la page. */
 export type HumanOrder =
   | { readonly type: "found_city"; readonly tile: number }
   | { readonly type: "set_farm_share"; readonly percent: number }
@@ -42,7 +45,13 @@ export type ToWorker =
       /** Durée d'un tour en ms ; 100 par défaut. Outil de développement (paramètre `?step=` de l'adresse). */
       readonly stepMs?: number;
     }
+  /**
+   * Partie en ligne : le Worker ouvre lui-même le WebSocket (`url`, calculée par la page d'après l'adresse du
+   * lobby) et envoie `join {name, token}` ; le relais répond par le message de départ et les tours.
+   */
+  | { readonly type: "online"; readonly url: string; readonly name: string; readonly token: string }
   | { readonly type: "order"; readonly id: number; readonly order: HumanOrder }
+  /** Solo : pause ou reprise. En ligne : demande à l'hôte, que le relais refuse à un autre joueur. */
   | { readonly type: "pause"; readonly paused: boolean }
   /**
    * Outil de développement, mode solo seulement : modifie l'état directement, hors des règles et des ordres.
@@ -64,6 +73,10 @@ export interface InitMessage {
   readonly mapSeed: number;
   /** Nombre de joueurs, bots compris (identifiants 1 à playerCount). */
   readonly playerCount: number;
+  /** Identifiant du joueur de cette page : 1 (`HUMAN`) en solo, `you` du message de départ en ligne. */
+  readonly you: number;
+  /** Nom de chaque joueur, `playerNames[id - 1]` : « Vous » et « Bot n » en solo, les noms du message de départ en ligne. */
+  readonly playerNames: readonly string[];
   readonly expansionRadius: number;
   readonly controlRadius: number;
   readonly stepMs: number;
@@ -385,4 +398,22 @@ export interface TickMessage {
   readonly perf: { readonly bots: number; readonly apply: number; readonly pack: number };
 }
 
-export type FromWorker = InitMessage | TickMessage | { readonly type: "paused"; readonly paused: boolean };
+/**
+ * La partie en ligne s'arrête (le Worker a fermé le WebSocket). `desync` : la copie de la partie a divergé
+ * (01-Architecture §3) ; `refused` : le relais a refusé la connexion, ou la partie n'existe plus ; `lost` : la
+ * connexion s'est fermée sans raison donnée ; `error` : le moteur a levé une erreur ou un tour manque.
+ * `message` : le texte à afficher.
+ */
+export interface EndedMessage {
+  readonly type: "ended";
+  readonly reason: "desync" | "refused" | "lost" | "error";
+  readonly message: string;
+}
+
+export type FromWorker =
+  | InitMessage
+  | TickMessage
+  | EndedMessage
+  | { readonly type: "paused"; readonly paused: boolean }
+  /** Un refus du relais qui n'arrête pas la partie (ordre ignoré, pause demandée par un autre que l'hôte) : texte à afficher. */
+  | { readonly type: "notice"; readonly text: string };

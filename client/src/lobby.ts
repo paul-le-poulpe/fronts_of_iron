@@ -1,7 +1,9 @@
 // Accueil, salle d'attente et lancement des parties en ligne (Docs/Design/03-Client.md §7,
 // 01-Architecture §4). Interface provisoire : la page ne contient aucune règle de jeu ;
-// elle affiche ce que le relais envoie (état de la salle, message de départ) et lui envoie
-// les choix de l'hôte. Le mode solo reste dans main.ts : ce module montre et cache #lobby et #app.
+// elle affiche ce que le relais envoie (état de la salle) et lui envoie les choix de l'hôte.
+// Le mode solo et la partie lancée sont dans main.ts : ce module montre et cache #lobby et #app,
+// et confie la partie lancée à main.ts (`setGameLauncher`), dont le Web Worker rouvre sa propre
+// connexion avec le jeton.
 
 import "./lobby.css";
 
@@ -166,17 +168,35 @@ $("lb-refresh").addEventListener("click", () => void refresh());
 
 // ---- mode solo (débogage) : main.ts gère la partie, ce module n'affiche que #lobby ou #app ----
 
-function showLobby(): void {
+/**
+ * Montre l'accueil. `text` : un message sous le titre de la liste (`error` : en rouge), par exemple la raison
+ * pour laquelle une partie en ligne s'est arrêtée ; sans texte, le message actuel reste. La liste n'est pas
+ * rechargée (quota, 01-Architecture §4).
+ */
+export function showHome(text = "", error = false): void {
+  disconnect();
   $("app").hidden = true;
   $("lobby").hidden = false;
   show("lb-home");
+  if (text !== "") setStatus(text, error);
 }
 
 $("lb-solo").addEventListener("click", () => {
   $("lobby").hidden = true;
   $("app").hidden = false;
 });
-$("solo-back").addEventListener("click", showLobby);
+$("solo-back").addEventListener("click", () => showHome());
+
+/** Ce que main.ts fait d'une partie lancée : l'ouvrir (Web Worker + WebSocket), ou l'abandonner avant son chargement. */
+interface GameLauncher {
+  start(launch: { readonly url: string; readonly name: string; readonly token: string }): void;
+  cancel(): void;
+}
+let launcher: GameLauncher | null = null;
+
+export function setGameLauncher(value: GameLauncher): void {
+  launcher = value;
+}
 
 // ---- connexion à une partie ----
 
@@ -280,15 +300,33 @@ function onMessage(c: Connection, message: ServerMessage): void {
       return;
     case "start":
       c.joined = true;
-      setBusy(c.origin, false);
-      renderStarted(c, message);
-      hideNotice();
-      show("lb-started");
+      launch(c, message);
       return;
     case "error":
       onRoomError(c, message);
       return;
   }
+}
+
+/**
+ * Le relais a lancé la partie (ou la reprend). La page ferme son WebSocket de salle et confie la partie au Web
+ * Worker, qui se connecte avec le même jeton : le relais le reconnaît, lui renvoie le message de départ et tous
+ * les tours créés jusque-là. L'écran « Partie lancée » reste affiché jusqu'à ce que le Worker ait créé la partie.
+ */
+function launch(c: Connection, start: StartMessage): void {
+  const url = wsUrl(c.target.address, window.location);
+  const token = loadToken(store, c.target.id);
+  if (url === null || token === undefined || launcher === null) {
+    c.failed = true;
+    failBeforeJoin(c.origin, "Impossible d'ouvrir la partie lancée.");
+    disconnect();
+    return;
+  }
+  setBusy(c.origin, false);
+  renderStarted(c, start);
+  show("lb-started");
+  disconnect();
+  launcher.start({ url, name: c.playerName, token });
 }
 
 /** Le texte vient du relais (`message`) ; le code ne sert qu'à décider quoi faire. */
@@ -361,32 +399,30 @@ function clearError(id: string): void {
   $(id).hidden = true;
 }
 
-/** Bandeau de la salle et de l'écran de lancement : erreur ou connexion perdue (avec « Se reconnecter »). */
+/** Bandeau de la salle : erreur ou connexion perdue (avec « Se reconnecter »). */
 function showNotice(text: string, canReconnect: boolean): void {
-  for (const prefix of ["lb-room", "lb-started"]) {
-    $(`${prefix}-notice-text`).textContent = text;
-    $(`${prefix}-reconnect`).hidden = !canReconnect;
-    $(`${prefix}-notice`).hidden = false;
-  }
+  $("lb-room-notice-text").textContent = text;
+  $("lb-room-reconnect").hidden = !canReconnect;
+  $("lb-room-notice").hidden = false;
 }
 
 function hideNotice(): void {
-  for (const prefix of ["lb-room", "lb-started"]) $(`${prefix}-notice`).hidden = true;
+  $("lb-room-notice").hidden = true;
 }
 
 function reconnect(): void {
   const c = current;
   if (c === null) return;
-  const token = loadToken(store, c.target.id);
-  // Depuis l'écran de lancement, on reprend une partie lancée ; une erreur est affichée sur l'accueil.
-  connect(c.target, c.playerName, token, "lb-home", token !== undefined && !$("lb-started").hidden);
+  // Une erreur est affichée sur l'accueil ; si la partie a été lancée entre-temps, la réponse est le message de départ.
+  connect(c.target, c.playerName, loadToken(store, c.target.id), "lb-home");
 }
 
-for (const id of ["lb-room-reconnect", "lb-started-reconnect"]) $(id).addEventListener("click", reconnect);
+$("lb-room-reconnect").addEventListener("click", reconnect);
 
 function leave(): void {
   disconnect();
   hideNotice();
+  launcher?.cancel();
   show("lb-home");
 }
 $("lb-room-leave").addEventListener("click", leave);

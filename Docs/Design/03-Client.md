@@ -2,10 +2,11 @@
 
 Le client (`client/`) est la page du jeu : une interface provisoire, et le moteur
 dans un Web Worker. Ce qui existe : le **mode solo** (un humain contre des bots,
-tout dans le navigateur, sans serveur ni lobby), et l'**accueil, la salle
-d'attente et l'écran de lancement** des parties en ligne (§7, dernière
-sous-section), jusqu'au message de départ. Pas de partie en ligne : le client ne
-reçoit pas encore de tours (§8).
+tout dans le navigateur, sans serveur ni lobby), l'**accueil et la salle
+d'attente** des parties en ligne (§7, dernière sous-section), et la **partie en
+ligne** hébergée par Cloudflare : le Web Worker reçoit les tours du relais par
+WebSocket (§8). Le solo et le jeu en ligne passent par le même relais
+(`packages/relay`).
 
 **L'interface est provisoire.** L'auteur la définit (00-Game §1) ; la page ne
 contient que ce qu'il faut pour essayer le moteur, et l'affiche
@@ -41,13 +42,13 @@ Depuis la racine du dépôt, après `npm install` :
 | Fichier (`client/`) | Rôle |
 | --- | --- |
 | `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau latéral, panneau de production |
-| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran « Partie lancée » ; connexion WebSocket au relais (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
+| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
-| `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker |
+| `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
 | `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock) ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
-| `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; nom d'un joueur (`playerName` : « Vous », « Bot n ») |
+| `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, logos d'usine, modes placement et usine |
@@ -58,11 +59,14 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/frontpanel.ts` | panneau d'un front (05-Fronts §11.3) : titre, boutons d'attaque, percées, réglages, tableau des unités |
 | `src/protocol.ts` | types des messages page ↔ Worker |
-| `src/engine.worker.ts` | Web Worker : reçoit les messages, tient l'horloge de tour |
-| `src/solo.ts` | `SoloGame` : moteur + bots + fabrication des messages (sans DOM, sans `self`) |
+| `src/engine.worker.ts` | Web Worker : reçoit les messages de la page, choisit la source de tours (solo ou en ligne), tient l'horloge du solo, ouvre le vrai WebSocket |
+| `src/game.ts` | `Game`, « la partie » : moteur du client, application d'un tour (`applyTurn`, `advance`), fabrication des messages de la page ; indépendante de la source (sans DOM, sans `self`) |
+| `src/solo.ts` | `SoloGame`, source de tours locale : `Game` + relais (`Room`) + bots (sans DOM, sans `self`) |
+| `src/online-game.ts` | `OnlineGame`, source de tours WebSocket : ordres, tours, hashes, pause, fin de partie ; le transport est fourni (sans `WebSocket`, sans `self`) |
 | `src/bots.ts` | bots (§5) |
 | `test/solo.test.ts`, `test/fronts.test.ts` | tests sous Node : partie solo, copie de la page, peinture ; géométrie des fronts, message des fronts, double ligne rouge, prise d'une ville |
 | `test/online.test.ts` | tests sous Node de `online.ts` : adresse du WebSocket, nom et jetons gardés (stockage qui lève compris), liste du lobby |
+| `test/online-game.test.ts` | tests sous Node de `OnlineGame` branché sur un vrai relais en mémoire : même état et mêmes hashes chez trois clients, rejeu d'une reprise (un seul `tick`), désynchronisation, pause, connexion perdue |
 | `vite.config.ts` | `server.proxy` pour `/api` (`ws: true`), Worker au format module |
 | `public/icons/` | icônes provisoires (00-Game §11), servies telles quelles |
 
@@ -80,27 +84,35 @@ façon en développement et au build.
 `setTimeout`, sur une heure prévue (`nextAt += stepMs`) et non sur la fin du
 calcul, donc sans dérive. En retard de plus d'un pas, il repart de l'heure
 courante au lieu de rattraper en rafale. Une minuterie est permise ici : le
-Worker n'est pas dans `packages/engine`.
+Worker n'est pas dans `packages/engine`. En ligne, il n'y a pas d'horloge dans
+le Worker : le serveur donne le rythme (§8).
 
-À chaque tour, `SoloGame.step` :
+Le solo crée ses tours comme une partie en ligne (01-Architecture §1) :
+`SoloGame` possède un relais (`Room`) où l'humain est l'hôte (connexion
+`humain`, jeton d'hôte, `start`). À chaque tour, `SoloGame.tick` :
 
-1. prend les ordres humains reçus depuis le tour précédent, et écrit
-   `player: 1` dans chacun (règle 4 du `CLAUDE.md` : le message de la page n'a
-   pas de champ `player`, et un champ `player` qu'il contiendrait serait
+1. fait produire aux bots leurs ordres, dans l'ordre de leurs identifiants, et
+   les fait entrer dans le relais au nom de leur identifiant (`Room.submit`) ;
+2. demande le tour au relais (`Room.step`) : ses ordres sont ceux de l'humain,
+   entrés à leur arrivée (`SoloGame.submit`, appelé par le Worker à chaque
+   message `order`), puis ceux des bots. Le champ `player` est écrit par le
+   relais d'après la connexion (règle 4 du `CLAUDE.md` : le message de la page
+   n'a pas de champ `player`, et un champ `player` qu'il contiendrait serait
    écrasé) ;
-2. ajoute les ordres de chaque bot, dans l'ordre de leurs identifiants ;
-3. appelle `applyTurn(state, { turn: state.tick + 1, intents })` ;
-4. fabrique le message du tour (§4).
+3. donne le tour à `Game.applyTurn`, qui l'applique au moteur et fabrique le
+   message du tour (§4).
 
-Les ordres humains passent avant ceux des bots : à case égale, l'humain gagne.
-Cette règle disparaîtra quand le solo passera par `packages/relay`
-(01-Architecture §1, §9) : le solo sert au débogage et doit créer ses tours
-comme une partie en ligne, avec la règle d'ordre du relais.
+Il n'y a plus de règle « l'humain passe avant les bots » : l'ordre est celui
+d'arrivée au relais. L'humain passe avant les bots parce que ses ordres
+arrivent entre deux tours et ceux des bots au moment du tour.
 
-**Pause** : bouton « Pause (outil de développement) ». Le Worker saute alors les
-tours, sans arrêter la minuterie ; les ordres reçus attendent. Ce n'est pas un
-ordre. En ligne, seul l'hôte a ce bouton (00-Game §1.1, 01-Architecture §3) ;
-en solo, le joueur est l'hôte.
+**Pause** : bouton « Pause (outil de développement) » en solo, « Mettre en
+pause » pour l'hôte en ligne ; les autres joueurs n'ont pas le bouton
+(00-Game §1.1, 01-Architecture §3). Le message `pause` va au relais, qui ne
+crée plus de tour ; en solo, le Worker garde sa minuterie et `SoloGame.tick`
+renvoie `null`, sans exécuter les bots. Les ordres reçus attendent. Ce n'est
+pas un ordre. En ligne, tous les joueurs reçoivent `paused` et un message
+« La partie est en pause. » s'affiche.
 
 **Barre de debug** (demandée par l'auteur, 24 octobre 2026) : à droite de la
 barre de boutons, encadrée en pointillé orange, étiquetée « Debug ». Ses
@@ -115,15 +127,20 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | « + armement » | ajoute à la réserve du joueur de quoi former 100 unités de chaque type (`UNITS` : l'équipement de chaque type) ; message `addArmament` |
 | « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (300 unités de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
 
-Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15).
+Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug`.
 
 ## 4. Messages
 
 Page → Worker (`ToWorker`) :
 
-- `start { mapSeed, bots, stepMs? }` : génère la carte (`generateTestMap`), crée
-  la partie (`createGame`, graine = graine de la carte mélangée à une constante),
-  les bots, lance l'horloge. Joueur 1 = l'humain, 2 à n = les bots.
+- `start { mapSeed, bots, stepMs? }` (solo) : génère la carte (`generateTestMap`), crée
+  la partie (`createGame`, graine = graine de la carte mélangée à une constante,
+  `gameSeedFor`), les bots, lance l'horloge. Joueur 1 = l'humain, 2 à n = les bots.
+- `online { url, name, token }` (en ligne) : le Worker ouvre le WebSocket `url`
+  (calculée par la page d'après l'adresse du lobby, `wsUrl`) et envoie
+  `join {name, token}`. Le message de départ du relais donne la carte, la
+  graine, les joueurs et `you` : la partie est créée de la même façon chez
+  tous (`new Game`, même graine de partie qu'en solo).
 - `order { id, order }` : `found_city { tile }`, `set_farm_share { percent }`, ou un
   ordre d'usine : `build_factory { city, factoryType }`, `create_line { city,
   good }`, `set_active_lines { city, good, count }`, `set_city_priority { city,
@@ -131,7 +148,7 @@ Page → Worker (`ToWorker`) :
   ordre de diplomatie : `declare_war { target }`, `propose_pact { target }`,
   `break_pact { target }`, `propose_peace { target }`, `answer_proposal { from,
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
-- `pause { paused }`.
+- `pause { paused }` (solo : le relais local ; en ligne : demande à l'hôte, que le relais refuse à un autre joueur).
 - `order` accepte aussi les ordres des fronts (05-Fronts §5, 02-Engine §4) : `set_front_priority { front, priority }`,
   `set_front_reassign { front, enabled }`, `set_unit_line_mode { front, unit, mode }`, `set_unit_allowed { front, unit, enabled }`, `set_breakthrough_motorized_only
   { front, enabled }`, `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
@@ -141,7 +158,9 @@ Page → Worker (`ToWorker`) :
 Worker → page (`FromWorker`) :
 
 - `init` (une fois) : largeur, hauteur, `terrain`, `resources`, `fertility`
-  (copies, transférées : le moteur garde les siennes), nombre de joueurs, rayons
+  (copies, transférées : le moteur garde les siennes), nombre de joueurs, `you`
+  (le joueur de la page : 1 en solo, celui du message de départ en ligne) et
+  `playerNames` (le nom de chaque joueur, indice `id - 1`), rayons
   d'expansion et de contrôle, coût d'une ville, `stepMs`, et `catalog` : la
   configuration des usines que la page affiche (types d'usine et leur arbre,
   `unlockTurns`, identifiants des biens et des armements, production,
@@ -164,7 +183,7 @@ Worker → page (`FromWorker`) :
     indice du type, niveau, indice dans l'arbre du bien dominant (`dominantGood`,
     `names.ts` : le plus de lignes construites)], **seulement** si elles ont changé depuis le tour
     précédent (`SoloGame` compare une chaîne), sinon `null` ;
-  - `human` : le détail des usines du joueur 1, à chaque tour (quelques dizaines
+  - `human` : le détail des usines du joueur local (`you`), à chaque tour (quelques dizaines
     de nombres) : pour chaque usine, ses groupes `{ good, lines, active, filled }`
     et ses compteurs de déblocage ; biens produits, réserves d'armement, réserves
     cibles, capacité de fer, fer requis (somme des lignes actives × fer par ligne) ;
@@ -172,10 +191,11 @@ Worker → page (`FromWorker`) :
     nourriture, blé, poisson, surface cultivée et max, surface pêchée et max,
     `farmPercent`, capitale, nombre de villes, ouvriers d'usine, mineurs, cases
     de fer exploitées, fer extrait ;
-  - `results` : pour chaque ordre humain du tour, `applied` vrai ou faux ;
+  - `results` : pour chaque ordre du joueur local dans le tour, `applied` vrai ou faux
+    (`id` : l'identifiant que la page avait donné à l'ordre, rendu dans l'ordre d'envoi) ;
   - `diplomacy`, **à chaque tour** (`SoloGame.diplomacyView`, quelques dizaines
     d'octets : un statut par joueur, quelques propositions) : `status`, le statut du
-    joueur 1 envers chaque joueur (`status[id - 1]` : `"neutral"`, `"pact"` ou
+    joueur local envers chaque joueur (`status[id - 1]` : `"neutral"`, `"pact"` ou
     `"war"`) ; `proposals`, les propositions en attente dont le joueur 1 est
     l'auteur ou la cible, chacune `{ from, to, kind, startTick, endTick }` (`endTick`
     = tour de l'envoi + `DIPLOMACY.proposalTurns`) ; `events`, les événements
@@ -197,10 +217,28 @@ Worker → page (`FromWorker`) :
     unités des fronts, par type d'armement) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
-- `paused { paused }`.
+- `paused { paused }` : état de la pause (la réponse du relais, solo comme en ligne).
+- `notice { text }` (en ligne) : un refus du relais qui n'arrête pas la partie
+  (ordre ignoré, pause demandée par un autre que l'hôte) ; la page l'affiche.
+- `ended { reason, message }` (en ligne) : la source de tours s'est arrêtée.
+  `desync` : la copie de la partie a divergé (01-Architecture §3) ; `refused` :
+  le relais a refusé la connexion, la partie n'existe plus, ou le joueur est
+  remplacé par un autre onglet ; `error` : le moteur a levé une erreur ou un
+  tour manque ; `lost` : la connexion s'est fermée. `message` est le texte à
+  afficher.
 
 Aucun tableau complet par tour. Les grands tableaux de `tick` sont transférés,
 pas copiés.
+
+**Rejeu d'une reprise.** À la reconnexion, le relais renvoie tous les tours
+depuis le début (`turns`). `OnlineGame` applique tous les tours sauf le dernier
+avec `Game.advance` (moteur seul, aucun message) et le dernier avec
+`Game.applyTurn(…, { full: true })` : la page reçoit un seul `tick` qui porte
+tout ce que les messages sautés auraient apporté (toutes les cases de
+`tileCity`, les villes et routes, les usines, les fronts), et aucun événement du
+passé (`results`, `captured`, `encircled`, `failedBreakthroughs` et `events`
+de la diplomatie sont vides). Un seul hash est envoyé : celui du dernier
+multiple de N atteint pendant le rejeu.
 
 **Cases modifiées.** `applyTurn` renvoie les cases dont le propriétaire a changé,
 mais pas celles qui passent d'une ville à une autre du même joueur (02-Engine §4),
@@ -781,10 +819,27 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   la carte est un emplacement vide. Le champ de la graine n'est pas écrasé par un
   message `room` pendant qu'il a le focus. « Quitter la salle » ferme le
   WebSocket.
-- **Partie lancée** (`#lb-started`) : écran provisoire, le jeu en ligne n'existe
-  pas encore. Affiche le message de départ reçu : carte, graine, joueur du
-  destinataire, liste des joueurs. « Reprendre » à l'accueil rouvre cet écran avec
-  le jeton gardé.
+- **Partie lancée** (`#lb-started`) : écran d'attente, visible le temps que le
+  Web Worker crée la partie (et rejoue les tours déjà joués d'une reprise). Il
+  affiche le message de départ reçu : carte, graine, joueur du destinataire,
+  liste des joueurs. Au message de départ, la page ferme son WebSocket de salle
+  et `main.ts` crée le Worker (`startOnline`), qui rouvre une connexion avec
+  le même jeton ; le premier message `init` remplace `#lobby` par `#app` et le
+  jeu. « Reprendre » à l'accueil (ou la reprise automatique au chargement)
+  suit le même chemin. « Retour à l'accueil » abandonne le chargement.
+- **Partie en ligne** (`#app`, même écran que le solo) : `main.ts` lit `you` et
+  `playerNames` de `init` (`setRoster`) ; « Vous » désigne le joueur de la page,
+  les autres joueurs ont le nom du message de départ (tableau des joueurs,
+  diplomatie, notifications, panneau d'un front). La barre de debug est cachée ;
+  le bouton de pause n'existe que pour l'hôte (joueur 1). Les noms viennent
+  d'autres joueurs : `textContent`, jamais `innerHTML`. **Désynchronisation**
+  (`ended desync`) : la page termine le Worker, abandonne sa copie de la
+  partie et revient à l'accueil avec un message ; elle ne se reconnecte pas
+  d'elle-même (la reprise automatique ne se fait qu'au chargement de la page,
+  donc pas de boucle) et le joueur peut rejouer la partie depuis le début par
+  « Reprendre ». **Connexion perdue** (`ended lost`) : la partie reste
+  affichée avec « Connexion perdue. Rechargez la page pour reprendre la
+  partie. » ; provisoire, le client ne se reconnecte pas seul.
 - **Erreurs.** Un refus à l'arrivée (partie pleine, déjà lancée, nom invalide)
   ramène à l'écran d'où l'on vient avec le texte envoyé par le relais (`message`
   de `error`, 01-Architecture §4) ; un refus HTTP du Worker affiche son
@@ -796,27 +851,44 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   reconnexion. Une reprise dont le serveur répond `welcome` au lieu de `start`
   (la partie n'existe plus, par exemple après un déploiement) oublie le jeton.
 
-## 8. Pas fait
+## 8. Le Web Worker : la partie et deux sources de tours
 
-- Jeu en ligne : l'écran de lobby et la salle d'attente existent (§7), mais le
-  client n'ouvre le WebSocket que jusqu'au message de départ ; il ne reçoit
-  pas de tours. Les trois façons de jouer (solo, hébergé par un joueur, hébergé
-  par Cloudflare : 01-Architecture §1) passent par le même Web Worker, découpé
-  ainsi :
-  - **la partie** : applique un tour au moteur et fabrique le message `tick` de
-    la page. C'est la seconde moitié de `SoloGame.step` (à partir de
-    `applyTurn`) ; elle ne dépend pas du mode ;
-  - **une source de tours**, choisie au lancement :
-    - locale (solo) : la minuterie d'`engine.worker.ts`, les bots, et
-      `packages/relay`, qui reçoit les ordres de l'humain (joueur 1) et des
-      bots (leur identifiant) et crée le tour ;
-    - WebSocket (en ligne) : envoie les ordres au serveur, reçoit les tours,
-      envoie un hash tous les N tours (01-Architecture §3). L'adresse vient du
-      lobby (01-Architecture §6, Client, point 2).
+Les trois façons de jouer (solo, hébergé par un joueur, hébergé par Cloudflare :
+01-Architecture §1) passent par le même Web Worker, découpé ainsi :
 
-  La page ne sait pas quelle source est utilisée, sauf pour l'écran de lobby et
-  la barre de debug (solo seulement, §3).
-- Hash de l'état envoyé au serveur (01-Architecture §3) : sans objet en solo.
+- **la partie** (`game.ts`, `Game`) : applique un tour au moteur et fabrique le
+  message `tick` de la page. Elle ne dépend pas du mode : elle connaît
+  seulement le joueur local (`you`) ;
+- **une source de tours**, choisie au lancement par `engine.worker.ts` :
+  - locale (`solo.ts`) : la minuterie d'`engine.worker.ts`, les bots, et
+    `packages/relay`, qui reçoit les ordres de l'humain (joueur 1) et des bots
+    (leur identifiant) et crée le tour ;
+  - WebSocket (`online-game.ts`) : envoie les ordres au relais, applique les
+    tours reçus, envoie un hash tous les N tours (01-Architecture §3). Le
+    transport (`Connect`) est fourni par le Worker, qui ouvre le vrai
+    WebSocket ; un test le remplace par un relais en mémoire.
+
+La page ne sait pas quelle source est utilisée, sauf pour l'écran de lobby, la
+barre de debug (solo seulement, §3) et le bouton de pause (§3).
+
+Comportement de `OnlineGame` :
+
+- au message de départ, crée la partie et envoie `init` ; ensuite chaque `turn`
+  est appliqué (un tour déjà appliqué est ignoré, un tour manquant arrête la
+  partie : `ended error`) et le hash de l'état est envoyé après chaque tour
+  multiple de N, calculé juste après l'avoir appliqué ;
+- `turns` (reprise) : voir §4, Rejeu d'une reprise ;
+- `desync`, une erreur du relais avant le message de départ, une salle qui
+  répond `welcome` ou `room` (partie perdue, 01-Architecture §6), `replaced` :
+  fin avec `ended` ; toute autre erreur du relais est un `notice` ;
+- `order(id, ordre)` envoie `{type: "order", order}` sans champ `player` ; les
+  identifiants sont rendus dans `results` dans l'ordre d'envoi.
+
+## 8 bis. Pas fait
+
+- Reconnexion automatique en cours de partie (le client demande de recharger
+  la page).
+- Hash de l'état envoyé au serveur (01-Architecture §3) : sans objet en solo, fait en ligne.
 - Routes maritimes : pas de règle, donc pas d'ordre ni d'interface.
 - Bots et usines : les bots ne construisent pas d'usine (rien ne les y oblige ; une
   usine retire des travailleurs aux champs). Seul l'humain en a.
@@ -834,7 +906,6 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   Les noms de ville (« Ville n° N ») sont leur identifiant.
 - Build pour Cloudflare : fait (01-Architecture §6, Client, point 4).
 - Aperçu de la carte dans la salle d'attente : un emplacement vide.
-- Pause par l'hôte en ligne (01-Architecture §3) : pas de bouton, pas de message.
 - Couleurs de joueur, textures et tailles : provisoires, choisies à la main.
 - Rendu mobile / tactile : la mise en page s'adapte, mais le zoom au pincement
   n'existe pas.
@@ -905,6 +976,17 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   navigateur ou une fenêtre privée.
 - **Importer `lobby.ts` ou `main.ts` depuis un test** : ils lisent `document` à
   l'import. Ce qui se teste sous Node est dans `online.ts` (sans DOM).
+- **Un `tick` sauté sans le dernier en `full`** : pour un rejeu, la page n'a pas
+  reçu les `tiles`, `cities`, `factoryMarks` ni `fronts` des tours sautés, qui ne
+  sont envoyés que quand ils changent. `Game.applyTurn(…, { full: true })` les
+  envoie tous ; toute donnée « seulement si changée » ajoutée à `tick` doit
+  être forcée dans ce cas.
+- **Lire `HUMAN` dans la page** : en ligne le joueur local n'est pas le joueur 1.
+  La page lit `localPlayer()` (`names.ts`), posé par `setRoster` à l'`init`.
+  `HUMAN` n'existe plus que pour le solo (`SoloGame`, tests).
+- **Hacher l'état à un autre moment qu'après le tour multiple de N** : le relais
+  compare des hashes de même tour ; un hash calculé après le tour suivant est
+  déclaré divergent.
 - **Mesures du navigateur** : `performance.now()` y est arrondi (environ 0,1 ms
   ou plus selon le navigateur) : les durées de moins de 0,1 ms affichées dans le
   bloc développement sont à lire comme « sous la résolution ».

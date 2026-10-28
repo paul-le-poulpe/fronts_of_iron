@@ -14,5 +14,5 @@
     "skipLibCheck": true
   },
   "include": ["src", "vite.config.ts"],
-  "exclude": ["src/engine.worker.ts", "src/solo.ts", "src/bots.ts"]
+  "exclude": ["src/engine.worker.ts", "src/game.ts", "src/solo.ts", "src/online-game.ts", "src/bots.ts"]
 }

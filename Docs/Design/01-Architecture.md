@@ -16,7 +16,7 @@ Décidé par l'auteur le 27 octobre 2026 : les trois existent en même temps.
 
 | Mode | Qui crée les tours | Réseau |
 | --- | --- | --- |
-| **Solo** (construit) — outil de débogage | le Web Worker du moteur, dans le navigateur du joueur, avec les bots | aucun |
+| **Solo** (construit) — outil de débogage | le relais (`packages/relay`) compilé dans le Web Worker du moteur, dans le navigateur du joueur, avec les bots | aucun |
 | **Hébergé par un joueur** | `server/` (Node) sur le PC de l'hôte, joint par un tunnel Cloudflare | WebSocket vers l'adresse du tunnel |
 | **Hébergé par Cloudflare** | un Durable Object par partie, dans le Worker | WebSocket vers `/api/games/:id/ws`, même origine que la page |
 
@@ -39,8 +39,8 @@ chaque mode l'entoure d'une enveloppe qui fournit la minuterie et le transport.
 | Module | Contenu | Dépend de |
 | --- | --- | --- |
 | `packages/engine` | le moteur (`02-Engine.md`) | rien |
-| `packages/shared` | formats des messages et réglages communs. **Construit** : messages de la salle d'attente, entrée du lobby, réglages (100 joueurs, longueur des noms, cartes). À venir : ordres, tours, hashes | rien |
-| `packages/relay` | le relais : file d'ordres, création du tour, expéditeur réécrit, liste des tours, tours manqués pour la reconnexion, hash majoritaire. Reçoit des messages, renvoie les messages à envoyer et à qui. **Construit** : la salle d'attente (`Room`, §4). Pas encore : tours, ordres, hashes | `shared` |
+| `packages/shared` | formats des messages et réglages communs. **Construit** : messages de la salle d'attente, des ordres, des tours, des hashes et de la pause, entrée du lobby, réglages (100 joueurs, longueur des noms, cartes, N) | rien |
+| `packages/relay` | le relais : file d'ordres, création du tour, expéditeur réécrit, liste des tours, tours manqués pour la reconnexion, hash majoritaire. Reçoit des messages, renvoie les messages à envoyer et à qui. **Construit** : la salle d'attente et la partie lancée (`Room`, §4 ; `Match` : file d'ordres, tours, hashes, pause) | `shared` |
 | `client/` (Web Worker) | applique les tours au moteur et fabrique les messages de la page ; reçoit ses tours d'une **source de tours** : locale (solo) ou WebSocket (en ligne) — `03-Client.md` §8 | `engine`, `shared`, `relay` (solo) |
 | `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby | `relay`, `shared` |
 | `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval`, inscription et signaux au lobby | `relay`, `shared` |
@@ -108,16 +108,19 @@ l'enveloppe le lui demande.
   départ, même graine, mêmes ordres dans le même ordre : même état d'arrivée.
 - Tous les N tours, chaque client envoie au serveur un **hash** de son état. Le
   serveur garde le hash majoritaire et signale aux clients divergents qu'ils
-  sont désynchronisés. (Choix de N : ci-dessous.)
+  sont désynchronisés. (Choix de N : ci-dessous ; messages et départage :
+  §4, Partie lancée.)
 - **Joueur désynchronisé** (décidé par l'auteur le 28 octobre 2026) : sa page
   abandonne sa copie de la partie et le renvoie à l'accueil, d'où il rejoint de
   nouveau la partie (« Reprendre », jeton gardé, §4). Il repart du message de
   départ et rejoue tous les tours depuis le début : son état redevient celui
   des autres, sauf si la divergence vient du moteur lui-même (règle 2), auquel
   cas elle se reproduit.
-- **Reconnexion** : le client donne le numéro du dernier tour reçu, le serveur
-  lui renvoie les tours suivants, le client les rejoue. Les parties étant
-  courtes, rejouer depuis le début reste acceptable.
+- **Reconnexion** : le serveur renvoie au client le message de départ puis
+  **tous** les tours depuis le début (en un seul message), le client les
+  rejoue. Les parties étant courtes, rejouer depuis le début est acceptable ;
+  c'est aussi ce que fait un joueur désynchronisé qui revient. Un client qui a
+  déjà certains de ces tours ignore ceux qu'il a appliqués.
 - **Pause, par l'hôte seulement** (`00-Game.md` §1.1) : le relais cesse de
   créer des tours ; elle prend effet à la fin d'un tour. Elle est commandée
   par un message de pause ou de reprise que le relais n'accepte que de la
@@ -257,12 +260,19 @@ Code : `worker/src/index.ts` (routes, secret, validation), `worker/src/lobby.ts`
   `setInterval` s'arrête : plus de signal, le lobby retire la partie après 90 s,
   et la prochaine connexion la réinscrit. Un seul signal à la fois ; un
   signal demandé pendant un autre est rejoué ensuite avec l'état courant.
-- **La salle est en mémoire.** Seuls l'identifiant, le nom et le jeton d'hôte
-  sont dans le stockage. Une partie dont le Durable Object quitte la mémoire
-  (plus aucune connexion) ou qu'un déploiement redémarre perd sa salle : joueurs,
-  jetons des joueurs, lancement (§6). Sans tours en ligne, il n'y a rien d'autre
-  à perdre ; quand les tours existeront, la liste des tours devra être
-  persistée.
+- **La salle et les tours sont en mémoire.** Seuls l'identifiant, le nom et le
+  jeton d'hôte sont dans le stockage. Une partie dont le Durable Object quitte
+  la mémoire (plus aucune connexion) ou qu'un déploiement redémarre perd sa
+  salle : joueurs, jetons des joueurs, lancement, et la liste des tours (§6).
+  Persister la liste des tours est à faire si l'auteur veut que les parties
+  survivent à un déploiement.
+- **Les tours.** Une fois la partie lancée, le Durable Object démarre un
+  `setInterval` de `TURN_STEP_MS` (100 ms, constante exportée de
+  `worker/src/game.ts`) qui appelle `Room.step()` et envoie le résultat. Sans
+  connexion ouverte, la minuterie des tours s'arrête avec celle des signaux :
+  aucun tour n'est créé tant que personne n'est là, et la numérotation reprend
+  à la suite quand un joueur revient. Un tour est sérialisé une fois pour tous
+  ses destinataires (même objet message).
 - Coût du signal : environ 60 requêtes pour 30 min.
 - Création protégée par le mot de passe de création (Requêtes, ci-dessus) ;
   pas de plafond du nombre de parties ouvertes.
@@ -330,7 +340,58 @@ foi pour les champs) :
 | relais → client | `welcome {token}` | à l'arrivée d'un nouveau joueur : le jeton à garder |
 | relais → client | `room {you, players, map, seed}` | état de la salle, à chaque changement, à chaque joueur avec son propre `you` |
 | relais → client | `start {you, map, seed, players}` | message de départ, au lancement et à chaque reconnexion après le lancement |
-| relais → client | `error {code, message}` (`message` : le texte à afficher, `ROOM_ERROR_TEXT` de `packages/shared`) | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced` |
+| relais → client | `error {code, message}` (`message` : le texte à afficher, `ROOM_ERROR_TEXT` de `packages/shared`) | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced`, `not_started`, `too_many_orders` |
+| client → relais | `order {order}` | un ordre du joueur, pour le prochain tour (partie lancée) |
+| client → relais | `hash {turn, hash}` | hash de l'état après le tour `turn`, multiple de N |
+| client → relais | `pause {paused}` | hôte seulement |
+| relais → client | `turn {turn, orders}` | le tour suivant, à chaque pas |
+| relais → client | `turns {turns}` | tous les tours depuis le premier, à la reconnexion (absent s'il n'y en a aucun) |
+| relais → client | `desync {turn}` | le hash du client diffère du hash majoritaire |
+| relais → client | `paused {paused}` | à chaque pause ou reprise, et à la reconnexion si la partie est en pause |
+
+### Partie lancée : tours, ordres, hashes, pause
+
+Code : `packages/relay` (`Match` : file, tours, hashes ; `Room` : connexions et
+droits), formats dans `packages/shared`. Le relais ne lit pas le contenu d'un
+ordre : c'est un objet JSON avec un `type` chaîne, que le moteur de chaque
+client valide.
+
+- **Ordres.** `Room.handle` met l'ordre de la connexion dans la file avec
+  `player` = identifiant du joueur de la connexion (règle 4 : un `player`
+  envoyé par le client est écrasé). `Room.submit(joueur, ordre)` fait de même au
+  nom d'un identifiant donné, sans connexion : les bots du solo.
+- **Tours.** `Room.step()` (appelé par l'enveloppe à chaque pas) crée le tour
+  `{turn, orders}`, numéroté à partir de 1 sans trou, avec les ordres dans
+  l'**ordre d'arrivée**, vide la file, garde le tour dans la liste, et renvoie
+  un `turn` par joueur connecté. Rien avant le lancement ni en pause.
+- **Hashes.** Un `hash` n'est accepté que pour un tour déjà créé et multiple
+  de `HASH_EVERY_TURNS` (10). Le relais garde, par tour, le dernier hash de
+  chaque joueur ; le hash majoritaire est le plus fréquent. Chaque joueur dont
+  le hash diffère reçoit `desync {turn}`, une fois par tour tant qu'il ne
+  renvoie pas un autre hash (un rejeu renvoie les siens).
+- **Pause.** `pause` n'est accepté que de l'hôte (`not_host` sinon) et
+  seulement après le lancement. Les ordres reçus en pause attendent dans la
+  file. La pause n'entre dans aucun tour.
+
+Choix faits à l'implémentation, **provisoires** (non tranchés par l'auteur) :
+
+- À égalité de hashes (deux joueurs qui divergent), le premier hash arrivé
+  fait référence : rien ne dit lequel des deux a raison.
+- Au plus `MAX_ORDERS_PER_TURN` (20) ordres par joueur et par tour ; les
+  suivants reçoivent `too_many_orders`. Le relais garde tous les tours en
+  mémoire : sans borne, un client pourrait la remplir.
+- La reconnexion renvoie l'historique en un seul message `turns`, sans
+  découpage (une demi-heure de partie : environ 500 Ko).
+- La page ferme son WebSocket de salle au message de départ ; le Web Worker du
+  client ouvre le sien avec le même jeton (`join`), qui remplace l'ancien. Une
+  reprise après rechargement reçoit donc l'historique deux fois (la page
+  ignore le premier).
+- L'hôte est le joueur 1 (premier de la liste au lancement) : le client en
+  déduit s'il affiche le bouton de pause, sans champ de plus dans le message de
+  départ. Le relais refuse de toute façon la pause d'un autre.
+- Une connexion perdue en cours de partie n'est pas rétablie par le client :
+  il affiche « Connexion perdue » et demande de recharger la page (reprise
+  automatique, §4 Reconnexion).
 
 Choix faits à l'implémentation, **provisoires** eux aussi :
 
@@ -493,10 +554,11 @@ que le passage de l'un à l'autre ne demande aucune modification du code :
    `wrangler deploy` échouent : compiler le client d'abord.
 
 **Mode solo contre des bots** (construit, `Docs/Design/03-Client.md`) : le
-Web Worker du moteur crée lui-même un tour toutes les 100 ms avec les ordres du
-joueur (champ `player` écrit par le Worker, règle 4) et des bots, sans serveur
+Web Worker du moteur demande un tour toutes les 100 ms au relais
+(`packages/relay`, compilé dans le Worker), où entrent les ordres du joueur
+(champ `player` écrit par le relais, règle 4) et ceux des bots, sans serveur
 de partie ni lobby. Il n'a besoin que de la page, servie en local ou par
-Cloudflare. Il passera par `packages/relay` quand ce module existera (§1).
+Cloudflare.
 
 **Développement des deux modes en ligne** : `npx wrangler dev` exécute le
 Worker, le lobby et les Durable Objects des parties, WebSocket compris, sur
@@ -568,15 +630,16 @@ Ordre prévu :
 4. Multijoueur (§1, Modules). Ne dépend pas des règles : le relais transmet
    des ordres sans les lire. Ordre de construction :
    1. `packages/shared` (formats) et `packages/relay` (relais), avec leurs
-      tests sous Node. **Fait pour la salle d'attente** (point 6) ; les tours,
-      les ordres et les hashes restent à faire ;
-   2. le mode solo passe par `packages/relay` (source de tours locale,
-      `03-Client.md` §8) : premier utilisateur du relais, sans réseau ;
-   3. la source de tours WebSocket du client, et l'écran de lobby. **Écran de
-      lobby fait** (point 6) ; la source de tours WebSocket reste à faire ;
+      tests sous Node. **Fait** : salle d'attente (point 6), ordres, tours,
+      hashes, pause (point 8) ;
+   2. **Fait** (point 8) : le mode solo passe par `packages/relay` (source de
+      tours locale, `03-Client.md` §8), sans réseau ;
+   3. **Fait** (points 6 et 8) : l'écran de lobby et la source de tours
+      WebSocket du client ;
    4. les deux enveloppes : `server/` (Node, tunnel) et le Durable Object de
       partie dans `worker/`, dans l'ordre que l'auteur choisira. **Le
-      Durable Object `Game` est fait pour la salle d'attente** (pas de tours) ;
+      Durable Object `Game` est fait** (salle d'attente, tours toutes les
+      100 ms) ;
       `server/` n'existe pas encore ;
    5. un test qui joue la même suite d'ordres à travers les deux enveloppes et
       vérifie que les tours envoyés sont identiques.
@@ -603,9 +666,9 @@ Ordre prévu :
    - `[assets]` sur `client/dist`, `worker/public` supprimé, étape de build du
      client dans le workflow (§6, Client, point 4).
 
-   Pas fait : les tours en ligne (relais, source de tours WebSocket du client),
-   `server/` (partie hébergée sur un PC, en attente du feu vert de l'auteur),
-   la pause, l'aperçu de la carte (un emplacement vide). Essayé de bout en bout
+   Les tours en ligne sont faits depuis (point 8). Pas fait : `server/` (partie
+   hébergée sur un PC, en attente du feu vert de l'auteur), l'aperçu de la
+   carte (un emplacement vide). Essayé de bout en bout
    avec `wrangler dev` (deux connexions scriptées, puis deux navigateurs par
    l'auteur) le 28 octobre 2026.
 
@@ -620,6 +683,24 @@ Ordre prévu :
    Worker. Le changement est dans le dépôt de la vitrine
    (`Projets code/Vitrine/vitrine`), pas dans celui-ci : il se commite et se
    déploie là-bas.
+
+8. **Fait (28 octobre 2026) : les tours en ligne des parties Cloudflare.**
+   Existe :
+   - `packages/shared` : messages `order`, `hash`, `pause`, `turn`, `turns`,
+     `desync`, `paused`, erreurs `not_started` et `too_many_orders` ;
+   - `packages/relay` : `Match` (file, tours, hashes, pause), `Room.step`,
+     `Room.submit`, reconnexion avec l'historique (§4, Partie lancée) ;
+   - `worker/src/game.ts` : minuterie des tours (`TURN_STEP_MS`) ;
+   - le client : la partie (`game.ts`) et deux sources de tours, locale
+     (`solo.ts`, par le relais) et WebSocket (`online-game.ts`), l'écran de jeu
+     en ligne à la place de l'écran « Partie lancée » (`03-Client.md` §8) ;
+   - tests sous Node : relais (`packages/relay/test/turns.test.ts`), Durable
+     Object (`worker/test`), et le client branché sur un vrai relais en mémoire
+     (`client/test/online-game.test.ts`).
+
+   Pas fait : la persistance des tours, les bots en ligne, `server/`. Pas
+   encore d'essai à deux navigateurs par l'auteur. Le test du point 4.5 (mêmes
+   tours par les deux enveloppes) attend `server/`.
 
 ## 10. Pièges
 
@@ -658,6 +739,17 @@ Ordre prévu :
   (`worker/src/lobby.ts`) plante le Durable Object du lobby sur une base
   existante (déploiement, `.wrangler/state` local) : `CREATE TABLE IF NOT
   EXISTS` ne modifie pas une table qui existe.
+- Les ordres arrivent au moteur tels que le relais les a écrits, `player`
+  compris : ne jamais lire un `player` écrit par la page, et ne jamais écrire
+  l'identifiant d'expéditeur ailleurs que dans le relais.
+- Le rejeu d'une partie reprise n'envoie qu'un message `tick` à la page, avec
+  tout ce que les messages sautés auraient apporté (`TurnContext.full`,
+  `client/src/game.ts`). Une donnée ajoutée au message `tick` et envoyée
+  « seulement quand elle change » doit aussi y figurer, sinon la page est
+  incomplète après une reprise.
+- Le hash d'un tour se calcule juste après l'avoir appliqué, quand `tick` vaut
+  encore ce numéro : plus tard, le hash est celui d'un autre état et le client
+  est déclaré désynchronisé à tort.
 - Passer `Game` à l'API d'hibernation des WebSocket arrêterait son
   `setInterval` quand le Durable Object s'endort : plus de signal, la partie
   disparaîtrait du lobby avec ses joueurs encore connectés.

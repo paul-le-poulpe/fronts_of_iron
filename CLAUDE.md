@@ -47,15 +47,16 @@ contient `.git`), pas le dossier parent.
 ```
 packages/
   shared/    formats des messages — lus par client, relais et serveurs. Fait : salle
-             d'attente, entrée du lobby ; à venir : ordre, tour, hash
+             d'attente, entrée du lobby, ordres, tours, hashes, pause
   engine/    simulation déterministe ; ses règles viennent de Docs/Design/00-Game.md
   relay/     relais d'une partie, sans API de plateforme ; utilisé par le solo,
-             server/ et worker/. Fait : la salle d'attente (`Room`) ; à venir :
-             file d'ordres, création des tours
+             server/ et worker/. Fait : la salle d'attente et la partie lancée
+             (`Room`, `Match` : file d'ordres, création des tours, hashes, pause)
 client/      page du jeu (Vite + TypeScript) : interface + engine dans un Web Worker
 worker/      Worker Cloudflare : sert client/dist (le client compilé) + lobby
              (Durable Object) + parties hébergées par Cloudflare (un Durable
-             Object `Game` par partie : salle d'attente pour l'instant)
+             Object `Game` par partie : salle d'attente, puis un tour toutes
+             les 100 ms)
 server/      Node : parties hébergées par un joueur, sur son PC, via un tunnel
 .github/workflows/deploy.yml   build, puis wrangler deploy dans worker/
 Docs/Design/                   documents de conception
@@ -87,11 +88,13 @@ Depuis la racine du dépôt, après `npm install` :
   invalides sans effet, et recherche des fonctions interdites par la règle 2
   dans `packages/engine/src`.
   Pour le client : partie solo et affichage (copie locale, peinture) sous Node,
-  sans navigateur ; `online.ts` (adresse du WebSocket, nom et jetons gardés).
-  Pour `packages/relay` : une règle de la salle d'attente par test, et
-  l'absence d'API de plateforme dans `src`. Pour `worker` : routes, table des
+  sans navigateur ; `online.ts` (adresse du WebSocket, nom et jetons gardés) ;
+  `online-game.ts` branché sur un vrai relais en mémoire (trois clients : mêmes
+  tours, mêmes hashes, rejeu d'une reprise, désynchronisation, pause).
+  Pour `packages/relay` : une règle de la salle d'attente, des tours, des hashes
+  ou de la pause par test, et l'absence d'API de plateforme dans `src`. Pour `worker` : routes, table des
   parties (migration d'une base de la version précédente comprise) et Durable
-  Object `Game`, avec des remplaçants de `cloudflare:workers`, SQLite, WebSocket
+  Object `Game` (salle et tours toutes les 100 ms), avec des remplaçants de `cloudflare:workers`, SQLite, WebSocket
   et minuterie (`node:sqlite`, `node:test`) — pas de `wrangler dev`.
 - `npm run dev -w client` — le client (mode solo contre des bots) sur
   `http://localhost:5173` ; `npm run build -w client` le compile dans

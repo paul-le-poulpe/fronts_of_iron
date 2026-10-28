@@ -179,7 +179,7 @@
         </div>
       </section>
 
-      <!-- Partie lancée : écran provisoire, le jeu en ligne n'existe pas encore -->
+      <!-- Partie lancée : écran d'attente du chargement. Le jeu le remplace dès que le Web Worker a créé la partie. -->
       <section id="lb-started" class="lb-screen" hidden>
         <div class="lb-page">
           <header class="lb-header lb-header-room">
@@ -188,16 +188,12 @@
               <p id="lb-started-game" class="lb-muted"></p>
             </div>
           </header>
-          <div id="lb-started-notice" class="lb-notice" role="alert" hidden>
-            <span id="lb-started-notice-text"></span>
-            <button id="lb-started-reconnect" type="button" class="lb-btn lb-btn-outline" hidden>Se reconnecter</button>
-          </div>
           <div class="lb-cols">
             <section class="lb-panel lb-panel-body">
-              <h2 class="lb-h3">Message de départ</h2>
+              <h2 class="lb-h3">Chargement de la partie…</h2>
               <p class="lb-muted">
-                Écran provisoire : le jeu en ligne n'existe pas encore. Voici ce que le serveur a envoyé à ce joueur ; chaque
-                client créera sa partie avec ces valeurs.
+                Connexion au serveur de la partie, création de la carte avec les valeurs du message de départ, puis
+                rejeu des tours déjà joués s'il y en a.
               </p>
               <dl class="lb-facts">
                 <div><dt>Carte</dt><dd id="lb-started-map"></dd></div>
@@ -224,7 +220,7 @@
     <div id="app" hidden>
       <header id="top">
         <strong>Fronts of Iron</strong>
-        <span class="muted">mode solo contre des bots</span>
+        <span id="mode-label" class="muted">mode solo contre des bots</span>
         <span class="badge" title="Cette interface n'est pas celle du jeu : elle sert à essayer le moteur.">interface provisoire</span>
       </header>
 
@@ -304,8 +300,8 @@
               <button id="quit" type="button">Quitter la partie</button>
             </div>
             <p class="muted small">
-              Le jeu n'a pas de pause (00-Game §1.1) : ce bouton n'existe que pour développer. Molette : zoom ;
-              glisser : déplacer la carte.
+              En ligne, seul l'hôte met la partie en pause (00-Game §1.1) ; en solo, le joueur est l'hôte. Molette :
+              zoom ; glisser : déplacer la carte.
             </p>
           </section>
         </aside>

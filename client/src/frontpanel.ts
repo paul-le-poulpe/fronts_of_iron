@@ -9,8 +9,8 @@
 // avec elle), pour ne pas détruire un bouton entre le `pointerdown` et le `click`.
 
 import { playerColor, rgbCss } from "./painter.ts";
-import { HUMAN, type BreakthroughView, type FrontSideView, type FrontView, type HumanOrder, type MilitaryCatalog, type UnitInfo } from "./protocol.ts";
-import { nicheName, playerName, unitName } from "./names.ts";
+import { type BreakthroughView, type FrontSideView, type FrontView, type HumanOrder, type MilitaryCatalog, type UnitInfo } from "./protocol.ts";
+import { localPlayer, nicheName, playerName, unitName } from "./names.ts";
 
 const pctFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 const numFmt = new Intl.NumberFormat("fr-FR");
@@ -125,7 +125,7 @@ export class FrontPanel {
   /** Ouvre le panneau du front. */
   open(front: FrontView): void {
     this.frontId = front.id;
-    this.me = front.players.indexOf(HUMAN);
+    this.me = front.players.indexOf(localPlayer());
     this.left = this.me >= 0 ? this.me : 0;
     this.build(front);
     this.root.hidden = false;

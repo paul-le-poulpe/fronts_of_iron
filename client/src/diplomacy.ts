@@ -13,9 +13,9 @@
 // la liste est la source, les événements ne servent qu'aux cartes d'information.
 
 import { dismiss, notify } from "./notifications.ts";
-import { playerName } from "./names.ts";
+import { localPlayer, playerName } from "./names.ts";
 import { playerColor, rgbCss } from "./painter.ts";
-import { HUMAN, type DiplomacyEventView, type DiplomacyView, type DiplomaticStatusName, type HumanOrder, type ProposalView } from "./protocol.ts";
+import { type DiplomacyEventView, type DiplomacyView, type DiplomaticStatusName, type HumanOrder, type ProposalView } from "./protocol.ts";
 
 const STATUS_LABELS: Readonly<Record<DiplomaticStatusName, string>> = {
   neutral: "Neutre",
@@ -96,7 +96,7 @@ export class Diplomacy {
    * de la souris, ou ferme le menu si le clic ne désigne pas un autre joueur.
    */
   openFor(owner: number): void {
-    if (owner === 0 || owner === HUMAN || this.view === null) {
+    if (owner === 0 || owner === localPlayer() || this.view === null) {
       this.closeMenu();
       return;
     }
@@ -118,8 +118,8 @@ export class Diplomacy {
   /** Les actions possibles envers le joueur `target`, d'après le tableau du 00-Game §1. */
   private actionsFor(target: number, view: DiplomacyView): MenuAction[] {
     const status = view.status[target - 1] ?? "neutral";
-    const pending = view.proposals.find((p) => (p.from === target && p.to === HUMAN) || (p.from === HUMAN && p.to === target));
-    const note = pending === undefined ? undefined : pending.from === HUMAN ? "En attente de réponse" : "Proposition reçue";
+    const pending = view.proposals.find((p) => (p.from === target && p.to === localPlayer()) || (p.from === localPlayer() && p.to === target));
+    const note = pending === undefined ? undefined : pending.from === localPlayer() ? "En attente de réponse" : "Proposition reçue";
     const propose = (label: string, order: HumanOrder): MenuAction =>
       note === undefined ? { label, order } : { label, note };
     switch (status) {
@@ -198,7 +198,7 @@ export class Diplomacy {
 
   /** Une carte à boutons par proposition reçue ; retirée quand la proposition n'est plus dans la liste. */
   private syncProposalCards(view: DiplomacyView): void {
-    const received = view.proposals.filter((p) => p.to === HUMAN);
+    const received = view.proposals.filter((p) => p.to === localPlayer());
     for (const p of received) {
       if (this.shown.has(p.from)) continue;
       this.shown.add(p.from);
@@ -235,23 +235,23 @@ export class Diplomacy {
     const info = (other: number, text: string): void => notify({ text, color: rgbCss(playerColor(other)) });
     switch (e.type) {
       case "war_declared":
-        if (e.to === HUMAN) info(e.from, `${playerName(e.from)} vous a déclaré la guerre`);
+        if (e.to === localPlayer()) info(e.from, `${playerName(e.from)} vous a déclaré la guerre`);
         break;
       case "pact_broken":
-        if (e.to === HUMAN) info(e.from, `${playerName(e.from)} a rompu le pacte`);
+        if (e.to === localPlayer()) info(e.from, `${playerName(e.from)} a rompu le pacte`);
         break;
       case "proposal_accepted": {
-        const other = e.from === HUMAN ? e.to : e.from;
+        const other = e.from === localPlayer() ? e.to : e.from;
         info(other, e.kind === "pact" ? `Pacte de non-agression conclu avec ${playerName(other)}` : `Paix conclue avec ${playerName(other)}`);
         break;
       }
       case "proposal_refused":
-        if (e.from === HUMAN) {
+        if (e.from === localPlayer()) {
           info(e.to, `${playerName(e.to)} a refusé votre proposition de ${e.kind === "pact" ? "pacte" : "paix"}`);
         }
         break;
       case "proposal_expired":
-        if (e.from === HUMAN) info(e.to, `Votre proposition à ${playerName(e.to)} a expiré`);
+        if (e.from === localPlayer()) info(e.to, `Votre proposition à ${playerName(e.to)} a expiré`);
         break;
       case "proposal_sent":
         break;

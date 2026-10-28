@@ -1,4 +1,4 @@
-// La salle d'attente d'une partie en ligne (Docs/Design/01-Architecture.md §4).
+// La salle d'attente et la partie lancée d'une partie en ligne (Docs/Design/01-Architecture.md §3 et §4).
 //
 // Une `Room` ne connaît ni horloge, ni réseau, ni hasard : l'enveloppe (Durable
 // Object, serveur Node) lui donne les connexions comme des identifiants de
@@ -8,18 +8,23 @@
 import {
   DEFAULT_MAP,
   DEFAULT_SEED,
+  HASH_EVERY_TURNS,
   MAX_ONLINE_PLAYERS,
   ROOM_ERROR_TEXT,
   isMapId,
   isSeed,
+  isUint32,
   normalizePlayerName,
   type ClientMessage,
   type MapId,
+  type Order,
   type RoomErrorCode,
   type RoomPlayer,
   type RoomState,
   type ServerMessage,
 } from "@fronts-of-iron/shared";
+
+import { Match } from "./match.ts";
 
 /** Ce que la salle demande à l'enveloppe. */
 export interface RoomEnv {
@@ -66,6 +71,8 @@ export class Room {
   #state: RoomState = "waiting";
   #map: MapId = DEFAULT_MAP;
   #seed = DEFAULT_SEED;
+  /** La partie lancée : non nul dès le lancement. */
+  #match: Match | null = null;
 
   /** `hostToken` : un jeton déjà créé (salle reconstruite par l'enveloppe) ; sinon la salle en crée un. */
   constructor(env: RoomEnv, hostToken?: string) {
@@ -80,8 +87,53 @@ export class Room {
     if (msg.type === "join") return this.#join(conn, msg);
     const member = this.#byConn.get(conn);
     if (member === undefined) return [error(conn, "not_joined")];
-    if (msg.type === "set_map") return this.#setMap(conn, member, msg);
-    return this.#start(conn, member);
+    switch (msg.type) {
+      case "set_map":
+        return this.#setMap(conn, member, msg);
+      case "start":
+        return this.#start(conn, member);
+      case "order":
+        return this.#match === null ? [error(conn, "not_started")] : this.#order(conn, member, msg.order);
+      case "hash":
+        return this.#match === null ? [error(conn, "not_started")] : this.#hash(conn, member, msg);
+      case "pause":
+        return this.#pause(conn, member, msg.paused);
+    }
+  }
+
+  /**
+   * Crée le tour suivant et le renvoie à chaque joueur connecté : l'enveloppe appelle `step` à chaque
+   * pas (100 ms). Rien avant le lancement, ni en pause. Le même objet message part à tous les
+   * destinataires : l'enveloppe peut ne le sérialiser qu'une fois.
+   */
+  step(): Outgoing[] {
+    const turn = this.#match?.step();
+    if (turn === null || turn === undefined) return [];
+    const message: ServerMessage = { type: "turn", turn: turn.turn, orders: turn.orders };
+    const out: Outgoing[] = [];
+    for (const m of this.#members) if (m.conn !== null) out.push({ to: m.conn, message });
+    return out;
+  }
+
+  /**
+   * Ajoute un ordre au prochain tour au nom du joueur `player`, sans passer par une connexion : les
+   * bots du solo (`client/`). L'enveloppe est de confiance, le relais ne vérifie pas que le joueur
+   * existe. Renvoie faux avant le lancement, pour un identifiant invalide ou au-delà de
+   * `MAX_ORDERS_PER_TURN` ordres du joueur dans le tour.
+   */
+  submit(player: number, order: Order): boolean {
+    if (this.#match === null || !Number.isInteger(player) || player < 1) return false;
+    return this.#match.queue(player, order);
+  }
+
+  /** La partie est lancée et en pause. */
+  get paused(): boolean {
+    return this.#match?.paused ?? false;
+  }
+
+  /** Nombre de tours créés depuis le lancement. */
+  get turnCount(): number {
+    return this.#match?.turns.length ?? 0;
   }
 
   /** La connexion `conn` s'est fermée. */
@@ -144,8 +196,14 @@ export class Room {
     }
     member.conn = conn;
     this.#byConn.set(conn, member);
-    if (this.#state === "started") out.push(this.#startMessage(member, conn));
-    else out.push({ to: conn, message: { type: "welcome", token: member.token } }, ...this.#broadcastRoom());
+    if (this.#match !== null) {
+      // Après le lancement : le message de départ, puis tous les tours depuis le début (le client rejoue, 01-Architecture §3).
+      out.push(this.#startMessage(member, conn));
+      if (this.#match.turns.length > 0) out.push({ to: conn, message: { type: "turns", turns: this.#match.turns } });
+      if (this.#match.paused) out.push({ to: conn, message: { type: "paused", paused: true } });
+    } else {
+      out.push({ to: conn, message: { type: "welcome", token: member.token } }, ...this.#broadcastRoom());
+    }
     return out;
   }
 
@@ -171,8 +229,41 @@ export class Room {
     if (this.#state === "started") return [error(conn, "game_started")];
     // Les identifiants sont déjà `1..n` sans trou (#renumber) : on les fige en changeant d'état.
     this.#state = "started";
+    this.#match = new Match();
     const out: Outgoing[] = [];
     for (const m of this.#members) if (m.conn !== null) out.push(this.#startMessage(m, m.conn));
+    return out;
+  }
+
+  /** L'expéditeur de l'ordre est celui de la connexion (règle 4) : `Match.queue` écrase tout champ `player`. */
+  #order(conn: string, member: Member, order: Order): Outgoing[] {
+    return this.#match!.queue(member.id, order) ? [] : [error(conn, "too_many_orders")];
+  }
+
+  /** Hash de l'état du client : s'il diverge du hash majoritaire, le client est averti. */
+  #hash(conn: string, member: Member, msg: Extract<ClientMessage, { type: "hash" }>): Outgoing[] {
+    const match = this.#match!;
+    // Un hash n'a de sens que pour un tour déjà créé et multiple de N.
+    if (!Number.isInteger(msg.turn) || msg.turn < 1 || msg.turn > match.turns.length || msg.turn % HASH_EVERY_TURNS !== 0) {
+      return [error(conn, "invalid_message")];
+    }
+    const out: Outgoing[] = [];
+    for (const id of match.vote(member.id, msg.turn, msg.hash)) {
+      const target = this.#members.find((m) => m.id === id);
+      if (target !== undefined && target.conn !== null) out.push({ to: target.conn, message: { type: "desync", turn: msg.turn } });
+    }
+    return out;
+  }
+
+  /** Pause et reprise : l'hôte seulement, tous les joueurs connectés en sont informés. */
+  #pause(conn: string, member: Member, paused: boolean): Outgoing[] {
+    if (!member.host) return [error(conn, "not_host")];
+    const match = this.#match;
+    if (match === null) return [error(conn, "not_started")];
+    match.paused = paused;
+    const message: ServerMessage = { type: "paused", paused };
+    const out: Outgoing[] = [];
+    for (const m of this.#members) if (m.conn !== null) out.push({ to: m.conn, message });
     return out;
   }
 
@@ -221,6 +312,18 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
       return { type: "set_map", map: m.map as MapId | undefined, seed: m.seed as number | "random" | undefined };
     case "start":
       return { type: "start" };
+    case "order": {
+      // Seule la forme est vérifiée : un objet avec un `type` chaîne. Le moteur valide le reste.
+      const o = m.order;
+      if (typeof o !== "object" || o === null || Array.isArray(o) || typeof (o as { type?: unknown }).type !== "string") return null;
+      return { type: "order", order: o as Order };
+    }
+    case "hash":
+      if (!Number.isInteger(m.turn) || !isUint32(m.hash)) return null;
+      return { type: "hash", turn: m.turn as number, hash: m.hash };
+    case "pause":
+      if (typeof m.paused !== "boolean") return null;
+      return { type: "pause", paused: m.paused };
     default:
       return null;
   }

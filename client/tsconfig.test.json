@@ -6,6 +6,6 @@
     "moduleResolution": "nodenext",
     "types": ["node"]
   },
-  "include": ["src/solo.ts", "src/bots.ts", "src/protocol.ts", "src/mirror.ts", "src/painter.ts", "src/online.ts", "test"],
+  "include": ["src/game.ts", "src/solo.ts", "src/online-game.ts", "src/bots.ts", "src/protocol.ts", "src/mirror.ts", "src/painter.ts", "src/online.ts", "test"],
   "exclude": []
 }
