@@ -513,7 +513,21 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   (ni pendant 500 ms après, le temps que le moteur applique l'ordre) ; entre deux
   reconstructions, seuls les nombres sont mis à jour.
 - **Barre d'informations**, en haut de l'écran de jeu (00-Game §11, `infobar.ts`) :
-  30 px de haut, une ligne, quatre boutons séparés par un trait. Un clic sur un
+  44 px de haut, cinq boutons séparés par un trait ; chacun a une ligne de
+  chiffres et, juste dessous, une **mini-barre** (10 px, `.ib-mini`) : la barre
+  la plus pertinente de son détail, mise à jour par `head` à chaque tour, détail
+  ouvert ou non. Population : la barre empilée de toutes les occupations, avec
+  leurs couleurs. Nourriture : la population (vert plein) et la population que la
+  nourriture du tour fait vivre (vert hachuré), à l'échelle du plus grand des deux.
+  Ressources (flux) : la barre du fer, **orange** (`.ib-track.iron`, comme dans
+  le détail) : orange clair pour la barre pleine (capacité, ce que les cases de
+  fer pourraient donner), orange pour l'extrait, écart rouge, trait noir du
+  requis. Provisoire : elle deviendra une vue agrégée de toutes les ressources
+  (hors biens produits), à définir, car elle doit couvrir plusieurs types autres
+  que le fer. Armement : tous les types additionnés, mêmes couleurs et même
+  échelle que les lignes du détail (fronts, stock, hachures au-delà de la cible,
+  trait de la cible). Fronts : part des fronts du joueur qui sont actifs
+  (vert). Un clic sur un
   bouton déplie son détail juste sous la barre, par-dessus le haut de la carte,
   aligné sur le bord gauche du bouton ; un second clic le replie ; un seul détail
   est ouvert à la fois. Le DOM est construit une fois par partie ; chaque tour,
@@ -669,7 +683,7 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
      déplacement n'envoie pas `change`). Il est mis à jour à l'ouverture du
      détail et à chaque tour tant qu'il est ouvert.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
-     *Fer* : barre pleine = capacité (`ironCapacity`), vert = fer extrait au
+     *Fer* : barre pleine (orange clair) = capacité (`ironCapacity`), orange = fer extrait au
      dernier tour, trait noir épais = fer requis (`ironRequired`, compté sur
      les lignes en service, `min(active, usefulLines)`, pas sur toutes les
      lignes actives : une ligne arrêtée parce que la demande est atteinte ne

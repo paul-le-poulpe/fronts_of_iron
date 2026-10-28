@@ -311,7 +311,7 @@ tr.me td { font-weight: 600; }
 #infobar { grid-area: info; position: relative; z-index: 20; }
 .ib-bar {
   display: flex;
-  height: 30px;
+  height: 44px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -321,9 +321,10 @@ tr.me td { font-weight: 600; }
 .ib-sec {
   flex: none;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 44px;
   padding: 0 14px;
   border: 0;
   border-right: 1px solid var(--line);
@@ -335,6 +336,9 @@ tr.me td { font-weight: 600; }
 .ib-sec:hover:not(:disabled) { background: #eef1f6; border-color: var(--line); }
 .ib-sec[aria-expanded="true"] { background: #e6ecf5; box-shadow: inset 0 -2px 0 var(--accent); }
 .ib-sec .ib-num, .ib-sec .pos, .ib-sec .neg, .ib-sec .zero { font-variant-numeric: tabular-nums; }
+/* Ligne de chiffres, puis mini-barre (infobar.ts) : ni l'une ni l'autre ne dépasse la largeur de la ligne. */
+.ib-line { display: flex; align-items: center; gap: 8px; }
+.ib-sec .ib-mini { flex: none; width: 100%; height: 10px; margin: 0; box-sizing: border-box; }
 .ib-name { color: var(--muted); }
 .ib-icon { color: var(--muted); font-size: 14px; }
 /* Pixel art 16 × 16 : agrandi sans lissage sur un écran haute densité. */
@@ -401,7 +405,7 @@ tr.me td { font-weight: 600; }
 
 /* Bouton « Carte » : dernier de la barre, contre le bord droit ; son menu est un enfant
    de #infobar (la barre a overflow) et se déplie vers le bas, aligné à droite. */
-.ib-map { margin-left: auto; margin-right: var(--panel-w); padding: 0 20px; border-left: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+.ib-map { flex-direction: row; align-items: center; gap: 8px; margin-left: auto; margin-right: var(--panel-w); padding: 0 20px; border-left: 1px solid var(--line); font-size: 15px; font-weight: 600; }
 .ib-map .ib-name { color: var(--fg); }
 .ib-map .ib-chev::before { font-size: 13px; }
 .menu.ib-menu { top: 100%; bottom: auto; left: auto; right: var(--panel-w); min-width: 210px; border-top: 0; border-radius: 0 0 8px 8px; }
@@ -471,6 +475,9 @@ tr.me td { font-weight: 600; }
 .ib-cap .cap-food { background: repeating-linear-gradient(45deg, var(--ok) 0 2px, transparent 2px 5px); }
 .ib-cap .cap-land { background: #dcdcdc; }
 .ib-track.stock .ib-fill { background: var(--stock); }
+/* Fer : orange clair = ce que les cases de fer pourraient donner (capacité), orange = extrait. */
+.ib-track.iron { background: #f7d9b0; }
+.ib-track.iron .ib-fill { background: #e8821c; }
 .ib-track .ib-gap { background: var(--bad); }
 .ib-track .ib-hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
 .ib-track .ib-mark { top: -3px; bottom: -3px; background: #000; }

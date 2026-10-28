@@ -3,6 +3,10 @@
 // à la fois. La page n'applique aucune règle : elle affiche des nombres du moteur
 // (HumanDetail, PlayerStats) et en tire quelques rapports (parts, écarts).
 //
+// Chaque bouton porte, sous ses chiffres, la barre la plus pertinente de son détail
+// (mini-barre, mise à jour par `head` à chaque tour, détail ouvert ou non) : répartition
+// de la population, population et capacité, fer, armement, fronts actifs.
+//
 // Le DOM est construit une seule fois, dans le constructeur. Ensuite `update`
 // écrit seulement des textes et des largeurs : rien n'est détruit entre deux tours.
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
@@ -62,6 +66,16 @@ function setSigned(e: HTMLElement, n: number): void {
 function span(seg: HTMLElement, from: number, to: number): void {
   seg.style.left = `${from}%`;
   seg.style.width = `${Math.max(0, to - from)}%`;
+}
+
+/** Barre empilée : un segment par valeur, de gauche à droite, en parts de leur somme. */
+function stackSpans(parts: readonly HTMLElement[], counts: readonly number[]): void {
+  const sum = counts.reduce((a, b) => a + b, 0);
+  let from = 0;
+  counts.forEach((n, i) => {
+    span(parts[i]!, from, from + pct(n, sum));
+    from += pct(n, sum);
+  });
 }
 
 interface Track {
@@ -296,13 +310,20 @@ export class InfoBar {
 
   // ---- construction d'une section : bouton + détail ----
 
-  private button(id: string, content: HTMLElement[]): HTMLButtonElement {
+  /** Bouton de section : une ligne de chiffres, puis la mini-barre `mini` juste dessous (s'il y en a une). */
+  private button(id: string, content: HTMLElement[], mini?: HTMLElement): HTMLButtonElement {
     const b = el("button", "ib-sec");
     b.type = "button";
     b.id = `ib-${id}`;
     b.setAttribute("aria-expanded", "false");
     b.setAttribute("aria-controls", `ib-pane-${id}`);
-    b.append(...content, el("span", "ib-chev"));
+    const line = el("span", "ib-line");
+    line.append(...content, el("span", "ib-chev"));
+    b.append(line);
+    if (mini) {
+      mini.classList.add("ib-mini");
+      b.append(mini);
+    }
     return b;
   }
 
@@ -319,7 +340,9 @@ export class InfoBar {
     const total = el("strong", "ib-num");
     const delta = el("span", "zero");
     const max = el("span", "muted");
-    const button = this.button("pop", [icon("population/pop-default.png"), el("span", "ib-name", "Population"), total, delta, max]);
+    // Mini-barre : la répartition par occupation, avec toutes les couleurs du détail.
+    const miniStack = el("div", "ib-stack");
+    const button = this.button("pop", [icon("population/pop-default.png"), el("span", "ib-name", "Population"), total, delta, max], miniStack);
     button.title = "Population · variation / maximum";
 
     const occupations = [
@@ -348,12 +371,15 @@ export class InfoBar {
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
     ];
     const stacked = el("div", "ib-stack");
-    const parts = occupations.map((o) => {
-      const part = el("i");
-      part.style.background = o.color;
-      stacked.append(part);
-      return part;
-    });
+    const stackParts = (bar: HTMLElement): HTMLElement[] =>
+      occupations.map((o) => {
+        const part = el("i");
+        part.style.background = o.color;
+        bar.append(part);
+        return part;
+      });
+    const parts = stackParts(stacked);
+    const miniParts = stackParts(miniStack);
     const rows = occupations.map((o) => {
       const r = el("div", "ib-row occ");
       const sw = el("span", "sw");
@@ -394,6 +420,7 @@ export class InfoBar {
         // Croissance du tour : la population d'après moins celle du début du tour, somme des occupations.
         setSigned(delta, s.population - (s.factoryWorkers + s.miners + s.farmers + s.fishers + s.idle + s.soldiers));
         max.textContent = `/ ${num(this.info.foodPerHead > 0 ? Math.floor(s.food / this.info.foodPerHead) : 0)}`;
+        stackSpans(miniParts, occupations.map((o) => o.read(s)));
       },
       body: (_d, s) => {
         if (Date.now() >= this.forcedUntil) forcedBox.checked = s.forcedMobilization;
@@ -402,10 +429,8 @@ export class InfoBar {
         const missing = occupations.map((o) => o.missing?.(s) ?? 0);
         // Échelle des barres : la population, ou plus large si le hachuré dépasserait la barre (les tailles restent comparables).
         const scale = counts.reduce((m, n, i) => Math.max(m, n + missing[i]!), sum);
-        let from = 0;
+        stackSpans(parts, counts);
         counts.forEach((n, i) => {
-          span(parts[i]!, from, from + pct(n, sum));
-          from += pct(n, sum);
           const w = pct(n, scale);
           span(rows[i]!.fill, 0, w);
           span(rows[i]!.need, w, w + pct(missing[i]!, scale));
@@ -423,7 +448,12 @@ export class InfoBar {
   private food(): Section {
     const total = el("strong", "ib-num");
     const surplus = el("span", "zero");
-    const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus]);
+    // Mini-barre : la population (vert plein) et la population que la nourriture du tour fait vivre (vert hachuré).
+    const miniCap = el("div", "ib-track ib-cap");
+    const miniNow = el("i", "cap-now");
+    const miniFood = el("i", "cap-food");
+    miniCap.append(miniFood, miniNow);
+    const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus], miniCap);
     button.title = "Production / tour · surplus";
 
     // Jauge de population : actuelle (vert), maximum avec la nourriture du tour (vert
@@ -504,6 +534,10 @@ export class InfoBar {
       head: (_d, s) => {
         total.textContent = num(s.food);
         setSigned(surplus, surplusOf(s));
+        const maxNow = this.info.foodPerHead > 0 ? Math.floor(s.food / this.info.foodPerHead) : 0;
+        const scale = Math.max(maxNow, s.population, 1);
+        span(miniNow, 0, pct(s.population, scale));
+        span(miniFood, 0, pct(maxNow, scale));
       },
       body: (_d, s) => {
         const perHead = this.info.foodPerHead > 0 ? this.info.foodPerHead : 1;
@@ -553,9 +587,13 @@ export class InfoBar {
   // ---- 3. Ressources (flux) ----
 
   private flows(catalog: FactoryCatalog): Section {
-    const button = this.button("flow", [el("span", "ib-icon", "⇄"), el("span", "ib-name", "Ressources (flux)")]);
+    // Mini-barre : le fer, la ressource dont dépend la production (même barre que dans le détail).
+    const miniIron = track("flow");
+    miniIron.root.classList.add("iron");
+    const button = this.button("flow", [el("span", "ib-icon", "⇄"), el("span", "ib-name", "Ressources (flux)")], miniIron.root);
 
     const iron = track("flow");
+    iron.root.classList.add("iron");
     const ironValue = el("span", "ib-value");
     ironValue.title = "Extrait / demandé · capacité";
     const ironRow = row(iconLabel("goods/goods-iron-ingot.png", "Fer"), iron.root, ironValue);
@@ -592,19 +630,26 @@ export class InfoBar {
       legend,
     );
     iron.root.title = "Barre pleine : capacité · trait noir : demandé";
+    /** Fer : orange = extrait, rouge = écart au requis, trait noir = requis, orange clair (barre pleine) = capacité. */
+    const ironSpans = (t: Track, d: HumanDetail, s: PlayerStats): void => {
+      const cap = d.ironCapacity;
+      const got = s.ironExtracted;
+      const need = d.ironRequired;
+      span(t.fill, 0, pct(got, cap));
+      span(t.gap, pct(got, cap), got < need ? pct(need, cap) : 0);
+      t.mark.style.left = `${pct(need, cap)}%`;
+      t.mark.hidden = need === 0;
+    };
 
     return {
       button,
       pane,
-      head: () => {},
+      head: (d, s) => ironSpans(miniIron, d, s),
       body: (d, s) => {
         const cap = d.ironCapacity;
         const got = s.ironExtracted;
         const need = d.ironRequired;
-        span(iron.fill, 0, pct(got, cap));
-        span(iron.gap, pct(got, cap), got < need ? pct(need, cap) : 0);
-        iron.mark.style.left = `${pct(need, cap)}%`;
-        iron.mark.hidden = need === 0;
+        ironSpans(iron, d, s);
         ironValue.textContent = `${num(got)} / ${num(need)} · capacité ${num(cap)}`;
         for (const m of machines) {
           const have = m.index >= 0 ? (d.goods[m.index] ?? 0) : 0;
@@ -622,7 +667,10 @@ export class InfoBar {
   // ---- 4. Armement (stock) ----
 
   private stocks(catalog: FactoryCatalog): Section {
-    const button = this.button("stock", [el("span", "ib-icon", "▣"), el("span", "ib-name", "Armement (stock)")]);
+    // Mini-barre : tous les types d'armement additionnés, avec les couleurs et l'échelle du détail.
+    const miniStock = track("stock");
+    miniStock.mark.hidden = false;
+    const button = this.button("stock", [el("span", "ib-icon", "▣"), el("span", "ib-name", "Armement (stock)")], miniStock.root);
 
     const rows = catalog.armamentIds.map((id, index) => {
       const t = track("stock");
@@ -640,11 +688,32 @@ export class InfoBar {
     hatched.append(decay);
     legend.append(legendItem("front", "sur les fronts"), legendItem("stock", "stock"), legendItem("target", "stock cible"), hatched);
     const pane = this.pane("stock", el("h3", undefined, "Armement (stock)"), ...rows.map((x) => x.r), empty, legend);
+    /**
+     * De gauche à droite : jaune foncé (fronts), bleu (en stock), hachures rouges (au-dessus du stock cible).
+     * Échelle : 1,5 × la cible, ou le total s'il la dépasse davantage, pour que l'excès se voie.
+     */
+    const stockSpans = (t: Track, stock: number, target: number, onFronts: number): void => {
+      const scale = Math.max(Math.floor((target * 3) / 2), stock + onFronts);
+      span(t.deployed, 0, pct(onFronts, scale));
+      span(t.fill, pct(onFronts, scale), pct(onFronts + stock, scale));
+      span(t.hatch, pct(target, scale), 100);
+      t.mark.style.left = `${pct(target, scale)}%`;
+    };
 
     return {
       button,
       pane,
-      head: () => {},
+      head: (d, s) => {
+        let stock = 0;
+        let target = 0;
+        let onFronts = 0;
+        rows.forEach((x) => {
+          stock += d.reserve[x.index] ?? 0;
+          target += d.reserveMax[x.index] ?? 0;
+          onFronts += s.frontEquipment[x.index] ?? 0;
+        });
+        stockSpans(miniStock, stock, target, onFronts);
+      },
       body: (d, s) => {
         let shown = 0;
         for (const x of rows) {
@@ -655,13 +724,7 @@ export class InfoBar {
           x.r.hidden = target === 0 && stock === 0 && onFronts === 0;
           if (x.r.hidden) continue;
           shown++;
-          // Échelle : 1,5 × la cible, ou le total s'il la dépasse davantage, pour que l'excès se voie.
-          const scale = Math.max(Math.floor((target * 3) / 2), stock + onFronts);
-          // De gauche à droite : jaune foncé (fronts), bleu (en stock), hachures rouges (au-dessus du stock cible).
-          span(x.t.deployed, 0, pct(onFronts, scale));
-          span(x.t.fill, pct(onFronts, scale), pct(onFronts + stock, scale));
-          span(x.t.hatch, pct(target, scale), 100);
-          x.t.mark.style.left = `${pct(target, scale)}%`;
+          stockSpans(x.t, stock, target, onFronts);
           x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par tour · ${num(onFronts)} sur les fronts`;
         }
         empty.hidden = shown > 0;
@@ -679,7 +742,9 @@ export class InfoBar {
 
   private frontList(): Section {
     const count = el("strong", "ib-num");
-    const button = this.button("fronts", [el("span", "ib-name", "Fronts"), count]);
+    // Mini-barre : part des fronts du joueur qui sont actifs.
+    const miniFronts = track("flow");
+    const button = this.button("fronts", [el("span", "ib-name", "Fronts"), count], miniFronts.root);
     button.title = "Fronts de votre pays · actifs";
     const activeTitle = el("h4", undefined, "Fronts actifs");
     const peaceTitle = el("h4", undefined, "Fronts en paix");
@@ -721,7 +786,9 @@ export class InfoBar {
       pane,
       head: () => {
         const mineList = this.fronts.filter((f) => mine(f) >= 0);
-        count.textContent = `${mineList.filter((f) => f.active).length} / ${mineList.length}`;
+        const active = mineList.filter((f) => f.active).length;
+        count.textContent = `${active} / ${mineList.length}`;
+        span(miniFronts.fill, 0, pct(active, mineList.length));
       },
       body: render,
     };
