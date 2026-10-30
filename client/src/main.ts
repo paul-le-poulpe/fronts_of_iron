@@ -624,7 +624,7 @@ function buildFactoryMenu(catalog: InitMessage["catalog"]): void {
     b.type = "button";
     const root = type.tree[0]!.good;
     if (productIconPath(root) === undefined) b.textContent = `${productSymbol(root)} ${factoryName(type.id)}`;
-    else b.append(productIcon(root), ` ${factoryName(type.id)}`);
+    else b.append(productIcon(root, 32), ` ${factoryName(type.id)}`);
     attachFactoryTreeTip(b, type, factoryMenu);
     b.addEventListener("click", () => setFactoryArmed(type.id));
     factoryMenu.appendChild(b);

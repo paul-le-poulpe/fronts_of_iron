@@ -10,6 +10,7 @@
 
 import { playerColor, rgbCss } from "./painter.ts";
 import { type BreakthroughView, type FrontSideView, type FrontView, type HumanOrder, type MilitaryCatalog, type UnitInfo } from "./protocol.ts";
+import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheName, playerName, unitName } from "./names.ts";
 
 const pctFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -322,7 +323,7 @@ export class FrontPanel {
         // L'image est dans un conteneur : une image qui serait elle-même la cellule de la grille serait écrasée sur la largeur.
         const icon = (): HTMLElement => {
           const i = el("img", "fp-icon-img");
-          i.src = `icons/${unit.icon}`;
+          i.src = `icons/${icon32Path(unit.icon)}`;
           i.alt = "";
           const box = el("div");
           box.append(i);
@@ -491,7 +492,7 @@ export class FrontPanel {
       // Colonnes, de gauche à droite : le camp qui perce à gauche, attaque puis défense de première puis de seconde ligne ;
       // à droite, la même suite en miroir. Les effectifs sont ceux que le moteur engagera (prévus avant la phase 2).
       const cols = owner === L ? (["a", "i", "d1", "d2"] as const) : (["d2", "d1", "i", "a"] as const);
-      t.rows.style.setProperty("--bt-cols", owner === L ? "1fr 22px 1fr 1fr" : "1fr 1fr 22px 1fr");
+      t.rows.style.setProperty("--bt-cols", owner === L ? "1fr 34px 1fr 1fr" : "1fr 1fr 34px 1fr");
       const lines: HTMLElement[] = [];
       const names = el("div", "fp-bt-row h");
       const mine = el("span", "name", playerName(front.players[owner]!));
@@ -509,8 +510,8 @@ export class FrontPanel {
         const row = el("div", "fp-bt-row");
         for (const c of cols) {
           if (c === "i") {
-            const icon = el("img", "ib-img");
-            icon.src = `icons/${u.icon}`;
+            const icon = el("img", "ib-img big");
+            icon.src = `icons/${icon32Path(u.icon)}`;
             icon.alt = unitName(u.id);
             row.append(icon);
           } else row.append(el("span", "cnt", numFmt.format(counts[c])));

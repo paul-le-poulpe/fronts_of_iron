@@ -540,6 +540,14 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   (`image-rendering: pixelated`) ; `pop-default` sur l'onglet, une icône par
   occupation dans son détail. Les machines tirent la leur de `icon` dans
   `config/goods.ts` (voir ci-dessous).
+  **Icônes en 32 px (essai)** : dans l'interface des usines (onglet Production,
+  menu « Inaugurer une usine » et son arbre de progression au survol) et dans l'onglet militaire (tableau des unités et
+  combats), les icônes de biens, d'armement et d'unités sont affichées à 32 px
+  (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; la barre du haut et
+  les autres infobulles restent à 16 px. `icons.ts` (`ICONS_32`) associe à trois icônes
+  d'armement (AA, AT, artillerie) leur fichier dessiné en 32 × 32 ; les autres sont
+  les fichiers 16 × 16 agrandis sans lissage. Provisoire : à terme, un bien aura
+  ses deux versions dessinées.
   **Menu « Carte »** : dernier élément de la barre (bouton `Carte ▾`, texte plus
   gros que les sections ; une icône de carte le remplacera). Son bord droit est
   contre le bord gauche du panneau latéral : `margin-right: var(--panel-w)`, la

@@ -129,7 +129,7 @@ export class ProductionPanel {
     const meta = el("span", "muted");
     meta.textContent = `${factoryName(f.type)} · niveau ${f.level}`;
     // Le bien qui a le plus de lignes construites représente l'usine (actives ou non).
-    const mark = productIcon(dominantGood(this.tree(f.type), f.groups));
+    const mark = productIcon(dominantGood(this.tree(f.type), f.groups), 32);
     head.append(grip, title, mark, meta);
     section.append(head);
 
@@ -188,7 +188,7 @@ export class ProductionPanel {
     row.dataset["city"] = String(f.city);
     row.dataset["good"] = g.good;
     const grip = this.grip({ kind: "line", city: f.city, good: g.good }, row);
-    const sym = productIcon(g.good);
+    const sym = productIcon(g.good, 32);
     if (!attachGoodTip(sym, g.good)) sym.title = productName(g.good);
     const slider = el("input") as HTMLInputElement;
     slider.type = "range";
@@ -413,7 +413,7 @@ function span(text: string): HTMLElement {
 
 /** Symbole d'un bien, avec son infobulle construite s'il en a une. */
 function goodSpan(good: string): HTMLElement {
-  const s = productIcon(good);
+  const s = productIcon(good, 32);
   attachGoodTip(s, good);
   return s;
 }

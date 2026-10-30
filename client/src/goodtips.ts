@@ -129,7 +129,7 @@ function factoryTreeTip(type: FactoryTypeInfo): Node {
     const li = el("li");
     const row = el("div", "tip-tree-node");
     // Sans icône, un carré en pointillés plutôt que le symbole texte, qui répéterait le nom.
-    row.append(productIconPath(good) === undefined ? el("span", "tip-tree-ph") : productIcon(good));
+    row.append(productIconPath(good) === undefined ? el("span", "tip-tree-ph") : productIcon(good, 32));
     row.append(el("span", parent === null ? "tip-tree-root" : undefined, productName(good)));
     li.append(row);
     if (parent === null) li.append(el("div", "tip-tree-sub", "production de base"));
