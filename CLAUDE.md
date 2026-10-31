@@ -31,11 +31,12 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
 - `Docs/Design/03-Client.md` — le client : mode solo, messages avec le Worker,
   affichage, interface provisoire ;
 - `Docs/Design/04-Tooltips.md` — feuille de route des infobulles des icônes ;
-- `Docs/Design/05-Fronts.md` — fronts terrestres (version 1), document
-  thématique qui fait foi : détection, unités, affectation des troupes,
-  attaques, combat, avancée, prise de ville, encerclement, interface, et notes
-  d'implémentation. Historique des discussions (ne fait pas foi) :
-  `05-Fronts-History.md`.
+- `Docs/Design/05-Fronts.md` — fronts terrestres (version 1 : les divisions,
+  pas encore implémentée), document thématique qui fait foi : détection,
+  divisions, placement, renfort, attaques, combat, avancée, prise de ville,
+  encerclement, interface, et notes d'implémentation. Historique des
+  discussions (ne fait pas foi) : `05-Fronts-History.md`, qui garde aussi la
+  version 0.1, celle du code actuel (tag `v0.1`).
 
 ---
 

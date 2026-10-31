@@ -13,7 +13,7 @@ garde qu'un résumé et y renvoie. Une règle n'est écrite qu'à un seul endroi
 
 | Domaine | Document |
 | --- | --- |
-| Fronts terrestres : détection, unités, affectation des troupes, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
+| Fronts terrestres : détection, divisions, placement sur les fronts, renfort, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
 
 Un fichier dont le nom finit par `-History` (par exemple `05-Fronts-History.md`)
 est un historique de discussions : il ne fait jamais foi.
@@ -61,8 +61,8 @@ Modules prévus :
 | Routes terrestres et maritimes | décrit en partie (§3.5, §3.6). Nœuds : les villes sur terre, les zones maritimes en mer (§2.1) |
 | Croissance des villes | décrit (§3.7) : affichage seulement, pas de taille dans le moteur |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
-| Fronts terrestres | version 1 décrite (`05-Fronts.md`, résumé §3.8) et **implémentée** (26 octobre 2026), sans les bots ; fronts aériens et maritimes plus tard |
-| Armée, combat | terre : `05-Fronts.md` (unités, troupes, combat, prise de ville) ; air et mer : annoncé, non décrit |
+| Fronts terrestres | version 1 (divisions) décrite le 30 octobre 2026 (`05-Fronts.md`, résumé §3.8), **non implémentée** ; le code implémente la version 0.1 (tag `v0.1`). Fronts aériens et maritimes plus tard |
+| Armée, combat | terre : `05-Fronts.md` (divisions, combat, prise de ville) ; air et mer : annoncé, non décrit |
 | Politique entre joueurs | décrit en partie (§1, Diplomatie) : statuts neutre, pacte de non-agression, guerre ; menu au clic sur un joueur. Ni alliance, ni droit de passage, ni garantie d'indépendance, ni commerce dans cette version |
 
 Le joueur agit par une barre de boutons. Pour l'instant, tous les boutons sont
@@ -254,7 +254,7 @@ l'auteur) : seul le rayon d'expansion est réglé, le moteur en déduit l'autre.
 **Ordre de grandeur** (repère de l'auteur, 25 octobre 2026, pas une règle du
 moteur) : le rayon de contrôle d'une ville vaut environ **10 000 m**. Avec 25
 cases, une case fait environ 400 m. Sert à choisir les valeurs exprimées en
-mètres, comme la largeur de front (`05-Fronts.md` : 5 000 m par connexion).
+mètres (la largeur d'un front, elle, se compte en connexions : `05-Fronts.md` §2.2).
 D'autres types de villes pourraient venir plus tard ; ce n'est pas prévu.
 
 ### 3.2 Zone d'une ville
@@ -488,14 +488,17 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
 
 - Un **front** est l'ensemble des routes (§3.5) entre un groupe d'un joueur et
   un groupe d'un autre joueur. Il existe en paix (front potentiel, où l'on peut
-  déjà placer des troupes) et en guerre (front actif).
-- Le joueur y affecte des **unités** (infanterie, équipements, blindés ;
-  `config/units.ts`) en première et en seconde ligne, selon des niches, une
-  priorité par front et des réglages par type d'unité.
-- En guerre, il lance des **attaques** : attaque sur tout le front, percées sur
-  une route, barrage (hors périmètre). Les rounds de combat font des pertes et
-  font avancer le front le long des routes ; le front arrivé au bout d'une
-  route prend la ville. Encerclement à la prise.
+  déjà placer des divisions) et en guerre (front actif).
+- Le joueur crée des **divisions** de types prédéfinis (un stock d'hommes et
+  d'équipements ; `config/divisions.ts`), qui existent en dehors des fronts. Il
+  les déplace par glisser-déposer entre la réserve nationale et les fronts ;
+  sur un front, elles se rangent par niche en première ligne (combat) et en
+  seconde ligne (remplacement).
+- En guerre, il lance l'**attaque sur tout le front** (percée : version 2 ;
+  barrage : hors périmètre). Les rounds de combat font perdre de l'équipement
+  et des hommes aux divisions de première ligne et font avancer le front le
+  long des routes ; le front arrivé au bout d'une route prend la ville.
+  Encerclement à la prise.
 - Le front ne change pas la propriété des cases tant que la ville ne change pas
   de main.
 
@@ -530,9 +533,11 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
      à 100 % ;
   4. ceux qui n'ont toujours pas de surface à travailler forment la
      **population inactive** ;
-  5. les **soldats** des fronts sont recrutés en dernier, parmi les inactifs,
-     sauf en mobilisation forcée, où ils passent en premier (règles dans
-     `05-Fronts.md` §4.1).
+  5. les **hommes des divisions** ne travaillent pas : la répartition se fait
+     sur la population moins ces hommes. La création d'une division et le
+     renfort prennent leurs hommes parmi les inactifs ; en mobilisation forcée,
+     le renfort passe avant les emplois (règles dans `05-Fronts.md` §3.5,
+     §4.3).
 
   ```
   F, P              = fermiers et pêcheurs disponibles, selon le réglage
@@ -1123,15 +1128,11 @@ fusils                       production de base de l'usine
 | Répondre à une proposition | l'auteur de la proposition, accepter ou refuser | le joueur est la cible d'une proposition de cet auteur ; pour accepter, le statut est encore celui que la proposition change | accepter : statut pacte (pacte) ou neutre (paix) ; refuser : rien ne change. Dans les deux cas la proposition disparaît |
 | Changer de capitale | la ville | la ville appartient au joueur ; coût et conditions à définir (§3.4) | la ville devient la capitale ; recalcule les villes reliées (§3.5, §3.6) |
 | Interdire / autoriser une zone maritime | la zone | la zone existe | ajoute ou retire la zone des zones interdites du joueur ; recalcule ses routes maritimes (§3.6) |
-| Régler la priorité d'un front | le front, le niveau (1, 2, 3) | le joueur est un camp du front | `set_front_priority` (`05-Fronts.md` §4.3, §5) |
-| Autoriser la réassignation | le front, oui / non | idem | `set_front_reassign` (§4.4) |
-| Régler une unité sur un front | le front, le type d'unité, première ligne / équilibré / seconde ligne | idem | `set_unit_line_mode` (§4.2) |
-| Autoriser un type d'unité sur un front | le front, le type d'unité, oui / non | idem | `set_unit_allowed` (`05-Fronts.md` §4.2) |
-| Régler « Motorisé seulement » | le front, oui / non | idem | `set_breakthrough_motorized_only` (§7.2) |
-| Mobilisation forcée | oui / non | toujours | `set_forced_mobilization` (§4.1) |
+| Créer une division | le type de division | stock d'armement et inactifs suffisants pour la remplir | `create_division` (`05-Fronts.md` §3.5) |
+| Supprimer une division | la division | elle est au joueur, dans la réserve nationale, ni en déplacement ni en formation | `delete_division` (§3.5) |
+| Déplacer des divisions | les divisions ; la réserve nationale, ou un front et une ligne | au joueur, pas en formation ; le joueur est un camp du front | `move_division` (§4, §5.2) |
+| Mobilisation forcée | oui / non | toujours | `set_forced_mobilization` (§4.3) |
 | Lancer ou arrêter l'attaque sur tout le front | le front | front actif ; le joueur en est un camp | `start_front_attack`, `stop_front_attack` (§5) |
-| Lancer une percée | le front, la connexion | front actif ; la connexion est dans ce front ; pas déjà une percée de ce camp sur cet axe | `start_breakthrough` (§7.2) |
-| Annuler une percée | la percée | elle est au joueur | `cancel_breakthrough` (§5) |
 
 Les noms et formats exacts des ordres sont fixés avec la session du moteur.
 
@@ -1177,7 +1178,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; **1**, choisi avec l'auteur : une case coûte `1 + altitude` (de 1 à 32). Constante `ROAD_HEIGHT_COST_FACTOR` de `client/src/roadpaths.ts` |
-| `FRONTS`, `UNITS`, `NICHES` | réglages des fronts et des unités militaires : `config/fronts.ts` et `config/units.ts`, décrits dans `05-Fronts.md` §3 et §12 |
+| `FRONTS`, `DIVISIONS`, `NICHES` | réglages des fronts et des divisions : `config/fronts.ts` et `config/divisions.ts` (aujourd'hui encore `config/units.ts`, version 0.1), décrits dans `05-Fronts.md` §3 et §12 |
 | `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
 | `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
 | `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |
@@ -1238,8 +1239,9 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Routes terrestres : chemin A* sur les cases, plus cher en altitude (§3.5).
   Sans chemin de terre : par les deux ports, en pointillés sur la mer (§3.6).
 - Routes maritimes : courbe lissée (Bézier) par les zones du chemin (§3.6).
-- Fronts : double ligne rouge, zones hachurées, soldats sur les connexions, liste et panneau des
-  fronts, mobilisation forcée, barre jaune de l'armement : `05-Fronts.md` §11.
+- Fronts : double ligne rouge, zones hachurées, soldats sur les connexions, liste et fenêtre des
+  fronts, onglet des forces et pions des divisions, mobilisation forcée, barre jaune de
+  l'armement : `05-Fronts.md` §11.
 - Diplomatie : petit menu à côté de la souris, au clic sur le territoire d'un
   autre joueur (§1) ; les propositions et les changements de statut arrivent
   par des notifications empilées en bas à gauche de la carte (03-Client §7).
@@ -1310,7 +1312,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - Le réseau de routes terrestres se déduit des villes (§3.5) : il peut être
   gardé dans l'état ou recalculé, le résultat est le même. Il est recalculé
   quand une ville est fondée ou disparaît.
-- Fronts, troupes, attaques : état et hash décrits dans `05-Fronts.md` §13.
+- Fronts, divisions, attaques : état et hash décrits dans `05-Fronts.md` §13.
 - Le réseau maritime (§3.6) est calculé une fois, à la génération de la
   carte, après les zones maritimes, et ne change pas. Comme les zones, il est
   recalculé par chaque client à partir de la graine.
