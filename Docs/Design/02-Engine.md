@@ -380,7 +380,7 @@ Une `City.player` change à la prise de la ville.
 
 | Ordre | Champs | Valide si | Effet |
 | --- | --- | --- | --- |
-| `create_division` | `division` (clé de `DIVISIONS`) | les inactifs et le stock d'armement suffisent à remplir la division | division en formation dans la réserve ; hommes et armement retirés |
+| `create_division` | `division` (clé de `DIVISIONS`) | les inactifs et le stock d'armement suffisent à remplir ses composants requis | division en formation dans la réserve ; hommes et armement requis retirés, composants optionnels à 0 (renfort) |
 | `delete_division` | `id` | la division est au joueur, dans la réserve nationale, ni en formation ni en déplacement | hommes et armement rendus au stock ; la division est retirée |
 | `move_division` | `ids` (tableau), `front` (0 : réserve), `line` (`first` ou `second`, facultatif ; absent : seconde ligne) | `front` est 0 ou un front dont le joueur est un camp ; au moins une division est déplacée | déplace les divisions du joueur hors formation ; les autres de la liste sont ignorées |
 | `set_forced_mobilization` | `enabled` (booléen) | toujours | `forcedMobilization` du joueur |
