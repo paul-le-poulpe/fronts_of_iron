@@ -12,8 +12,8 @@ garde qu'un résumé. Règles décidées avec l'auteur les 29 et 30 octobre 2026
 - **Choix provisoires** : ce que l'auteur n'a pas tranché mais qu'il faut
   bien choisir pour implémenter est marqué « *provisoire* » et listé au §15.
   Tout le reste est décidé.
-- **Version 2** (plus tard, §16) : la percée refaite, la réserve active, la
-  boîte des forces de percée.
+- **Version 2** (décidée le 31 octobre 2026) : la **réaction rapide**, les
+  **boîtes de percée** (§4.6) et la **percée** (§7.2).
 - **Hors périmètre** : fronts aériens et maritimes, avions, barrage
   d'artillerie, bots (§16).
 
@@ -229,7 +229,9 @@ composants de poids 0, est perdu).
 | `attackMultiplier` | multiplie les attaques de la division quand son camp attaque ; aucun multiplicateur en défense |
 | `armorPercent` | de 0 (infanterie) à 100 (chars) : part des dégâts antiblindés qu'elle prend, le reste en anti-infanterie (§6.2) |
 | `movement` | `foot` ou `motorized` |
-| `breakthroughWidth`, `breakthroughMultiplier`, `counterAttackMultiplier` | gardés pour la percée de la V2 ; sans effet en V1 |
+| `breakthroughWidth` | largeur tenue dans une percée, en liaisons (§7.2) |
+| `breakthroughMultiplier` | multiplie les attaques de la division quand elle perce (§7.2) |
+| `counterAttackMultiplier` | multiplie les attaques de la division dans une force de contre-attaque (§7.2) |
 
 **Valeurs** (validées par l'auteur le 31 octobre 2026, à partir des unités de
 la version 0.1 ; 1 liaison = 1 000 m). Un type par niche pour l'instant.
@@ -302,8 +304,8 @@ Attributs :
 Une division est à **un seul endroit** :
 
 - la **réserve nationale** ;
-- un **front**, dans une ligne : **première ligne** ou **seconde ligne**
-  (réserve active et boîte des forces de percée : V2) ;
+- un **front**, dans une ligne : **première ligne**, **seconde ligne**,
+  **réaction rapide** ou une **boîte de percée** (§4.6) ;
 - **en déplacement** vers l'un de ces endroits (§4.4).
 
 Le joueur la place par glisser-déposer (ordre `move_division`, plusieurs
@@ -362,8 +364,9 @@ place.
 - Tout déplacement entre la réserve nationale et un front, ou entre deux
   fronts, prend `FRONTS.transferRounds` **rounds de combat** (**10**, soit
   100 tours, 10 s).
-- *Provisoire* : un déplacement entre les deux lignes d'un même front est sans
-  délai. Un nouvel ordre vers la destination d'un déplacement en cours ne
+- **Sans délai** entre la seconde ligne, la réaction rapide et les boîtes de
+  percée d'un même front (§4.6). *Provisoire* : sans délai aussi entre la
+  première ligne et ces endroits. Un nouvel ordre vers la destination d'un déplacement en cours ne
   relance pas le délai ; il change seulement la ligne demandée.
 - La ligne demandée (première ou seconde) est gardée pendant le trajet ; à
   l'arrivée, le rangement (§4.2) la place.
@@ -379,6 +382,38 @@ place.
   (00-Game §8.3).
 - Le déclin ne retire que l'équipement **hors des divisions**.
 
+### 4.6 Réaction rapide et boîtes de percée (version 2)
+
+Chaque camp d'un front a, en plus de ses deux lignes :
+
+- une **réaction rapide** : des divisions qui ne sont ni en première ni en
+  seconde ligne, rangées par niche comme une ligne. Elles ne prennent pas part
+  à l'attaque sur tout le front ; elles défendent contre les percées adverses
+  (§7.2, combat 2). De préférence des unités motorisées (§7.2, facteur de
+  réaction).
+- des **boîtes de percée**, dans un ordre (« Percée 1 », « Percée 2 »…) :
+  chacune est un groupe de divisions, sans ligne. Elles ne prennent pas part à
+  l'attaque sur tout le front ; elles servent à lancer des percées (§7.2).
+
+Règles :
+
+- **Création d'une boîte** : déposer des divisions sur la boîte « + » crée une
+  nouvelle boîte qui les contient. On ajoute ensuite des divisions à une boîte
+  existante en les déposant dessus.
+- Une boîte **reste** après une percée, même si ses divisions sont toutes
+  engagées : on peut relancer une percée avec les divisions qui y restent. Une
+  boîte n'est supprimée que quand elle n'a plus aucune division, ni dans la
+  boîte ni engagée dans une de ses percées.
+- **Déplacements** : sans délai entre la seconde ligne, la réaction rapide et
+  les boîtes du même front (§4.4) ; avec le délai habituel vers la réserve ou
+  un autre front.
+- **Renfort** (§4.3) : comme toute division qui n'est pas en combat. Une
+  division engagée dans une percée (attaquant, tranche de première ligne ou
+  force de contre-attaque) est en combat : pas de renfort.
+- *Provisoire* : un front qui change (§2.5) — une division qui change de front
+  sort de sa boîte et va en seconde ligne ; une boîte dont le front disparaît
+  est supprimée.
+
 ## 5. Attaques et lignes en combat
 
 ### 5.1 Types et ordres
@@ -387,7 +422,7 @@ place.
 | --- | --- | --- |
 | **Attaque sur tout le front** (assaut généralisé) | toute la première ligne des deux camps | sur toutes les routes du front (§7) |
 | **Barrage d'artillerie** | hors périmètre | aucune |
-| **Percée** | V2 : **le bouton disparaît** jusque-là | — |
+| **Percée** | une boîte de percée contre une tranche de la première ligne adverse, puis contre sa réaction rapide (§7.2) | sur l'axe choisi |
 
 - Le bouton est un **interrupteur** : un clic lance, un second arrête.
 - **Les deux joueurs peuvent attaquer en même temps** sur le même front : l'état
@@ -402,7 +437,9 @@ place.
 | --- | --- | --- |
 | `create_division` | type de division | stocks et inactifs suffisants (§3.5) |
 | `delete_division` | division | elle est au joueur, dans la réserve nationale, ni en déplacement ni en formation |
-| `move_division` | liste de divisions ; destination : réserve nationale, ou front + ligne (première, seconde, ou sans ligne → seconde) | chaque division est au joueur, n'est pas en formation ; le joueur est un camp du front. *Provisoire* : les divisions invalides de la liste sont ignorées, les autres déplacées |
+| `move_division` | liste de divisions ; destination : réserve nationale, ou front + ligne (première, seconde, réaction rapide, boîte de percée existante, nouvelle boîte ; sans ligne → seconde) | chaque division est au joueur, n'est pas en formation ni engagée dans une percée ; le joueur est un camp du front ; la boîte est à lui sur ce front. *Provisoire* : les divisions invalides de la liste sont ignorées, les autres déplacées |
+| `start_breakthrough` | front, boîte, axe (`city1`, `city2`) | front actif ; la boîte est au joueur sur ce front ; l'axe est une connexion du front ; la boîte a au moins une division disponible |
+| `cancel_breakthrough` | percée | la percée est au joueur (*provisoire* : l'annulation de la v0.1 est gardée) |
 | `set_forced_mobilization` | oui / non | toujours |
 | `start_front_attack` / `stop_front_attack` | front | front actif ; le joueur en est un camp |
 
@@ -501,6 +538,8 @@ avancée (§7), calculée sur les lignes rangées.
 
 ## 7. Avancée
 
+### 7.1 Attaque sur tout le front
+
 L'attaquant fait avancer le front vers la ville adverse ; sur une connexion,
 la position augmente si l'attaquant est `p1`, diminue si c'est `p2`. Quand
 les deux camps poussent, les deux avancées s'appliquent en sens contraire.
@@ -532,6 +571,80 @@ avancée      = arrondi(déséquilibre × v)     en millièmes de route
   `avancée = floor((2 × x × v + (B − A) × d) / (2 × (B − A) × d))`.
 - **Défenseur sans infanterie engagée** (`d = 0`) : vitesse maximale.
   **Attaquant sans infanterie engagée** : aucune avancée.
+
+### 7.2 Percée (version 2)
+
+Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
+(05-Fronts-History, §7.2 de la v0.1).
+
+1. **Lancement** (ordre `start_breakthrough`) : le joueur choisit une boîte de
+   percée, puis un **axe** sur la carte, une connexion du front (mode choix
+   d'axe, §11.1). Front actif seulement.
+2. **Largeur de la percée** : **une liaison** (une connexion), quelle que soit
+   la largeur du front. Les divisions y comptent avec leur
+   **`breakthroughWidth`** (une tankette : 2 en première ligne, 1 en percée).
+3. **Force qui perce** : prise dans la boîte **au lancement**, niche par niche,
+   jusqu'à remplir une liaison par niche, dans l'ordre de choix (§4.2 : meilleur
+   état, meilleur type, plus petit identifiant). La dernière peut n'être
+   engagée qu'en partie (part engagée, §4.2) ; elle est quand même **toute
+   prise** par cette percée. Les autres divisions **restent dans la boîte** et
+   peuvent servir à une autre percée. **Pas de renfort** de la force en cours
+   de percée : seules les divisions engagées au départ y prennent part.
+   *Provisoire* : appui-feu sans infanterie dans la force, comme au §4.2 (il
+   n'est pas engagé).
+4. **Délai** : le combat commence `FRONTS.breakthroughDelayTurns` tours après
+   le lancement (**50**, 5 s). Pendant le délai, la force est déjà prise (elle
+   ne combat pas).
+5. **Combat 1, contre la première ligne** : le défenseur engage une **tranche
+   de sa première ligne** de largeur une liaison par niche, en `frontWidth`,
+   dans l'ordre de choix (*provisoire*). Cette tranche **reste en première
+   ligne** et continue de prendre part à l'attaque sur tout le front s'il y en
+   a une (*provisoire*). Rien ne la remplace pendant la percée. Pas d'avancée
+   à chaque round.
+6. **Première ligne percée** : quand plus aucune infanterie de la tranche
+   n'est engagée (détruite ou en fuite). Alors :
+   - le front **avance d'un coup** sur l'axe :
+     `saut = arrondi(N × v × facteur de réaction)`, `N` =
+     `FRONTS.breakthroughJumpRounds` = **10** ; `v` la vitesse de la force qui
+     perce (§7.1 : motorisée seulement si toute son infanterie l'est) ;
+   - le combat 2 commence.
+7. **Facteur de réaction** du défenseur, selon le pourcentage `m` de
+   motorisation de sa force de contre-attaque (largeur des divisions
+   motorisées / largeur de toutes, en `breakthroughWidth`, niches principales
+   seulement, *provisoire*) : `m` = 100 % → 1 ; `m` < 50 % → `X` =
+   `FRONTS.slowReactionFactor` = **3** ; entre les deux, linéaire (à 75 % : 2).
+   Une défense à pied réagit lentement et laisse l'attaquant avancer plus.
+8. **Combat 2, contre la réaction rapide** : la **force de contre-attaque** du
+   défenseur remplit une liaison par niche, en `breakthroughWidth`, d'abord
+   avec sa **réaction rapide**, puis complétée par sa **seconde ligne** pour
+   arriver si possible à 100 % de couverture dans chaque niche ; dans l'ordre
+   de choix. **Plusieurs percées** sur le même front : la réaction rapide et
+   la seconde ligne se partagent **équitablement** entre elles, recalculé à
+   chaque round. Les divisions de la force restent dans leur ligne.
+9. **Seconde ligne percée** : quand plus aucune infanterie de la force de
+   contre-attaque n'est engagée, ou qu'il n'y en a pas : le front avance
+   jusqu'à la ville au bout de l'axe, qui tombe (§10).
+10. **Multiplicateurs** : la force qui perce attaque avec son
+    **`breakthroughMultiplier`**, dans les deux combats. La force de
+    contre-attaque (réaction rapide et seconde ligne) attaque avec son
+    **`counterAttackMultiplier`**. La tranche de première ligne attaque sans
+    multiplicateur. Le défenseur prend ses PV de défense
+    (`defenseHitPointsMultiplier`) dans les deux combats (*provisoire*).
+11. **Dégâts et pertes** : comme au §6, sur une largeur d'une liaison :
+    partage infanterie / chars au prorata du remplissage, pertes de
+    l'appui-feu, pertes tirées. **Fuite** (§5.4) : une division de la force
+    qui perce qui tombe à 25 % retourne dans sa boîte, en fuite.
+12. **Essoufflement** : la percée s'arrête quand l'état moyen de la force qui
+    perce, pondéré par la largeur engagée, tombe sous
+    `FRONTS.breakthroughExhaustionPercent` = **35** % de sa valeur au début du
+    combat 1. L'avancée déjà gagnée reste.
+13. **Fin de la percée** (réussie, essoufflée, annulée, front passé en paix,
+    axe disparu) : les divisions survivantes de la force qui perce
+    **retournent dans leur boîte**, sans délai ; celles du défenseur n'ont
+    jamais quitté leur ligne.
+14. *Provisoire* : boîte sans division disponible au lancement : l'ordre est
+    invalide. Plus aucune division dans la force au début du combat 1 : la
+    percée s'arrête, le joueur est prévenu.
 
 ## 8. Fondation pendant une guerre
 
@@ -632,8 +745,14 @@ contraire.
   du front (§11.5, petit point rouge foncé) et, de chaque côté sur le segment
   droit entre les deux villes, **un rond de la couleur du joueur de ce côté**,
   de la taille d'une ville, qui touche le point. Fronts actifs seulement.
-- Les éléments de carte de la percée (mode choix d'axe, flèche) disparaissent
-  avec elle jusqu'à la V2.
+- **Mode choix d'axe** (bouton « Lancer » d'une boîte de percée) : la fenêtre
+  du front se ferme le temps du choix ; un clic sur la carte lance la percée
+  sur la connexion du front la plus proche du clic (*provisoire*), surlignée
+  au survol ; Échap annule. Repris de la version 0.1.
+- **Percée en cours** : un trait rouge sur le segment droit entre les deux
+  villes de l'axe et une flèche au milieu, de la ville de celui qui perce vers
+  celle de son adversaire. Les deux joueurs voient la même chose. Repris de la
+  version 0.1.
 
 ### 11.2 Onglet des forces (nouveau)
 
@@ -762,19 +881,18 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
 
 **Corps**, de gauche à droite :
 
-- côté du joueur : colonne des **forces de percée** (V2), colonne de la
-  **réaction rapide** (V2), puis une **capsule** (rectangle arrondi) qui
+- côté du joueur : colonne des **forces de percée**, colonne de la
+  **réaction rapide**, puis une **capsule** (rectangle arrondi) qui
   contient la **seconde ligne** puis la **première ligne** ;
 - **barre verticale** ;
 - côté adverse, en miroir : une capsule avec la **première ligne**, contre la
   barre et **de la même largeur que celle du joueur**, puis la **seconde
   ligne** comprimée ; puis la réaction rapide et les forces de percée
-  comprimées (V2). Le reste du côté adverse est comprimé (maquette : 800 px
+  comprimées. Le reste du côté adverse est comprimé (maquette : 800 px
   pour le joueur, 484 px pour l'adversaire).
-- **En V1**, les colonnes de la V2 (forces de percée, réaction rapide, et
-  leurs colonnes comprimées chez l'adversaire) sont **dessinées vides** : titre,
-  rangées par niche pour la réaction rapide, boîte « + » des forces de percée
-  sans effet.
+- **Réaction rapide** et **boîtes de percée** se présentent comme les lignes
+  d'un front (rangées par niche, pions de §11.3), sauf que les boîtes de
+  percée **n'ont pas de couleur de niche**.
 - **Zone des avions** : en bas, sur toute la largeur, un cinquième de la
   hauteur, réservée et vide.
 - Chaque colonne a un petit titre gris centré au-dessus (« Seconde ligne »,
@@ -849,14 +967,38 @@ apparaît en bas de la colonne de gauche ; y déposer des divisions les renvoie
 - Les divisions en formation ou en déplacement ne sont pas déplaçables
   (§3.5, §4.4).
 
-**V2** (pour mémoire, non affiché en V1) : colonne des forces de percée du
-joueur (170 px : liste défilante de boîtes « Percée n » avec bouton
-« Lancer », boîte « + » à bord pointillé, vue étendue de 330 px au survol
-d'une boîte, avec rangées par niche et pourcentages de la largeur du front de
-percée) ; colonne de réaction rapide (170 px, rangées par niche) ; colonnes
-comprimées de l'adversaire (une boîte comprimée par force de percée, boîte
-« ··· » pour celles qui ne tiennent pas, cadre de 330 px au survol). La zone
-de retour à la réserve se place alors sous la boîte « + ».
+**Forces de percée du joueur** (colonne de 170 px) :
+
+- une **liste de boîtes** qui défile verticalement (pas de compression des
+  boîtes) ; chaque boîte : son nom (« Percée 1 », « Percée 2 »…) à gauche et
+  un petit **bouton « Lancer »** à droite (mode choix d'axe, §11.1) ; dessous,
+  ses pions **groupés par type** (3 px entre pions, 10 px entre types), sans
+  fond coloré, jusqu'à 3 lignes ;
+- sous la liste, fixe : la **boîte « + »** à bord pointillé. **Y déposer des
+  divisions crée une nouvelle boîte** (§4.6) ; déposer sur une boîte existante
+  les y ajoute ;
+- **pendant un glisser**, la zone « Retour à la réserve nationale » apparaît
+  sous la boîte « + » ;
+- **au survol d'une boîte**, une vue étendue s'ouvre vers la droite (330 px) :
+  nom et bouton Lancer, rangées par niche colorées (seulement les non vides),
+  pourcentages de couverture d'une liaison (largeur de percée, §7.2), pions.
+
+**Réaction rapide du joueur** (colonne de 170 px) : rangées par niche, comme
+une ligne ; on y dépose des divisions.
+
+**Percées en cours** : la force engagée d'une percée quitte sa boîte (la boîte
+reste dans la liste avec ses autres divisions) et s'affiche **en haut de la
+fenêtre du front**, dans une petite fenêtre par percée, avec les icônes des
+unités des deux camps engagés (force qui perce ; tranche de première ligne ou
+force de contre-attaque). *À proposer* par la session de l'interface et à
+valider par l'auteur (reprend l'idée de la section des percées de la v0.1).
+
+**Colonnes comprimées de l'adversaire** : sa réaction rapide (comme sa seconde
+ligne comprimée) ; ses forces de percée (une boîte comprimée par boîte, icône
+et nombre, sans nom ni bouton ; boîte « ··· » pour celles qui ne tiennent pas
+en hauteur ; au survol de la colonne, un cadre de 330 px vers la gauche avec
+toutes les boîtes, rangées par niche non vides et pourcentages ; titre
+« Percée »).
 
 ### 11.5 Points du front
 
@@ -943,9 +1085,12 @@ la ligne survolée (*provisoire*) :
 | `footSpeedPermille` | 5 | vitesse à pied, en millièmes de route par round |
 | `motorizedSpeedPermille` | 15 | vitesse motorisée |
 
-Les réglages de la percée de la version 0.1 (`breakthroughDelayTurns`,
-`breakthroughJumpRounds`, `slowReactionFactor`,
-`breakthroughExhaustionPercent`) attendent la V2. Supprimés :
+| `breakthroughDelayTurns` | 50 | tours entre le lancement d'une percée et son combat (5 s) |
+| `breakthroughJumpRounds` | 10 | `N` : le saut d'une première ligne percée vaut `N × vitesse × facteur de réaction` |
+| `slowReactionFactor` | 3 | `X` : facteur de réaction d'une défense motorisée à moins de 50 % |
+| `breakthroughExhaustionPercent` | 35 | une percée s'arrête quand l'état moyen de sa force tombe sous ce % de celui du début |
+
+Valeurs de la percée reprises de la version 0.1. Supprimés :
 `metersPerConnection`, `priorityPercent`, `maxSecondLineOvercrowding`,
 `transferTurns`.
 
@@ -1101,17 +1246,19 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
   l'infanterie engagée l'est (§7) ;
 - encerclement appliqué composant par composant (§10.2) ;
 - prise : usine détruite, nouvelle capitale, joueur sans ville (§10.2) ;
+- V2 : sans délai entre la première ligne et la réaction rapide ou une boîte ;
+  division qui change de front sortie de sa boîte (§4.4, §4.6) ; tranche de
+  première ligne dans l'ordre de choix, qui garde part à l'attaque sur tout le
+  front ; PV de défense dans les deux combats ; motorisation sur les niches
+  principales ; appui-feu sans infanterie non engagé dans une percée ;
+  annulation d'une percée ; mode choix d'axe sur la connexion la plus proche
+  (§7.2, §11.1) ;
 - double ligne rouge sur les fronts actifs seulement (§11.1) ;
 - ordre des étapes dans un tour (§13.2).
 
-## 16. Version 2, hors périmètre et pistes
+## 16. Plus tard, hors périmètre et pistes
 
-**Version 2** :
-- la **percée** refaite (bouton absent en V1) ;
-- la **réserve active** (de préférence des unités motorisées, pour répondre
-  aux percées) ;
-- la **boîte des forces de percée** ;
-- une priorité de renfort entre divisions.
+**Pistes** : une priorité de renfort entre divisions (rien n'est décidé).
 
 **Plus tard, sans version fixée** : le **rang** d'une division (0 à 7,
 icônes déjà dessinées, §11.3) ; ce qu'il représente et ses effets sont à
