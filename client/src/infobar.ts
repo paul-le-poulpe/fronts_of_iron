@@ -448,11 +448,12 @@ export class InfoBar {
   private food(): Section {
     const total = el("strong", "ib-num");
     const surplus = el("span", "zero");
-    // Mini-barre : la population (vert plein) et la population que la nourriture du tour fait vivre (vert hachuré).
+    // Mini-barre : la même jauge que « Population » du détail (vert, vert hachuré, gris).
     const miniCap = el("div", "ib-track ib-cap");
     const miniNow = el("i", "cap-now");
     const miniFood = el("i", "cap-food");
-    miniCap.append(miniFood, miniNow);
+    const miniLand = el("i", "cap-land");
+    miniCap.append(miniLand, miniFood, miniNow);
     const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus], miniCap);
     button.title = "Production / tour · surplus";
 
@@ -534,10 +535,13 @@ export class InfoBar {
       head: (_d, s) => {
         total.textContent = num(s.food);
         setSigned(surplus, surplusOf(s));
-        const maxNow = this.info.foodPerHead > 0 ? Math.floor(s.food / this.info.foodPerHead) : 0;
-        const scale = Math.max(maxNow, s.population, 1);
+        const perHead = this.info.foodPerHead > 0 ? this.info.foodPerHead : 1;
+        const maxNow = this.info.foodPerHead > 0 ? Math.floor(s.food / perHead) : 0;
+        const maxLand = Math.max(maxNow, Math.floor(s.foodPotential / perHead));
+        const scale = Math.max(maxLand, s.population, 1);
         span(miniNow, 0, pct(s.population, scale));
         span(miniFood, 0, pct(maxNow, scale));
+        span(miniLand, 0, pct(maxLand, scale));
       },
       body: (_d, s) => {
         const perHead = this.info.foodPerHead > 0 ? this.info.foodPerHead : 1;

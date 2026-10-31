@@ -517,8 +517,10 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   chiffres et, juste dessous, une **mini-barre** (10 px, `.ib-mini`) : la barre
   la plus pertinente de son détail, mise à jour par `head` à chaque tour, détail
   ouvert ou non. Population : la barre empilée de toutes les occupations, avec
-  leurs couleurs. Nourriture : la population (vert plein) et la population que la
-  nourriture du tour fait vivre (vert hachuré), à l'échelle du plus grand des deux.
+  leurs couleurs. Nourriture : la même jauge que la ligne « Population » du détail : la
+  population (vert plein), la population que la nourriture du tour fait vivre
+  (vert hachuré) et le maximum si toutes les cases étaient travaillées (gris),
+  à l'échelle du plus grand des trois.
   Ressources (flux) : la barre du fer, **orange** (`.ib-track.iron`, comme dans
   le détail) : orange clair pour la barre pleine (capacité, ce que les cases de
   fer pourraient donner), orange pour l'extrait, écart rouge, trait noir du
