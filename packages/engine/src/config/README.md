@@ -31,8 +31,8 @@ typecheck`, puis `npm test` (certains tests comparent des résultats chiffrés).
 | `goods.ts` | production, ouvriers et fer par ligne, pour chaque machine | `factories.ts` (`productConfig`), `economy.ts` |
 | `armament.ts` | idem pour chaque type d'armement ; stock cible et déclin | `factories.ts`, `economy.ts` |
 | `factories.ts` | délais de déblocage et de croissance, spécialisation, arbres de production | `economy.ts`, `factories.ts`, `state.ts` |
-| `fronts.ts` | réglages des fronts : durée de formation d'une division, délais de déplacement et de combat, seuils de fuite et d'échange, avancée, vitesses, prise de ville, encerclement (valeurs de l'auteur, 05-Fronts §12) | `fronts.ts`, `placement.ts`, `combat.ts`, `conquest.ts`, `client/src/solo.ts` |
-| `divisions.ts` | types de division (composants : hommes et armement, poids, attaques, largeurs, PV, multiplicateurs décimaux à deux décimales au plus, valeurs de l'auteur, 05-Fronts §3.4) et niches des fronts ; convertis une fois en entiers par `src/divisions.ts` | `divisions.ts`, `placement.ts`, `combat.ts`, `client/src/solo.ts` |
+| `fronts.ts` | réglages des fronts : durée de formation d'une division, délais de déplacement et de combat, seuils de fuite et d'échange, avancée, vitesses, prise de ville, encerclement, percée (délai, saut, facteur de réaction, essoufflement : `breakthroughDelayTurns`, `breakthroughJumpRounds`, `slowReactionFactor`, `breakthroughExhaustionPercent`, valeurs de la version 0.1, 05-Fronts §12) | `fronts.ts`, `placement.ts`, `combat.ts`, `breakthroughs.ts`, `conquest.ts`, `client/src/solo.ts` |
+| `divisions.ts` | types de division (composants : hommes et armement, poids, attaques, largeurs, PV, multiplicateurs décimaux à deux décimales au plus, valeurs de l'auteur, 05-Fronts §3.4) et niches des fronts ; convertis une fois en entiers par `src/divisions.ts` | `divisions.ts`, `placement.ts`, `combat.ts`, `breakthroughs.ts`, `client/src/solo.ts` |
 | `diplomacy.ts` | durée de vie d'une proposition de pacte ou de paix (`DIPLOMACY.proposalTurns`, en tours) ; **valeur provisoire, à fixer par l'auteur** | `diplomacy.ts`, `client/src/solo.ts` (fin de la barre de temps restant) |
 | `limits.ts` | plafonds liés à la taille des tableaux | `cities.ts`, `state.ts` |
 
@@ -137,8 +137,10 @@ puis la ranger dans une seule niche de `NICHES`, du meilleur type au moins bon. 
 décimales au plus (un test le vérifie). Au moins un composant `required`. `client/src/names.ts` : son nom (`UNIT_NAMES`, lu
 par `unitName`) et celui de la niche si elle est nouvelle (`NICHE_NAMES`). Le moteur n'a rien d'autre à changer.
 
-Les champs `breakthroughWidth`, `breakthroughMultiplier`, `counterAttackMultiplier` et `airAttack` sont lus par rien
-dans la version 1 (percée, contre-attaque et aérien : version 2, 05-Fronts §16).
+Les champs `breakthroughWidth`, `breakthroughMultiplier` et `counterAttackMultiplier` sont lus par la percée
+(`breakthroughs.ts`, `combat.ts`, 05-Fronts §7.2) : `breakthroughWidth` fixe la largeur d'une division dans la force qui
+perce et dans la force de contre-attaque. `movement: "motorized"` règle la vitesse de la force qui perce et le facteur de
+réaction. `airAttack` n'est lu par rien (l'aérien n'existe pas encore).
 
 ### Un bien (machine)
 

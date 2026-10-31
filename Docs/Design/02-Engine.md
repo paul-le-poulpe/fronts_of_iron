@@ -17,12 +17,13 @@ joueurs, propositions), et leurs ordres : `found_city`,
 `break_pact`, `propose_peace`, `answer_proposal`. **Les fronts terrestres (version 1 : les divisions)**
 sont implémentés le 31 octobre 2026 (`05-Fronts.md`, qui fait foi) : détection des fronts, divisions
 (création, suppression, déplacement), renfort, mobilisation forcée, rangement des lignes, échange et fuite, attaques,
-combat par round avec appui-feu et pertes tirées, avancée, prise de ville et encerclement, et leurs ordres :
-`create_division`, `delete_division`, `move_division`, `set_forced_mobilization`, `start_front_attack`,
-`stop_front_attack` (§4, « Fronts et divisions »). La version 0.1 (paquets d'unités, tag git `v0.1`) n'existe plus dans le
+combat par round avec appui-feu et pertes tirées, avancée, prise de ville et encerclement. La percée (réaction rapide,
+boîtes de percée, combats de percée, saut, essoufflement) est dans le moteur depuis le même jour (05-Fronts §4.6,
+§7.2). Leurs ordres : `create_division`, `delete_division`, `move_division`, `set_forced_mobilization`,
+`start_front_attack`, `stop_front_attack`, `start_breakthrough`, `cancel_breakthrough` (§4, « Fronts et divisions »). La version 0.1 (paquets d'unités, tag git `v0.1`) n'existe plus dans le
 code. Pas implémenté : coût de création d'une usine ou d'une ligne,
 nombre maximal de lignes, routes maritimes, changement de capitale, commerce, bots qui font la guerre,
-percée et contre-attaque (05-Fronts §16, version 2), fronts aériens et maritimes.
+fronts aériens et maritimes.
 
 ---
 
@@ -47,10 +48,11 @@ percée et contre-attaque (05-Fronts §16, version 2), fronts aériens et mariti
 | `src/diplomacy.ts` | diplomatie (00-Game §1) : statut d'une paire (`statusOf`), propositions, les cinq ordres (`declareWar`, `breakPact`, `propose`, `answerProposal`), `expireProposals`, type des événements |
 | `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
 | `src/divisions.ts` | divisions en entiers (05-Fronts §3) : `Division`, `DIVISION_DATA` (types de `config/divisions.ts` avec multiplicateurs convertis à l'échelle 100, `toScale100`), `NICHE_TYPES`, échelles (`MULT_SCALE`, `WIDTH_SCALE`, `STATE_SCALE`, `LOSS_SCALE`), `stateOf` (état), `isEmpty`, `trimExcess` (excédent rendu au stock), `emptyDivision`, `attackOf` (attaques d'une division engagée), `applyLoss` (pertes tirées), `byChoice`, `countSoldiers`, `divisionEquipment` |
-| `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection` ; `updateFronts` (détection, identité, répartition des divisions), `startWar`, `endWar`, `frontWidth`, `inCombat`, `activeFrontCities`, `splitProportional`, `frontsByPlayer` |
-| `src/placement.ts` | divisions hors du combat (05-Fronts §3.5, §4, §5.3, §5.4) : ordres `createDivision`, `deleteDivision`, `moveDivisions`, `setForcedMobilization` ; renfort à parts égales (`shareEqually`, `reinforceBeforeEconomy`, `reinforceAfterEconomy`) ; `applyArrivals`, `trimAll`, `removeDestroyed` ; rangement des lignes (`arrangeSide`, `arrangeAll`) ; `applyFlight` (fuite), `applySwaps` (échange) |
+| `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection` ; `updateFronts` (détection, identité, répartition des divisions), `startWar`, `endWar`, `frontWidth`, `inCombat` et `hasRound`, `endOf`, `activeFrontCities`, `splitProportional`, `frontsByPlayer` |
+| `src/placement.ts` | divisions hors du combat (05-Fronts §3.5, §4, §5.3, §5.4) : ordres `createDivision`, `deleteDivision`, `moveDivisions` (réserve, première ou seconde ligne, réaction rapide, boîte de percée), `setForcedMobilization` ; renfort à parts égales (`shareEqually`, `reinforceBeforeEconomy`, `reinforceAfterEconomy`) ; `applyArrivals`, `trimAll`, `removeDestroyed` ; rangement des lignes (`arrangeSide`, `arrangeAll`) ; `applyFlight` (fuite), `applySwaps` (échange) |
 | `src/attacks.ts` | ordres d'attaque : `startFrontAttack`, `stopFrontAttack` |
-| `src/combat.ts` | `combatRound` : un round par front en combat (dégâts de chaque camp, pertes de l'appui-feu, application des pertes, fuite, échange, rangement, avancée), puis les prises de villes ; `frontAdvance`, `endOf` |
+| `src/breakthroughs.ts` | percées (05-Fronts §4.6, §7.2) : états `Box` et `Breakthrough` ; ordres `startBreakthrough` (force prise au lancement) et `cancelBreakthrough` ; `beginCombat1` (tranche de première ligne), `assignCounterForces` (forces de contre-attaque, recalculées à chaque round), `checkBreakthrough` (fin de round : saut, seconde ligne percée, essoufflement), `breakthroughFlight`, `reactionFactor100`, `removeEmptyBoxes`, `afterFrontsChanged` (nettoyage après un recalcul des fronts), `endBreakthroughsBetween` (paix) |
+| `src/combat.ts` | `combatRound` : un round par front qui a un round (`hasRound`) ; `Fight` et `fightLosses` (un combat : dégâts des deux forces et pertes de l'appui-feu), un combat par attaque sur tout le front et un par percée, tous dans le même round ; application des pertes, fuite, vérifications des percées, échange, rangement, avancée ; puis les prises de villes ; `frontAdvance` |
 | `src/conquest.ts` | `captureCity` : encerclement (pertes tirées sur la première ligne), changement de propriétaire de la ville et de sa zone, recalcul des fronts |
 | `src/turn.ts` | `applyTurn(state, { turn, intents })` : l'ordre d'un tour est au §4 |
 | `src/hash.ts` | `hashMap`, `hashState` |
@@ -212,7 +214,7 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
   7. `removeDestroyed` : les divisions à 0 % sont retirées de l'état ;
   8. `countSoldiers` ;
   9. `arrangeAll` : rangement des lignes de chaque camp de chaque front (05-Fronts §4.2) ;
-  10. si le numéro du tour est un multiple de `FRONTS.combatTurns`, `combatRound` (un round par front en combat, puis les prises de villes).
+  10. si le numéro du tour est un multiple de `FRONTS.combatTurns`, `combatRound` (un round par front qui a un round, puis les prises de villes, puis `removeEmptyBoxes`).
 
   Il passe ensuite `state.tick` à `turn`, et renvoie la liste des cases dont le
   propriétaire a été écrit, chacune une fois, dans l'ordre de leur première
@@ -328,16 +330,22 @@ Les règles (formation, déplacement, engagement, destruction d'une division) so
 
 Dans `GameState` : `fronts : Front[]` (par identifiant croissant), `nextFrontId`,
 `divisions : Division[]` (toutes les divisions de tous les joueurs, par identifiant croissant ;
-le tableau est réassigné à chaque suppression), `nextDivisionId`. Par joueur :
+le tableau est réassigné à chaque suppression), `nextDivisionId`, `boxes : Box[]` et `nextBoxId`
+(boîtes de percée), `breakthroughs : Breakthrough[]` et `nextBreakthroughId` (percées lancées), les deux
+tableaux par identifiant croissant. Par joueur :
 `forcedMobilization` et `soldiers` (somme des hommes de ses divisions : ils restent dans
 `population` mais ne travaillent pas ; l'étape d'économie se fait sur `population − soldiers`).
 Une `City.player` change à la prise de la ville.
 
 - **Une division** (`divisions.ts`) : `id`, `owner`, `type` (indice dans les clés de `DIVISIONS`),
   `counts` (exemplaires présents par composant, dans l'ordre de `components`), `front`
-  (0 : réserve nationale ; pendant un déplacement : la destination), `line` (`LINE_FIRST`
-  ou `LINE_SECOND`), `engaged` (largeur engagée, millièmes de liaison, 0 hors de la première
-  ligne), `arrivalTick` (déplacement en cours jusqu'à ce tour ; 0 sinon), `formedTick`, `fleeUntilTick`.
+  (0 : réserve nationale ; pendant un déplacement : la destination), `line` (`LINE_FIRST`,
+  `LINE_SECOND`, `LINE_RAPID` : réaction rapide, ou `LINE_BOX` : boîte de percée ; pendant un déplacement,
+  la ligne demandée), `engaged` (largeur engagée en première ligne, millièmes de liaison, 0 ailleurs),
+  `box` (boîte de la division si `line = LINE_BOX`, 0 sinon), `breakthrough` (percée où la division est
+  engagée : force qui perce, tranche de première ligne ou force de contre-attaque ; 0 sinon),
+  `btEngaged` (largeur engagée dans cette percée, millièmes de liaison), `arrivalTick`
+  (déplacement en cours jusqu'à ce tour ; 0 sinon), `formedTick`, `fleeUntilTick`.
   L'état (0 à 10 000) n'est pas stocké : `stateOf` le recalcule à chaque lecture.
 - **Échelles** : état sur `STATE_SCALE` (10 000), largeurs en millièmes de liaison (`WIDTH_SCALE`),
   fractions de pertes `f` sur `LOSS_SCALE` (10⁶), multiplicateurs sur `MULT_SCALE` (100), dégâts en
@@ -351,40 +359,65 @@ Une `City.player` change à la prise de la ville.
   mises ensemble ; coupure, réparties au prorata des connexions (`splitProportional`, divisions et morceaux
   par identifiant, sans délai) ; front sans connexion gardée, divisions rendues à la réserve avec le délai
   d'un déplacement. Aucun recalage : le rangement des lignes du tour suivant place les divisions.
+  `afterFrontsChanged` (`breakthroughs.ts`), appelée à la fin de `updateFronts`, nettoie les percées :
+  une percée suit le front qui contient son axe et s'arrête si l'axe a disparu ou si sa boîte n'est plus
+  sur ce front ; une boîte dont le front a disparu est supprimée ; une division qui n'est plus sur le
+  front de sa boîte passe en seconde ligne ; une division engagée dans une percée d'un autre front est libérée.
 - **Création et déplacement** (`placement.ts`) : `createDivision` retire les hommes de `Player.idle` et
   l'armement de `armamentReserve`, et pose la division dans la réserve, en formation jusqu'à
   `formedTick`. `moveDivisions` écrit la destination et `arrivalTick` = tour + `transferRounds × combatTurns`,
-  sauf entre les deux lignes d'un même front, sans délai. `deleteDivision` rend tout au stock.
+  sauf sur le même front (ou vers la destination d'un déplacement en cours), sans délai. Vers `"box"`,
+  `box` désigne une boîte du joueur sur ce front, ou 0 (absent) pour en créer une, ce qui n'arrive que si une
+  division y va ; une division engagée dans une percée est ignorée. `deleteDivision` rend tout au stock.
   Les hommes d'une division ne redeviennent actifs que si on la supprime.
 - **Renfort** (`reinforcePlayer`) : ressource par ressource (les hommes, puis chaque armement par indice),
   le stock est partagé à parts égales (`shareEqually`) entre les divisions qui en manquent, puis `trimExcess`
-  rend l'excédent. Ni en déplacement, ni en fuite, ni en première ligne d'un front en combat
-  (05-Fronts §4.3). Les hommes viennent des inactifs, ou de toute la population hors soldats en
+  rend l'excédent. Ni en déplacement, ni en fuite, ni engagée dans une percée, ni en première ligne d'un front
+  en combat (05-Fronts §4.3, §4.6). Les hommes viennent des inactifs, ou de toute la population hors soldats en
   mobilisation forcée.
 - **Rangement des lignes** (`arrangeSide`, chaque tour) : par niche, les divisions de première ligne gardent
   leur place dans l'ordre de `byChoice` (état, rang du type dans la niche, identifiant), la largeur restante
-  est remplie par la seconde ligne ; l'appui-feu sans infanterie engagée repasse en seconde ligne.
-- **Combat** (`combatRound`, `fightFront`) : pour chaque front actif où au moins un camp attaque (`inCombat`),
-  dégâts de chaque camp calculés sur les divisions engagées du début du round (`attackOf`, `strike`), pertes de
-  l'appui-feu déduites de celles de l'infanterie, puis toutes les pertes appliquées par identifiant de division
-  (`applyLoss`, pertes tirées) ; ensuite `trimAll`, `removeDestroyed`, `applyFlight`, `applySwaps`, rangement
-  des lignes, et l'avancée (`frontAdvance`) de toutes les routes du front. Les connexions arrivées au bout de
-  leur route sont gardées de côté ; les prises de villes (`captureCity`) viennent après tous les fronts, chacune
-  revérifiée sur l'état d'alors.
+  est remplie par la seconde ligne (sans les divisions engagées dans une force de contre-attaque) ;
+  l'appui-feu sans infanterie engagée repasse en seconde ligne. Seules les divisions des deux lignes sont
+  rangées : la réaction rapide et les boîtes n'en font pas partie.
+- **Combat** (`combatRound`, `fightFront`) : un front a un round (`hasRound`) s'il est actif et si un camp y
+  attaque sur tout le front, ou si une percée y attend la fin de son délai ou y combat. `inCombat` (front en
+  combat) est vrai pour une attaque sur tout le front ou une percée en phase 1 ou 2 ; il règle le renfort de
+  la première ligne. Un round, dans l'ordre :
+  1. percées en phase 0 dont le délai `breakthroughDelayTurns` est écoulé : `beginCombat1` (état de départ de la
+     force, tranche de première ligne du défenseur) ; sans division à engager, la percée s'arrête et l'événement
+     `breakthrough_failed` est émis ;
+  2. `assignCounterForces` : forces de contre-attaque des percées en phase 2, recalculées ;
+  3. les combats, sur les divisions du début du round : un par attaque sur tout le front, un par percée en
+     phase 1 ou 2. Chacun est un `Fight` (deux forces, la largeur engagée de chaque division, ses multiplicateurs
+     d'attaque et de PV) traité par `fightLosses` (`attackOf`, `strike`, pertes de l'appui-feu déduites de celles
+     de l'infanterie). Les pertes de plusieurs combats s'additionnent par division ;
+  4. toutes les pertes sont appliquées par identifiant de division (`applyLoss`, pertes tirées), puis `trimAll`,
+     `removeDestroyed`, `applyFlight`, `breakthroughFlight`, `checkBreakthrough` pour chaque percée en combat
+     (par identifiant), `applySwaps` et le rangement des lignes ;
+  5. avancée de l'attaque sur tout le front (`frontAdvance`) sur toutes les routes du front.
+
+  Les connexions arrivées au bout de leur route (par l'avancée ou par une percée) sont gardées de côté ; les
+  prises de villes (`captureCity`) viennent après tous les fronts, chacune revérifiée sur l'état d'alors.
+  La percée elle-même (choix des forces, vérifications) est dans `breakthroughs.ts`, ses règles dans 05-Fronts §7.2.
 - **Guerre et paix** : `declare_war` met toutes les connexions des fronts entre les deux joueurs à 500 (`startWar`) ;
-  une paix acceptée met les positions à 0 et supprime les attaques (`endWar`) ; les divisions restent.
+  une paix acceptée met les positions à 0, supprime les attaques et arrête les percées entre les deux
+  joueurs (`endWar`, `endBreakthroughsBetween`) ; les divisions restent.
   `intents.ts` appelle ces deux fonctions parce que `fronts.ts` lit `diplomacy.ts` (`statusOf`) : l'inverse
   ferait un cycle d'imports.
-- **Événements** (dans `state.events`, pour l'affichage) : `city_captured` (`from` a pris `city` à `to`) et
-  `encirclement` (la prise de `city` par `from` touche `divisions` divisions de `to`, tous fronts confondus).
+- **Événements** (dans `state.events`, pour l'affichage) : `city_captured` (`from` a pris `city` à `to`),
+  `encirclement` (la prise de `city` par `from` touche `divisions` divisions de `to`, tous fronts confondus) et
+  `breakthrough_failed` (la percée de `from` contre `to` s'arrête au début de son combat 1 : sa force n'a plus de division).
 
 | Ordre | Champs | Valide si | Effet |
 | --- | --- | --- | --- |
 | `create_division` | `division` (clé de `DIVISIONS`) | les inactifs et le stock d'armement suffisent à remplir ses composants requis | division en formation dans la réserve ; hommes et armement requis retirés, composants optionnels à 0 (renfort) |
 | `delete_division` | `id` | la division est au joueur, dans la réserve nationale, ni en formation ni en déplacement | hommes et armement rendus au stock ; la division est retirée |
-| `move_division` | `ids` (tableau), `front` (0 : réserve), `line` (`first` ou `second`, facultatif ; absent : seconde ligne) | `front` est 0 ou un front dont le joueur est un camp ; au moins une division est déplacée | déplace les divisions du joueur hors formation ; les autres de la liste sont ignorées |
+| `move_division` | `ids` (tableau), `front` (0 : réserve), `line` (`first`, `second`, `rapid` ou `box`, facultatif ; absent : seconde ligne), `box` (avec `line: "box"` : identifiant d'une boîte du joueur sur ce front ; 0 ou absent : nouvelle boîte) | `front` est 0 ou un front dont le joueur est un camp ; `box`, s'il est donné, est une boîte du joueur sur ce front ; au moins une division est déplacée | déplace les divisions du joueur hors formation et hors percée ; les autres de la liste sont ignorées |
 | `set_forced_mobilization` | `enabled` (booléen) | toujours | `forcedMobilization` du joueur |
 | `start_front_attack`, `stop_front_attack` | `front` | front actif ; le joueur en est un camp ; l'attaque n'est pas déjà dans cet état | `frontAttack` du camp |
+| `start_breakthrough` | `box`, `city1`, `city2` (l'axe : une connexion du front) | la boîte est au joueur, son front est actif et contient la connexion ; le joueur n'a pas déjà une percée sur cet axe ; la boîte a au moins une division disponible (ni engagée, ni en déplacement, ni en fuite) | ajoute une `Breakthrough` en phase 0 ; la force est prise tout de suite (une liaison par niche, dans l'ordre de choix), le reste reste dans la boîte |
+| `cancel_breakthrough` | `id` | la percée est au joueur | la termine ; ses divisions sont libérées (celles de la force sont toujours dans leur boîte) |
 
 ### `found_city`
 
@@ -647,7 +680,10 @@ sa capitale : `cities[capital - 1].group`.
 7. les fronts : `nextFrontId`, le nombre de fronts, puis pour chacun (par identifiant) : id, joueurs, groupes,
    nombre de connexions et pour chacune villes et position, puis `frontAttack` de chaque camp ; puis les divisions :
    `nextDivisionId`, le nombre de divisions, puis pour chacune (par identifiant) : id, joueur, type, `counts` (nombre,
-   valeurs), front, ligne, largeur engagée, tour d'arrivée, tour de fin de formation, tour de fin de fuite ;
+   valeurs), front, ligne, largeur engagée, boîte, percée, largeur engagée dans la percée, tour d'arrivée, tour de fin de
+   formation, tour de fin de fuite ; puis les boîtes (`nextBoxId`, nombre, puis id, front, joueur) et les percées
+   (`nextBreakthroughId`, nombre, puis id, front, joueur, boîte, villes de l'axe, tour de lancement, phase,
+   état de départ) ;
 8. `diplomacy` (les `n × n` octets, par mots de 4 octets), puis le nombre de
    propositions et pour chacune, dans l'ordre de création : `from`, `to`, le genre
    (0 pacte, 1 paix), `createdTick`. `events` n'y est pas (§6) ;
@@ -788,6 +824,19 @@ ils sont donc dans le hash (§6).
 - **Lire `Division.front` d'une division en déplacement comme sa position** : c'est la destination. Le renfort, le
   combat et le rangement ignorent les divisions dont `arrivalTick ≠ 0` (`sideDivisions`, `reinforceable`) ; seul
   l'affichage les compte à leur destination.
+- **Écrire `Division.line` sans `box`, `breakthrough` ni `btEngaged`** : une division en `LINE_BOX` doit avoir un
+  `box` qui existe ; une division hors des lignes de combat n'a ni `engaged` ni percée. `moveDivisions`, `arrangeAll`,
+  `afterFrontsChanged` et `endBreakthrough` tiennent ces champs d'accord ; un code qui déplace une division
+  autrement laisse une division dans une boîte supprimée ou dans une percée finie.
+- **Oublier `afterFrontsChanged`** : un recalcul des fronts (`updateFronts`) change les identifiants de front et peut
+  retirer l'axe d'une percée. Sans le nettoyage, une percée garde l'identifiant d'un front qui n'existe plus et ses
+  divisions restent engagées.
+- **Une percée n'est pas une attaque sur tout le front** : le front d'une percée a un round (`hasRound`) même sans
+  `frontAttack`, et est « en combat » (`inCombat`, donc renfort de la première ligne coupé) dès que la percée a quitté
+  la phase 0. Les deux fonctions diffèrent seulement pendant le délai.
+- **Calculer les forces de contre-attaque une fois pour toutes** : `assignCounterForces` les recalcule à chaque round
+  (réaction rapide d'abord, puis seconde ligne ; partage à tour de rôle entre plusieurs percées). Une force gardée
+  d'un round à l'autre contiendrait des divisions parties, en fuite ou détruites.
 - **Laisser un excédent dans une division** : après tout ajout ou perte de composant, `trimExcess` doit rendre ce qui
   dépasse le taux du composant requis le plus bas (05-Fronts §3.2). `trimAll` le fait pour toutes les divisions à chaque
   tour et après chaque round ; un code qui écrit dans `counts` hors du renfort et des pertes doit en faire autant.
@@ -1067,6 +1116,8 @@ d'avant les usines :
 
 ## 9. Tests
 
+Tests à écrire plus tard (version 2 des fronts, points non tranchés) : `Docs/Tests-a-faire.md`.
+
 **Passe du 26 octobre 2026** (fin des fronts de la version 0.1). Tous les tests passaient (`npm test`). Ce qui a été
 repris : `factories.test.ts` (une usine naît avec une ligne ; un bien n'est rempli que sous la demande du tour précédent, le
 premier tour la fixe ; plus de suspension de l'armement) ; `specialization.test.ts` (une mer assez grande pour que la demande de
@@ -1075,19 +1126,23 @@ mécanisation ; invariants des résultats un tour de prise exceptés) ; `engine.
 `helpers.ts` (la capitale est une ville du joueur, pas forcément la plus ancienne : une ville prise change de main) ;
 `client/test/solo.test.ts` (niveau 2 d'une usine qui a une ligne de plus).
 
-**Fronts version 1 (31 octobre 2026).** `troops.test.ts` et `combat.test.ts` sont supprimés avec `troops.ts`, `units.ts` et
-`config/units.ts`. `fronts.test.ts` est réécrit pour les divisions : configuration (multiplicateurs à deux décimales au plus,
-chaque type dans une seule niche), détection, répartition des divisions d'un front qui change, guerre et paix, ordres,
-fondation en guerre, hash de chaque champ d'un front et d'une division. `determinism.test.ts` joue des guerres à partir du
-tour 1 500 (`warsFromTurn`) : ordres de division, mobilisation forcée et attaques, mêmes hashes dans deux processus. Côté
-client, `client/test/fronts.test.ts`. Le plan de 05-Fronts §13.7 (round de combat, pertes tirées, avancée, prise,
-encerclement) est à écrire en une passe à la fin (05-Fronts §14, étape 11) : pour l'instant aucun test ne vérifie le résultat d'un round
-de combat (le scénario de `determinism.test.ts` en joue, sans le contrôler).
+**Fronts version 1 (31 octobre 2026).** `troops.test.ts` est supprimé avec `troops.ts`, `units.ts` et `config/units.ts` ;
+`combat.test.ts` est réécrit. Les tests des fronts sont répartis dans :
+`fronts.test.ts` (configuration des divisions, détection, répartition des divisions d'un front qui change, guerre et
+paix, ordres d'attaque, fondation en guerre, hash de chaque champ d'un front et d'une division) ;
+`divisions.test.ts` (état, création, suppression, déplacement, renfort, excédent, rangement des lignes, fuite) ;
+`combat.test.ts` (pertes tirées avec le modèle de `war-helpers.ts` qui rejoue les tirages, pertes par composant,
+round, appui-feu, échange et fuite, avancée, prise de ville et encerclement) ;
+`determinism.test.ts` (le scénario joue des guerres à partir du tour 1 500, `warsFromTurn` : mêmes hashes dans deux
+processus). Côté client, `client/test/fronts.test.ts`.
 
-**Aucun test ne couvre encore** : la diplomatie hors guerre et paix (propositions, expiration, événements, hash) ; le round
-de combat, l'appui-feu, les pertes tirées, la fuite, l'échange, l'avancée, la prise de ville et l'encerclement ; la
-motorisation (aucun type n'est motorisé : la branche motorisée de `speedOf` n'est jamais prise) ; la percée et la
-contre-attaque (version 2, hors périmètre).
+**La percée (31 octobre 2026) n'a pas de test du moteur** : ni les ordres `start_breakthrough` et
+`cancel_breakthrough`, ni `move_division` vers `rapid` ou `box`, ni les combats, le saut, l'essoufflement, le nettoyage
+après un recalcul des fronts, ni le hash des boîtes et des percées. Le scénario du déterminisme n'envoie pas ces ordres.
+
+**Aucun test ne couvre encore** : la diplomatie hors guerre et paix (propositions, expiration, événements, hash) ; la
+motorisation (aucun type n'est motorisé : la branche motorisée de `speedOf` et le facteur de réaction ne sont jamais pris
+avec une force motorisée).
 
 **Exigences que les tests couvrent** (écrites dans 00-Game et 05-Fronts) :
 rang calculé par groupe (un bien dans une usine) ; coût du rang 1 = `workersPerLine`,

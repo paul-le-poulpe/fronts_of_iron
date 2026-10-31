@@ -74,6 +74,8 @@ interface Fight {
   readonly a: readonly Division[];
   readonly b: readonly Division[];
   readonly width: (d: Division) => number;
+  /** Largeur pleine de la division dans ce combat : la part engagée est `width / fullWidth` (05-Fronts §4.2, §7.2). */
+  readonly fullWidth: (d: Division) => number;
   readonly attackMult: (d: Division) => number;
   readonly hpMult: (d: Division) => number;
 }
@@ -87,7 +89,7 @@ function strike(fight: Fight, from: readonly Division[], to: readonly Division[]
   let soft = 0;
   let hard = 0;
   for (const d of from) {
-    const a = attackOf(d, fight.attackMult(d), fight.width(d));
+    const a = attackOf(d, fight.attackMult(d), fight.width(d), fight.fullWidth(d));
     soft += a.soft;
     hard += a.hard;
   }
@@ -126,7 +128,7 @@ function fightLosses(fight: Fight, total: Map<Division, number>): void {
     }
     if (den === 0 || num === 0) continue;
     const fInf = Math.floor(num / den);
-    for (const d of divs) if (dataOf(d).support) losses.set(d, Math.floor((fInf * fight.width(d)) / dataOf(d).width));
+    for (const d of divs) if (dataOf(d).support) losses.set(d, Math.floor((fInf * fight.width(d)) / fight.fullWidth(d)));
   }
   for (const [d, f] of losses) total.set(d, (total.get(d) ?? 0) + f);
 }
@@ -157,6 +159,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
         a: attacker,
         b: sides[1 - x]!,
         width: (d) => d.engaged,
+        fullWidth: (d) => dataOf(d).width,
         attackMult: (d) => (attacker.includes(d) ? dataOf(d).attackMultiplier : MULT_SCALE),
         hpMult: (d) => (attacker.includes(d) ? MULT_SCALE : dataOf(d).defenseHitPointsMultiplier),
       },
@@ -173,6 +176,8 @@ function fightFront(state: GameState, front: Front): Arrival[] {
         a: force,
         b: defense,
         width: (d) => d.btEngaged,
+        // Force qui perce et force de contre-attaque : `breakthroughWidth` ; tranche de première ligne : `frontWidth`.
+        fullWidth: (d) => (d.owner !== bt.owner && bt.phase === 1 ? dataOf(d).width : dataOf(d).breakthroughWidth),
         attackMult: (d) => (d.owner === bt.owner ? dataOf(d).breakthroughMultiplier : bt.phase === 2 ? dataOf(d).counterAttackMultiplier : MULT_SCALE),
         hpMult: (d) => (d.owner === bt.owner ? MULT_SCALE : dataOf(d).defenseHitPointsMultiplier),
       },

@@ -236,9 +236,10 @@ export function emptyDivision(player: Player, d: Division): void {
  * part engagée × Σ (attaque du composant × taux) × multiplicateur. `mult` à
  * l'échelle 100 (100 : aucun multiplicateur). `engaged` : largeur engagée dans ce
  * combat (première ligne par défaut ; dans une percée, `btEngaged`), rapportée à la
- * largeur de première ligne de la division.
+ * largeur de la division dans ce combat (`width`, sa largeur de première ligne par défaut ;
+ * `breakthroughWidth` pour la force qui perce et la force de contre-attaque, 05-Fronts §7.2).
  */
-export function attackOf(d: Division, mult: number, engaged: number = d.engaged): { soft: number; hard: number } {
+export function attackOf(d: Division, mult: number, engaged: number = d.engaged, width: number = dataOf(d).width): { soft: number; hard: number } {
   const data = dataOf(d);
   let soft = 0;
   let hard = 0;
@@ -246,7 +247,7 @@ export function attackOf(d: Division, mult: number, engaged: number = d.engaged)
     const p = d.counts[i]!;
     if (p === 0) return;
     // e / largeur × attaque × p / count × mult / 100, en millièmes : × 1 000 / 100 = × 10.
-    const den = data.width * c.count;
+    const den = width * c.count;
     soft += Math.floor((engaged * c.softAttack * p * mult * 10) / den);
     hard += Math.floor((engaged * c.hardAttack * p * mult * 10) / den);
   });
