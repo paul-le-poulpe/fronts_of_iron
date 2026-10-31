@@ -26,7 +26,10 @@ export type HumanOrder =
   // Fronts (05-Fronts §5.2) : `front` est l'identifiant du front (0 : réserve nationale), `division` une clé de `DIVISIONS`.
   | { readonly type: "create_division"; readonly division: string }
   | { readonly type: "delete_division"; readonly id: number }
-  | { readonly type: "move_division"; readonly ids: readonly number[]; readonly front: number; readonly line?: "first" | "second" }
+  // `line: "box"` : `box` est une boîte de percée du joueur sur ce front, ou 0 pour en créer une (05-Fronts §4.6).
+  | { readonly type: "move_division"; readonly ids: readonly number[]; readonly front: number; readonly line?: "first" | "second" | "rapid" | "box"; readonly box?: number }
+  | { readonly type: "start_breakthrough"; readonly box: number; readonly city1: number; readonly city2: number }
+  | { readonly type: "cancel_breakthrough"; readonly id: number }
   | { readonly type: "set_forced_mobilization"; readonly enabled: boolean }
   | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number };
 
@@ -112,11 +115,15 @@ export interface DivisionTypeInfo {
   readonly description: string;
   /** Largeur de première ligne, en liaisons. */
   readonly frontWidth: number;
+  /** Largeur dans une percée, en liaisons (05-Fronts §7.2). */
+  readonly breakthroughWidth: number;
   /** PV d'une division complète ; 0 pour l'appui-feu (jamais lus). */
   readonly hitPoints: number;
   /** Multiplicateurs à l'échelle 100. */
   readonly defenseHitPointsMultiplier: number;
   readonly attackMultiplier: number;
+  readonly breakthroughMultiplier: number;
+  readonly counterAttackMultiplier: number;
   readonly armorPercent: number;
   readonly motorized: boolean;
 }
@@ -135,6 +142,8 @@ export interface MilitaryCatalog {
   readonly transferTurns: number;
   /** Échelle de `DivisionView.state` (10 000 = 100 %). */
   readonly stateScale: number;
+  /** Délai entre le lancement d'une percée et son combat 1, en tours (05-Fronts §7.2). */
+  readonly breakthroughDelayTurns: number;
 }
 
 /** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */
@@ -233,6 +242,26 @@ export interface FrontSideView {
   readonly frontAttack: boolean;
 }
 
+/** Une boîte de percée (05-Fronts §4.6), dans l'ordre de création : « Percée 1 », « Percée 2 »… de son camp. */
+export interface BoxView {
+  readonly id: number;
+  readonly owner: number;
+}
+
+/**
+ * Une percée lancée (05-Fronts §7.2). `phase` : 0 pendant le délai (le combat 1 commence au tour `startTick`), 1 contre la
+ * tranche de première ligne, 2 contre la force de contre-attaque. Les divisions engagées ont `DivisionView.breakthrough = id`.
+ */
+export interface BreakthroughView {
+  readonly id: number;
+  readonly owner: number;
+  readonly box: number;
+  readonly city1: number;
+  readonly city2: number;
+  readonly phase: number;
+  readonly startTick: number;
+}
+
 export interface FrontView {
   readonly id: number;
   readonly players: readonly [number, number];
@@ -241,6 +270,10 @@ export interface FrontView {
   readonly active: boolean;
   readonly connections: readonly FrontConnectionView[];
   readonly sides: readonly [FrontSideView, FrontSideView];
+  /** Boîtes de percée des deux camps, par identifiant. */
+  readonly boxes: readonly BoxView[];
+  /** Percées en cours sur ce front, des deux camps, par identifiant. */
+  readonly breakthroughs: readonly BreakthroughView[];
 }
 
 /** Une division (05-Fronts §3, §13.4), de n'importe quel joueur (pas de brouillard de guerre). */
@@ -253,7 +286,17 @@ export interface DivisionView {
   readonly counts: readonly number[];
   /** Front où elle est, ou vers lequel elle va ; 0 : réserve nationale. */
   readonly front: number;
-  readonly line: "first" | "second";
+  /** `box` : dans la boîte de percée `box` (05-Fronts §4.6) ; `rapid` : réaction rapide. */
+  readonly line: "first" | "second" | "rapid" | "box";
+  /** Boîte de percée ; 0 hors boîte. */
+  readonly box: number;
+  /**
+   * Percée où la division est engagée (force qui perce, tranche de première ligne, force de contre-attaque) ; 0 sinon.
+   * Une division de la force qui perce a toujours `line = "box"` : la page l'affiche dans la percée, pas dans sa boîte.
+   */
+  readonly breakthrough: number;
+  /** Largeur engagée dans cette percée, en millièmes de liaison. */
+  readonly btEngaged: number;
   /** Largeur engagée en première ligne, en millièmes de liaison (05-Fronts §4.2). */
   readonly engaged: number;
   /** État, de 0 à `MilitaryCatalog.stateScale` (05-Fronts §3.3). */
@@ -396,6 +439,8 @@ export interface TickMessage {
   readonly fronts: readonly FrontView[] | null;
   /** Toutes les divisions de tous les joueurs, par identifiant ; `null` si rien n'a changé depuis le tour précédent. */
   readonly divisions: readonly DivisionView[] | null;
+  /** Percées du joueur local arrêtées au début de leur combat 1 pendant ce tour, faute de division (05-Fronts §7.2, point 14). */
+  readonly failedBreakthroughs: number;
   /** Villes prises pendant ce tour. La page reçoit alors `cities` et les cases de leur zone. */
   readonly captured: readonly { readonly city: number; readonly from: number; readonly to: number }[];
   /** Encerclements causés par ces prises (05-Fronts §10.2) : `from` encercle des divisions de `to` ; `divisions` : divisions touchées. */

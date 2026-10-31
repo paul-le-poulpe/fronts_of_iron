@@ -29,6 +29,9 @@ import {
   generateTestMap,
   GOOD_IDS,
   inFormation,
+  LINE_BOX,
+  LINE_FIRST,
+  LINE_RAPID,
   isActive,
   isFleeing,
   MINING,
@@ -173,9 +176,12 @@ export function militaryCatalog(): MilitaryCatalog {
         icon: config.icon,
         description: config.description ?? fallback ?? "",
         frontWidth: d.width / 1000,
+        breakthroughWidth: d.breakthroughWidth / 1000,
         hitPoints: d.hitPoints,
         defenseHitPointsMultiplier: d.defenseHitPointsMultiplier,
         attackMultiplier: d.attackMultiplier,
+        breakthroughMultiplier: d.breakthroughMultiplier,
+        counterAttackMultiplier: d.counterAttackMultiplier,
         armorPercent: d.armorPercent,
         motorized: d.motorized,
       };
@@ -185,6 +191,7 @@ export function militaryCatalog(): MilitaryCatalog {
     formationTurns: FRONTS.formationTurns,
     transferTurns: FRONTS.transferRounds * FRONTS.combatTurns,
     stateScale: STATE_SCALE,
+    breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
   };
 }
 
@@ -197,6 +204,10 @@ export function frontView(state: GameState, f: Front): FrontView {
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
     sides: [{ frontAttack: f.sides[0].frontAttack }, { frontAttack: f.sides[1].frontAttack }],
+    boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
+    breakthroughs: state.breakthroughs
+      .filter((b) => b.front === f.id)
+      .map((b) => ({ id: b.id, owner: b.owner, box: b.box, city1: b.city1, city2: b.city2, phase: b.phase, startTick: b.launchTick + FRONTS.breakthroughDelayTurns })),
   };
 }
 
@@ -209,7 +220,10 @@ export function divisionView(state: GameState, d: Division): DivisionView {
     type: d.type,
     counts: d.counts.slice(),
     front: d.front,
-    line: d.line === 0 ? "first" : "second",
+    line: d.line === LINE_FIRST ? "first" : d.line === LINE_RAPID ? "rapid" : d.line === LINE_BOX ? "box" : "second",
+    box: d.box,
+    breakthrough: d.breakthrough,
+    btEngaged: d.btEngaged,
     engaged: d.engaged,
     state: stateOf(d),
     status,
@@ -454,6 +468,7 @@ export class Game {
       diplomacy: this.diplomacyView(full),
       fronts,
       divisions,
+      failedBreakthroughs: full ? 0 : state.events.filter((e) => e.type === "breakthrough_failed" && e.from === you).length,
       captured,
       encircled: full ? [] : state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, divisions: e.divisions }] : [])),
       paused: false,
@@ -505,7 +520,7 @@ export class Game {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "encirclement" && mine(e.from, e.to) ? [e] : [])),
+      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "encirclement" && e.type !== "breakthrough_failed" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 
@@ -627,6 +642,10 @@ export class Game {
         return !state.divisions.some((d) => d.id === order.id);
       case "move_division":
         return order.ids.some((id) => state.divisions.find((d) => d.id === id)?.front === order.front);
+      case "start_breakthrough":
+        return state.breakthroughs.some((b) => b.owner === this.you && b.box === order.box && b.city1 === order.city1 && b.city2 === order.city2);
+      case "cancel_breakthrough":
+        return !state.breakthroughs.some((b) => b.id === order.id);
       case "start_front_attack":
         return this.mySide(order.front)?.frontAttack === true;
       case "stop_front_attack":

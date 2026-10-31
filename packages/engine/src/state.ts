@@ -5,6 +5,7 @@
 import { isUint32 } from "./bits.ts";
 import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
 import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
+import type { Box, Breakthrough } from "./breakthroughs.ts";
 import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import { hashMap } from "./hash.ts";
@@ -159,6 +160,12 @@ export interface GameState {
   divisions: Division[];
   /** Prochain identifiant de division (1, 2, 3…). */
   nextDivisionId: number;
+  /** Boîtes de percée (05-Fronts §4.6), par identifiant croissant. */
+  boxes: Box[];
+  nextBoxId: number;
+  /** Percées lancées (05-Fronts §7.2), par identifiant croissant. */
+  breakthroughs: Breakthrough[];
+  nextBreakthroughId: number;
   readonly rng: Rng;
   /**
    * Statut diplomatique de chaque paire de joueurs (diplomacy.ts) : `players.length`²
@@ -250,6 +257,10 @@ export function createGame(setup: GameSetup): GameState {
     nextFrontId: 1,
     divisions: [],
     nextDivisionId: 1,
+    boxes: [],
+    nextBoxId: 1,
+    breakthroughs: [],
+    nextBreakthroughId: 1,
     rng: createRng(setup.seed),
     diplomacy: new Uint8Array(playerCount * playerCount),
     proposals: [],

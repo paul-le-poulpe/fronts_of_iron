@@ -68,6 +68,7 @@ export {
   frontById,
   frontWidth,
   frontsByPlayer,
+  hasRound,
   inCombat,
   isActive,
   sideIndex,
@@ -81,7 +82,9 @@ export {
   DIVISION_DATA,
   DIVISION_IDS,
   INFANTRY_NICHE,
+  LINE_BOX,
   LINE_FIRST,
+  LINE_RAPID,
   LINE_SECOND,
   LOSS_SCALE,
   MEN,
@@ -106,6 +109,7 @@ export {
 } from "./divisions.ts";
 export { arrangeAll, arrangeSide, createDivision, deleteDivision, moveDivisions, shareEqually } from "./placement.ts";
 export { combatRound, endOf, frontAdvance } from "./combat.ts";
+export { reactionFactor100, type Box, type Breakthrough } from "./breakthroughs.ts";
 export { captureCity } from "./conquest.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
 export {
@@ -176,9 +180,11 @@ export {
   type AnswerProposalIntent,
   type BreakPactIntent,
   type BuildFactoryIntent,
+  type CancelBreakthroughIntent,
   type CreateDivisionIntent,
   type DeleteDivisionIntent,
   type MoveDivisionIntent,
+  type StartBreakthroughIntent,
   type CreateLineIntent,
   type DeclareWarIntent,
   type FoundCityIntent,

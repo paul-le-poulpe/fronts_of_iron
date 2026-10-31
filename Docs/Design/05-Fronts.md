@@ -1109,7 +1109,10 @@ interface Division {              // divisions.ts
   readonly type: number;          // indice dans les clés de DIVISIONS
   readonly counts: number[];      // exemplaires par composant, ordre de `components`
   front: number;                  // 0 : réserve nationale ; en déplacement : destination
-  line: number;                   // LINE_FIRST (0) ou LINE_SECOND (1) ; seconde dans la réserve
+  line: number;                   // LINE_FIRST, LINE_SECOND, LINE_RAPID, LINE_BOX ; seconde dans la réserve
+  box: number;                    // boîte de percée (LINE_BOX) ; 0 sinon
+  breakthrough: number;           // percée où elle est engagée (force, tranche, contre-attaque) ; 0 sinon
+  btEngaged: number;              // largeur engagée dans cette percée, millièmes de liaison
   engaged: number;                // largeur engagée en première ligne, millièmes de liaison
   arrivalTick: number;            // en déplacement : tour d'arrivée ; 0 sinon
   readonly formedTick: number;    // fin de formation
@@ -1123,7 +1126,16 @@ interface Front {
   connections: FrontConnection[];                 // par (city1, city2), avec position
   sides: [FrontSide, FrontSide];
 }
-// GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId ;
+interface Box { readonly id: number; readonly front: number; readonly owner: number }   // breakthroughs.ts
+interface Breakthrough {          // breakthroughs.ts
+  readonly id: number; front: number; readonly owner: number; readonly box: number;
+  readonly city1: number; readonly city2: number;  // axe
+  readonly launchTick: number;    // combat 1 à launchTick + breakthroughDelayTurns
+  phase: number;                  // 0 attente, 1 contre la tranche, 2 contre la contre-attaque
+  startState: number;             // état moyen de la force au début du combat 1
+}
+// GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId,
+// boxes, nextBoxId, breakthroughs, nextBreakthroughId ;
 // Player : forcedMobilization, soldiers (hommes des divisions, recomptés par countSoldiers).
 ```
 
@@ -1133,7 +1145,9 @@ interface Front {
   (`LOSS_SCALE` × échelle 100 du `lossMultiplier`).
 - **Fichiers** : `divisions.ts` (types en entiers, état, excédent, attaques,
   pertes) ; `placement.ts` (ordres des divisions, renfort, arrivées, rangement
-  des lignes, fuite, échange) ; `combat.ts` (round, appui-feu, avancée) ;
+  des lignes, fuite, échange) ; `breakthroughs.ts` (boîtes, percées : ordres,
+  forces, vérifications, nettoyage après un changement de front) ;
+  `combat.ts` (round, combats de front et de percée, appui-feu, avancée) ;
   `conquest.ts` (prise, encerclement) ; `fronts.ts` (détection, coupure,
   guerre et paix).
 - La largeur engagée est rangée dans l'état à chaque rangement ; l'état d'une

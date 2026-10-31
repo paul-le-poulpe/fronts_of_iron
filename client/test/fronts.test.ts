@@ -35,6 +35,8 @@ function view(connections: [number, number, number][], active: boolean, id = 1):
     active,
     connections: connections.map(([city1, city2, position]) => ({ city1, city2, position })),
     sides: [empty, empty],
+    boxes: [],
+    breakthroughs: [],
   };
 }
 
@@ -161,6 +163,9 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
     counts: infantry.components.map((c) => c.count),
     front: front.id,
     line: 0,
+    box: 0,
+    breakthrough: 0,
+    btEngaged: 0,
     engaged: 0,
     arrivalTick: 0,
     formedTick: 0,

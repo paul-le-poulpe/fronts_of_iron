@@ -8,7 +8,9 @@ import {
   DIVISION_DATA,
   DIVISION_IDS,
   INFANTRY_NICHE,
+  LINE_BOX,
   LINE_FIRST,
+  LINE_RAPID,
   LINE_SECOND,
   MEN,
   NICHE_TYPES,
@@ -63,6 +65,9 @@ export function createDivision(state: GameState, player: number, type: unknown):
     counts: data.components.map((c) => (c.required ? c.count : 0)),
     front: 0,
     line: LINE_SECOND,
+    box: 0,
+    breakthrough: 0,
+    btEngaged: 0,
     engaged: 0,
     arrivalTick: 0,
     formedTick: turn + FRONTS.formationTurns,
@@ -92,44 +97,54 @@ export function deleteDivision(state: GameState, player: number, id: unknown): b
   return true;
 }
 
+const LINES: Readonly<Record<string, number>> = { first: LINE_FIRST, second: LINE_SECOND, rapid: LINE_RAPID, box: LINE_BOX };
+
 /**
- * `move_division` (05-Fronts §4.4, §5.2) : destination réserve nationale
- * (`front` 0), ou front + ligne (`"first"`, `"second"`, absente : seconde ligne).
- * Chaque division doit être au joueur et hors formation ; le joueur doit être un
- * camp du front. Provisoire : les divisions invalides de la liste sont ignorées,
- * les autres déplacées. Entre les deux lignes d'un même front, sans délai
- * (provisoire) ; sinon `transferRounds` rounds. Valide si au moins une division
- * est déplacée.
+ * `move_division` (05-Fronts §4.4, §4.6, §5.2) : destination réserve nationale (`front` 0), ou front + ligne
+ * (`"first"`, `"second"`, `"rapid"`, `"box"` ; absente : seconde ligne). Pour `"box"`, `box` est une boîte du joueur
+ * sur ce front, ou 0 (ou absent) pour une nouvelle boîte, créée seulement si une division y va. Chaque division doit
+ * être au joueur, hors formation et hors percée ; le joueur doit être un camp du front. Provisoire : les divisions
+ * invalides de la liste sont ignorées, les autres déplacées. Sur le même front (ou vers la destination d'un
+ * déplacement en cours), sans délai ; sinon `transferRounds` rounds. Valide si au moins une division est déplacée.
  */
-export function moveDivisions(state: GameState, player: number, ids: unknown, frontId: unknown, line: unknown): boolean {
+export function moveDivisions(state: GameState, player: number, ids: unknown, frontId: unknown, line: unknown, box?: unknown): boolean {
   if (!Array.isArray(ids) || !Number.isInteger(frontId)) return false;
-  if (line !== undefined && line !== "first" && line !== "second") return false;
+  if (line !== undefined && (typeof line !== "string" || !(line in LINES))) return false;
   const dest = frontId as number;
   if (dest !== 0) {
     const front = frontById(state, dest);
     if (front === undefined || sideIndex(front, player) < 0) return false;
   }
-  const toLine = dest !== 0 && line === "first" ? LINE_FIRST : LINE_SECOND;
+  const toLine = dest === 0 || line === undefined ? LINE_SECOND : LINES[line as string]!;
+  let boxId = 0;
+  if (toLine === LINE_BOX && box !== undefined && box !== 0) {
+    if (!Number.isInteger(box)) return false;
+    const b = state.boxes.find((x) => x.id === box);
+    if (b === undefined || b.owner !== player || b.front !== dest) return false;
+    boxId = b.id;
+  }
   const turn = currentTurn(state);
   let moved = false;
   const seen = new Set<number>();
   for (const id of ids) {
     const d = ownDivision(state, player, id);
-    if (d === undefined || seen.has(d.id) || inFormation(state, d)) continue;
+    if (d === undefined || seen.has(d.id) || inFormation(state, d) || d.breakthrough !== 0) continue;
     seen.add(d.id);
     const sameFront = d.front === dest;
     if (sameFront && dest === 0) continue;
-    if (sameFront) {
-      // Entre les deux lignes d'un même front, ou vers la destination d'un déplacement en cours : sans nouveau délai
-      // (provisoire) ; le rangement des lignes décide de la place.
-      d.line = toLine;
-      if (toLine === LINE_SECOND) d.engaged = 0;
-    } else {
+    if (toLine === LINE_BOX && boxId === 0) {
+      boxId = state.nextBoxId++;
+      state.boxes.push({ id: boxId, front: dest, owner: player });
+    }
+    if (!sameFront) {
       d.front = dest;
-      d.line = toLine;
-      d.engaged = 0;
       d.arrivalTick = turn + transferTurns();
     }
+    // Sur le même front, ou vers la destination d'un déplacement en cours : sans nouveau délai (provisoire) ; le
+    // rangement des lignes décide de la place en première et seconde ligne.
+    d.line = toLine;
+    d.box = toLine === LINE_BOX ? boxId : 0;
+    if (toLine !== LINE_FIRST) d.engaged = 0;
     moved = true;
   }
   return moved;
@@ -169,9 +184,12 @@ export function shareEqually(stock: number, needs: readonly number[]): number[] 
   return out;
 }
 
-/** Une division peut-elle recevoir du renfort ? Ni en déplacement, ni en fuite, ni en première ligne d'un front en combat. */
+/**
+ * Une division peut-elle recevoir du renfort ? Ni en déplacement, ni en fuite, ni engagée dans une percée, ni en
+ * première ligne d'un front en combat (05-Fronts §4.3, §4.6).
+ */
 function reinforceable(state: GameState, d: Division, fighting: ReadonlySet<number>): boolean {
-  if (isMoving(d) || isFleeing(state, d)) return false;
+  if (isMoving(d) || isFleeing(state, d) || d.breakthrough !== 0) return false;
   return !(d.front !== 0 && d.line === LINE_FIRST && fighting.has(d.front));
 }
 
@@ -281,7 +299,8 @@ export function sideDivisions(state: GameState, front: Front, player: number): D
  */
 export function arrangeSide(state: GameState, front: Front, player: number): void {
   const width = frontWidth(front);
-  const divs = sideDivisions(state, front, player);
+  // Seulement les deux lignes : la réaction rapide et les boîtes de percée n'en font pas partie (05-Fronts §4.6).
+  const divs = sideDivisions(state, front, player).filter((d) => d.line === LINE_FIRST || d.line === LINE_SECOND);
   let infantry = 0;
   NICHE_TYPES.forEach((types, n) => {
     const niche = divs.filter((d) => types.includes(d.type));
@@ -310,7 +329,8 @@ export function arrangeSide(state: GameState, front: Front, player: number): voi
       room -= take;
     };
     for (const d of niche.filter((x) => x.line === LINE_FIRST).sort(byChoice)) place(d);
-    for (const d of niche.filter((x) => x.line === LINE_SECOND && !isFleeing(state, x)).sort(byChoice)) {
+    // Une division de seconde ligne engagée dans une force de contre-attaque (05-Fronts §7.2) n'y est pas prise.
+    for (const d of niche.filter((x) => x.line === LINE_SECOND && !isFleeing(state, x) && x.breakthrough === 0).sort(byChoice)) {
       if (room <= 0) break;
       place(d);
     }
@@ -322,7 +342,10 @@ export function arrangeSide(state: GameState, front: Front, player: number): voi
 export function arrangeAll(state: GameState): void {
   for (const d of state.divisions) {
     // En déplacement, la ligne demandée est gardée pour l'arrivée ; rien n'est engagé.
-    if (d.front === 0) d.line = LINE_SECOND;
+    if (d.front === 0) {
+      d.line = LINE_SECOND;
+      d.box = 0;
+    }
     if (d.front === 0 || isMoving(d)) d.engaged = 0;
   }
   for (const f of state.fronts) for (const p of f.players) arrangeSide(state, f, p);
@@ -340,6 +363,9 @@ export function applyFlight(state: GameState, front: Front): void {
     if (stateOf(d) * 100 > FRONTS.fleeStatePercent * STATE_SCALE) continue;
     d.line = LINE_SECOND;
     d.engaged = 0;
+    // Une division de la tranche d'une percée la quitte (05-Fronts §7.2).
+    d.breakthrough = 0;
+    d.btEngaged = 0;
     d.fleeUntilTick = until;
   }
 }
@@ -356,9 +382,10 @@ export function applySwaps(state: GameState, front: Front): void {
     const divs = sideDivisions(state, front, player);
     for (const types of NICHE_TYPES) {
       const niche = divs.filter((d) => types.includes(d.type));
-      const reserve = niche.filter((d) => d.line === LINE_SECOND && !isFleeing(state, d)).sort(byChoice);
+      // Les divisions engagées dans une percée n'échangent pas (provisoire).
+      const reserve = niche.filter((d) => d.line === LINE_SECOND && !isFleeing(state, d) && d.breakthrough === 0).sort(byChoice);
       for (const d of niche) {
-        if (d.line !== LINE_FIRST || reserve.length === 0) continue;
+        if (d.line !== LINE_FIRST || d.breakthrough !== 0 || reserve.length === 0) continue;
         const best = reserve[0]!;
         if (stateOf(d) * 100 >= FRONTS.swapStatePercent * stateOf(best)) continue;
         reserve.shift();

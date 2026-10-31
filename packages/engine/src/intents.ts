@@ -8,7 +8,7 @@
 // actives, changer les priorités, et les ordres de diplomatie (§1, §9) : déclarer
 // la guerre, proposer un pacte, rompre un pacte, proposer la paix, répondre à une
 // proposition, et les ordres des fronts (05-Fronts §5.2) : créer, supprimer,
-// déplacer une division, mobilisation forcée, attaque sur tout le front. Les autres actions du joueur n'ont pas encore de règle écrite et
+// déplacer une division, mobilisation forcée, attaque sur tout le front, percée. Les autres actions du joueur n'ont pas encore de règle écrite et
 // n'ont donc pas d'ordre.
 
 import type { FactoryTypeId, ProductId } from "./config.ts";
@@ -16,6 +16,7 @@ import { foundCity } from "./cities.ts";
 import { STATUS_NEUTRAL, STATUS_WAR, answerProposal, breakPact, declareWar, propose, statusOf } from "./diplomacy.ts";
 import { endWar, startWar } from "./fronts.ts";
 import { startFrontAttack, stopFrontAttack } from "./attacks.ts";
+import { cancelBreakthrough, startBreakthrough } from "./breakthroughs.ts";
 import { createDivision, deleteDivision, moveDivisions, setForcedMobilization } from "./placement.ts";
 import {
   buildFactory,
@@ -148,15 +149,33 @@ export interface DeleteDivisionIntent {
 }
 
 /**
- * Déplacer des divisions (05-Fronts §4.4, §5.2) : `front` 0 pour la réserve
- * nationale ; `line` absente : seconde ligne.
+ * Déplacer des divisions (05-Fronts §4.4, §4.6, §5.2) : `front` 0 pour la réserve
+ * nationale ; `line` absente : seconde ligne ; `box` avec `line: "box"` : une boîte
+ * de percée existante, ou 0 / absente pour en créer une.
  */
 export interface MoveDivisionIntent {
   readonly type: "move_division";
   readonly player: number;
   readonly ids: readonly number[];
   readonly front: number;
-  readonly line?: "first" | "second";
+  readonly line?: "first" | "second" | "rapid" | "box";
+  readonly box?: number;
+}
+
+/** Lancer une percée avec une boîte, sur l'axe (`city1`, `city2`) de son front (05-Fronts §7.2). */
+export interface StartBreakthroughIntent {
+  readonly type: "start_breakthrough";
+  readonly player: number;
+  readonly box: number;
+  readonly city1: number;
+  readonly city2: number;
+}
+
+/** Annuler une percée du joueur (05-Fronts §7.2, provisoire). */
+export interface CancelBreakthroughIntent {
+  readonly type: "cancel_breakthrough";
+  readonly player: number;
+  readonly id: number;
 }
 
 /** Mobilisation forcée du joueur (05-Fronts §4.3). */
@@ -177,6 +196,8 @@ export type Intent =
   | CreateDivisionIntent
   | DeleteDivisionIntent
   | MoveDivisionIntent
+  | StartBreakthroughIntent
+  | CancelBreakthroughIntent
   | SetForcedMobilizationIntent
   | FrontAttackIntent
   | FoundCityIntent
@@ -253,7 +274,11 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
     case "delete_division":
       return deleteDivision(state, player, fields["id"]);
     case "move_division":
-      return moveDivisions(state, player, fields["ids"], fields["front"], fields["line"]);
+      return moveDivisions(state, player, fields["ids"], fields["front"], fields["line"], fields["box"]);
+    case "start_breakthrough":
+      return startBreakthrough(state, player, fields["box"], fields["city1"], fields["city2"]);
+    case "cancel_breakthrough":
+      return cancelBreakthrough(state, player, fields["id"]);
     case "set_forced_mobilization":
       return setForcedMobilization(state, player, fields["enabled"]);
     case "start_front_attack":

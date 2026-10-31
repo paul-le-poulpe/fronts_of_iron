@@ -20,9 +20,13 @@ export const LOSS_SCALE = 1000000;
 /** Ressource d'un composant : les hommes. Les autres valeurs sont des indices de `ARMAMENT.types`. */
 export const MEN = -1;
 
-/** Première ligne et seconde ligne (05-Fronts §4.1), valeurs de `Division.line`. */
+/** Où est une division sur un front (05-Fronts §4.1, §4.6), valeurs de `Division.line`. */
 export const LINE_FIRST = 0;
 export const LINE_SECOND = 1;
+/** Réaction rapide (05-Fronts §4.6). */
+export const LINE_RAPID = 2;
+/** Boîte de percée `Division.box` (05-Fronts §4.6). */
+export const LINE_BOX = 3;
 
 /** Une division (05-Fronts §3, §13.1). Tous ses champs entrent dans le hash. */
 export interface Division {
@@ -34,8 +38,17 @@ export interface Division {
   readonly counts: number[];
   /** Front où elle est, ou vers lequel elle va ; 0 : réserve nationale. */
   front: number;
-  /** `LINE_FIRST` ou `LINE_SECOND` ; `LINE_SECOND` dans la réserve et en déplacement. */
+  /** `LINE_FIRST`, `LINE_SECOND`, `LINE_RAPID` ou `LINE_BOX` ; `LINE_SECOND` dans la réserve. En déplacement : la ligne demandée. */
   line: number;
+  /** Boîte de percée (`LINE_BOX`) ; 0 sinon. */
+  box: number;
+  /**
+   * Percée où la division est engagée (05-Fronts §7.2) : force qui perce, tranche de première ligne ou force de
+   * contre-attaque ; 0 sinon.
+   */
+  breakthrough: number;
+  /** Largeur engagée dans cette percée, en millièmes de liaison ; 0 hors percée. */
+  btEngaged: number;
   /** Largeur engagée en première ligne, en millièmes de liaison (05-Fronts §4.2) ; 0 hors de la première ligne. */
   engaged: number;
   /** En déplacement : tour d'arrivée (`front` est la destination) ; 0 sinon. */
@@ -221,9 +234,11 @@ export function emptyDivision(player: Player, d: Division): void {
 /**
  * Attaques d'une division engagée (05-Fronts §6.1), en millièmes de point :
  * part engagée × Σ (attaque du composant × taux) × multiplicateur. `mult` à
- * l'échelle 100 (100 : aucun multiplicateur).
+ * l'échelle 100 (100 : aucun multiplicateur). `engaged` : largeur engagée dans ce
+ * combat (première ligne par défaut ; dans une percée, `btEngaged`), rapportée à la
+ * largeur de première ligne de la division.
  */
-export function attackOf(d: Division, mult: number): { soft: number; hard: number } {
+export function attackOf(d: Division, mult: number, engaged: number = d.engaged): { soft: number; hard: number } {
   const data = dataOf(d);
   let soft = 0;
   let hard = 0;
@@ -232,8 +247,8 @@ export function attackOf(d: Division, mult: number): { soft: number; hard: numbe
     if (p === 0) return;
     // e / largeur × attaque × p / count × mult / 100, en millièmes : × 1 000 / 100 = × 10.
     const den = data.width * c.count;
-    soft += Math.floor((d.engaged * c.softAttack * p * mult * 10) / den);
-    hard += Math.floor((d.engaged * c.hardAttack * p * mult * 10) / den);
+    soft += Math.floor((engaged * c.softAttack * p * mult * 10) / den);
+    hard += Math.floor((engaged * c.hardAttack * p * mult * 10) / den);
   });
   return { soft, hard };
 }

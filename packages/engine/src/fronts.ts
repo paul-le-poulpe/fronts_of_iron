@@ -7,6 +7,7 @@
 // symétrique : les deux joueurs voient le même front. Les deux camps sont rangés
 // dans l'ordre des joueurs du front, `players[0] < players[1]`.
 
+import { afterFrontsChanged, endBreakthroughsBetween } from "./breakthroughs.ts";
 import { FRONTS } from "./config.ts";
 import { STATUS_WAR, statusOf } from "./diplomacy.ts";
 import { LINE_SECOND, WIDTH_SCALE, currentTurn, type Division } from "./divisions.ts";
@@ -45,14 +46,21 @@ export const MIDDLE = 500;
 /** Longueur d'une route en millièmes. */
 export const ROUTE = 1000;
 
+/** Position d'arrivée du camp `x` : 1 000 pour `players[0]` (il avance vers la ville 2), 0 pour `players[1]`. */
+export const endOf = (x: number): number => (x === 0 ? ROUTE : 0);
+
 /** Largeur du front en millièmes de liaison : une liaison par connexion (05-Fronts §1). Jamais stockée. */
 export const frontWidth = (front: Front): number => front.connections.length * WIDTH_SCALE;
 
 /** Les deux joueurs du front sont-ils en guerre ? (front actif) */
 export const isActive = (state: GameState, front: Front): boolean => statusOf(state, front.players[0], front.players[1]) === STATUS_WAR;
 
-/** Un front est en combat quand il est actif et qu'au moins un camp attaque (05-Fronts §4.3, §6). */
-export const inCombat = (state: GameState, front: Front): boolean => isActive(state, front) && front.sides.some((s) => s.frontAttack);
+/** Un front est en combat quand il est actif et qu'un camp attaque sur tout le front, ou qu'une percée y combat (05-Fronts §4.3, §6, §7.2). */
+export const inCombat = (state: GameState, front: Front): boolean =>
+  isActive(state, front) && (front.sides.some((s) => s.frontAttack) || state.breakthroughs.some((b) => b.front === front.id && b.phase > 0));
+
+/** Un round est joué sur ce front : il est en combat, ou une percée y attend la fin de son délai. */
+export const hasRound = (state: GameState, front: Front): boolean => inCombat(state, front) || (isActive(state, front) && state.breakthroughs.some((b) => b.front === front.id));
 
 /** Villes qui ont au moins une connexion dans un front actif (05-Fronts §8) : leur rayon d'expansion ne compte pas pour fonder. */
 export function activeFrontCities(state: GameState): Set<number> {
@@ -240,6 +248,7 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
         for (const d of divs) {
           d.front = 0;
           d.line = LINE_SECOND;
+          d.box = 0;
           d.engaged = 0;
           d.arrivalTick = turn + FRONTS.transferRounds * FRONTS.combatTurns;
         }
@@ -254,6 +263,7 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
     }
   }
   state.fronts = next;
+  afterFrontsChanged(state);
 }
 
 // ---- guerre et paix (05-Fronts §2.3) ----
@@ -266,8 +276,9 @@ export function startWar(state: GameState, a: number, b: number): void {
   }
 }
 
-/** Paix : positions et attaques supprimées ; les divisions restent. */
+/** Paix : positions, attaques et percées supprimées ; les divisions restent. */
 export function endWar(state: GameState, a: number, b: number): void {
+  endBreakthroughsBetween(state, a, b);
   for (const f of state.fronts) {
     if (!isPair(f, a, b)) continue;
     for (const c of f.connections) c.position = 0;

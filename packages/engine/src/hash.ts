@@ -60,6 +60,9 @@ function hashDivision(h: number, d: Division): number {
   h = mixList(h, d.counts);
   h = mixWord(h, d.front);
   h = mixWord(h, d.line);
+  h = mixWord(h, d.box);
+  h = mixWord(h, d.breakthrough);
+  h = mixWord(h, d.btEngaged);
   h = mixWord(h, d.engaged);
   h = mixWord(h, d.arrivalTick);
   h = mixWord(h, d.formedTick);
@@ -160,6 +163,27 @@ export function hashState(state: GameState): number {
   h = mixWord(h, state.nextDivisionId);
   h = mixWord(h, state.divisions.length);
   for (const d of state.divisions) h = hashDivision(h, d);
+  // Boîtes de percée et percées (05-Fronts §4.6, §7.2), par identifiant.
+  h = mixWord(h, state.nextBoxId);
+  h = mixWord(h, state.boxes.length);
+  for (const b of state.boxes) {
+    h = mixWord(h, b.id);
+    h = mixWord(h, b.front);
+    h = mixWord(h, b.owner);
+  }
+  h = mixWord(h, state.nextBreakthroughId);
+  h = mixWord(h, state.breakthroughs.length);
+  for (const b of state.breakthroughs) {
+    h = mixWord(h, b.id);
+    h = mixWord(h, b.front);
+    h = mixWord(h, b.owner);
+    h = mixWord(h, b.box);
+    h = mixWord(h, b.city1);
+    h = mixWord(h, b.city2);
+    h = mixWord(h, b.launchTick);
+    h = mixWord(h, b.phase);
+    h = mixWord(h, b.startState);
+  }
   // Diplomatie : les statuts (les deux cases de chaque paire), puis les propositions dans l'ordre de création.
   // `state.events` n'y est pas : rien ne le lit dans les règles.
   h = mixBytes(h, state.diplomacy);

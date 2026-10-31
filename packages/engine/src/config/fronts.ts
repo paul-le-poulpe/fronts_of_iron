@@ -44,4 +44,12 @@ export const FRONTS = {
   footSpeedPermille: 5,
   /** Vitesse d'une armée motorisée, en millièmes de route par round (15 = 1,5 %). */
   motorizedSpeedPermille: 15,
+  /** Tours entre le lancement d'une percée et son premier combat (50 = 5 s). Valeur de la version 0.1, confirmée par l'auteur. */
+  breakthroughDelayTurns: 50,
+  /** `N` : le saut d'une première ligne percée vaut `N × vitesse × facteur de réaction`. Valeur de la version 0.1. */
+  breakthroughJumpRounds: 10,
+  /** `X` : facteur de réaction d'une force de contre-attaque motorisée à moins de 50 % ; décroît jusqu'à 1 à 100 %. Valeur de la version 0.1. */
+  slowReactionFactor: 3,
+  /** Une percée s'arrête quand l'état moyen de sa force tombe sous ce % de celui du début du combat 1. Valeur de la version 0.1. */
+  breakthroughExhaustionPercent: 35,
 } as const;
