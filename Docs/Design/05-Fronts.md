@@ -768,8 +768,10 @@ l'implémentation.
   ligne** comprimée ; puis la réaction rapide et les forces de percée
   comprimées (V2). Le reste du côté adverse est comprimé (maquette : 800 px
   pour le joueur, 484 px pour l'adversaire).
-- **En V1**, seules les capsules des deux lignes sont affichées de chaque
-  côté ; la place des colonnes de la V2 est réservée.
+- **En V1**, les colonnes de la V2 (forces de percée, réaction rapide, et
+  leurs colonnes comprimées chez l'adversaire) sont **dessinées vides** : titre,
+  rangées par niche pour la réaction rapide, boîte « + » des forces de percée
+  sans effet.
 - **Zone des avions** : en bas, sur toute la largeur, un cinquième de la
   hauteur, réservée et vide.
 - Chaque colonne a un petit titre gris centré au-dessus (« Seconde ligne »,
@@ -875,8 +877,9 @@ la ligne survolée (*provisoire*) :
 
 - en-tête : **nom du type en gras** à gauche, **niche en gris** à droite ;
 - **description** du type (§3.4) ;
-- **équipement requis** : pour chaque composant, son symbole (16 × 16 px,
-  taille réelle, hommes compris), son nom, la quantité requise ;
+- **équipement requis** : pour chaque composant, son icône en **32 × 32 px**
+  (la version 32 × 32 si elle existe, sinon la 16 × 16 agrandie ; hommes
+  compris), son nom, la quantité requise ;
 - **statistiques** : attaque anti-infanterie, attaque antiblindée, attaque
   antiaérienne, PV, blindage en %, largeur de front, déplacement (à pied ou
   motorisé). **Une attaque nulle n'est pas affichée** ; le blindage non plus
@@ -893,7 +896,7 @@ la ligne survolée (*provisoire*) :
   agrandie ×2 : 16 × 20 px), puis le **nom du type en gras** ; **niche en
   gris** à droite ;
 - **description** ;
-- **équipement** : symbole 16 × 16, nom, **quantité actuelle / quantité
+- **équipement** : icône 32 × 32, nom, **quantité actuelle / quantité
   requise** (hommes compris) ;
 - **état** : le pourcentage seul (« 92 % ») ;
 - **attaques non nulles** : valeur actuelle / valeur maximale
@@ -903,9 +906,11 @@ la ligne survolée (*provisoire*) :
 
 ### 11.8 Thèmes clair et sombre
 
-- La fenêtre d'un front et l'onglet des forces existent en **thème sombre** et
-  en **thème clair** (couleurs des niches : §11.4 ; en clair, panneau
-  `#f6f7f9`, lettres de niche plus sombres que leur fond).
+- La fenêtre d'un front et l'onglet des forces existent en **thème clair**
+  (par défaut) et en **thème sombre** (couleurs des niches : §11.4 ; en clair,
+  panneau `#f6f7f9`, lettres de niche plus sombres que leur fond).
+- Les boutons à icône (« + ») peuvent avoir une version par thème ; pour
+  l'instant, **les deux thèmes utilisent la même**.
 - Un **bouton de debug temporaire**, à côté des boutons de debug existants,
   bascule entre les deux thèmes. Il ne concerne que ces deux panneaux et sera
   remplacé plus tard par un panneau de configuration du joueur.

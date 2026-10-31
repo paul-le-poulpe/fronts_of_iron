@@ -1,5 +1,5 @@
 /* Fenêtre d'un front, onglet des forces, panneaux de survol (Docs/Design/05-Fronts.md §11.2, §11.4, §11.7, §11.8).
-   Deux thèmes, sombre (par défaut) et clair, posés sur `html[data-theme]` par le bouton de debug (theme.ts) : ils ne
+   Deux thèmes, clair (par défaut) et sombre, posés sur `html[data-theme]` par le bouton de debug (theme.ts) : ils ne
    concernent que ces panneaux (classe `themed`, panneaux de survol `ip`). Les pions et leurs rectangles sont dans pawn.css. */
 
 /* ---- thèmes ---- */
@@ -47,7 +47,8 @@ html[data-theme="light"] .ip {
   --t-ip-niche: #7b8190;
   --t-icon-bg: #dfe2e8;
   --t-sq: #c9ced8;
-  --t-plus-filter: invert(1);
+  /* Pour l'instant, le même bouton « + » dans les deux thèmes. */
+  --t-plus-filter: none;
   --t-red: #d32f2f;
 }
 
@@ -109,10 +110,13 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-side { display: flex; gap: 10px; padding: 8px; min-width: 0; min-height: 0; }
 .fw-side.ours { flex: 0 0 62%; }
 .fw-side.theirs { flex: 1; border-left: 3px solid var(--t-muted); }
-/* Place des colonnes de la V2 (forces de percée, réaction rapide) : réservée. À gauche, en bas, la zone de retour. */
-.fw-v2 { flex: none; }
-.fw-v2.left { flex: 0 1 350px; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
-.fw-v2.right { width: 162px; }
+/* Colonnes de la V2 (forces de percée, réaction rapide), vides en V1. Forces de percée : la liste des boîtes, la boîte « + »,
+   puis, pendant un glisser, la zone de retour. */
+.fw-col.fw-pierce { flex: none; width: 170px; gap: 6px; }
+.fw-col.fw-rapid { flex: none; width: 170px; }
+.fw-col.fw-pierce-c { flex: none; width: 76px; }
+.fw-plist { flex: 1; min-height: 0; overflow-y: auto; border-radius: 6px; background: var(--t-capsule); }
+.fw-pplus { flex: none; height: 40px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--t-line); border-radius: 8px; color: var(--t-muted); font-size: 22px; opacity: 0.6; user-select: none; }
 .fw-retour {
   display: none;
   height: 90px;
@@ -249,6 +253,6 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .ip-sep { height: 1px; margin: 6px 0; background: var(--t-ip-sep); }
 .ip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
 .ip-label { flex: 1; }
-.ip-icon { width: 16px; height: 16px; flex: none; image-rendering: pixelated; background: var(--t-icon-bg); border-radius: 3px; }
+.ip-icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; background: var(--t-icon-bg); border-radius: 3px; }
 .ip-sq { width: 16px; height: 16px; flex: none; box-sizing: border-box; background: var(--t-sq); border: 1px solid var(--t-ip-line); border-radius: 2px; }
 .ip-rank { width: 16px; height: 20px; image-rendering: pixelated; }

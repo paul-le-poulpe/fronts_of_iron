@@ -133,7 +133,7 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | « +1 000 population » | `population += 1000` (jamais sous 0) |
 | « + armement » | ajoute à la réserve du joueur de quoi équiper 10 divisions de chaque type (`DIVISIONS` : l'armement de chaque composant) ; message `addArmament` |
 | « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (de quoi équiper 30 divisions de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
-| « Thème : sombre / clair » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
+| « Thème : clair / sombre » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
 
 Les quatre boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
 
@@ -744,9 +744,10 @@ sur la carte.
   deux moitiés autour de la barre verticale : titre, interrupteur « Sélection avancée » (éteint à chaque ouverture) et boutons
   « Attaque sur tout le front » (interrupteur, `start_front_attack` / `stop_front_attack`, grisé en paix, contour rouge qui clignote quand
   l'attaque est en cours) et « Barrage d'artillerie » (grisé, sans effet) à gauche ; « ← Retour » et ✕ à droite. Corps : côté du joueur,
-  la place réservée à la V2 (350 px, avec en bas la zone « Retour à la réserve nationale », visible pendant un glisser seulement) puis la
-  capsule seconde ligne / première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à chaque
-  dessin) / seconde ligne comprimée (76 px), puis la place réservée à la V2. Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
+  les colonnes de la V2, vides : forces de percée (170 px : liste vide, boîte « + » sans effet, puis la zone « Retour à la réserve
+  nationale », visible pendant un glisser seulement) et réaction rapide (170 px, rangées par niche), puis la capsule seconde ligne /
+  première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à chaque dessin) / seconde ligne
+  comprimée (76 px), puis la réaction rapide et la percée comprimées (76 px, vides). Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
   de niche par thème (variables CSS `--n-bg`, `--n-ink`, `--n-ink2` posées par la classe `n-<niche>`) ; en première ligne, le pourcentage de
   couverture (somme des `engaged` de la niche / (connexions × 1 000)). Seconde ligne adverse : par niche `countTag` (icône du premier type,
   nombre total) ; au survol, un rectangle de 240 px qui s'élargit vers la gauche et vers le bas, une ligne par type, cinq pions par ligne.
@@ -776,12 +777,13 @@ sur la carte.
   `data-drop` sous le pointeur (`dnd-over` : contour clair, choix de la page), `DndHost.drop` envoie les ordres ; Échap abandonne. Un glisser
   sans mouvement (moins de 4 px) ne dépose rien.
 - **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
-  nom en gras et niche en gris, description, composants (symbole 16 × 16, nom, quantité), statistiques non nulles (attaques, PV hors appui-feu,
+  nom en gras et niche en gris, description, composants (icône 32 × 32 : `icon32Path`, nom, quantité), statistiques non nulles (attaques, PV hors appui-feu,
   blindage, largeur de front, déplacement), carrés provisoires. Panneau d'un pion : rang (icône 8 × 10 agrandie ×2), nom, niche, description,
   composants « présents / requis », état (« 92 % »), attaques actuelles / maximales (`currentAttacks`, `maxAttacks` : stat × taux, sans
   multiplicateur). Il apparaît 120 ms après le survol, 14 px au-dessus du pion (au-dessous s'il n'y a pas la place), disparaît dès qu'un
   glisser ou le premier clic de la sélection avancée commence. Pions de l'adversaire : même panneau (`attachPawnPanels`).
-- **Thèmes** (`theme.ts`, `forces.css`, 05-Fronts §11.8) : `html[data-theme="dark" | "light"]`, sombre au départ ; les variables `--t-*` sont
+- **Thèmes** (`theme.ts`, `forces.css`, 05-Fronts §11.8) : `html[data-theme="dark" | "light"]`, clair au départ ; le
+  bouton « + » est le même dans les deux thèmes (`--t-plus-filter: none`) ; les variables `--t-*` sont
   posées sur la classe `themed` (fenêtre, volet des forces) et sur `.ip` (panneaux de survol), le reste de la page garde sa palette claire.
 - **Notifications des prises de villes** : « Vous avez pris la ville n° k à Bot j. » / « Bot j vous a pris la ville n° k. »
   (`captured`). **Encerclements** (`encircled`, événement `encirclement` du moteur) : une carte du même module

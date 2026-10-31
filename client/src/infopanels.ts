@@ -4,7 +4,7 @@
 // moteur envoie (`DivisionTypeInfo`, `DivisionView`).
 
 import { currentAttacks, maxAttacks, statePercent, typeOf } from "./divisions.ts";
-import { productIconPath } from "./icons.ts";
+import { icon32Path, productIconPath } from "./icons.ts";
 import { equipmentName, nicheName, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 
@@ -18,12 +18,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   return e;
 }
 
-/** Symbole de 16 × 16 px, à la taille réelle, d'un composant : les hommes ou un type d'armement. */
+/** Symbole de 32 × 32 px d'un composant : les hommes ou un type d'armement (version 32 × 32 si elle existe, sinon la 16 × 16 agrandie). */
 function equipmentIcon(resource: string): HTMLElement {
   const path = resource === "men" ? "population/pop-soldier.png" : productIconPath(resource);
   if (path === undefined) return el("span", "ip-sq");
   const img = el("img", "ip-icon");
-  img.src = `icons/${path}`;
+  img.src = `icons/${icon32Path(path)}`;
   img.alt = "";
   return img;
 }

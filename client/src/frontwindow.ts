@@ -1,9 +1,10 @@
 // Fenêtre d'un front (05-Fronts §11.4), posée sur la carte. Bandeau (titre, interrupteur « Sélection avancée »,
-// boutons d'attaque, fermeture et retour), capsule du joueur (seconde ligne, première ligne), barre verticale,
-// capsule de l'adversaire (première ligne de la même largeur, seconde ligne comprimée), zone des avions réservée.
+// boutons d'attaque, fermeture et retour), forces de percée et réaction rapide du joueur, capsule du joueur (seconde
+// ligne, première ligne), barre verticale, capsule de l'adversaire (première ligne de la même largeur, seconde ligne
+// comprimée), sa réaction rapide et sa percée comprimées, zone des avions réservée.
 // Les deux camps sont visibles (pas de brouillard de guerre). La page n'applique aucune règle : elle affiche ce que
 // le moteur envoie (`FrontView`, `DivisionView`) et envoie des ordres. Colonnes de réaction rapide et de percée :
-// V2, leur place est réservée.
+// V2, dessinées vides (aucune règle ne les remplit encore).
 //
 // Le DOM est construit une fois. `draw` ne remplace que le contenu des rangées de pions et des textes : un bouton
 // survit entre `pointerdown` et `click`.
@@ -99,14 +100,18 @@ export class FrontWindow implements DndHost {
     hr.append(this.backButton, close);
     head.append(hl, hr);
 
-    // Corps : côté du joueur | barre | côté adverse. Les colonnes de la V2 ont leur place réservée.
+    // Corps : côté du joueur | barre | côté adverse. Les colonnes de la V2 (percée, réaction rapide) sont dessinées vides.
     const main = el("div", "fw-main");
     const ours = el("div", "fw-side ours");
     const theirs = el("div", "fw-side theirs");
-    const reserved = el("div", "fw-v2 left");
+    const pierce = el("div", "fw-col fw-pierce");
+    const plus = el("div", "fw-pplus", "+");
+    plus.title = "Forces de percée : version 2.";
     const retour = el("div", "fw-retour", "Retour à la réserve nationale");
     retour.dataset.drop = "reserve";
-    reserved.append(retour);
+    pierce.append(el("div", "fw-lab", "Forces de percée"), el("div", "fw-plist"), plus, retour);
+    const rapid = this.column("Réaction rapide", false, false);
+    rapid.col.classList.add("fw-rapid");
     const o2 = this.column("Seconde ligne", false, false);
     const o1 = this.column("Première ligne", true, false);
     const t1 = this.column("Première ligne", true, false);
@@ -116,8 +121,11 @@ export class FrontWindow implements DndHost {
     capsuleOurs.append(o2.col, o1.col);
     const capsuleTheirs = el("div", "fw-capsule");
     capsuleTheirs.append(t1.col, t2.col);
-    ours.append(reserved, capsuleOurs);
-    theirs.append(capsuleTheirs, el("div", "fw-v2 right"));
+    ours.append(pierce, rapid.col, capsuleOurs);
+    const rapidTheirs = this.column("Réaction rapide", false, true);
+    const pierceTheirs = el("div", "fw-col comp fw-pierce-c");
+    pierceTheirs.append(el("div", "fw-lab", "Percée"), el("div", "fw-plist"));
+    theirs.append(capsuleTheirs, rapidTheirs.col, pierceTheirs);
     main.append(ours, theirs);
 
     const air = el("div", "fw-air", "ZONE DES AVIONS (RÉSERVÉE)");
