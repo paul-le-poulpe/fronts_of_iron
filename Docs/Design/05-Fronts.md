@@ -17,11 +17,10 @@ garde qu'un résumé. Règles décidées avec l'auteur les 29 et 30 octobre 2026
 - **Hors périmètre** : fronts aériens et maritimes, avions, barrage
   d'artillerie, bots (§16).
 
-**État (30 octobre 2026)** : **rien de ce document n'est implémenté.** Le code
-implémente la version 0.1 (tag git `v0.1`), décrite à la fin de
-`05-Fronts-History.md` ; `02-Engine.md` et `03-Client.md` décrivent ce code-là
-jusqu'à la refonte. Ordre d'implémentation au §14. Les valeurs des divisions
-(§3.4) restent à fixer.
+**État (31 octobre 2026)** : **implémentation en cours** (§14). Valeurs des
+divisions (§3.4) et interface (§11) décidées avec l'auteur le 31 octobre 2026.
+La version 0.1 est au tag git `v0.1`, décrite à la fin de
+`05-Fronts-History.md`.
 
 ---
 
@@ -50,6 +49,13 @@ de la configuration, écrits en décimal (deux décimales au plus), sont convert
 une fois en entiers à l'échelle 100. **Arrondi** : au plus proche, 0,5 vers le
 haut, partout où ce document dit « arrondi ». En entiers :
 `arrondi(p / q) = floor((2p + q) / (2q))` pour `p ≥ 0`, `q > 0`.
+
+**Pertes tirées** (pertes d'exemplaires d'un composant, §6.2, §6.3, §10.2) :
+la perte exacte est `p / q` en entiers. La partie entière `floor(p / q)` est
+toujours perdue ; pour le reste `r = p mod q`, un exemplaire de plus est perdu
+si `nextInt(state.rng, q) < r`. On ne tire que si `r > 0`, dans un ordre fixé :
+fronts par identifiant, divisions par identifiant, composants dans l'ordre de
+`components`. La perte est bornée à ce que le composant a.
 
 ## 2. Détection des fronts
 
@@ -176,10 +182,13 @@ Un type de division est une liste de **composants**. Chacun a :
 | ressource | les **hommes** (population), ou un type d'armement de `config/armament.ts` |
 | `count` | nombre d'exemplaires dans une division complète (infanterie : 1 000 hommes, 1 000 fusils, 100 mitrailleuses, par exemple) |
 | `required` | **requis** ou **optionnel** |
-| `weight` | poids dans l'état de la division (§3.3) ; peut valoir 0 |
+| `weight` | poids dans l'état de la division (§3.3) ; peut valoir 0 ; la somme des poids n'a pas à valoir 100 |
 | `softAttack`, `hardAttack`, `airAttack` | apport du composant **complet** aux attaques de la division. L'antiaérien n'a pas d'effet (pas d'aérien) |
 | `lossMultiplier` | part des pertes de la division que subit ce composant (§6.2) ; 1 par défaut |
-| `armored` | composant blindé (un canon antichar blindé, par exemple), pour les pertes de l'appui-feu (§6.3). *Provisoire* : porté par le composant |
+
+Il n'y a pas de composant « blindé » : aucune division ne mêle équipements
+blindés et non blindés (le blindage d'une division est son `armorPercent`,
+§3.4).
 
 - **Les stats appartiennent aux composants** ; celles de la division sont leur
   somme. Deux types de division peuvent utiliser le même armement avec des
@@ -211,7 +220,7 @@ composants de poids 0, est perdu).
 | Champ | Sens |
 | --- | --- |
 | `components` | la liste du §3.2 |
-| `icon`, `description` | affichage (pion, liste de création) |
+| `icon`, `description` | affichage (pion, menu « + », panneaux). Le **nom** de chaque type, celui de l'unité (« Chenillette »), distinct de celui de sa niche (« Chars »), est dans le client (`client/src/names.ts`) |
 | `frontWidth` | largeur tenue en première ligne, en liaisons (infanterie : 1) |
 | `hitPoints` | PV maximum : perte = dégâts / PV (1 dégât sur 100 PV : 1 %, §6.2) |
 | `defenseHitPointsMultiplier` | multiplie les PV quand la division défend (l'infanterie, plus résistante en défense) |
@@ -220,9 +229,49 @@ composants de poids 0, est perdu).
 | `movement` | `foot` ou `motorized` |
 | `breakthroughWidth`, `breakthroughMultiplier`, `counterAttackMultiplier` | gardés pour la percée de la V2 ; sans effet en V1 |
 
-**Valeurs** : à fixer à partir des unités de la version 0.1 (`config/units.ts`),
-avec des valeurs différentes, puis validées par l'auteur (§14, étape 3). Aucune
-n'est inventée en dehors de cette étape.
+**Valeurs** (validées par l'auteur le 31 octobre 2026, à partir des unités de
+la version 0.1 ; 1 liaison = 1 000 m). Un type par niche pour l'instant.
+
+Composants (`count`, requis, `weight`, `softAttack`, `hardAttack`, `airAttack`,
+`lossMultiplier`) :
+
+| Type | Ressource | count | requis | weight | soft | hard | air | lossMult |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `infantry` | hommes | 1 000 | oui | 2 | 0 | 0 | 0 | 1 |
+| | `rifle` | 1 000 | oui | 2 | 1 000 | 100 | 0 | 1 |
+| | `machineGun` | 100 | non | 1 | 500 | 0 | 100 | 1 |
+| `tankette` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 0,5 |
+| | `tankette` | 50 | oui | 1 | 2 500 | 500 | 0 | 1 |
+| `antiTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `antiTankGun` | 100 | oui | 1 | 0 | 5 000 | 0 | 1 |
+| `antiAir` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `antiAirGun` | 100 | oui | 1 | 1 000 | 0 | 5 000 | 1 |
+| `artillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 0,5 |
+| | `artillery` | 50 | oui | 1 | 2 500 | 250 | 0 | 0,5 |
+
+- Les mitrailleuses sont servies par les 1 000 hommes de l'infanterie, sans
+  homme de plus.
+- Tankette : 10 hommes par char (5 à bord, 5 à l'entretien) ; les hommes en
+  trop après des pertes de chars retournent à la population (§3.2).
+
+Attributs :
+
+| Type | Nom | Niche | frontWidth | breakthroughWidth | hitPoints | defenseHP× | attack× | breakthrough× | counterAttack× | armorPercent | movement |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `infantry` | Infanterie | infanterie | 1 | 1 | 50 000 | 2 | 0,5 | 0,2 | 0,7 | 0 | foot |
+| `tankette` | Chenillette | chars | 2 | 1 | 50 000 | 1 | 1 | 1 | 1 | 100 | foot |
+| `antiTank` | Canon anti-char | antichar | 5 | 5 | — | — | 0,2 | 0,2 | 0,7 | — | foot |
+| `antiAir` | Canon anti-aérien | antiaérien | 5 | 5 | — | — | 0,2 | 0,2 | 0,7 | — | foot |
+| `artillery` | Artillerie | artillerie | 5 | 5 | — | — | 1 | 1 | 1 | — | foot |
+
+- « — » : l'appui-feu ne reçoit pas de dégâts directs (§6.3) ; ces champs ne
+  sont jamais lus (0, 1 et 0 dans la configuration).
+- Icônes : `population/pop-soldier.png`, `armament/armament-tankette.png`,
+  `armament/armament-AT-gun.png`, `armament/armament-AA-gun.png`,
+  `armament/armament-artillery.png` (version 32 × 32 par `icon32Path`).
+- Descriptions : celle de l'armement (`ARMAMENT.types`), sauf l'infanterie :
+  « La base de toutes vos armées. Elle devra recevoir de l'équipement
+  supplémentaire pour être vraiment efficace : canons, mitrailleuses, etc. »
 
 ### 3.5 Création et suppression
 
@@ -410,8 +459,8 @@ l'attaquant de ce combat ; aucun quand il défend.
 4. **Perte** : `f = dégâts effectifs / PV`, en fraction de la division
    complète, PV = `hitPoints`, × `defenseHitPointsMultiplier` quand la division
    défend. 1 dégât pour 100 PV : 1 %.
-5. **Chaque composant perd** `f × lossMultiplier × count` exemplaires (arrondi,
-   au plus ce qu'il a). Exemple : à 10 %, fusils ×1 → 10 % de ses fusils,
+5. **Chaque composant perd** `f × lossMultiplier × count` exemplaires (pertes
+   tirées, §1). Exemple : à 10 %, fusils ×1 → 10 % de ses fusils,
    mitrailleuses ×0,5 → 5 %. L'état est recalculé (§3.3) ; l'excédent créé
    retourne au stock (§3.2).
 
@@ -423,18 +472,15 @@ L'appui-feu ne reçoit pas de dégâts directs.
 
 ```
 f_inf   = Σ (f de chaque infanterie engagée × sa largeur engagée) / Σ largeurs engagées
-f_comp  = f_inf × part engagée de la division d'appui-feu × lossMultiplier × facteur de blindage
-pertes  = arrondi(f_comp × count), au plus ce qu'il a
+f_comp  = f_inf × part engagée de la division d'appui-feu × lossMultiplier
+pertes  = f_comp × count             (pertes tirées, §1)
 ```
 
 - `f_inf` : moyenne des pertes de l'infanterie engagée **en fraction de sa
   capacité totale**, pondérée par la largeur engagée. Mesurée avant les
   échanges et fuites du round. Deux infanteries de même largeur qui perdent
-  10 % et 5 % donnent 7,5 %.
-- **Facteur de blindage** : 1 pour un composant non blindé ; pour un composant
-  blindé, `min(2, antiblindé reçu / anti-infanterie reçu)`, dégâts **reçus par
-  la ligne d'infanterie** ; anti-infanterie reçu nul : 2. Plafond :
-  `FRONTS.armorLossFactorMax` = **2**.
+  10 % et 5 % donnent 7,5 %. Pour une infanterie, `f` est celui du §6.2
+  (point 4), avant le tirage.
 - Exemple : artillerie, hommes et canons à `lossMultiplier` 0,5 → elle perd
   moitié moins que l'infanterie.
 - Les chars ne suivent pas cette règle : ils sont dans une niche principale
@@ -532,7 +578,8 @@ ville X à B :
   `f = routes encerclées × encirclementLossPercent / (connexions du front ×
   100)` de son état, `FRONTS.encirclementLossPercent` = **50**, connexions
   comptées avant la prise. *Provisoire* : appliqué composant par composant
-  comme au §6.2 (point 5), avec la part engagée et le `lossMultiplier`.
+  comme au §6.2 (point 5), avec la part engagée et le `lossMultiplier`
+  (pertes tirées, §1).
 - **Notification** : le moteur écrit l'événement `encirclement` (prise, camps,
   divisions touchées) ; la page prévient le joueur s'il est l'un des deux
   camps.
@@ -546,8 +593,9 @@ ville X à B :
 ## 11. Interface
 
 L'interface vient de l'auteur. Ce qui n'est pas écrit ici est **à décrire par
-lui** ; rien n'est inventé. Une session Sonnet préparera les maquettes d'après
-sa description (§14).
+lui** ; rien n'est inventé. Les tailles, couleurs et noms des maquettes de la
+session de l'interface (31 octobre 2026) sont des exemples, sauf indication
+contraire.
 
 ### 11.1 Carte
 
@@ -583,26 +631,57 @@ sa description (§14).
 ### 11.2 Onglet des forces (nouveau)
 
 Un nouvel onglet en haut de l'écran : un aperçu de **toutes les divisions** du
-joueur, sous forme de pions (§11.3).
+joueur, sous forme de pions (§11.3). Largeur d'exemple : 700 px (à fixer à
+l'implémentation). De haut en bas :
 
-- **Première section** : la **réserve nationale** (divisions affectées à aucun
-  front).
-- **Puis une section par front**, sur un fond de la **couleur de
-  l'adversaire**.
-- **Glisser-déposer** de pions d'une section à l'autre : vers un front, le pion
-  va en seconde ligne (§4.2) ; vers la réserve nationale, il y retourne.
-- **Bouton « + »** : ouvre la liste de tous les types de division ; un clic sur
-  un type la crée (§3.5). Très simple pour l'instant.
-- **Icône de poubelle** : y glisser une division de la réserve nationale la
-  supprime (§3.5).
-- **Point ouvert** : pions en vrac dans la section d'un front, ou sous-sections
-  (première ligne, seconde ligne) séparées par des barres verticales ; la place
-  manque peut-être.
+1. **Barre du haut** : le **bouton « + »** (icône `misc-plus-lighter.png`)
+   occupe la **moitié gauche** ; la **corbeille** occupe la **moitié droite**
+   et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
+   réserve nationale les supprime (§3.5). Icône de corbeille : *provisoire*.
+2. **Réserve nationale**, détaillée : de vrais pions, **un groupe par type**
+   (§11.3 : espacé, piles, « trop de pions »), **jamais deux types dans la
+   même pile**. Pas de colonnes de niche.
+3. **Les fronts**, chacun dans sa section : d'abord les **fronts en guerre
+   active**, puis les **fronts en paix**, chaque groupe trié par longueur
+   (*provisoire* : du plus long au plus court). Une section de front :
+   - fond de la **couleur de l'adversaire** ;
+   - à gauche, la **colonne du statut diplomatique** : un carré de 32 × 32 px
+     à bord noir, **rouge en guerre, bleu en paix** (*provisoire* : carrés en
+     attendant les icônes) ; la réserve a une case vide de même largeur, pour
+     l'alignement ;
+   - puis, côte à côte, pour chaque niche non vide : **une icône** (celle du
+     type le plus nombreux de la niche) et, à côté, le **nombre total** de
+     divisions de la niche (police de 20 px, blanc, contour noir de 1 px). Pas
+     de pile, pas de case vide, pas de tri par ligne.
+- **Glisser-déposer** (sélection : §11.4) d'une section à l'autre : une
+  division déposée sur un front va en **seconde ligne** (§4.2) ; sur la
+  réserve nationale, elle y retourne. Pour retirer des divisions d'un front,
+  le joueur **clique sur le front** : sa fenêtre s'ouvre (§11.4), avec le
+  bouton « ← Retour ».
+
+**Menu « + »**
+
+- Menu déroulant sous le bouton ; **il ne se ferme pas après un clic** ; **un
+  clic en dehors le ferme**.
+- **Une ligne par niche** (fond de la niche, §11.4 ; nom de la niche à droite
+  en lettres sombres, 36 px), **les types de la niche côte à côte** (icône de
+  32 px). Un nouveau type se place **à droite** des types existants.
+- À côté de chaque type, **« actuel / supportable »** : « actuel » = nombre de
+  divisions du type ; « supportable » = nombre de divisions complètes que le
+  pays peut équiper avec ce qu'il a (dans les divisions et en stock),
+  l'équipement le plus limitant fixant ce nombre (les hommes comptent aussi).
+  Exemple : 10 divisions de chars à moitié équipées, aucun stock : « 10/5 ».
+  « Actuel » est écrit **en rouge** s'il dépasse « supportable ».
+- Un type dont on ne peut pas créer **une** division (§3.5) est à **50 % de
+  transparence** ; son clic est sans effet.
+- **Un clic crée une seule division** (`create_division`). Pas de quantité ni
+  de clic maintenu.
+- Survol d'un type : panneau de type (§11.7).
 
 ### 11.3 Pion d'une division
 
 Décisions de l'auteur avec la session « Propositions visuelles du pion de
-division » (30 octobre 2026).
+division » (30 octobre 2026) et la session de l'interface (31 octobre 2026).
 
 **Le pion**
 
@@ -614,20 +693,23 @@ division » (30 octobre 2026).
   **Pas de barre à 100 %** (division au complet). Seul mini-widget pour
   l'instant.
 - **Rang** : icône de 8 × 10 en taille réelle, coin **haut gauche**
-  (`icons/ranks/icon-rank-N.png`, N de 0 à 7). Rang 0 : rien n'est dessiné ;
-  il n'existe que pour le panneau de survol. **Le rang n'existe pas encore
-  dans les règles** : en V1, toutes les divisions sont au rang 0, donc aucune
-  icône de rang n'est dessinée (§16).
+  (`icons/ranks/icon-rank-N.png`, N de 0 à 7). Rang 0 : rien n'est dessiné sur
+  le pion. **Le rang n'existe pas encore dans les règles** : en V1, toutes les
+  divisions sont au rang 0, donc aucune icône de rang n'est dessinée sur un
+  pion (§16).
 - **Statut** : icône de 16 × 16 en taille réelle, coin **bas gauche** :
   `icons/miscellaneous/icon-clock.png` en formation ou en déplacement,
   `icon-white-flag.png` en fuite. Le rang et le statut ne se chevauchent pas.
-- **Grisage** : avec une horloge ou un drapeau, l'icône du type est grisée :
-  chaque canal RVB avance de la moitié de la distance vers 255
-  (`(c + 255) / 2`, arrondi), alpha inchangé. Rang, statut et barre gardent
-  leurs couleurs (*provisoire* : non tranché explicitement).
-- **Survol** : un panneau détaillé (équipements, stats, rang), **à décrire
-  par l'auteur**.
-- **Sélection de plusieurs pions** : à décrire par l'auteur.
+- **Transparence** : avec une horloge ou un drapeau, l'icône du type est à
+  **50 % d'opacité**. Rang, statut et barre gardent leurs couleurs.
+- **Rectangle de sélection** : fond gris-bleu clair
+  `rgba(159, 182, 209, 0.60)`, coins arrondis de 4 px, derrière les pions.
+  48 px de haut (8 px au-dessus et au-dessous des pions), 3 px de marge à
+  gauche du premier et à droite du dernier pion sélectionné. Il reste dans sa
+  rangée, sans toucher le bord de la rangée ni un autre rectangle. Dans une
+  pile, les pions sélectionnés sont **au-dessus** du rectangle, et le
+  rectangle **au-dessus** des pions non sélectionnés.
+- **Survol** : panneau d'un pion (§11.7).
 
 **Disposition des pions dans une zone** (section de l'onglet des forces, zone
 de la fenêtre d'un front)
@@ -643,8 +725,8 @@ de la fenêtre d'un front)
    Le rang et le statut d'un pion en dessous sont cachés ; seule sa barre
    dépasse, sur une piste opaque gris foncé.
    **Ordre** (de gauche, dessus, à droite, dessous) : les divisions les plus
-   prêtes au combat, puis les abîmées par état décroissant, puis les grisées
-   (horloge ou drapeau), elles aussi par état décroissant.
+   prêtes au combat, puis les abîmées par état décroissant, puis celles à
+   horloge ou drapeau, elles aussi par état décroissant.
 3. **Trop de pions** (même à 8 px, ça ne rentre pas) : une seule icône par
    type, le pion du dessus de la pile (avec rang, statut et barre), et à côté
    le nombre de divisions du type (police de 20 px, blanc, contour noir de
@@ -655,21 +737,111 @@ de la fenêtre d'un front)
 
 ### 11.4 Fenêtre d'un front
 
-Ce qui est décidé ; la disposition détaillée est **à décrire par l'auteur** :
+Taille d'exemple : 1 284 × 500 px ; les tailles et positions sont à ajuster à
+l'implémentation.
 
-- Des **zones en colonnes** : en V1, première ligne et seconde ligne (réserve
-  active et forces de percée : V2). Dans une zone, des **rangées par niche** ;
-  les pions se rangent seuls dans la bonne niche, où qu'ils soient posés.
-- **Zone de renvoi à l'arrière**, tout à gauche : visible seulement pendant
-  qu'on fait glisser un pion ; y déposer un pion le renvoie à la réserve
-  nationale.
-- **Zone des avions** en bas, sur toute la largeur (un cinquième ou un dixième
-  de la hauteur) : réservée, vide pour l'instant.
-- **Forces de l'adversaire en face**, visibles (pas de brouillard de guerre).
-  Point ouvert : répartition deux tiers joueur, un tiers adversaire, et
-  symétrie incomplète.
-- **Boutons d'attaque** : attaque sur tout le front (interrupteur), barrage
-  (sans effet) ; plus de bouton de percée en V1.
+**Bandeau du haut**, coupé en deux par la barre verticale :
+
+- moitié du joueur : titre du front ; à sa droite, l'interrupteur
+  **« Sélection avancée »** (éteint par défaut) ; alignés à droite dans cette
+  moitié, les boutons **« Attaque sur tout le front »** (interrupteur, §5.1) et
+  **« Barrage d'artillerie »** (grisé, sans effet). Pas de bouton de percée en
+  V1 ;
+- moitié adverse : le bouton de fermeture ✕ à droite. Ouverte **depuis
+  l'onglet des forces**, la fenêtre a aussi un bouton **« ← Retour »** à gauche
+  du ✕, qui ramène à l'onglet ; ouverte depuis la carte, pas de bouton Retour,
+  et ✕ ramène à la carte (*provisoire* : place du bouton Retour).
+
+**Corps**, de gauche à droite :
+
+- côté du joueur : colonne des **forces de percée** (V2), colonne de la
+  **réaction rapide** (V2), puis une **capsule** (rectangle arrondi) qui
+  contient la **seconde ligne** puis la **première ligne** ;
+- **barre verticale** ;
+- côté adverse, en miroir : une capsule avec la **première ligne**, contre la
+  barre et **de la même largeur que celle du joueur**, puis la **seconde
+  ligne** comprimée ; puis la réaction rapide et les forces de percée
+  comprimées (V2). Le reste du côté adverse est comprimé (maquette : 800 px
+  pour le joueur, 484 px pour l'adversaire).
+- **En V1**, seules les capsules des deux lignes sont affichées de chaque
+  côté ; la place des colonnes de la V2 est réservée.
+- **Zone des avions** : en bas, sur toute la largeur, un cinquième de la
+  hauteur, réservée et vide.
+- Chaque colonne a un petit titre gris centré au-dessus (« Seconde ligne »,
+  « Première ligne », « Réaction rapide », « Forces de percée » ; « Percée »
+  pour la colonne comprimée de l'adversaire).
+
+**Rangées par niche** (dans chaque ligne) : une rangée par niche, dans l'ordre
+infanterie, chars, antichar, antiaérien, artillerie (*provisoire*). Fond gris
+très légèrement teinté :
+
+| Niche | Teinte | Sombre | Clair |
+| --- | --- | --- | --- |
+| infanterie | vert | `#262c27` | `#dde8de` |
+| chars | rouge | `#2d2626` | `#eadcdc` |
+| antichar | orange | `#2e2a23` | `#eae2d2` |
+| antiaérien | bleu | `#232830` | `#d9e0ea` |
+| artillerie | jaune | `#2d2c22` | `#e9e6cf` |
+
+- **Lettres de niche** en grosses lettres grasses, **plus sombres que le
+  fond** (à peine visibles) : `INF`, `TANK`, `AT`, `AA`, `ART` (*provisoire*),
+  alignées à droite de la rangée, derrière les pions. 36 px.
+- **En première ligne seulement** (du joueur et de l'adversaire), sous les
+  lettres, le **pourcentage de couverture du front** de la niche (largeur
+  engagée / largeur du front), de même taille et gras ; lettres et
+  pourcentage y sont plus sombres encore, en 24 px.
+- Les pions d'une rangée suivent §11.3. Le placement dans la bonne niche est
+  automatique (§4.1).
+
+**Seconde ligne adverse comprimée** (76 px de large ; *provisoire*) :
+
+- chaque rangée montre **une icône** (celle du premier type) et, à côté, le
+  **nombre total de divisions** de la niche (police de 20 px, blanc, contour
+  noir de 1 px). Pas de pile.
+- **Au survol**, la zone s'élargit **vers la gauche** (240 px pour une
+  rangée), grandit vers le bas et montre toutes ses divisions, une ligne par
+  type, 3 px entre pions.
+- Les pions de l'adversaire ne sont pas sélectionnables.
+
+**Retour à la réserve nationale** : pendant un glisser seulement, une zone
+« Retour à la réserve nationale » (bord pointillé clair, 90 px de haut)
+apparaît en bas de la colonne de gauche ; y déposer des divisions les renvoie
+à la réserve nationale. Hors glisser, elle n'est pas visible.
+
+**Sélection et glisser-déposer** (fenêtre d'un front et onglet des forces) :
+
+- **Sélection simple** (par défaut), un seul clic : survoler une division
+  montre le rectangle de ce qui sera sélectionné : **les divisions du même
+  type, depuis le début du groupe jusqu'à celle-ci**, dans l'ordre de la pile
+  (§11.3). **Le clic lance directement le glisser** : les divisions
+  sélectionnées suivent le curseur. À la dépose, elles vont dans la zone
+  visée (ligne d'un front, placement automatique dans la niche), dans la zone
+  de retour, sur une section de l'onglet des forces, ou sur la corbeille
+  (`move_division` ou `delete_division`).
+- **Sélection avancée** (interrupteur du bandeau), deux clics :
+  - le **premier clic marque la première division** (rectangle sur elle
+    seule) ;
+  - **dès que la souris bouge**, le rectangle se dessine jusqu'à la division
+    survolée, pour montrer ce que donnerait le second clic ;
+  - le **second clic fige** la sélection, qui peut ensuite être glissée.
+  - **Toutes les divisions entre les deux clics** sont sélectionnées, rangée
+    après rangée (rangées de haut en bas, pions de gauche à droite dans
+    l'ordre de la pile) : de la première à la fin de sa rangée, les rangées
+    entières entre les deux, du début de la dernière rangée à la seconde.
+    **Un rectangle par rangée.**
+  - Disponible dans toutes les zones ; **une sélection ne sort jamais de sa
+    zone** (une ligne, la réserve nationale, une section de front).
+- Les divisions en formation ou en déplacement ne sont pas déplaçables
+  (§3.5, §4.4).
+
+**V2** (pour mémoire, non affiché en V1) : colonne des forces de percée du
+joueur (170 px : liste défilante de boîtes « Percée n » avec bouton
+« Lancer », boîte « + » à bord pointillé, vue étendue de 330 px au survol
+d'une boîte, avec rangées par niche et pourcentages de la largeur du front de
+percée) ; colonne de réaction rapide (170 px, rangées par niche) ; colonnes
+comprimées de l'adversaire (une boîte comprimée par force de percée, boîte
+« ··· » pour celles qui ne tiennent pas, cadre de 330 px au survol). La zone
+de retour à la réserve se place alors sous la boîte « + ».
 
 ### 11.5 Points du front
 
@@ -691,6 +863,48 @@ Ce qui est décidé ; la disposition détaillée est **à décrire par l'auteur*
 - **Barre de stock de chaque armement** : la portion jaune foncé montre
   l'équipement des divisions.
 
+### 11.7 Panneaux de survol
+
+**Panneau d'un type** (menu « + »), 280 px, à droite du menu, à la hauteur de
+la ligne survolée (*provisoire*) :
+
+- en-tête : **nom du type en gras** à gauche, **niche en gris** à droite ;
+- **description** du type (§3.4) ;
+- **équipement requis** : pour chaque composant, son symbole (16 × 16 px,
+  taille réelle, hommes compris), son nom, la quantité requise ;
+- **statistiques** : attaque anti-infanterie, attaque antiblindée, attaque
+  antiaérienne, PV, blindage en %, largeur de front, déplacement (à pied ou
+  motorisé). **Une attaque nulle n'est pas affichée** ; le blindage non plus
+  s'il est nul ; *provisoire* : PV non affichés pour l'appui-feu (jamais lus,
+  §3.4). Chaque statistique a une petite icône (*provisoire* : carré de
+  16 × 16 px).
+
+**Panneau d'un pion** (fenêtre d'un front et onglet des forces), 280 px :
+
+- apparaît **14 px au-dessus du pion**, jamais collé à la souris ;
+- **disparaît dès qu'une sélection avancée (après le premier clic) ou un
+  glisser commence** ;
+- en-tête : l'**icône de rang** à gauche, avant le nom (rang 0 compris ;
+  agrandie ×2 : 16 × 20 px), puis le **nom du type en gras** ; **niche en
+  gris** à droite ;
+- **description** ;
+- **équipement** : symbole 16 × 16, nom, **quantité actuelle / quantité
+  requise** (hommes compris) ;
+- **état** : le pourcentage seul (« 92 % ») ;
+- **attaques non nulles** : valeur actuelle / valeur maximale
+  (anti-infanterie, antiblindée, antiaérienne), avec les mêmes icônes.
+- Panneau d'un pion adverse (seconde ligne adverse au survol) : non décrit ;
+  *provisoire* : le même.
+
+### 11.8 Thèmes clair et sombre
+
+- La fenêtre d'un front et l'onglet des forces existent en **thème sombre** et
+  en **thème clair** (couleurs des niches : §11.4 ; en clair, panneau
+  `#f6f7f9`, lettres de niche plus sombres que leur fond).
+- Un **bouton de debug temporaire**, à côté des boutons de debug existants,
+  bascule entre les deux thèmes. Il ne concerne que ces deux panneaux et sera
+  remplacé plus tard par un panneau de configuration du joueur.
+
 ## 12. Configuration
 
 **`packages/engine/src/config/fronts.ts`** (lisible et commenté) :
@@ -703,7 +917,6 @@ Ce qui est décidé ; la disposition détaillée est **à décrire par l'auteur*
 | `fleeStatePercent` | 25 | état sous lequel (ou auquel) une division fuit |
 | `fleeRounds` | 10 | rounds avant qu'une division en fuite puisse revenir en première ligne |
 | `swapStatePercent` | 50 | une division de première ligne échange quand son état est sous ce % de celui d'une division de seconde ligne |
-| `armorLossFactorMax` | 2 | plafond du facteur de blindage de l'appui-feu |
 | `capturePercent` | 1 | position du front, en % de la route depuis la ville prise |
 | `minEncirclementLengthPercent` | 25 | part de la route que le perdant doit tenir pour que la route soit encerclée |
 | `encirclementLossPercent` | 50 | pertes d'encerclement |
@@ -807,16 +1020,15 @@ les divisions de chaque front.
 - Création refusée faute de stock ou d'inactifs ; suppression ; déplacement
   et délai.
 - Un round : partage 2/3 – 1/3, pertes par composant, pertes de l'appui-feu
-  (moyenne pondérée, facteur de blindage plafonné), échange, fuite.
+  (moyenne pondérée), échange, fuite. Pertes tirées (§1) : partie entière
+  et tirage du reste.
 - Avancée : formule, cas `d = 0` et `a = 0`. Une prise, un encerclement.
 
 ## 14. Ordre d'implémentation
 
 1. Règles (ce document, 00-Game) — fait le 30 octobre 2026.
-2. **Valeurs des divisions** : session Sonnet, à partir de `config/units.ts`,
-   validées par l'auteur (§3.4).
-3. **Interface** : session Sonnet, maquettes d'après la description de
-   l'auteur (onglet des forces, fenêtre du front).
+2. **Valeurs des divisions** (§3.4) — fait le 31 octobre 2026.
+3. **Interface** (§11) — décidée le 31 octobre 2026.
 4. **Configuration** : `config/fronts.ts`, `config/divisions.ts`.
 5. **État du moteur** : divisions, hash.
 6. **Ordres** : `create_division`, `delete_division`, `move_division` ;
@@ -841,8 +1053,11 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
   délai ; identifiant d'un front fusionné ou coupé (§2.5) ;
 - nouvelle connexion créée en guerre par une fondation : 500 (§2.4) ; route
   vers un troisième joueur après une prise : 500 (§10.1) ;
-- `armored` porté par le composant (§3.2) ;
-- pion : place de la barre non réservée à 100 % ; rang, statut et barre non grisés (§11.3) ;
+- pion : place de la barre non réservée à 100 % (§11.3) ;
+- interface : ordre et lettres des niches, tri des fronts de l'onglet, place
+  du bouton Retour et du panneau de type, largeurs, icônes de statut
+  diplomatique, de statistique et de corbeille, panneau d'un pion adverse
+  (§11.2, §11.4, §11.7) ;
 - excédent rendu sans délai, à chaque tour (§3.2) ;
 - division à 0 % : le reste est perdu (§3.3) ;
 - création : inactifs seulement même en mobilisation forcée ; division en
