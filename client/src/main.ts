@@ -14,12 +14,14 @@ import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
 import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
 import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
-import { FrontPanel } from "./frontpanel.ts";
+import { ForcesTab } from "./forcestab.ts";
+import { FrontWindow } from "./frontwindow.ts";
 import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView, RESOURCE_LEGEND } from "./render.ts";
 import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
 import { applyBlinkPeriod } from "./blink.ts";
+import { currentTheme, toggleTheme } from "./theme.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -77,7 +79,8 @@ interface Session {
   view: MapView | null;
   production: ProductionPanel | null;
   infobar: InfoBar | null;
-  frontPanel: FrontPanel | null;
+  frontPanel: FrontWindow | null;
+  forces: ForcesTab | null;
   nextOrderId: number;
   paused: boolean;
   ticks: number;
@@ -104,6 +107,7 @@ function openSession(online: boolean): Session {
     production: null,
     infobar: null,
     frontPanel: null,
+    forces: null,
     nextOrderId: 1,
     paused: false,
     ticks: 0,
@@ -211,14 +215,17 @@ function onInit(s: Session, init: InitMessage): void {
   s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
-  s.frontPanel = new FrontPanel($("front-panel"), init.military, sendOrder);
+  // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
+  s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces());
+  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, (id) => openFront(id, true));
   s.infobar = new InfoBar(
     $("infobar"),
     init.catalog,
     setMapOption,
     (percent) => sendOrder({ type: "set_farm_share", percent }),
     (enabled) => sendOrder({ type: "set_forced_mobilization", enabled }),
-    openFront,
+    (id) => openFront(id, false),
+    s.forces,
   );
   buildFactoryMenu(init.catalog);
   $("prod").hidden = true;
@@ -244,7 +251,8 @@ function onTick(s: Session, msg: TickMessage): void {
     view.frontsChanged();
     s.infobar?.setFronts(msg.fronts);
   }
-  s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
+  s.frontPanel?.refresh(mirror.fronts, mirror.divisions);
+  s.forces?.setData(mirror.fronts, mirror.divisions);
   for (const c of msg.captured) {
     if (c.from === localPlayer() || c.to === localPlayer()) {
       const other = c.from === localPlayer() ? c.to : c.from;
@@ -430,6 +438,12 @@ $("dbg-arm").addEventListener("click", () => {
 $("dbg-bots").addEventListener("click", () => {
   if (session !== null) post({ type: "debug", action: "armBots", amount: 3 });
 });
+// Bouton temporaire (05-Fronts §11.8) : bascule le thème de la fenêtre d'un front et de l'onglet des forces.
+const themeButton = $("dbg-theme");
+themeButton.textContent = `Thème : ${currentTheme() === "dark" ? "sombre" : "clair"}`;
+themeButton.addEventListener("click", () => {
+  themeButton.textContent = `Thème : ${toggleTheme() === "dark" ? "sombre" : "clair"}`;
+});
 
 /** Ferme la session en cours (Worker compris, donc le WebSocket d'une partie en ligne) et remet l'écran de départ du solo. */
 function endSession(): void {
@@ -575,7 +589,7 @@ function onMapClick(tile: number): void {
     const front = session?.view?.frontAt(tile);
     if (front !== undefined) {
       diplomacy.openFor(0);
-      session?.frontPanel?.open(front);
+      session?.frontPanel?.open(front, false);
       return;
     }
     diplomacy.openFor(m.ownerOf(tile));
@@ -657,12 +671,13 @@ function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; pr
 
 // ---- fronts : fenêtre d'un front (05-Fronts §11.4) ----
 
-function openFront(id: number): void {
+/** `fromTab` : ouverte depuis l'onglet des forces, donc avec le bouton « ← Retour » ; depuis la liste des fronts, sans. */
+function openFront(id: number, fromTab: boolean): void {
   const s = session;
   const front = s?.mirror?.fronts.find((f) => f.id === id);
   if (s === null || front === undefined) return;
   s.infobar?.closeAll();
-  s.frontPanel?.open(front);
+  s.frontPanel?.open(front, fromTab);
 }
 
 

@@ -15,11 +15,17 @@ import {
   hashState,
   nextInt,
   POPULATION,
+  DIVISION_DATA,
   DIVISION_IDS,
+  isActive,
+  MEN,
   PRODUCT_IDS,
+  type DivisionId,
+  type Front,
   type GameMap,
   type GameState,
   type Intent,
+  type Player,
   type Rng,
 } from "../src/index.ts";
 
@@ -75,10 +81,12 @@ export interface ScenarioResult {
   filledLinePlayerTurns: number;
   /** Nombre de couples (joueur, tour) où le joueur a des soldats : les troupes sont jouées. */
   soldierPlayerTurns: number;
-  /** Nombre de tours où au moins un front a une attaque ou une percée en cours : le combat est joué. */
+  /** Nombre de tours où au moins un front a une attaque en cours : le combat est joué. */
   fightingTurns: number;
   /** Nombre de villes prises. */
   captures: number;
+  /** Nombre de divisions créées. */
+  divisions: number;
   /** Temps total passé dans applyTurn, en ms. */
   applyMs: number;
 }
@@ -124,6 +132,73 @@ function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent
       return nextInt(bot, 2) === 0
         ? { type: "set_city_priority", player, city, position: nextInt(bot, 3) }
         : { type: "set_line_priority", player, city, good, position: nextInt(bot, 3) };
+  }
+}
+
+/** Rifles et inactifs d'une division d'infanterie complète (05-Fronts §3.4). */
+const INFANTRY = DIVISION_DATA[DIVISION_IDS.indexOf("infantry")]!;
+
+/** Le joueur peut-il créer une division de ce type avec son stock et ses inactifs ? */
+function affordable(p: Player, type: DivisionId): boolean {
+  const data = DIVISION_DATA[DIVISION_IDS.indexOf(type)]!;
+  return data.components.every((c) => (c.resource === MEN ? p.idle : p.armamentReserve[c.resource]!) >= c.count);
+}
+
+/** Fronts du joueur, par identifiant croissant. */
+const frontsOf = (state: GameState, player: number): Front[] => state.fronts.filter((f) => f.players[0] === player || f.players[1] === player);
+
+/**
+ * Un ordre d'armée pour le joueur `player`, pour que les fronts voient des divisions : l'infanterie d'abord (c'est elle
+ * qui avance), puis un autre type tiré au hasard ; sans les hommes, mais avec les fusils, il coupe ses lignes de production
+ * pour libérer des ouvriers. Un `move_division` envoie une de ses divisions vers un de ses fronts, parfois en première ligne,
+ * et une attaque est lancée sur un front actif.
+ */
+function armyOrders(bot: Rng, state: GameState, player: number): Intent[] {
+  const me = state.players[player - 1]!;
+  const mine = state.divisions.filter((d) => d.owner === player);
+  const fronts = frontsOf(state, player);
+  const active = fronts.filter((f) => isActive(state, f));
+  switch (nextInt(bot, 8)) {
+    case 0:
+    case 1: {
+      if (affordable(me, "infantry")) return [{ type: "create_division", player, division: "infantry" }];
+      const others = DIVISION_IDS.filter((id) => affordable(me, id));
+      if (others.length > 0 && nextInt(bot, 4) === 0) return [{ type: "create_division", player, division: others[nextInt(bot, others.length)]! }];
+      // Ni hommes ni armement : couper les lignes libère des ouvriers, donc des inactifs.
+      const hasRifles = me.armamentReserve[INFANTRY.components[1]!.resource]! >= INFANTRY.components[1]!.count;
+      if (!hasRifles) return [{ type: "create_division", player, division: DIVISION_IDS[nextInt(bot, DIVISION_IDS.length)]! }];
+      const out: Intent[] = [];
+      for (const f of me.factories) for (const g of f.groups) out.push({ type: "set_active_lines", player, city: f.city, good: g.good, count: 0 });
+      return out;
+    }
+    case 2:
+    case 3:
+    case 4: {
+      if (mine.length === 0 || fronts.length === 0) return [];
+      // Trois fois sur quatre vers un front actif, quand il y en a un ; les divisions de la réserve d'abord.
+      const pool = active.length > 0 && nextInt(bot, 4) > 0 ? active : fronts;
+      const f = pool[nextInt(bot, pool.length)]!;
+      // Une division en déplacement repart de zéro quand on la déplace : on ne déplace que celles qui sont arrivées.
+      const reserve = mine.filter((x) => x.front === 0 && x.arrivalTick === 0);
+      const pick = reserve.length > 0 && nextInt(bot, 8) > 0 ? reserve : mine.filter((x) => x.arrivalTick === 0);
+      const ids = pick.slice(0, 1 + nextInt(bot, 3)).map((x) => x.id);
+      return [{ type: "move_division", player, ids, front: f.id, ...(nextInt(bot, 2) === 0 ? { line: "first" as const } : {}) }];
+    }
+    case 5: {
+      if (active.length === 0) return [];
+      return [{ type: "start_front_attack", player, front: active[nextInt(bot, active.length)]!.id }];
+    }
+    case 6: {
+      // Un front voisin, en paix : déclarer la guerre à son adversaire.
+      const peace = fronts.filter((f) => !isActive(state, f));
+      if (peace.length === 0) return [];
+      const f = peace[nextInt(bot, peace.length)]!;
+      return [{ type: "declare_war", player, target: f.players[0] === player ? f.players[1] : f.players[0] }];
+    }
+    default:
+      return nextInt(bot, 6) === 0 && mine.length > 0
+        ? [{ type: "delete_division", player, id: mine[nextInt(bot, mine.length)]!.id }]
+        : [];
   }
 }
 
@@ -179,6 +254,8 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
 const FARM_SHARE_ONE_IN = 150;
 /** Un joueur qui a une ville envoie un ordre de guerre ou de front à un tour sur `FRONT_ORDER_ONE_IN`. */
 const FRONT_ORDER_ONE_IN = 60;
+/** Un joueur qui a une ville envoie un ordre d'armée (`armyOrders`) à un tour sur `ARMY_ORDER_ONE_IN`, en plus des ordres de `frontOrder`. */
+const ARMY_ORDER_ONE_IN = 15;
 /** Un joueur qui a une ville envoie un ordre d'usine (construire, créer, régler, priorité) à un tour sur `FACTORY_ORDER_ONE_IN`. */
 const FACTORY_ORDER_ONE_IN = 25;
 
@@ -228,6 +305,9 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
       if (mine.length > 0 && turn >= opts.warsFromTurn && nextInt(bot, FRONT_ORDER_ONE_IN) === 0) {
         intents.push(frontOrder(bot, state, p));
       }
+      if (mine.length > 0 && turn >= opts.warsFromTurn && nextInt(bot, ARMY_ORDER_ONE_IN) === 0) {
+        intents.push(...armyOrders(bot, state, p));
+      }
     }
     intents.push(GARBAGE[turn % GARBAGE.length] as Intent);
 
@@ -257,6 +337,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     soldierPlayerTurns,
     fightingTurns,
     captures,
+    divisions: state.nextDivisionId - 1,
     totalPopulation: state.players.reduce((sum, p) => sum + p.population, 0),
     applyMs,
   };

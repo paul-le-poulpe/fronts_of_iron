@@ -20,27 +20,47 @@ const FACTORY_NAMES: Readonly<Record<string, string>> = {
   miningMachines: "Usine mécanique",
 };
 
-/** Noms des unités militaires et des niches des fronts (05-Fronts §3). */
+/** Noms des types de division (clés de `DIVISIONS`) et des niches des fronts (clés de `NICHES`, 05-Fronts §3). */
 const UNIT_NAMES: Readonly<Record<string, string>> = {
   infantry: "Infanterie",
-  machineGun: "Mitrailleuse",
-  artillery: "Artillerie",
-  antiTankGun: "Canon anti-char",
-  antiAirGun: "Canon anti-aérien",
   tankette: "Chenillette",
+  antiTank: "Canon anti-char",
+  antiAir: "Canon anti-aérien",
+  artillery: "Artillerie",
 };
 
 const NICHE_NAMES: Readonly<Record<string, string>> = {
   infantry: "Infanterie",
-  machineGun: "Mitrailleuses",
-  artillery: "Artillerie",
+  tanks: "Char",
   antiTank: "Antichar",
   antiAir: "Antiaérien",
-  assaultTank: "Chars d'assaut",
+  artillery: "Artillerie",
+};
+
+/** Lettres de niche, en grosses lettres sombres au fond des rangées (05-Fronts §11.4). */
+const NICHE_LETTERS: Readonly<Record<string, string>> = {
+  infantry: "INF",
+  tanks: "TANK",
+  antiTank: "AT",
+  antiAir: "AA",
+  artillery: "ART",
+};
+
+/** Équipement requis d'une division, au pluriel, avec majuscule (panneaux de survol, 05-Fronts §11.7) ; `men` : les hommes. */
+const EQUIPMENT_NAMES: Readonly<Record<string, string>> = {
+  men: "Hommes",
+  rifle: "Fusils",
+  machineGun: "Mitrailleuses",
+  artillery: "Artillerie",
+  antiAirGun: "Canons anti-aériens",
+  antiTankGun: "Canons anti-char",
+  tankette: "Chenillettes",
 };
 
 export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;
 export const nicheName = (id: string): string => NICHE_NAMES[id] ?? id;
+export const nicheLetters = (id: string): string => NICHE_LETTERS[id] ?? id.toUpperCase();
+export const equipmentName = (id: string): string => EQUIPMENT_NAMES[id] ?? id;
 
 let localId = 1;
 let rosterNames: readonly string[] = [];

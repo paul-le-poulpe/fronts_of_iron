@@ -18,6 +18,7 @@ interface RunOutput {
   soldierPlayerTurns: number;
   fightingTurns: number;
   captures: number;
+  divisions: number;
   totalPopulation: number;
 }
 
@@ -41,11 +42,12 @@ describe("déterminisme", () => {
     // Les usines sont jouées : des lignes remplies, donc des ouvriers, des mineurs et du fer.
     assert.ok(a.filledLinePlayerTurns > 1000, `seulement ${a.filledLinePlayerTurns} tours-joueurs avec une ligne remplie : les usines ne sont pas testées`);
     assert.equal(b.filledLinePlayerTurns, a.filledLinePlayerTurns);
-    // Les fronts sont joués : des soldats, des attaques et des percées en cours, des villes prises (05-Fronts §13.7).
+    // Les fronts sont joués : des divisions créées, des soldats, des attaques en cours, des villes prises (05-Fronts §13.7).
+    assert.ok(a.divisions >= 5, `seulement ${a.divisions} divisions créées : les divisions ne sont pas testées`);
     assert.ok(a.soldierPlayerTurns > 1000, `seulement ${a.soldierPlayerTurns} tours-joueurs avec des soldats : les troupes ne sont pas testées`);
     assert.ok(a.fightingTurns > 100, `seulement ${a.fightingTurns} tours de combat : le combat n'est pas testé`);
     assert.ok(a.captures >= 1, "aucune ville prise : la prise et l'encerclement ne sont pas testés");
-    assert.deepEqual([b.soldierPlayerTurns, b.fightingTurns, b.captures], [a.soldierPlayerTurns, a.fightingTurns, a.captures]);
+    assert.deepEqual([b.soldierPlayerTurns, b.fightingTurns, b.captures, b.divisions], [a.soldierPlayerTurns, a.fightingTurns, a.captures, a.divisions]);
     assert.equal(a.cities, b.cities);
     assert.equal(b.starvingPlayerTurns, a.starvingPlayerTurns);
     assert.equal(b.totalPopulation, a.totalPopulation);

@@ -361,7 +361,10 @@ place.
   fronts, prend `FRONTS.transferRounds` **rounds de combat** (**10**, soit
   100 tours, 10 s).
 - *Provisoire* : un déplacement entre les deux lignes d'un même front est sans
-  délai.
+  délai. Un nouvel ordre vers la destination d'un déplacement en cours ne
+  relance pas le délai ; il change seulement la ligne demandée.
+- La ligne demandée (première ou seconde) est gardée pendant le trajet ; à
+  l'arrivée, le rangement (§4.2) la place.
 - Pendant le trajet, la division est comptée à sa **destination**, affichée
   grisée avec l'icône de statut horloge (§11.3) ; elle ne combat pas, ne compte
   pas pour le remplissage et ne réagit pas aux clics.
@@ -1073,7 +1076,10 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - rangement des lignes à chaque tour (§4.2) ;
 - renfort : ni en déplacement, ni en fuite ; calcul par parts égales et reste
   par identifiant (§4.3) ;
-- déplacement entre les lignes d'un même front sans délai (§4.4) ;
+- déplacement entre les lignes d'un même front sans délai ; nouvel ordre vers
+  la destination en cours sans nouveau délai (§4.4) ;
+- interface : sélection avancée seulement dans la fenêtre d'un front (pas dans
+  l'onglet des forces) ; une division en fuite peut être déplacée (§11.4) ;
 - `move_division` : divisions invalides ignorées (§5.2) ;
 - échange seulement dans la même niche (§5.3) ;
 - dégâts calculés sur les états du début du round ; ordre de fin de round

@@ -115,10 +115,11 @@ export function moveDivisions(state: GameState, player: number, ids: unknown, fr
     const d = ownDivision(state, player, id);
     if (d === undefined || seen.has(d.id) || inFormation(state, d)) continue;
     seen.add(d.id);
-    const sameFront = d.front === dest && !isMoving(d);
+    const sameFront = d.front === dest;
     if (sameFront && dest === 0) continue;
     if (sameFront) {
-      // Entre les deux lignes d'un même front : sans délai ; le rangement des lignes décide de la place.
+      // Entre les deux lignes d'un même front, ou vers la destination d'un déplacement en cours : sans nouveau délai
+      // (provisoire) ; le rangement des lignes décide de la place.
       d.line = toLine;
       if (toLine === LINE_SECOND) d.engaged = 0;
     } else {
@@ -315,13 +316,12 @@ export function arrangeSide(state: GameState, front: Front, player: number): voi
   });
 }
 
-/** Rangement des lignes de tous les fronts (05-Fronts §4.2, provisoire : à chaque tour). Divisions de la réserve : seconde ligne, rien d'engagé. */
+/** Rangement des lignes de tous les fronts (05-Fronts §4.2, provisoire : à chaque tour). Divisions de la réserve : seconde ligne ; en déplacement : rien d'engagé. */
 export function arrangeAll(state: GameState): void {
   for (const d of state.divisions) {
-    if (d.front === 0 || isMoving(d)) {
-      d.line = LINE_SECOND;
-      d.engaged = 0;
-    }
+    // En déplacement, la ligne demandée est gardée pour l'arrivée ; rien n'est engagé.
+    if (d.front === 0) d.line = LINE_SECOND;
+    if (d.front === 0 || isMoving(d)) d.engaged = 0;
   }
   for (const f of state.fronts) for (const p of f.players) arrangeSide(state, f, p);
 }

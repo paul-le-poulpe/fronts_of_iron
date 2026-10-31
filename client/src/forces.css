@@ -1,0 +1,254 @@
+/* Fenêtre d'un front, onglet des forces, panneaux de survol (Docs/Design/05-Fronts.md §11.2, §11.4, §11.7, §11.8).
+   Deux thèmes, sombre (par défaut) et clair, posés sur `html[data-theme]` par le bouton de debug (theme.ts) : ils ne
+   concernent que ces panneaux (classe `themed`, panneaux de survol `ip`). Les pions et leurs rectangles sont dans pawn.css. */
+
+/* ---- thèmes ---- */
+
+.themed, .ip {
+  --t-panel: #1e2024;
+  --t-head: #25282d;
+  --t-line: #3a3e46;
+  --t-fg: #dcdfe4;
+  --t-muted: #8b919b;
+  --t-btn: #2f333a;
+  --t-btn-line: #555a63;
+  --t-capsule: rgba(255, 255, 255, 0.03);
+  --t-air: #1a1c20;
+  --t-air-fg: #40454d;
+  --t-res: #2a2d33;
+  --t-ip-bg: #16181c;
+  --t-ip-line: #8b919b;
+  --t-ip-sep: #32363d;
+  --t-ip-desc: #9aa0aa;
+  --t-ip-niche: #6f7580;
+  --t-icon-bg: #4a4f58;
+  --t-sq: #5a6070;
+  --t-plus-filter: none;
+  --t-red: #ff5a4d;
+  color: var(--t-fg);
+}
+html[data-theme="light"] .themed,
+html[data-theme="light"] .ip {
+  --t-panel: #f6f7f9;
+  --t-head: #e8eaee;
+  --t-line: #b9bec7;
+  --t-fg: #14161a;
+  --t-muted: #5b616c;
+  --t-btn: #ffffff;
+  --t-btn-line: #8b919b;
+  --t-capsule: rgba(0, 0, 0, 0.03);
+  --t-air: #eceef2;
+  --t-air-fg: #aeb4bf;
+  --t-res: #dfe2e8;
+  --t-ip-bg: #ffffff;
+  --t-ip-line: #5b616c;
+  --t-ip-sep: #d5d9e0;
+  --t-ip-desc: #4b515c;
+  --t-ip-niche: #7b8190;
+  --t-icon-bg: #dfe2e8;
+  --t-sq: #c9ced8;
+  --t-plus-filter: invert(1);
+  --t-red: #d32f2f;
+}
+
+/* Couleur de fond d'une niche, et de ses lettres (plus sombres que le fond ; encore plus en première ligne). */
+.themed .n-infantry { --n-bg: #262c27; --n-ink: #222822; --n-ink2: #171b18; }
+.themed .n-tanks { --n-bg: #2d2626; --n-ink: #272121; --n-ink2: #1e1717; }
+.themed .n-antiTank { --n-bg: #2e2a23; --n-ink: #28241e; --n-ink2: #1f1b14; }
+.themed .n-antiAir { --n-bg: #232830; --n-ink: #1e232a; --n-ink2: #141920; }
+.themed .n-artillery { --n-bg: #2d2c22; --n-ink: #27261d; --n-ink2: #1f1e16; }
+html[data-theme="light"] .themed .n-infantry { --n-bg: #dde8de; --n-ink: #cbd9cc; --n-ink2: #a9bcab; }
+html[data-theme="light"] .themed .n-tanks { --n-bg: #eadcdc; --n-ink: #dbc9c9; --n-ink2: #c9aeae; }
+html[data-theme="light"] .themed .n-antiTank { --n-bg: #eae2d2; --n-ink: #d9cdb8; --n-ink2: #c7b693; }
+html[data-theme="light"] .themed .n-antiAir { --n-bg: #d9e0ea; --n-ink: #c5cfdd; --n-ink2: #a3b1c6; }
+html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b6; --n-ink2: #c4be91; }
+
+/* ---- fenêtre d'un front ---- */
+
+#front-panel { align-items: flex-start; }
+.fw {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 1284px);
+  height: min(100%, 500px);
+  background: var(--t-panel);
+  border: 1px solid var(--t-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px #0006;
+  overflow: hidden;
+  font-size: 13px;
+}
+.fw-head { flex: none; height: 44px; display: flex; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
+.fw-hl { flex: 0 0 62%; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
+.fw-hr { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 12px; border-left: 3px solid var(--t-muted); }
+.fw-title { flex: none; white-space: nowrap; }
+.fw-muted { color: var(--t-muted); }
+.fw-spacer { flex: 1; }
+.fw-sw { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t-muted); cursor: pointer; user-select: none; white-space: nowrap; }
+.fw-sw input { position: absolute; opacity: 0; width: 0; height: 0; }
+.fw-sw:has(input:checked) { color: var(--t-fg); }
+.fw-btn {
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--t-fg);
+  background: var(--t-btn);
+  border: 1px solid var(--t-btn-line);
+  border-radius: 0;
+  white-space: nowrap;
+}
+.fw-btn:hover:not(:disabled) { border-color: var(--t-fg); }
+.fw-btn:disabled { opacity: 0.45; cursor: default; }
+.fw-btn[aria-pressed="true"] { background: var(--t-btn); color: var(--t-fg); }
+.fw-btn.on { border-color: #e0443a; box-shadow: 0 0 0 2px #e0443a; animation: fw-blink var(--blink-period, 1s) steps(2, jump-none) infinite; }
+@keyframes fw-blink { 50% { box-shadow: 0 0 0 2px transparent; } }
+.fw-close { width: 28px; padding: 4px 0; }
+
+.fw-main { flex: 1; min-height: 0; display: flex; }
+.fw-side { display: flex; gap: 10px; padding: 8px; min-width: 0; min-height: 0; }
+.fw-side.ours { flex: 0 0 62%; }
+.fw-side.theirs { flex: 1; border-left: 3px solid var(--t-muted); }
+/* Place des colonnes de la V2 (forces de percée, réaction rapide) : réservée. À gauche, en bas, la zone de retour. */
+.fw-v2 { flex: none; }
+.fw-v2.left { flex: 0 1 350px; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.fw-v2.right { width: 162px; }
+.fw-retour {
+  display: none;
+  height: 90px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  border: 2px dashed var(--t-fg);
+  border-radius: 8px;
+  background: var(--t-capsule);
+  font-size: 12px;
+}
+.fw.dragging .fw-retour { display: flex; }
+.fw-capsule { flex: 1; min-width: 0; display: flex; gap: 6px; padding: 6px; border: 1px solid var(--t-line); border-radius: 14px; background: var(--t-capsule); }
+.fw-side.theirs .fw-capsule { flex: none; }
+.fw-col { flex: 1; min-width: 0; display: flex; flex-direction: column; border-radius: 6px; }
+.fw-col.comp { flex: none; width: 76px; }
+.fw-lab { flex: none; height: 16px; font-size: 11px; color: var(--t-muted); text-align: center; white-space: nowrap; }
+.fw-rows { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+.fw-row {
+  --pz-open-bg: var(--n-bg);
+  position: relative;
+  flex: 1 1 0;
+  min-height: 54px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  background: var(--n-bg);
+  border-radius: 4px;
+}
+.fw-clip { position: absolute; inset: 0; overflow: hidden; border-radius: 4px; pointer-events: none; }
+.fw-big { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); text-align: center; line-height: 1; color: var(--n-ink); user-select: none; }
+.fw-letters { display: block; font-size: 36px; font-weight: 800; letter-spacing: 0.04em; }
+.fw-pct { display: block; font-size: 24px; font-weight: 800; letter-spacing: 0.04em; }
+.fw-row.cov .fw-big { color: var(--n-ink2); }
+.fw-row.cov .fw-letters { font-size: 24px; }
+.fw-zone { position: relative; flex: 1; min-width: 0; height: 50px; }
+.fw-row.comp .fw-zone { display: flex; align-items: center; padding-left: 4px; }
+.fw-row.comp:hover { z-index: 30; }
+
+/* Rectangle élargi d'une zone comprimée de l'adversaire : vers la gauche, vers le bas (05-Fronts §11.4). */
+.fw-pop {
+  display: none;
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 240px;
+  min-height: calc(100% + 2px);
+  box-sizing: border-box;
+  padding: 0 8px;
+  flex-direction: column;
+  background: var(--n-bg);
+  border: 1px solid var(--t-muted);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px #0007;
+}
+.fw-row.comp:hover > .fw-pop { display: flex; }
+.fw-popline { position: relative; flex: none; height: 50px; }
+
+.fw-air { flex: 0 0 20%; display: flex; align-items: center; justify-content: center; background: var(--t-air); border-top: 1px solid var(--t-line); color: var(--t-air-fg); font-size: 12px; letter-spacing: 0.08em; }
+
+/* Une icône et un nombre : sections de front de l'onglet des forces, zones comprimées de l'adversaire. */
+.ct { display: flex; align-items: center; gap: 4px; flex: none; }
+.ct-icon { width: 32px; height: 32px; image-rendering: pixelated; display: block; }
+.ct-num {
+  font: 700 20px/32px system-ui, sans-serif;
+  color: #fff;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000, 1px 0 0 #000;
+}
+
+/* ---- onglet des forces ---- */
+
+.ib-pane.forces { width: min(720px, 100%); padding: 8px; background: var(--t-panel); border-color: var(--t-line); }
+.fx { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.fx.menu-open { min-height: 360px; }
+.fx-bar { display: flex; gap: 6px; height: 40px; }
+.fx-half { flex: 1; display: flex; }
+.fx-plus, .fx-trash { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 0; color: var(--t-fg); }
+.fx-plus:hover:not(:disabled) { border-color: var(--t-fg); }
+.fx-plus-icon { width: 24px; height: 24px; image-rendering: pixelated; filter: var(--t-plus-filter); }
+.fx-trash { visibility: hidden; }
+.fx.dragging .fx-trash { visibility: visible; }
+.fx-sec { --pz-open-bg: var(--t-res); display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 3px 8px; border-radius: 4px; box-sizing: border-box; }
+.fx-res { background: var(--t-res); }
+.fx-front { width: 100%; border: 0; text-align: left; color: #fff; cursor: pointer; }
+.fx-front:hover:not(:disabled) { border: 0; filter: brightness(1.08); }
+.fx-fronts { display: flex; flex-direction: column; gap: 6px; }
+.fx-dip { flex: none; width: 32px; height: 32px; box-sizing: border-box; border: 2px solid #000; }
+.fx-dip.war { background: #e53935; }
+.fx-dip.peace { background: #3b82f6; }
+.fx-dip.spacer { visibility: hidden; }
+.fx-zone { position: relative; flex: 1; min-width: 0; min-height: 50px; }
+.fx-tags { display: flex; align-items: center; gap: 16px; }
+
+/* Menu « + » : sous le bouton, une ligne par niche, les types côte à côte. */
+.fx-menu { position: absolute; left: 0; top: 46px; z-index: 60; width: 440px; padding: 4px; background: var(--t-panel); border: 1px solid var(--t-ip-line); border-radius: 6px; box-shadow: 0 4px 14px #0007; }
+.fx-menu[hidden] { display: none; }
+.fx-mrow { position: relative; height: 56px; margin-bottom: 2px; padding: 0 12px; display: flex; align-items: center; background: var(--n-bg); border-radius: 4px; }
+.fx-mrow:last-child { margin-bottom: 0; }
+.fx-types { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px; }
+.fx-ment { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fx-ment-icon { width: 32px; height: 32px; image-rendering: pixelated; display: block; }
+.fx-ment.unavailable { cursor: default; }
+.fx-ment.unavailable .fx-ment-icon { opacity: 0.5; }
+.fx-cnt { font: 700 16px system-ui, sans-serif; color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
+.fx-cnt .red { color: var(--t-red); }
+.fx-mlab { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 36px; font-weight: 800; letter-spacing: 0.04em; line-height: 1; color: var(--n-ink); pointer-events: none; user-select: none; }
+
+/* ---- glisser-déposer ---- */
+
+.dnd-ghost { position: fixed; z-index: 300; pointer-events: none; opacity: 0.85; filter: drop-shadow(0 2px 4px #000a); }
+.dnd-over { outline: 2px solid #9fb6d1; outline-offset: -2px; }
+
+/* ---- panneaux de survol (infopanels.ts) ---- */
+
+.ip {
+  position: fixed;
+  z-index: 200;
+  width: 280px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  background: var(--t-ip-bg);
+  border: 1px solid var(--t-ip-line);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px #0007;
+  font-size: 12px;
+  pointer-events: none;
+}
+.ip-head { margin: 0 0 4px; font-size: 13px; font-weight: 400; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ip-name { display: inline-flex; align-items: center; gap: 6px; }
+.ip-name b { font-weight: 700; }
+.ip-niche { color: var(--t-ip-niche); font-size: 12px; }
+.ip-desc { color: var(--t-ip-desc); margin-bottom: 6px; }
+.ip-sep { height: 1px; margin: 6px 0; background: var(--t-ip-sep); }
+.ip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+.ip-label { flex: 1; }
+.ip-icon { width: 16px; height: 16px; flex: none; image-rendering: pixelated; background: var(--t-icon-bg); border-radius: 3px; }
+.ip-sq { width: 16px; height: 16px; flex: none; box-sizing: border-box; background: var(--t-sq); border: 1px solid var(--t-ip-line); border-radius: 2px; }
+.ip-rank { width: 16px; height: 20px; image-rendering: pixelated; }

@@ -46,9 +46,9 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
-| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock) ; DOM construit une fois, pas de règle |
+| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), fronts, forces ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
-| `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
+| `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; noms des types de division, des niches (et leurs lettres) et de l'équipement des divisions ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, logos d'usine, modes placement et usine |
@@ -57,7 +57,14 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
-| `src/frontpanel.ts` | panneau d'un front (05-Fronts §11.3) : titre, boutons d'attaque, percées, réglages, tableau des unités |
+| `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
+| `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la sixième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
+| `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
+| `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales, « supportable » et « créable » du menu « + », couverture d'un front, rangement des fronts |
+| `src/infopanels.ts` | panneaux de survol (§11.7) : panneau d'un type (menu « + ») et panneau d'un pion, posés sur `document.body` |
+| `src/counttag.ts` | une icône et un nombre (sections de front de l'onglet, zones comprimées de l'adversaire) |
+| `src/pawn.ts`, `src/pawn.css` | pion d'une division et disposition d'une zone (§11.3) : `renderZone`, `pawnOrder` ; ne gère ni la sélection ni les panneaux |
+| `src/theme.ts`, `src/forces.css` | thèmes clair et sombre de la fenêtre d'un front et de l'onglet des forces (§11.8) ; styles de ces deux panneaux, du menu « + », du glisser et des panneaux de survol |
 | `src/protocol.ts` | types des messages page ↔ Worker |
 | `src/engine.worker.ts` | Web Worker : reçoit les messages de la page, choisit la source de tours (solo ou en ligne), tient l'horloge du solo, ouvre le vrai WebSocket |
 | `src/game.ts` | `Game`, « la partie » : moteur du client, application d'un tour (`applyTurn`, `advance`), fabrication des messages de la page ; indépendante de la source (sans DOM, sans `self`) |
@@ -124,10 +131,11 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | Bouton | Action |
 | --- | --- |
 | « +1 000 population » | `population += 1000` (jamais sous 0) |
-| « + armement » | ajoute à la réserve du joueur de quoi former 100 unités de chaque type (`UNITS` : l'équipement de chaque type) ; message `addArmament` |
-| « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (300 unités de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
+| « + armement » | ajoute à la réserve du joueur de quoi équiper 10 divisions de chaque type (`DIVISIONS` : l'armement de chaque composant) ; message `addArmament` |
+| « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (de quoi équiper 30 divisions de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
+| « Thème : sombre / clair » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
 
-Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug`.
+Les quatre boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
 
 ## 4. Messages
 
@@ -149,10 +157,9 @@ Page → Worker (`ToWorker`) :
   `break_pact { target }`, `propose_peace { target }`, `answer_proposal { from,
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
 - `pause { paused }` (solo : le relais local ; en ligne : demande à l'hôte, que le relais refuse à un autre joueur).
-- `order` accepte aussi les ordres des fronts (05-Fronts §5, 02-Engine §4) : `set_front_priority { front, priority }`,
-  `set_front_reassign { front, enabled }`, `set_unit_line_mode { front, unit, mode }`, `set_unit_allowed { front, unit, enabled }`, `set_breakthrough_motorized_only
-  { front, enabled }`, `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
-  `start_breakthrough { front, city1, city2 }`, `cancel_breakthrough { id }`.
+- `order` accepte aussi les ordres des fronts (05-Fronts §5.2, 02-Engine §4) : `create_division { division }` (clé d'un type de `DIVISIONS`),
+  `delete_division { id }`, `move_division { ids, front, line? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne),
+  `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`.
 - `debug { action: "addPopulation" | "addArmament" | "armBots", amount }` (voir §3).
 
 Worker → page (`FromWorker`) :
@@ -167,11 +174,11 @@ Worker → page (`FromWorker`) :
   ouvriers et fer par ligne, par produit), lue dans le moteur par `factoryCatalog()` (`solo.ts`) ;
   `catalog.economy` : les réglages que la barre d'informations utilise
   (consommation par tête, nourriture minimale, `maxMachinesPer1000` de chaque
-  machine, déclin de l'armement en pourcent) ; `military` : les unités militaires
-  (clé, niche, équipement, population, icône, description, attaques, largeurs, PV,
-  motorisation) et les réglages des fronts que le panneau affiche (largeur d'une
-  connexion, pourcentages de priorité, délais), lus dans `config/units.ts` et
-  `config/fronts.ts` par `militaryCatalog()` (`solo.ts`).
+  machine, déclin de l'armement en pourcent) ; `military` (`MilitaryCatalog`) : les types de division
+  (clé, indice, niche, rang dans la niche, composants avec leur quantité, leur poids et leurs attaques, icône,
+  description, largeur de front, PV, multiplicateurs, blindage, motorisation), les niches et leurs types, et
+  les délais (tours entre deux rounds, formation, déplacement) et l'échelle de l'état, lus dans
+  `config/divisions.ts` et `config/fronts.ts` par `militaryCatalog()` (`solo.ts`).
 - `tick`, à chaque tour :
   - `tick` : numéro du tour ;
   - `tiles` : paires `[case, ville]` des cases dont `tileCity` a changé, pas
@@ -202,19 +209,21 @@ Worker → page (`FromWorker`) :
     diplomatiques du tour où il est l'auteur ou la cible (`state.events` filtré,
     mêmes champs que `DiplomacyEvent`, 02-Engine §4). Pas d'envoi « seulement si
     changé » : c'est petit, et la liste est la source des cartes de proposition (§7) ;
-  - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions
-    avec leur position, et pour chaque camp les unités par type en première ligne, en seconde
-    ligne et en route, les réglages, l'attaque et les percées avec leurs unités engagées), ou
-    `null` si rien n'a changé depuis le dernier envoi. `SoloGame` les reconstruit à chaque
-    round de combat (`combatTurns`), quand le joueur donne un ordre et quand des villes changent,
-    et compare le JSON au dernier envoyé ; positions et effectifs changent à chaque round.
+  - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions avec leur position,
+    et pour chaque camp `frontAttack`, l'attaque sur tout le front), ou `null` si rien n'a changé depuis le dernier
+    envoi. `SoloGame` les reconstruit à chaque round de combat (`combatTurns`), quand le joueur donne un ordre et quand
+    des villes changent, et compare le JSON au dernier envoyé ; les positions changent à chaque round.
     Pas de brouillard de guerre : les fronts de tous les joueurs, pas seulement ceux du joueur 1 ;
+  - `divisions` : toutes les divisions de tous les joueurs, par identifiant (`DivisionView` : propriétaire, type,
+    quantités par composant, front (0 : réserve nationale), ligne, largeur engagée en millièmes de liaison, état sur
+    `stateScale`, statut `ready`, `formation`, `moving` ou `fleeing`, tour de fin du statut), ou `null` si rien n'a changé ;
+    `Mirror.divisions` garde le dernier tableau, le même objet tant qu'il ne change pas ;
   - `captured` : les villes prises pendant le tour (`{ city, from, to }`). Une ville prise
     change de joueur sans que `tileCity` change : `cities` est alors renvoyé, avec les paires
     `[case, ville]` de toute sa zone dans `tiles`, pour que la copie de la page la repeigne et
     refasse ses histogrammes ;
-  - `players` porte aussi `soldiers`, `forcedMobilization` et `frontEquipment` (équipement des
-    unités des fronts, par type d'armement) ;
+  - `players` porte aussi `soldiers`, `forcedMobilization` et `divisionEquipment` (armement
+    des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
 - `paused { paused }` : état de la pause (la réponse du relais, solo comme en ligne).
@@ -414,14 +423,9 @@ de 2 px (segments des côtés de cases qui touchent l'extérieur de la zone), en
 front » du menu Carte, cochée au départ), en bleu pour un front en paix **au survol seulement** ; la zone survolée s'affiche
 toujours, même case décochée. **Soldats** : pour chaque connexion d'un front actif, le point d'avancement et un rond de la couleur du joueur de chaque côté, de la
 taille d'une ville (`render.ts`, `FrontLayer.marks`) ; la courbe de Catmull-Rom est abandonnée (05-Fronts §11.1).
-**Mode choix d'axe** : après le bouton Percée, chaque clic lance une percée sur la connexion du front la plus proche du clic ;
-la connexion visée est surlignée ; **le mode se désactive dès la première percée placée** (pour en lancer une seconde, on rouvre le
-panneau) ; Échap le quitte sans percée. **Percées affichées** (`render.ts`, `drawBreakthroughs`) : pour chaque percée des deux
-camps, un trait rouge (le segment droit entre les deux villes, pas le tracé de la route) et une flèche de 14 px (`ARROW_PX`) au
-milieu, de la ville de celui qui perce vers celle de son adversaire ; les deux joueurs voient la même chose. **Survol d'une zone de
-front** : contour de 5 px, fixe. **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour les boutons d'attaque actifs et les
-percées du panneau (variable CSS `--blink-period` posée au démarrage). Une percée qui s'arrête au début faute de force est annoncée
-par un message (`failedBreakthroughs` du message `tick`, événement `breakthrough_failed` du moteur).
+**Survol d'une zone de front** : contour de 5 px, fixe. **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour le bouton d'attaque
+actif de la fenêtre d'un front (variable CSS `--blink-period` posée au démarrage). La percée est de la V2 : ni mode choix d'axe ni flèche
+sur la carte.
 
 ## 7. Interface provisoire
 
@@ -710,7 +714,7 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
      ligne de légende.
   4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
      type d'armement qui a des lignes, un stock ou de l'équipement sur les fronts, barre de gauche à droite :
-     **jaune foncé** = l'équipement des unités des fronts, déployé et en route (`PlayerStats.frontEquipment`),
+     **jaune foncé** = l'équipement des unités des fronts, déployé et en route (`PlayerStats.divisionEquipment`),
      **bleu** = stock, **hachures rouges** = au-delà du stock cible ; trait fin = stock cible (`reserveMax`),
      échelle = max(1,5 × cible, stock + fronts) pour que cette zone se voie ;
      texte « stock / cible · +production par tour · n sur les fronts ». Légende : l'excès disparaît à
@@ -719,7 +723,9 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   5. **Fronts** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2) : « Fronts n / m » (actifs / tous ceux du
      joueur). Détail : deux sections, **fronts actifs** puis **fronts en paix**, une ligne par front rangée par île
      (groupe du joueur) puis par adversaire : pastille de l'adversaire, « Île n° g · Bot k », et en petit l'île adverse et le
-     nombre de connexions. Un clic sur une ligne ouvre le panneau du front (`openFront`, `main.ts`).
+     nombre de connexions. Un clic sur une ligne ouvre la fenêtre du front (`openFront`, `main.ts`).
+  6. **Forces** (sixième position ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
+     (§ « Onglet des forces » ci-dessous). Le volet (`.ib-pane.forces`) a la classe `themed` : fond et couleurs de son thème.
   L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) avant les inactifs, qui sont en dernier, même en mobilisation forcée, et un
   interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie
   `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
@@ -731,26 +737,52 @@ par un message (`failedBreakthroughs` du message `tick`, événement `breakthrou
   d'armement par tour (lignes remplies × `productionPerLine` du catalogue). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
-- **Panneau d'un front** (`frontpanel.ts`, 05-Fronts §11.3), posé sur la carte (`#front-panel`, dans `#stage`), ouvert par la
-  liste des fronts ou par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de
-  diplomatie ; hors zone, un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie). N'importe quel front
-  s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages actifs. De haut en bas : titre centré (île, adversaire) ;
-  **boutons d'attaque** (attaque sur tout le front, percée, barrage d'artillerie — sans effet, hors périmètre), ceux du joueur dans
-  sa moitié et les trois mêmes en miroir et gris dans celle de l'adversaire ; rouge clair au repos, **contour rouge foncé épais qui
-  clignote** quand l'attaque est en cours (côté adversaire aussi) ; l'interrupteur « Motorisé seulement » à l'intérieur du cadre du bouton Percée ;
-  grisés en paix. Le bouton Percée ferme le panneau et passe la carte en mode choix d'axe. La **section des percées** : un petit
-  tableau par percée en cours, deux par rangée, titre « Percée première ligne » ou « seconde ligne » selon la phase, trois
-  colonnes (attaque, défense de première ligne, défense de seconde ligne) remplies dès le compte à rebours avec les effectifs
-  prévus par le moteur (`previewBreakthrough`), une rangée par type engagé, contour de la couleur du joueur qui perce plus un contour rouge clignotant, une croix pour
-  annuler (ses percées seulement). **Réglages** : priorité (1 · 100 %, 2 · 50 %, 3 · 0 %) et « Autoriser la réassignation à
-  d'autres fronts ». **Tableau des unités** : deux moitiés symétriques autour d'une barre centrale de 8 px (4 px de la couleur de
-  chaque joueur) ; de l'extérieur vers la barre : avions (vide), nom puis icône, seconde ligne, interrupteur à trois positions, colonne « prio »
-  (◀ priorité seconde ligne, côté extérieur ; = équilibré ; ▶ priorité première ligne, côté de la barre centrale ; joueur seulement), première ligne, « % front » ; sous les quantités des deux lignes, en rouge, les pertes du dernier round de combat ; groupé par
-  niche, un en-tête par niche avec sa couverture puis une rangée par type ; séparateur clair d'un seul tenant (un élément `.fp-sep` sur toute la rangée, de la couleur de chaque joueur de son côté de la barre) au-dessus
-  de chaque niche ; le panneau va jusqu'à 1 320 px de large. Le titre, les boutons et les réglages restent fixes en haut, le reste défile. Le DOM est construit à
-  l'ouverture ; `update` écrit des textes et des classes, sauf les tableaux de percées (créés et retirés avec leur percée), et les
-  réglages ne sont pas réécrits pendant 600 ms après un clic. L'infobulle d'un nom d'unité donne sa description, sa population et
-  ses attaques.
+- **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), ouverte par la liste
+  des fronts, par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de diplomatie ; hors zone,
+  un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie), ou par une section de l'onglet des forces (avec le bouton
+  « ← Retour », qui rouvre l'onglet). N'importe quel front s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages. Bandeau en
+  deux moitiés autour de la barre verticale : titre, interrupteur « Sélection avancée » (éteint à chaque ouverture) et boutons
+  « Attaque sur tout le front » (interrupteur, `start_front_attack` / `stop_front_attack`, grisé en paix, contour rouge qui clignote quand
+  l'attaque est en cours) et « Barrage d'artillerie » (grisé, sans effet) à gauche ; « ← Retour » et ✕ à droite. Corps : côté du joueur,
+  la place réservée à la V2 (350 px, avec en bas la zone « Retour à la réserve nationale », visible pendant un glisser seulement) puis la
+  capsule seconde ligne / première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à chaque
+  dessin) / seconde ligne comprimée (76 px), puis la place réservée à la V2. Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
+  de niche par thème (variables CSS `--n-bg`, `--n-ink`, `--n-ink2` posées par la classe `n-<niche>`) ; en première ligne, le pourcentage de
+  couverture (somme des `engaged` de la niche / (connexions × 1 000)). Seconde ligne adverse : par niche `countTag` (icône du premier type,
+  nombre total) ; au survol, un rectangle de 240 px qui s'élargit vers la gauche et vers le bas, une ligne par type, cinq pions par ligne.
+  Le DOM est construit une fois ; `draw` ne remplace que le contenu des rangées (`renderZone`) et des textes, donc un bouton survit entre
+  `pointerdown` et `click` ; il n'est refait que si `fronts` ou `divisions` (objets du `Mirror`) ont changé ou si la fenêtre change de taille
+  (`ResizeObserver`). Dépose : sur une ligne du joueur, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
+  réserve ; les divisions déjà à leur destination sont filtrées.
+- **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la sixième section de la barre d'informations. Barre du haut : le « + »
+  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Réserve nationale : de vrais
+  pions, un groupe par type (`renderZone`, redessinée si ses divisions ou sa largeur changent). Sections de front : fronts en guerre active puis
+  en paix, du plus long au plus court (`sortedFronts`), fond de la couleur de l'adversaire (`playerColor`), carré de 32 × 32 px de statut
+  diplomatique (rouge guerre, bleu paix ; provisoire), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
+  ouvre la fenêtre du front ; `data-drop="front:id"` : une dépose envoie `move_division { ids, front }` (seconde ligne). Les sections sont
+  reconstruites seulement si leur contenu change. La sélection y est simple (l'interrupteur « Sélection avancée » est dans la fenêtre d'un front).
+  **Menu « + »** : sous le bouton, une ligne par niche (fond de la niche, lettres à droite), les types côte à côte (icône de 32 px et
+  « actuel / supportable », `supportable` de `divisions.ts` : pour chaque composant requis, (divisions + stock) / quantité, le plus petit ;
+  hommes : soldats + inactifs ; « actuel » en rouge s'il dépasse) ; type que l'on ne peut pas créer (`creatable`, copie de la condition du
+  moteur : inactifs et stock remplissent tous les composants) à 50 % de transparence, clic sans effet ; un clic crée une division
+  (`create_division`) et le menu reste ouvert ; clic en dehors, Échap ou repli du volet le ferme ; survol d'un type : panneau de type.
+- **Sélection et glisser-déposer** (`dnd.ts`, 05-Fronts §11.4) : une `ZoneView` regroupe les rangées d'une zone (une ligne d'un front, la
+  réserve nationale) ; chaque rangée est un conteneur passé à `renderZone`, qui renvoie `groups` (ids par type, dans l'ordre de la pile) ; le pion
+  sous la souris est lu dans l'événement (`.pz-pawn[data-id]`, le navigateur connaît l'ordre d'empilement des piles). Mode simple : le survol
+  donne l'aperçu (du début du groupe jusqu'au pion), le clic prend la sélection et lance le glisser. Mode avancé : premier clic = `anchor`
+  (rectangle sur la division), la souris dessine l'aperçu jusqu'au pion survolé dans la même zone (`range` : ordre de lecture des rangées de
+  la zone), second clic = sélection figée ; un clic sur un pion sélectionné lance le glisser. Seules les divisions `ready` ou `fleeing` sont
+  prises (`movable`). Glisser : pion fantôme (`.dnd-ghost`, `renderZone` des divisions prises), cible = l'élément le plus proche portant
+  `data-drop` sous le pointeur (`dnd-over` : contour clair, choix de la page), `DndHost.drop` envoie les ordres ; Échap abandonne. Un glisser
+  sans mouvement (moins de 4 px) ne dépose rien.
+- **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
+  nom en gras et niche en gris, description, composants (symbole 16 × 16, nom, quantité), statistiques non nulles (attaques, PV hors appui-feu,
+  blindage, largeur de front, déplacement), carrés provisoires. Panneau d'un pion : rang (icône 8 × 10 agrandie ×2), nom, niche, description,
+  composants « présents / requis », état (« 92 % »), attaques actuelles / maximales (`currentAttacks`, `maxAttacks` : stat × taux, sans
+  multiplicateur). Il apparaît 120 ms après le survol, 14 px au-dessus du pion (au-dessous s'il n'y a pas la place), disparaît dès qu'un
+  glisser ou le premier clic de la sélection avancée commence. Pions de l'adversaire : même panneau (`attachPawnPanels`).
+- **Thèmes** (`theme.ts`, `forces.css`, 05-Fronts §11.8) : `html[data-theme="dark" | "light"]`, sombre au départ ; les variables `--t-*` sont
+  posées sur la classe `themed` (fenêtre, volet des forces) et sur `.ip` (panneaux de survol), le reste de la page garde sa palette claire.
 - **Notifications des prises de villes** : « Vous avez pris la ville n° k à Bot j. » / « Bot j vous a pris la ville n° k. »
   (`captured`). **Encerclements** (`encircled`, événement `encirclement` du moteur) : une carte du même module
   (`notifications.ts`) pour le joueur qui encercle ou qui est encerclé, avec le nombre d'unités perdues.
@@ -972,11 +1004,14 @@ Comportement de `OnlineGame` :
   usine absente, curseur bloqué à son ancien maximum). `production.ts` le remet
   aussi à faux sur `pointerup`, `pointercancel` et `blur`. Corrigé le 24 octobre
   2026.
-- **Reconstruire le panneau d'un front à chaque message** : un bouton remplacé entre le `pointerdown` et le `click` perd le
-  clic ; `FrontPanel.update` ne touche que des textes et des classes, et les tableaux de percées sont créés et retirés avec
-  leur percée.
-- **Appeler une classe `sw` dans le tableau des unités** : `.sw` est la pastille de couleur du reste de la page (12 × 12 px) ;
-  l'interrupteur du panneau s'appelle `swt`.
+- **Reconstruire la fenêtre d'un front ou l'onglet des forces à chaque message** : un bouton remplacé entre le `pointerdown` et le `click`
+  perd le clic ; `FrontWindow` ne remplace que le contenu des rangées et des textes, et seulement si `fronts` ou `divisions` ont changé ;
+  `ForcesTab` compare une clé (identifiants, états, largeur).
+- **`renderZone` remplace le contenu de son conteneur** (`innerHTML`) : les écouteurs sont sur le conteneur, jamais sur un pion, et le panneau
+  de survol retrouve le pion par `ZoneView.pawnEl` (l'élément lu au survol a pu être remplacé par un changement d'aperçu).
+- **Rendre une rangée dans un volet fermé** : `clientWidth` vaut 0. `ZoneView.render` saute alors la rangée ; le volet rend à l'ouverture
+  (`toggle` appelle `body` après l'avoir affiché) et la clé de la réserve contient la largeur.
+- **Mettre les panneaux de survol dans un conteneur à défilement** : ils seraient coupés ; ils sont sur `document.body`.
 - **Peindre une ville prise comme une ville fondée** : `tileCity` ne change pas à une prise. `SoloGame` renvoie les cases de
   sa zone, `Mirror` retire la zone des histogrammes de l'ancien joueur avant de remplacer les villes, et la remet dans ceux du
   nouveau après ; sans cela, les rayons d'exploitation des deux joueurs seraient faux.

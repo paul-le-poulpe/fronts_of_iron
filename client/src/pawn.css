@@ -1,0 +1,108 @@
+/* Pion d'une division et disposition d'une zone (Docs/Design/05-Fronts.md §11.3). */
+
+.pz-root {
+  position: relative;
+  box-sizing: border-box;
+  user-select: none;
+}
+.pz-root.pz-collapsed:hover {
+  z-index: 50;
+}
+
+.pz-pawn {
+  position: absolute;
+  height: 32px;
+}
+.pz-pawn > * {
+  pointer-events: none;
+}
+.pz-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  display: block;
+  image-rendering: pixelated;
+}
+.pz-grey .pz-icon {
+  opacity: 0.5;
+}
+.pz-rank {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 10px;
+  image-rendering: pixelated;
+}
+.pz-status {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+}
+
+/* Barre d'état : 4 px de large (bordure noire de 1 px, 2 px de remplissage), 1 px à droite de l'icône. */
+.pz-bar {
+  position: absolute;
+  left: 33px;
+  top: 0;
+  width: 4px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid #000;
+  background: rgba(0, 0, 0, 0.6);
+}
+/* Dans une pile, la barre dépasse sur l'icône du pion en dessous : piste opaque. */
+.pz-stacked .pz-bar {
+  background: #2b2b2b;
+}
+.pz-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Rectangle de sélection. */
+.pz-sel {
+  position: absolute;
+  z-index: 500;
+  box-sizing: border-box;
+  background: rgba(159, 182, 209, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Mode « trop de pions » : nombre de divisions du type, à côté de l'icône. */
+.pz-num {
+  position: absolute;
+  height: 32px;
+  font: 700 20px/32px system-ui, sans-serif;
+  color: #fff;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+    0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000, 1px 0 0 #000;
+  pointer-events: none;
+}
+
+/* Au survol, le rectangle de la zone s'élargit et grandit vers le bas. Fond : `--pz-open-bg`. */
+.pz-open {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2000;
+  box-sizing: border-box;
+  background: var(--pz-open-bg, #2a2f38);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.pz-collapsed:hover .pz-open {
+  display: block;
+}
+.pz-collapsed:hover .pz-rest {
+  visibility: hidden;
+}

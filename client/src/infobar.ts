@@ -12,7 +12,8 @@
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
 //
-// La cinquième section est la liste des fronts (05-Fronts §11.2), juste à droite d'Armement.
+// La cinquième section est la liste des fronts (05-Fronts §11.6), juste à droite d'Armement ; la sixième, l'onglet des
+// forces (05-Fronts §11.2, `forcestab.ts`), dont la barre ne fait que poser le détail.
 //
 // Le dernier élément de la barre, contre le bord droit, est le bouton « Carte » : il
 // ouvre un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
@@ -22,6 +23,7 @@
 // Chaque nombre a une infobulle (`title`) qui nomme ses valeurs dans l'ordre où
 // elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par tour ».
 
+import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
 import { localPlayer, playerName, productName } from "./names.ts";
@@ -191,6 +193,7 @@ export class InfoBar {
   private readonly onFarmShare: (percent: number) => void;
   private readonly onForcedMobilization: (enabled: boolean) => void;
   private readonly onOpenFront: (id: number) => void;
+  private readonly forcesTab: ForcesTab;
   /** Vrai pendant que le joueur tient le curseur de la part de fermiers : les tours n'y touchent pas. */
   private farmSliderActive = false;
   /** Jusqu'à cette heure, la case « mobilisation forcée » n'est pas réécrite par les tours (l'ordre n'est pas encore appliqué). */
@@ -203,7 +206,8 @@ export class InfoBar {
    * `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée ;
    * `onFarmShare`, au relâchement du curseur de la part de fermiers ;
    * `onForcedMobilization`, au changement de l'interrupteur de l'onglet Population ;
-   * `onOpenFront`, au clic sur une ligne de la liste des fronts.
+   * `onOpenFront`, au clic sur une ligne de la liste des fronts ;
+   * `forces`, l'onglet des forces (sixième section).
    */
   constructor(
     root: HTMLElement,
@@ -212,14 +216,16 @@ export class InfoBar {
     onFarmShare: (percent: number) => void,
     onForcedMobilization: (enabled: boolean) => void,
     onOpenFront: (id: number) => void,
+    forces: ForcesTab,
   ) {
     this.root = root;
     this.catalog = catalog;
     this.onFarmShare = onFarmShare;
     this.onForcedMobilization = onForcedMobilization;
     this.onOpenFront = onOpenFront;
+    this.forcesTab = forces;
     this.bar = el("div", "ib-bar");
-    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.frontList()];
+    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.frontList(), this.forcesSection(forces)];
     root.replaceChildren(this.bar);
     this.sections.forEach((s, i) => {
       s.pane.hidden = true;
@@ -275,8 +281,15 @@ export class InfoBar {
     this.collapse();
   }
 
+  /** Ouvre le détail de l'onglet des forces (bouton « ← Retour » de la fenêtre d'un front). */
+  openForces(): void {
+    const index = this.sections.length - 1;
+    if (this.open !== index) this.toggle(index);
+  }
+
   /** Replie le détail ouvert, s'il y en a un. */
   private collapse(): void {
+    this.forcesTab.collapsed();
     this.open = -1;
     this.sections.forEach((s) => {
       s.pane.hidden = true;
@@ -404,7 +417,7 @@ export class InfoBar {
     const forcedBox = el("input");
     forcedBox.type = "checkbox";
     const forced = el("label", "ib-forced");
-    forced.title = "Les soldats sont recrutés avant les lignes de production, jusqu'au pourcentage de priorité de chaque front.";
+    forced.title = "Les hommes des divisions sont pris avant les emplois (lignes de production, fermiers, pêcheurs), pour remplir les divisions.";
     forced.append(forcedBox, el("span", "ib-switch"), el("span", "ib-forced-text", "MOBILISATION FORCÉE"));
     forcedBox.addEventListener("change", () => {
       this.forcedUntil = Date.now() + 600;
@@ -795,6 +808,24 @@ export class InfoBar {
         span(miniFronts.fill, 0, pct(active, mineList.length));
       },
       body: render,
+    };
+  }
+
+  // ---- 6. Forces (05-Fronts §11.2) ----
+
+  private forcesSection(tab: ForcesTab): Section {
+    const count = el("strong", "ib-num");
+    const button = this.button("forces", [icon("population/pop-soldier.png"), el("span", "ib-name", "Forces"), count]);
+    button.title = "Divisions de votre pays";
+    const pane = this.pane("forces", tab.content);
+    pane.classList.add("themed", "forces");
+    return {
+      button,
+      pane,
+      head: () => {
+        count.textContent = num(tab.divisionCount);
+      },
+      body: (d, s) => tab.body(d, s),
     };
   }
 
