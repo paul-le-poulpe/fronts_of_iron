@@ -71,8 +71,8 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  width: min(100%, 1284px);
-  height: min(100%, 500px);
+  width: 100%;
+  height: 100%;
   background: var(--t-panel);
   border: 1px solid var(--t-line);
   border-radius: 10px;
@@ -154,6 +154,9 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-row.cov .fw-big { color: var(--n-ink2); }
 .fw-row.cov .fw-letters { font-size: 24px; }
 .fw-zone { position: relative; flex: 1; min-width: 0; height: 50px; }
+/* Première ligne : les pions ne passent jamais sous les lettres de niche et le pourcentage (05-Fronts §11.4) : la zone que `renderZone`
+   mesure (`clientWidth`) exclut leur place, d'où des piles plus tôt. */
+.fw-row.cov .fw-zone { margin-right: var(--fw-text-w, 96px); }
 .fw-row.comp .fw-zone { display: flex; align-items: center; padding-left: 4px; }
 .fw-row.comp:hover { z-index: 30; }
 

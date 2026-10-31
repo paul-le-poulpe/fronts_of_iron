@@ -737,7 +737,7 @@ sur la carte.
   d'armement par tour (lignes remplies × `productionPerLine` du catalogue). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
-- **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), ouverte par la liste
+- **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste
   des fronts, par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de diplomatie ; hors zone,
   un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie), ou par une section de l'onglet des forces (avec le bouton
   « ← Retour », qui rouvre l'onglet). N'importe quel front s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages. Bandeau en
@@ -749,7 +749,8 @@ sur la carte.
   première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à chaque dessin) / seconde ligne
   comprimée (76 px), puis la réaction rapide et la percée comprimées (76 px, vides). Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
   de niche par thème (variables CSS `--n-bg`, `--n-ink`, `--n-ink2` posées par la classe `n-<niche>`) ; en première ligne, le pourcentage de
-  couverture (somme des `engaged` de la niche / (connexions × 1 000)). Seconde ligne adverse : par niche `countTag` (icône du premier type,
+  couverture (somme des `engaged` de la niche / (connexions × 1 000)) ; la zone des pions d'une première ligne a une marge droite de 96 px
+  (`--fw-text-w`, `.fw-row.cov .fw-zone`) : `renderZone` reçoit sa `clientWidth`, donc les piles se forment plus tôt et ne passent pas sous le texte. Seconde ligne adverse : par niche `countTag` (icône du premier type,
   nombre total) ; au survol, un rectangle de 240 px qui s'élargit vers la gauche et vers le bas, une ligne par type, cinq pions par ligne.
   Le DOM est construit une fois ; `draw` ne remplace que le contenu des rangées (`renderZone`) et des textes, donc un bouton survit entre
   `pointerdown` et `click` ; il n'est refait que si `fronts` ou `divisions` (objets du `Mirror`) ont changé ou si la fenêtre change de taille

@@ -744,8 +744,9 @@ de la fenêtre d'un front)
 
 ### 11.4 Fenêtre d'un front
 
-Taille d'exemple : 1 284 × 500 px ; les tailles et positions sont à ajuster à
-l'implémentation.
+La fenêtre **recouvre presque toute la carte** (10 px de marge) ; il est
+accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquette
+(1 284 × 500 px) sont des exemples, à ajuster à l'implémentation.
 
 **Bandeau du haut**, coupé en deux par la barre verticale :
 
@@ -799,6 +800,11 @@ très légèrement teinté :
   lettres, le **pourcentage de couverture du front** de la niche (largeur
   engagée / largeur du front), de même taille et gras ; lettres et
   pourcentage y sont plus sombres encore, en 24 px.
+- **Largeur de la zone des pions en première ligne** : celle de la rangée
+  **moins la place des lettres et du pourcentage** (96 px, à droite de la
+  rangée). Les pions sont donc un peu plus comprimés (les piles se forment plus
+  tôt) et ne passent jamais sous le texte. Cette largeur est celle passée à la
+  disposition de §11.3 ; elle ne concerne pas la seconde ligne.
 - Les pions d'une rangée suivent §11.3. Le placement dans la bonne niche est
   automatique (§4.1).
 
