@@ -23,16 +23,12 @@ export type HumanOrder =
   | { readonly type: "break_pact"; readonly target: number }
   | { readonly type: "propose_peace"; readonly target: number }
   | { readonly type: "answer_proposal"; readonly from: number; readonly accept: boolean }
-  // Fronts (05-Fronts §5) : `front` est l'identifiant du front, `unit` une clé de `UNITS`.
-  | { readonly type: "set_front_priority"; readonly front: number; readonly priority: number }
-  | { readonly type: "set_front_reassign"; readonly front: number; readonly enabled: boolean }
-  | { readonly type: "set_unit_line_mode"; readonly front: number; readonly unit: string; readonly mode: "first" | "balanced" | "second" }
-  | { readonly type: "set_unit_allowed"; readonly front: number; readonly unit: string; readonly enabled: boolean }
-  | { readonly type: "set_breakthrough_motorized_only"; readonly front: number; readonly enabled: boolean }
+  // Fronts (05-Fronts §5.2) : `front` est l'identifiant du front (0 : réserve nationale), `division` une clé de `DIVISIONS`.
+  | { readonly type: "create_division"; readonly division: string }
+  | { readonly type: "delete_division"; readonly id: number }
+  | { readonly type: "move_division"; readonly ids: readonly number[]; readonly front: number; readonly line?: "first" | "second" }
   | { readonly type: "set_forced_mobilization"; readonly enabled: boolean }
-  | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number }
-  | { readonly type: "start_breakthrough"; readonly front: number; readonly city1: number; readonly city2: number }
-  | { readonly type: "cancel_breakthrough"; readonly id: number };
+  | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number };
 
 // ---- page → Worker ----
 
@@ -81,46 +77,64 @@ export interface InitMessage {
   readonly controlRadius: number;
   readonly stepMs: number;
   readonly catalog: FactoryCatalog;
-  /** Fronts et unités militaires (05-Fronts), envoyés une fois. */
+  /** Types de division, niches et réglages des fronts (05-Fronts), envoyés une fois. */
   readonly military: MilitaryCatalog;
 }
 
-/** Une unité militaire (`config/units.ts`), en entiers tels que le moteur les lit. */
-export interface UnitInfo {
+/** Un composant d'un type de division (05-Fronts §3.2), en entiers tels que le moteur les lit. */
+export interface DivisionComponentInfo {
+  /** `"men"` (les hommes) ou une clé de `ARMAMENT.types`. */
+  readonly resource: string;
+  readonly count: number;
+  readonly required: boolean;
+  readonly weight: number;
+  readonly softAttack: number;
+  readonly hardAttack: number;
+  readonly airAttack: number;
+  /** Échelle 100 (1 : 100). */
+  readonly lossMultiplier: number;
+}
+
+/** Un type de division (`config/divisions.ts`, 05-Fronts §3.4), en entiers tels que le moteur les lit. */
+export interface DivisionTypeInfo {
   readonly id: string;
-  /** Indice dans les tableaux d'effectifs (ordre des clés de `UNITS`). */
+  /** Indice dans `MilitaryCatalog.divisions` : c'est `DivisionView.type`. */
   readonly index: number;
   /** Clé de la niche (`NICHES`). */
   readonly niche: string;
-  readonly equipment: string;
-  readonly equipmentCount: number;
-  readonly population: number;
+  /** Rang dans la niche : 0 est le meilleur type. */
+  readonly rank: number;
+  /** Niche d'appui-feu (antichar, antiaérien, artillerie). */
+  readonly support: boolean;
+  readonly components: readonly DivisionComponentInfo[];
   readonly icon: string;
-  /** Description propre à l'unité, sinon celle de l'équipement, sinon vide. */
+  /** Description propre au type, sinon celle de l'armement de son premier composant d'armement. */
   readonly description: string;
-  readonly softAttack: number;
-  readonly hardAttack: number;
+  /** Largeur de première ligne, en liaisons. */
   readonly frontWidth: number;
-  readonly breakthroughWidth: number;
-  readonly kind: "infantry" | "armor" | "equipment";
+  /** PV d'une division complète ; 0 pour l'appui-feu (jamais lus). */
   readonly hitPoints: number;
+  /** Multiplicateurs à l'échelle 100. */
+  readonly defenseHitPointsMultiplier: number;
+  readonly attackMultiplier: number;
+  readonly armorPercent: number;
   readonly motorized: boolean;
-  /** Priorité de retrait des fronts, 1 à 10 : 10 est retirée en premier (05-Fronts §4.7). */
-  readonly releasePriority: number;
 }
 
-/** Ce que la page lit de `config/fronts.ts` et `config/units.ts` (envoyé une fois, dans `init`). */
+/** Ce que la page lit de `config/fronts.ts` et `config/divisions.ts` (envoyé une fois, dans `init`). */
 export interface MilitaryCatalog {
-  /** Types d'unités, dans l'ordre des clés de `UNITS`. */
-  readonly units: readonly UnitInfo[];
-  /** Niches dans l'ordre de `NICHES`, chacune avec ses types du meilleur au moins bon. */
-  readonly niches: readonly { readonly id: string; readonly units: readonly string[] }[];
-  readonly metersPerConnection: number;
-  readonly priorityPercent: readonly number[];
-  readonly transferTurns: number;
+  /** Types de division, dans l'ordre des clés de `DIVISIONS`. */
+  readonly divisions: readonly DivisionTypeInfo[];
+  /** Niches dans l'ordre de `NICHES` (principales, puis appui-feu), chacune avec ses types du meilleur au moins bon. */
+  readonly niches: readonly { readonly id: string; readonly support: boolean; readonly types: readonly string[] }[];
+  /** Tours entre deux rounds de combat. */
   readonly combatTurns: number;
-  readonly breakthroughDelayTurns: number;
-  readonly breakthroughExhaustionPercent: number;
+  /** Durée de formation d'une division, en tours. */
+  readonly formationTurns: number;
+  /** Délai d'un déplacement, en tours. */
+  readonly transferTurns: number;
+  /** Échelle de `DivisionView.state` (10 000 = 100 %). */
+  readonly stateScale: number;
 }
 
 /** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */
@@ -213,41 +227,10 @@ export interface FrontConnectionView {
   readonly position: number;
 }
 
-/**
- * Une percée en cours (05-Fronts §7.2). `attackers`, `defenders1`, `defenders2` : unités engagées par type. Avant la phase 2,
- * ce sont les forces prévues (`previewBreakthrough`) : l'attente comme la phase 1 montrent déjà la contre-attaque à venir.
- */
-export interface BreakthroughView {
-  readonly id: number;
-  readonly city1: number;
-  readonly city2: number;
-  /** 0 attente, 1 contre la première ligne, 2 contre la seconde ligne. */
-  readonly phase: number;
-  readonly startTick: number;
-  readonly attackers: readonly number[];
-  readonly defenders1: readonly number[];
-  readonly defenders2: readonly number[];
-}
-
-/** Un camp d'un front, tout visible (pas de brouillard de guerre). Les effectifs sont des nombres d'unités par type. */
+/** Un camp d'un front, tout visible (pas de brouillard de guerre). Ses divisions sont dans `TickMessage.divisions`. */
 export interface FrontSideView {
-  readonly first: readonly number[];
-  readonly second: readonly number[];
-  /** Unités perdues par type au dernier round de combat, en première et en seconde ligne. */
-  readonly lostFirst: readonly number[];
-  readonly lostSecond: readonly number[];
-  /** Unités en route vers le front, par type. */
-  readonly transit: readonly number[];
-  /** Indice dans `MilitaryCatalog.priorityPercent`. */
-  readonly priority: number;
-  readonly reassign: boolean;
-  /** Interrupteur de chaque type : 0 priorité première ligne, 1 équilibré, 2 priorité seconde ligne. */
-  readonly lineMode: readonly number[];
-  /** Case « autorisé sur ce front » de chaque type. */
-  readonly allowed: readonly boolean[];
-  readonly motorizedOnly: boolean;
+  /** Attaque sur tout le front en cours (05-Fronts §5.1). */
   readonly frontAttack: boolean;
-  readonly breakthroughs: readonly BreakthroughView[];
 }
 
 export interface FrontView {
@@ -260,13 +243,37 @@ export interface FrontView {
   readonly sides: readonly [FrontSideView, FrontSideView];
 }
 
+/** Une division (05-Fronts §3, §13.4), de n'importe quel joueur (pas de brouillard de guerre). */
+export interface DivisionView {
+  readonly id: number;
+  readonly owner: number;
+  /** Indice dans `MilitaryCatalog.divisions`. */
+  readonly type: number;
+  /** Exemplaires présents par composant, dans l'ordre de `components`. */
+  readonly counts: readonly number[];
+  /** Front où elle est, ou vers lequel elle va ; 0 : réserve nationale. */
+  readonly front: number;
+  readonly line: "first" | "second";
+  /** Largeur engagée en première ligne, en millièmes de liaison (05-Fronts §4.2). */
+  readonly engaged: number;
+  /** État, de 0 à `MilitaryCatalog.stateScale` (05-Fronts §3.3). */
+  readonly state: number;
+  /**
+   * `formation` (§3.5) et `moving` (§4.4) : icône horloge ; `fleeing` (§5.4) : drapeau blanc ; `ready` sinon.
+   * Une division en déplacement est comptée à sa destination.
+   */
+  readonly status: "ready" | "formation" | "moving" | "fleeing";
+  /** Tour où le statut prend fin (formation, déplacement, fuite) ; 0 pour `ready`. */
+  readonly until: number;
+}
+
 export interface PlayerStats {
   readonly id: number;
-  /** Soldats : population des unités sur les fronts et en route (05-Fronts §4.1). */
+  /** Soldats : hommes de toutes les divisions du joueur (00-Game §4, point 5). */
   readonly soldiers: number;
   readonly forcedMobilization: boolean;
-  /** Équipement dans des unités des fronts (déployé et en route), par type d'armement dans l'ordre de `FactoryCatalog.armamentIds`. */
-  readonly frontEquipment: readonly number[];
+  /** Armement dans les divisions du joueur, par type d'armement dans l'ordre de `FactoryCatalog.armamentIds` (05-Fronts §4.5, §11.6). */
+  readonly divisionEquipment: readonly number[];
   readonly population: number;
   readonly farmers: number;
   readonly fishers: number;
@@ -384,15 +391,15 @@ export interface TickMessage {
   readonly diplomacy: DiplomacyView;
   /**
    * Tous les fronts à plat (05-Fronts §13.4), par identifiant ; `null` si rien n'a changé depuis le
-   * tour précédent. Positions et effectifs changent à chaque round de combat.
+   * tour précédent. Les positions changent à chaque round de combat.
    */
   readonly fronts: readonly FrontView[] | null;
-  /** Nombre de percées du joueur humain qui se sont arrêtées au début faute de force à engager pendant ce tour (05-Fronts §7.2). */
-  readonly failedBreakthroughs: number;
+  /** Toutes les divisions de tous les joueurs, par identifiant ; `null` si rien n'a changé depuis le tour précédent. */
+  readonly divisions: readonly DivisionView[] | null;
   /** Villes prises pendant ce tour. La page reçoit alors `cities` et les cases de leur zone. */
   readonly captured: readonly { readonly city: number; readonly from: number; readonly to: number }[];
-  /** Encerclements causés par ces prises (05-Fronts §10.2) : `from` encercle des troupes de `to`, qui perdent `lost` unités. */
-  readonly encircled: readonly { readonly city: number; readonly from: number; readonly to: number; readonly lost: number }[];
+  /** Encerclements causés par ces prises (05-Fronts §10.2) : `from` encercle des divisions de `to` ; `divisions` : divisions touchées. */
+  readonly encircled: readonly { readonly city: number; readonly from: number; readonly to: number; readonly divisions: number }[];
   readonly paused: boolean;
   /** Durées mesurées dans le Worker, en ms. */
   readonly perf: { readonly bots: number; readonly apply: number; readonly pack: number };

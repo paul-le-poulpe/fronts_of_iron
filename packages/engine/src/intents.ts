@@ -7,23 +7,16 @@
 // usines (§8, §9) : construire une usine, créer une ligne, régler les lignes
 // actives, changer les priorités, et les ordres de diplomatie (§1, §9) : déclarer
 // la guerre, proposer un pacte, rompre un pacte, proposer la paix, répondre à une
-// proposition. Les autres actions du joueur n'ont pas encore de règle écrite et
+// proposition, et les ordres des fronts (05-Fronts §5.2) : créer, supprimer,
+// déplacer une division, mobilisation forcée, attaque sur tout le front. Les autres actions du joueur n'ont pas encore de règle écrite et
 // n'ont donc pas d'ordre.
 
 import type { FactoryTypeId, ProductId } from "./config.ts";
 import { foundCity } from "./cities.ts";
 import { STATUS_NEUTRAL, STATUS_WAR, answerProposal, breakPact, declareWar, propose, statusOf } from "./diplomacy.ts";
-import {
-  endWar,
-  setBreakthroughMotorizedOnly,
-  setForcedMobilization,
-  setFrontPriority,
-  setFrontReassign,
-  setUnitLineMode,
-  setUnitAllowed,
-  startWar,
-} from "./fronts.ts";
-import { cancelBreakthrough, startBreakthrough, startFrontAttack, stopFrontAttack } from "./attacks.ts";
+import { endWar, startWar } from "./fronts.ts";
+import { startFrontAttack, stopFrontAttack } from "./attacks.ts";
+import { createDivision, deleteDivision, moveDivisions, setForcedMobilization } from "./placement.ts";
 import {
   buildFactory,
   createLine,
@@ -140,49 +133,33 @@ export interface AnswerProposalIntent {
   readonly accept: boolean;
 }
 
-/** Priorité d'un front (05-Fronts §4.3, §5) : `priority` est un indice dans `FRONTS.priorityPercent`. */
-export interface SetFrontPriorityIntent {
-  readonly type: "set_front_priority";
+/** Créer une division d'un type (05-Fronts §3.5) : `division` est une clé de `DIVISIONS`. */
+export interface CreateDivisionIntent {
+  readonly type: "create_division";
   readonly player: number;
-  readonly front: number;
-  readonly priority: number;
+  readonly division: string;
 }
 
-/** « Autoriser la réassignation à d'autres fronts » (05-Fronts §4.4). */
-export interface SetFrontReassignIntent {
-  readonly type: "set_front_reassign";
+/** Supprimer une division de la réserve nationale (05-Fronts §3.5). */
+export interface DeleteDivisionIntent {
+  readonly type: "delete_division";
   readonly player: number;
-  readonly front: number;
-  readonly enabled: boolean;
+  readonly id: number;
 }
 
-/** Interrupteur à trois positions d'un type d'unité sur un front (05-Fronts §4.2) : `first`, `balanced` ou `second`. */
-export interface SetUnitLineModeIntent {
-  readonly type: "set_unit_line_mode";
+/**
+ * Déplacer des divisions (05-Fronts §4.4, §5.2) : `front` 0 pour la réserve
+ * nationale ; `line` absente : seconde ligne.
+ */
+export interface MoveDivisionIntent {
+  readonly type: "move_division";
   readonly player: number;
+  readonly ids: readonly number[];
   readonly front: number;
-  readonly unit: string;
-  readonly mode: "first" | "balanced" | "second";
+  readonly line?: "first" | "second";
 }
 
-/** Case à cocher d'un type d'unité sur un front : autorisé ou non (05-Fronts §4.2). */
-export interface SetUnitAllowedIntent {
-  readonly type: "set_unit_allowed";
-  readonly player: number;
-  readonly front: number;
-  readonly unit: string;
-  readonly enabled: boolean;
-}
-
-/** Interrupteur « Motorisé seulement » des percées d'un front (05-Fronts §7.2). */
-export interface SetBreakthroughMotorizedOnlyIntent {
-  readonly type: "set_breakthrough_motorized_only";
-  readonly player: number;
-  readonly front: number;
-  readonly enabled: boolean;
-}
-
-/** Mobilisation forcée du joueur (05-Fronts §4.1). */
+/** Mobilisation forcée du joueur (05-Fronts §4.3). */
 export interface SetForcedMobilizationIntent {
   readonly type: "set_forced_mobilization";
   readonly player: number;
@@ -196,32 +173,12 @@ export interface FrontAttackIntent {
   readonly front: number;
 }
 
-/** Lancer une percée sur la connexion (`city1`, `city2`) d'un front actif (05-Fronts §5, §7.2). */
-export interface StartBreakthroughIntent {
-  readonly type: "start_breakthrough";
-  readonly player: number;
-  readonly front: number;
-  readonly city1: number;
-  readonly city2: number;
-}
-
-/** Annuler une percée du joueur (05-Fronts §5). */
-export interface CancelBreakthroughIntent {
-  readonly type: "cancel_breakthrough";
-  readonly player: number;
-  readonly id: number;
-}
-
 export type Intent =
-  | SetFrontPriorityIntent
-  | SetFrontReassignIntent
-  | SetUnitLineModeIntent
-  | SetUnitAllowedIntent
-  | SetBreakthroughMotorizedOnlyIntent
+  | CreateDivisionIntent
+  | DeleteDivisionIntent
+  | MoveDivisionIntent
   | SetForcedMobilizationIntent
   | FrontAttackIntent
-  | StartBreakthroughIntent
-  | CancelBreakthroughIntent
   | FoundCityIntent
   | SetFarmShareIntent
   | BuildFactoryIntent
@@ -284,33 +241,25 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
     case "propose_peace":
       return propose(state, player, fields["target"], "peace");
     case "answer_proposal": {
-      // Une paix acceptée met fin à la guerre : positions, attaques et percées supprimées (05-Fronts §2.3).
+      // Une paix acceptée met fin à la guerre : positions et attaques supprimées (05-Fronts §2.3).
       const from = fields["from"];
       const wasWar = isPlayerId(state, from) && from !== player && statusOf(state, player, from) === STATUS_WAR;
       const ok = answerProposal(state, player, from, fields["accept"]);
       if (ok && wasWar && statusOf(state, player, from as number) === STATUS_NEUTRAL) endWar(state, player, from as number);
       return ok;
     }
-    case "set_front_priority":
-      return setFrontPriority(state, player, fields["front"], fields["priority"]);
-    case "set_front_reassign":
-      return setFrontReassign(state, player, fields["front"], fields["enabled"]);
-    case "set_unit_line_mode":
-      return setUnitLineMode(state, player, fields["front"], fields["unit"], fields["mode"]);
-    case "set_unit_allowed":
-      return setUnitAllowed(state, player, fields["front"], fields["unit"], fields["enabled"]);
-    case "set_breakthrough_motorized_only":
-      return setBreakthroughMotorizedOnly(state, player, fields["front"], fields["enabled"]);
+    case "create_division":
+      return createDivision(state, player, fields["division"]);
+    case "delete_division":
+      return deleteDivision(state, player, fields["id"]);
+    case "move_division":
+      return moveDivisions(state, player, fields["ids"], fields["front"], fields["line"]);
     case "set_forced_mobilization":
       return setForcedMobilization(state, player, fields["enabled"]);
     case "start_front_attack":
       return startFrontAttack(state, player, fields["front"]);
     case "stop_front_attack":
       return stopFrontAttack(state, player, fields["front"]);
-    case "start_breakthrough":
-      return startBreakthrough(state, player, fields["front"], fields["city1"], fields["city2"]);
-    case "cancel_breakthrough":
-      return cancelBreakthrough(state, player, fields["id"]);
     default:
       return false;
   }

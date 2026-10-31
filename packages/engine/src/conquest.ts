@@ -3,10 +3,10 @@
 
 import { CITY, FRONTS } from "./config.ts";
 import { computeGroups } from "./cities.ts";
-import { ROUTE, clipBreakthroughs, updateFronts } from "./fronts.ts";
+import { LINE_FIRST, LOSS_SCALE, applyLoss, dataOf } from "./divisions.ts";
+import { ROUTE, updateFronts } from "./fronts.ts";
+import { removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import { setOwner, type GameState } from "./state.ts";
-import { loseUnits } from "./troops.ts";
-import { UNIT_COUNT, roundDiv, zeros } from "./units.ts";
 
 /**
  * Le joueur `attacker` prend la ville `cityId` à `defender`, par la connexion `via`
@@ -32,8 +32,7 @@ export function captureCity(
   // côtés ; la route de l'attaque ne compte pas, et une route n'est encerclée que si B en tenait plus de
   // `minEncirclementLengthPercent` % depuis la ville prise.
   const minLength = FRONTS.minEncirclementLengthPercent * 10;
-  let encirclement = false;
-  let lostUnits = 0;
+  let touched = 0;
   for (const front of state.fronts) {
     const i: number = front.players[0] === defender && front.players[1] === attacker ? 0 : front.players[1] === defender && front.players[0] === attacker ? 1 : -1;
     if (i < 0) continue;
@@ -45,21 +44,19 @@ export function captureCity(
       if (held > minLength) encircled++;
     }
     if (encircled === 0) continue;
-    encirclement = true;
-    // Pertes sur la première ligne de B seulement, front par front, connexions comptées avant la prise.
-    const side = front.sides[i]!;
-    const lost = zeros();
-    for (let t = 0; t < UNIT_COUNT; t++) {
-      lost[t] = Math.min(side.firstLine[t]!, roundDiv(side.firstLine[t]! * encircled * FRONTS.encirclementLossPercent, front.connections.length * 100));
-      side.firstLine[t] = side.firstLine[t]! - lost[t]!;
-      side.lostFirst[t] = side.lostFirst[t]! + lost[t]!;
-      lostUnits += lost[t]!;
+    // Pertes sur la première ligne de B seulement, connexions comptées avant la prise : f de l'état, × part engagée,
+    // composant par composant avec le lossMultiplier (provisoire), en pertes tirées.
+    const f = Math.floor((encircled * FRONTS.encirclementLossPercent * LOSS_SCALE) / (front.connections.length * 100));
+    for (const d of sideDivisions(state, front, defender)) {
+      if (d.line !== LINE_FIRST || d.engaged === 0) continue;
+      applyLoss(state, d, Math.floor((f * d.engaged) / dataOf(d).width));
+      touched++;
     }
-    loseUnits(state, defender, lost);
-    clipBreakthroughs(front);
   }
+  trimAll(state);
+  removeDestroyed(state);
 
-  if (encirclement) state.events.push({ type: "encirclement", from: attacker, to: defender, city: cityId, lost: lostUnits, turn: state.tick + 1 });
+  if (touched > 0) state.events.push({ type: "encirclement", from: attacker, to: defender, city: cityId, divisions: touched, turn: state.tick + 1 });
 
   // 2. La ville et sa zone passent à l'attaquant.
   city.player = attacker;

@@ -6,16 +6,19 @@ import assert from "node:assert/strict";
 
 import {
   applyTurn,
-  assignTroops,
   CITY,
   createGame,
+  DIVISION_DATA,
+  DIVISION_IDS,
   FRONTS,
+  LINE_SECOND,
+  MEN,
+  type Division,
+  type DivisionId,
   type Front,
   type GameMap,
   type GameState,
   type Intent,
-  UNIT_DATA,
-  UNIT_IDS,
 } from "../src/index.ts";
 import { customMap, tileAt } from "./helpers.ts";
 
@@ -55,28 +58,41 @@ export function duel(map: GameMap = MAP): GameState {
 /** Le front n° `i` de l'état. */
 export const front = (s: GameState, i = 0): Front => s.fronts[i]!;
 
-/** Indice d'un type d'unité. */
-export const U = Object.fromEntries(UNIT_IDS.map((id, i) => [id, i])) as Record<(typeof UNIT_IDS)[number], number>;
+/** Indice d'un type de division. */
+export const D = Object.fromEntries(DIVISION_IDS.map((id, i) => [id, i])) as Record<DivisionId, number>;
 
-/** Donne au joueur une réserve d'armement de quoi former ces unités, et de la population. Ne forme rien. */
-export function stock(s: GameState, player: number, units: Partial<Record<(typeof UNIT_IDS)[number], number>>, population = 5_000_000): void {
+/** Donne au joueur l'armement et les inactifs de quoi créer ces divisions, et de la population. Ne crée rien. */
+export function stock(s: GameState, player: number, divisions: Partial<Record<DivisionId, number>>, population = 5_000_000): void {
   const p = s.players[player - 1]!;
   p.population = population;
-  for (const [id, n] of Object.entries(units)) {
-    const u = UNIT_DATA[U[id as (typeof UNIT_IDS)[number]]]!;
-    p.armamentReserve[u.equipment] = p.armamentReserve[u.equipment]! + n * u.equipmentCount;
+  for (const [id, n] of Object.entries(divisions)) {
+    for (const c of DIVISION_DATA[D[id as DivisionId]]!.components) {
+      if (c.resource === MEN) p.idle += (n ?? 0) * c.count;
+      else p.armamentReserve[c.resource] = p.armamentReserve[c.resource]! + (n ?? 0) * c.count;
+    }
   }
 }
 
 /**
- * Comme `stock`, puis forme tout de suite les unités (recrutement normal, sans attendre l'étape du tour : la
- * réserve inutilisée décline à chaque tour, ce qui fausserait les nombres) : elles partent vers les fronts et arrivent
- * `transferTurns` tours plus tard.
+ * Pose directement une division complète, formée, sur place (sans ordre, sans délai) : `front` 0 pour la réserve
+ * nationale. Les soldats du joueur sont recomptés au tour suivant.
  */
-export function arm(s: GameState, player: number, units: Partial<Record<(typeof UNIT_IDS)[number], number>>, population = 5_000_000): void {
-  stock(s, player, units, population);
-  const p = s.players[player - 1]!;
-  assignTroops(s, p, population, false);
+export function put(s: GameState, player: number, type: DivisionId, front = 0): Division {
+  const data = DIVISION_DATA[D[type]]!;
+  const d: Division = {
+    id: s.nextDivisionId++,
+    owner: player,
+    type: data.index,
+    counts: data.components.map((c) => c.count),
+    front,
+    line: LINE_SECOND,
+    engaged: 0,
+    arrivalTick: 0,
+    formedTick: 0,
+    fleeUntilTick: 0,
+  };
+  s.divisions.push(d);
+  return d;
 }
 
 /** Une carte où une case sur dix porte du fer, pour les tests qui ont besoin d'une usine. */

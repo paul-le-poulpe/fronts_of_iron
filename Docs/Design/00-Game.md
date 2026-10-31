@@ -61,7 +61,7 @@ Modules prévus :
 | Routes terrestres et maritimes | décrit en partie (§3.5, §3.6). Nœuds : les villes sur terre, les zones maritimes en mer (§2.1) |
 | Croissance des villes | décrit (§3.7) : affichage seulement, pas de taille dans le moteur |
 | Commerce terrestre et maritime | annoncé, non décrit. Mêmes règles sur terre et sur mer, seul le support change |
-| Fronts terrestres | version 1 (divisions) décrite le 30 octobre 2026 (`05-Fronts.md`, résumé §3.8), **non implémentée** ; le code implémente la version 0.1 (tag `v0.1`). Fronts aériens et maritimes plus tard |
+| Fronts terrestres | version 1 (divisions) décrite le 30 octobre 2026 (`05-Fronts.md`, résumé §3.8) ; moteur implémenté le 31 octobre 2026, interface en cours (version 0.1 : tag `v0.1`). Fronts aériens et maritimes plus tard |
 | Armée, combat | terre : `05-Fronts.md` (divisions, combat, prise de ville) ; air et mer : annoncé, non décrit |
 | Politique entre joueurs | décrit en partie (§1, Diplomatie) : statuts neutre, pacte de non-agression, guerre ; menu au clic sur un joueur. Ni alliance, ni droit de passage, ni garantie d'indépendance, ni commerce dans cette version |
 
@@ -1178,7 +1178,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
 | `ROADS.heightCostFactor` | client seulement : augmentation du coût d'une case avec son altitude, pour le tracé A* des routes (§3.5) ; **1**, choisi avec l'auteur : une case coûte `1 + altitude` (de 1 à 32). Constante `ROAD_HEIGHT_COST_FACTOR` de `client/src/roadpaths.ts` |
-| `FRONTS`, `DIVISIONS`, `NICHES` | réglages des fronts et des divisions : `config/fronts.ts` et `config/divisions.ts` (aujourd'hui encore `config/units.ts`, version 0.1), décrits dans `05-Fronts.md` §3 et §12 |
+| `FRONTS`, `DIVISIONS`, `NICHES` | réglages des fronts et des divisions : `config/fronts.ts` et `config/divisions.ts`, décrits dans `05-Fronts.md` §3 et §12 |
 | `SEA_ZONES.spacing` | écart entre les points de la grille de départ, en cases ; fixe aussi la taille visée d'une zone (§2.1) |
 | `SEA_ZONES.maxLandPercent` | au-delà de ce pourcentage de terre dans son carré, un point de la grille est supprimé (80 pour commencer, valeur donnée par l'auteur) |
 | `SEA_ZONES.iterations` | nombre d'itérations zones → barycentre avant la correction (§2.1) ; 50 pour commencer, valeur donnée par l'auteur (le calcul ne tourne qu'une fois par partie) |

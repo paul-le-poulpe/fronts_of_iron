@@ -21,8 +21,7 @@ import {
   type ProductId,
 } from "./config.ts";
 import { ARMAMENT_IDS, armamentIndex, armamentReserveMax, goodIndex, productConfig } from "./factories.ts";
-import { deployedEquipment, frontsByPlayer } from "./fronts.ts";
-import { releaseTroops } from "./troops.ts";
+import { divisionEquipment } from "./divisions.ts";
 import type { GameState, Player } from "./state.ts";
 
 /** Échelle de la courbe de mécanisation (00-Game §6.3) : x = 1 s'écrit S. */
@@ -227,9 +226,9 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
  * `p.goods` (les machines du tour suivant), l'armement dans les réserves ; puis
  * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
  * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
- * `deployed` : équipement des unités sur les fronts et en route, par type d'armement ;
- * il compte dans le stock, mais le déclin ne retire que l'équipement non déployé
- * (05-Fronts §4.6).
+ * `deployed` : équipement des divisions, par type d'armement ; il compte dans le
+ * stock, mais le déclin ne retire que l'équipement hors des divisions
+ * (05-Fronts §4.5).
  */
 function produce(p: Player, deployed: readonly number[]): void {
   p.goods.fill(0);
@@ -337,7 +336,7 @@ function allocate(p: Player, people: number): Allocation {
 
 /**
  * Personnes que le pays emploie s'il y consacre toute sa population : ouvriers, mineurs, fermiers et pêcheurs. Ce qui est
- * en plus est libre pour les soldats, puis inactif ; ce qui manque est retiré des fronts (05-Fronts §4.7).
+ * en plus est inactif (00-Game §4).
  */
 export function workersNeeded(p: Player): number {
   const a = allocate(p, p.population);
@@ -351,9 +350,8 @@ export function workersNeeded(p: Player): number {
  * utilisées sont celles produites au tour précédent (00-Game §12).
  */
 function stepPlayer(p: Player, deployed: readonly number[]): void {
-  // Les soldats comptent dans la population mais ne travaillent pas (05-Fronts §4.1) : la répartition se fait sur le reste.
-  // Le pays qui manque de personnes pour ses lignes, ses fermiers et ses pêcheurs a déjà retiré des soldats des fronts
-  // (`releaseTroops`, appelée par `stepEconomy`, 05-Fronts §4.7) ; en mobilisation forcée, ce sont eux qui passent d'abord.
+  // Les hommes des divisions comptent dans la population mais ne travaillent pas (00-Game §4, point 5) : la répartition
+  // se fait sur le reste. En mobilisation forcée, le renfort des divisions est déjà passé avant (05-Fronts §4.3).
   const people = Math.max(0, p.population - p.soldiers);
   const { lines, remaining, availableFarmers, availableFishers, spareFarmers, spareFishers, farm, sea } = allocate(p, people);
 
@@ -403,14 +401,6 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
 
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
-  const fronts = frontsByPlayer(state);
-  for (const p of state.players) {
-    // Les soldats sont la dernière occupation avant l'inactivité (05-Fronts §4.7) : si les personnes qui ne sont pas des soldats
-    // ne suffisent pas aux lignes, aux fermiers et aux pêcheurs, des unités sont retirées des fronts. Pas en mobilisation forcée.
-    if (p.soldiers > 0 && !p.forcedMobilization) {
-      const shortage = workersNeeded(p) - Math.max(0, p.population - p.soldiers);
-      if (shortage > 0) releaseTroops(state, p, shortage, fronts[p.id - 1]!);
-    }
-    stepPlayer(p, deployedEquipment(state, p.id, fronts[p.id - 1]));
-  }
+  // Les hommes des divisions ne retournent jamais d'eux-mêmes à l'économie (05-Fronts §3.5) : il faut supprimer la division.
+  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id));
 }

@@ -17,8 +17,10 @@ garde qu'un résumé. Règles décidées avec l'auteur les 29 et 30 octobre 2026
 - **Hors périmètre** : fronts aériens et maritimes, avions, barrage
   d'artillerie, bots (§16).
 
-**État (31 octobre 2026)** : **implémentation en cours** (§14). Valeurs des
-divisions (§3.4) et interface (§11) décidées avec l'auteur le 31 octobre 2026.
+**État (31 octobre 2026)** : **moteur implémenté** (§3 à §10, §13) ; client en
+cours : la fenêtre d'un front est provisoire (texte), l'onglet des forces et le
+pion restent à faire (§11, §14). Valeurs des divisions (§3.4) et interface (§11)
+décidées avec l'auteur le 31 octobre 2026.
 La version 0.1 est au tag git `v0.1`, décrite à la fin de
 `05-Fronts-History.md`.
 
@@ -937,36 +939,44 @@ sorte principale ou appui-feu, §3.1). Multiplicateurs : deux décimales au plus
 
 ## 13. Moteur
 
-### 13.1 Structures (proposition d'implémentation)
+### 13.1 Structures
 
 ```ts
-interface Division {
+interface Division {              // divisions.ts
   readonly id: number;
   readonly owner: number;
-  readonly type: DivisionId;
-  counts: number[];               // exemplaires par composant, ordre de `components`
-  front: number | null;           // null : réserve nationale
-  line: 0 | 1 | null;             // première, seconde ; null dans la réserve
-  arrivalTick: number | null;     // en déplacement : tour d'arrivée (front et ligne = destination)
-  formedTick: number;             // fin de formation
-  fleeUntilTick: number;          // pas de première ligne avant ce tour
+  readonly type: number;          // indice dans les clés de DIVISIONS
+  readonly counts: number[];      // exemplaires par composant, ordre de `components`
+  front: number;                  // 0 : réserve nationale ; en déplacement : destination
+  line: number;                   // LINE_FIRST (0) ou LINE_SECOND (1) ; seconde dans la réserve
+  engaged: number;                // largeur engagée en première ligne, millièmes de liaison
+  arrivalTick: number;            // en déplacement : tour d'arrivée ; 0 sinon
+  readonly formedTick: number;    // fin de formation
+  fleeUntilTick: number;          // en fuite jusqu'à ce tour exclu
 }
-interface FrontSide {             // un par camp
-  frontAttack: boolean;
-}
+interface FrontSide { frontAttack: boolean }      // fronts.ts, un par camp
 interface Front {
   readonly id: number;
   readonly players: readonly [number, number];   // p1 < p2
-  groups: [number, number];
+  readonly groups: readonly [number, number];
   connections: FrontConnection[];                 // par (city1, city2), avec position
   sides: [FrontSide, FrontSide];
 }
-// GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId,
-// forcedMobilization par joueur.
+// GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId ;
+// Player : forcedMobilization, soldiers (hommes des divisions, recomptés par countSoldiers).
 ```
 
-La part engagée et l'état se recalculent à la lecture (ou sont rangés à chaque
-tour, au choix de l'implémentation, mais toujours dans l'état si stockés).
+- **Échelles** : état d'une division sur 10 000 (`STATE_SCALE`), largeurs en
+  millièmes de liaison (`WIDTH_SCALE`), fractions de pertes `f` sur 1 000 000
+  (`LOSS_SCALE`), dégâts en millièmes de point. Pertes tirées : `q` = 10⁸
+  (`LOSS_SCALE` × échelle 100 du `lossMultiplier`).
+- **Fichiers** : `divisions.ts` (types en entiers, état, excédent, attaques,
+  pertes) ; `placement.ts` (ordres des divisions, renfort, arrivées, rangement
+  des lignes, fuite, échange) ; `combat.ts` (round, appui-feu, avancée) ;
+  `conquest.ts` (prise, encerclement) ; `fronts.ts` (détection, coupure,
+  guerre et paix).
+- La largeur engagée est rangée dans l'état à chaque rangement ; l'état d'une
+  division se recalcule à la lecture (`stateOf`).
 
 ### 13.2 Ordre dans un tour (*provisoire*)
 
@@ -1029,15 +1039,13 @@ les divisions de chaque front.
 1. Règles (ce document, 00-Game) — fait le 30 octobre 2026.
 2. **Valeurs des divisions** (§3.4) — fait le 31 octobre 2026.
 3. **Interface** (§11) — décidée le 31 octobre 2026.
-4. **Configuration** : `config/fronts.ts`, `config/divisions.ts`.
-5. **État du moteur** : divisions, hash.
-6. **Ordres** : `create_division`, `delete_division`, `move_division` ;
-   suppression des ordres de la version 0.1.
-7. **Placement** : lignes, renfort, déplacement, excédents.
-8. **Combat** : dégâts, pertes, appui-feu, échange, fuite.
-9. **Avancée, prise, encerclement** branchés sur les divisions.
-10. **Client** : onglet des forces, fenêtre du front ; le pion par la session
-    « Propositions visuelles du pion de division », une fois l'étape 5 faite.
+4. à 9. **Moteur** : configuration, état et hash, ordres, placement, combat,
+   avancée, prise, encerclement — fait le 31 octobre 2026. Messages du client
+   (`FrontView`, `DivisionView`, 03-Client) et fenêtre provisoire d'un front
+   faits le même jour.
+10. **Client** : onglet des forces, fenêtre du front, menu « + », sélection,
+    panneaux, thèmes (session de l'interface) ; le pion (session « Propositions
+    visuelles du pion de division »).
 11. **Tests** (§13.7), en une passe.
 
 À chaque étape : mettre à jour 02-Engine, 03-Client, 00-Game §9 et ce document

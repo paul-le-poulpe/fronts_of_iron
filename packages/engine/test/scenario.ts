@@ -15,7 +15,7 @@ import {
   hashState,
   nextInt,
   POPULATION,
-  UNIT_IDS,
+  DIVISION_IDS,
   PRODUCT_IDS,
   type GameMap,
   type GameState,
@@ -129,13 +129,13 @@ function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent
 
 /**
  * Un ordre de guerre ou de front tiré au hasard pour le joueur `player` : déclarer la guerre,
- * proposer ou accepter la paix, régler un front, lancer ou arrêter une attaque ou une percée. Beaucoup sont
- * invalides (front inconnu, joueur étranger au front, pas en guerre).
+ * proposer ou accepter la paix, créer, supprimer ou déplacer une division, lancer ou arrêter une attaque. Beaucoup
+ * sont invalides (front inconnu, joueur étranger au front, pas en guerre, stock insuffisant).
  */
 function frontOrder(bot: Rng, state: GameState, player: number): Intent {
   const front = 1 + nextInt(bot, Math.max(1, state.nextFrontId));
   const other = 1 + nextInt(bot, state.players.length);
-  const connection = state.fronts.find((f) => f.id === front)?.connections[0];
+  const division = 1 + nextInt(bot, Math.max(1, state.nextDivisionId));
   switch (nextInt(bot, 14)) {
     case 0:
     case 1:
@@ -145,13 +145,13 @@ function frontOrder(bot: Rng, state: GameState, player: number): Intent {
     case 3:
       return { type: "answer_proposal", player, from: other, accept: nextInt(bot, 2) === 0 };
     case 4:
-      return { type: "set_front_priority", player, front, priority: nextInt(bot, 4) };
     case 5:
-      return { type: "set_front_reassign", player, front, enabled: nextInt(bot, 2) === 0 };
+      return { type: "create_division", player, division: DIVISION_IDS[nextInt(bot, DIVISION_IDS.length)]! };
     case 6:
-      return { type: "set_unit_line_mode", player, front, unit: UNIT_IDS[nextInt(bot, UNIT_IDS.length)]!, mode: (["first", "balanced", "second"] as const)[nextInt(bot, 3)]! };
+      return { type: "delete_division", player, id: division };
     case 7:
-      return { type: "set_breakthrough_motorized_only", player, front, enabled: nextInt(bot, 2) === 0 };
+    case 12:
+      return { type: "move_division", player, ids: [division, division + 1], front: nextInt(bot, 3) === 0 ? 0 : front, ...(nextInt(bot, 2) === 0 ? { line: "first" as const } : {}) };
     case 8:
       return { type: "set_forced_mobilization", player, enabled: nextInt(bot, 2) === 0 };
     case 9:
@@ -159,10 +159,8 @@ function frontOrder(bot: Rng, state: GameState, player: number): Intent {
       return { type: "start_front_attack", player, front };
     case 11:
       return { type: "stop_front_attack", player, front };
-    case 12:
-      return { type: "start_breakthrough", player, front, city1: connection?.city1 ?? 0, city2: connection?.city2 ?? 0 };
     default:
-      return { type: "cancel_breakthrough", player, id: 1 + nextInt(bot, Math.max(1, state.nextBreakthroughId)) };
+      return { type: "move_division", player, ids: [division], front };
   }
 }
 
@@ -243,7 +241,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
       if (p.factories.some((f) => f.groups.some((g) => g.filled > 0))) filledLinePlayerTurns++;
       if (p.soldiers > 0) soldierPlayerTurns++;
     }
-    if (state.fronts.some((f) => f.sides.some((x) => x.frontAttack || x.breakthroughs.length > 0))) fightingTurns++;
+    if (state.fronts.some((f) => f.sides.some((x) => x.frontAttack))) fightingTurns++;
     captures += state.events.filter((e) => e.type === "city_captured").length;
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));

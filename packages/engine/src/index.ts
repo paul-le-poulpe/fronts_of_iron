@@ -53,57 +53,60 @@ export {
 } from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
 export { foundCity, foundingCost } from "./cities.ts";
-export { NICHES, UNITS, type NicheId, type UnitConfig, type UnitId } from "./config.ts";
+export {
+  DIVISIONS,
+  NICHES,
+  type DivisionComponentConfig,
+  type DivisionConfig,
+  type DivisionId,
+  type NicheId,
+} from "./config.ts";
 export {
   MIDDLE,
   ROUTE,
   activeFrontCities,
-  countSoldiers,
-  deployedEquipment,
-  deployedUnits,
   frontById,
   frontWidth,
+  frontsByPlayer,
+  inCombat,
   isActive,
-  priorityPercent,
   sideIndex,
+  splitProportional,
   updateFronts,
-  type Breakthrough,
   type Front,
   type FrontConnection,
   type FrontSide,
-  type Transfer,
 } from "./fronts.ts";
-export { applyTransfers, assignTroops, loseUnits, releaseTroops, splitProportional, trimSide } from "./troops.ts";
-export { combatRound, endOf, forceSpeed, frontAdvance, previewBreakthrough, reactionFactor100 } from "./combat.ts";
-export { captureCity } from "./conquest.ts";
 export {
-  FILL_ORDER,
-  KIND_ARMOR,
-  KIND_EQUIPMENT,
-  KIND_INFANTRY,
-  LINE_BALANCED,
+  DIVISION_DATA,
+  DIVISION_IDS,
+  INFANTRY_NICHE,
   LINE_FIRST,
   LINE_SECOND,
+  LOSS_SCALE,
+  MEN,
+  MULT_SCALE,
   NICHE_IDS,
-  NICHE_UNITS,
-  UNIT_COUNT,
-  UNIT_DATA,
-  UNIT_IDS,
-  damageOf,
-  fillWidth,
-  hitPointsOf,
-  infantryCount,
-  isUnitId,
-  lineRoom,
-  lossesFrom,
-  metersOf,
-  motorization,
-  roundDiv,
-  splitLines,
+  NICHE_TYPES,
+  STATE_SCALE,
+  WIDTH_SCALE,
+  attackOf,
+  countSoldiers,
+  divisionEquipment,
+  inFormation,
+  isDivisionId,
+  isFleeing,
+  isMoving,
+  menOf,
+  stateOf,
   toScale100,
-  unitIndex,
-  type UnitData,
-} from "./units.ts";
+  type ComponentData,
+  type Division,
+  type DivisionData,
+} from "./divisions.ts";
+export { arrangeAll, arrangeSide, createDivision, deleteDivision, moveDivisions, shareEqually } from "./placement.ts";
+export { combatRound, endOf, frontAdvance } from "./combat.ts";
+export { captureCity } from "./conquest.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
 export {
   createGame,
@@ -173,7 +176,9 @@ export {
   type AnswerProposalIntent,
   type BreakPactIntent,
   type BuildFactoryIntent,
-  type CancelBreakthroughIntent,
+  type CreateDivisionIntent,
+  type DeleteDivisionIntent,
+  type MoveDivisionIntent,
   type CreateLineIntent,
   type DeclareWarIntent,
   type FoundCityIntent,
@@ -182,15 +187,9 @@ export {
   type ProposePactIntent,
   type ProposePeaceIntent,
   type SetActiveLinesIntent,
-  type SetBreakthroughMotorizedOnlyIntent,
   type SetCityPriorityIntent,
   type SetFarmShareIntent,
   type SetForcedMobilizationIntent,
-  type SetFrontPriorityIntent,
-  type SetFrontReassignIntent,
-  type SetUnitLineModeIntent,
-  type SetUnitAllowedIntent,
-  type StartBreakthroughIntent,
   type SetLinePriorityIntent,
 } from "./intents.ts";
 export { applyTurn, type Turn } from "./turn.ts";

@@ -11,7 +11,7 @@
 // histogrammes sont tenus à jour case par case.
 
 import { computeFrontZones, type GeomWorld } from "./frontgeom.ts";
-import type { FactoryCatalog, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
+import type { DivisionView, FactoryCatalog, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
 import { RoadPaths } from "./roadpaths.ts";
 
 export const TERRAIN_LAND = 0x80;
@@ -74,6 +74,8 @@ export class Mirror {
   readonly military: MilitaryCatalog;
   /** Tous les fronts (05-Fronts), par identifiant, tels que le dernier message les donne. */
   fronts: readonly FrontView[] = [];
+  /** Toutes les divisions de tous les joueurs (05-Fronts §3), par identifiant, telles que le dernier message les donne. */
+  divisions: readonly DivisionView[] = [];
   /** Augmente à chaque changement des fronts : la vue et les zones recalculent alors. */
   frontsVersion = 0;
   /** Paires de villes `a × 65536 + b` (a < b) reliées par une connexion d'un front actif : double ligne rouge de la carte. */
@@ -255,6 +257,7 @@ export class Mirror {
       }
     }
     if (msg.fronts !== null) this.setFronts(msg.fronts, mark);
+    if (msg.divisions !== null) this.divisions = msg.divisions;
     if (msg.cities !== null) {
       this.portTiles.clear();
       for (const city of this.cities) if (city.port) this.portTiles.set(city.id, this.findPortTile(city));

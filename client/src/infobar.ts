@@ -714,7 +714,7 @@ export class InfoBar {
         rows.forEach((x) => {
           stock += d.reserve[x.index] ?? 0;
           target += d.reserveMax[x.index] ?? 0;
-          onFronts += s.frontEquipment[x.index] ?? 0;
+          onFronts += s.divisionEquipment[x.index] ?? 0;
         });
         stockSpans(miniStock, stock, target, onFronts);
       },
@@ -724,7 +724,7 @@ export class InfoBar {
           const stock = d.reserve[x.index] ?? 0;
           const target = d.reserveMax[x.index] ?? 0;
           // Équipement dans des unités des fronts, déployé et en route : il compte dans le stock (05-Fronts §4.6).
-          const onFronts = s.frontEquipment[x.index] ?? 0;
+          const onFronts = s.divisionEquipment[x.index] ?? 0;
           x.r.hidden = target === 0 && stock === 0 && onFronts === 0;
           if (x.r.hidden) continue;
           shown++;

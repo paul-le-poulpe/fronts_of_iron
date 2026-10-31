@@ -5,6 +5,7 @@
 import { isUint32 } from "./bits.ts";
 import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
 import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
+import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import { hashMap } from "./hash.ts";
 import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
@@ -107,12 +108,13 @@ export interface Player {
   mineMechanization: number;
   /** Fer extrait au dernier tour : celui des lignes remplies. */
   ironExtracted: number;
-  /** Mobilisation forcée (05-Fronts §4.1) : les soldats passent avant les lignes de production. Éteinte au départ. */
+  /** Mobilisation forcée (05-Fronts §4.3) : le renfort des divisions passe avant les emplois. Éteinte au départ. */
   forcedMobilization: boolean;
   /**
-   * Soldats : population des unités sur les fronts et en route (05-Fronts §4.1). Ils sont
-   * comptés dans `population` (ils mangent) mais ne travaillent pas : la répartition du
-   * §4 de 00-Game se fait sur `population − soldiers`.
+   * Soldats : hommes de toutes les divisions du joueur (00-Game §4, point 5 ; 05-Fronts §3).
+   * Ils sont comptés dans `population` (ils mangent) mais ne travaillent pas : la
+   * répartition du §4 de 00-Game se fait sur `population − soldiers`. Recomptés par
+   * `countSoldiers` (divisions.ts).
    */
   soldiers: number;
 }
@@ -153,8 +155,10 @@ export interface GameState {
   fronts: Front[];
   /** Prochain identifiant de front (1, 2, 3…). */
   nextFrontId: number;
-  /** Prochain identifiant de percée. */
-  nextBreakthroughId: number;
+  /** Divisions de tous les joueurs (05-Fronts §3), par identifiant croissant. Réassigné à chaque suppression. */
+  divisions: Division[];
+  /** Prochain identifiant de division (1, 2, 3…). */
+  nextDivisionId: number;
   readonly rng: Rng;
   /**
    * Statut diplomatique de chaque paire de joueurs (diplomacy.ts) : `players.length`²
@@ -244,7 +248,8 @@ export function createGame(setup: GameSetup): GameState {
     roadNetwork: createRoadNetwork(map.width, map.height, CITY.expansionRadius),
     fronts: [],
     nextFrontId: 1,
-    nextBreakthroughId: 1,
+    divisions: [],
+    nextDivisionId: 1,
     rng: createRng(setup.seed),
     diplomacy: new Uint8Array(playerCount * playerCount),
     proposals: [],

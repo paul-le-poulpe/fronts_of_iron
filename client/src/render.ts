@@ -27,7 +27,6 @@ const HATCH_WIDTH_PX = 4;
 const FRONT_HATCH_PERIOD_PX = 8;
 const FRONT_HATCH_WIDTH_PX = 2;
 /** Taille de la flèche d'une percée, du centre à la pointe, en pixels d'écran (14 : deux fois la première version). */
-const ARROW_PX = 14;
 const FRONT_RED_RGBA = [200, 30, 30, 200] as const;
 const FRONT_BLUE_RGBA = [40, 90, 210, 200] as const;
 /** Logo d'usine sur la carte, en pixels d'écran : icône de 16, 1 de fond gris clair autour, puis un cadre noir de 1. */
@@ -81,9 +80,6 @@ export class MapView {
   showFactoryLogos = true;
   /** Case « Zones de front » du menu Carte (05-Fronts §11.1) : hachures rouges des fronts actifs. */
   showFrontZones = true;
-  /** Mode choix d'axe d'une percée (05-Fronts §11.1) : front visé (0 : hors du mode), et connexion survolée. */
-  axisFront = 0;
-  axisHover: { city1: number; city2: number } | null = null;
   /** Front dont la zone est survolée (0 : aucun) : sa zone s'affiche toujours. */
   private hoverFront = 0;
   private readonly frontLayer: FrontLayer;
@@ -312,7 +308,7 @@ export class MapView {
     const front = tile >= 0 ? (this.frontLayer.frontAt(tile)?.id ?? 0) : 0;
     const frontChanged = front !== this.hoverFront;
     this.hoverFront = front;
-    if (this.placement || this.factoryMode || frontChanged || this.axisFront !== 0) this.requestDraw();
+    if (this.placement || this.factoryMode || frontChanged) this.requestDraw();
   }
 
   /** Front dont la zone contient la case (05-Fronts §11.1), affichée ou non. */
@@ -323,14 +319,6 @@ export class MapView {
   /** À rappeler quand les fronts changent : les zones et la courbe sont redessinées. */
   frontsChanged(): void {
     this.hoverFront = this.hoverTile >= 0 ? (this.frontLayer.frontAt(this.hoverTile)?.id ?? 0) : 0;
-    this.requestDraw();
-  }
-
-  /** Mode choix d'axe : `frontId` 0 pour en sortir. */
-  setAxisMode(frontId: number): void {
-    this.axisFront = frontId;
-    this.axisHover = null;
-    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || frontId !== 0);
     this.requestDraw();
   }
 
@@ -469,48 +457,6 @@ export class MapView {
     }
   }
 
-  /**
-   * Percées lancées, de l'un et l'autre camp, vues de la même façon (05-Fronts §11.1) : un trait rouge, le segment droit entre
-   * les deux villes de la connexion (pas le tracé de la route), et une flèche au milieu qui va de la ville de celui qui perce
-   * vers celle de son adversaire. Le camp 0 est le joueur de la ville 1 de la connexion, le camp 1 celui de la ville 2.
-   */
-  private drawBreakthroughs(ctx: CanvasRenderingContext2D, px: number): void {
-    const { mirror } = this;
-    const w = mirror.width;
-    const at = (id: number): { x: number; y: number } => {
-      const t = mirror.cities[id - 1]!.tile;
-      return { x: (t % w) + 0.5, y: Math.floor(t / w) + 0.5 };
-    };
-    for (const front of mirror.fronts) {
-      for (let x = 0; x < 2; x++) {
-        for (const bt of front.sides[x]!.breakthroughs) {
-          const from = at(x === 0 ? bt.city1 : bt.city2);
-          const to = at(x === 0 ? bt.city2 : bt.city1);
-          ctx.beginPath();
-          ctx.moveTo(from.x, from.y);
-          ctx.lineTo(to.x, to.y);
-          ctx.lineWidth = 3 * px;
-          ctx.strokeStyle = "#d11b1b";
-          ctx.stroke();
-          const angle = Math.atan2(to.y - from.y, to.x - from.x);
-          const mx = (from.x + to.x) / 2;
-          const my = (from.y + to.y) / 2;
-          const s = ARROW_PX * px;
-          ctx.beginPath();
-          ctx.moveTo(mx + Math.cos(angle) * s, my + Math.sin(angle) * s);
-          ctx.lineTo(mx + Math.cos(angle + 2.5) * s, my + Math.sin(angle + 2.5) * s);
-          ctx.lineTo(mx + Math.cos(angle - 2.5) * s, my + Math.sin(angle - 2.5) * s);
-          ctx.closePath();
-          ctx.fillStyle = "#d11b1b";
-          ctx.fill();
-          ctx.lineWidth = 1.5 * px;
-          ctx.strokeStyle = "#fff";
-          ctx.stroke();
-        }
-      }
-    }
-  }
-
   private draw(): void {
     const { ctx, mirror, zoom } = this;
     const k = this.dpr;
@@ -632,22 +578,6 @@ export class MapView {
         ctx.fill();
         ctx.stroke();
       }
-    }
-
-    // Percées lancées, de l'un et l'autre camp, vues de la même façon : trait rouge le long de la route, flèche dans le sens de
-    // l'avancée (vers la ville de l'adversaire de celui qui perce) (05-Fronts §11.1).
-    this.drawBreakthroughs(ctx, px);
-
-    // Mode choix d'axe : la connexion du front la plus proche de la souris.
-    if (this.axisFront !== 0 && this.axisHover !== null) {
-      const a = cities[this.axisHover.city1 - 1]!;
-      const b = cities[this.axisHover.city2 - 1]!;
-      ctx.beginPath();
-      ctx.moveTo(cx(a.tile), cy(a.tile));
-      ctx.lineTo(cx(b.tile), cy(b.tile));
-      ctx.strokeStyle = "rgba(255,60,40,0.95)";
-      ctx.lineWidth = 5 * px;
-      ctx.stroke();
     }
 
     // Villes : un point, une étoile pour la capitale, un carré bleu pour le port.

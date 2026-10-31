@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITY, FRONTS } from "@fronts-of-iron/engine";
+import { CITY, DIVISION_DATA, FRONTS } from "@fronts-of-iron/engine";
 
 import { computeFrontZones, connectionPoint, frontChains, type GeomWorld } from "../src/frontgeom.ts";
 import { Mirror } from "../src/mirror.ts";
@@ -27,7 +27,7 @@ function world(cities: [number, number][], roads: [number, number][]): GeomWorld
 
 /** Un front à la main, en paix ou en guerre. */
 function view(connections: [number, number, number][], active: boolean, id = 1): FrontView {
-  const empty = { first: [], second: [], lostFirst: [], lostSecond: [], transit: [], priority: 0, reassign: false, lineMode: [], allowed: [], motorizedOnly: true, frontAttack: false, breakthroughs: [] };
+  const empty = { frontAttack: false };
   return {
     id,
     players: [1, 2],
@@ -151,14 +151,22 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
   const { game, mirror, painter, apply, botCity } = duelGame();
   apply(game.step([{ id: 2, order: { type: "declare_war", target: 2 } }]));
   const front = game.state.fronts[0]!;
-  // Des troupes posées à la main : l'attaquant (joueur 1) écrase le défenseur.
-  front.sides[0]!.firstLine[0] = 500;
-  front.sides[1]!.firstLine[0] = 100;
-  // Assez de population pour que les emplois n'obligent pas à retirer ces soldats des fronts (05-Fronts §4.7).
-  for (const p of game.state.players) {
-    p.soldiers = p.id === 1 ? 5000 : 1000;
-    p.population = 10_000_000;
-  }
+  // Une division d'infanterie posée à la main chez l'attaquant (joueur 1), aucune chez le défenseur : l'avancée va à vitesse
+  // maximale (05-Fronts §7).
+  const infantry = DIVISION_DATA[0]!;
+  game.state.divisions.push({
+    id: game.state.nextDivisionId++,
+    owner: 1,
+    type: infantry.index,
+    counts: infantry.components.map((c) => c.count),
+    front: front.id,
+    line: 0,
+    engaged: 0,
+    arrivalTick: 0,
+    formedTick: 0,
+    fleeUntilTick: 0,
+  });
+  for (const p of game.state.players) p.population = 10_000_000;
   apply(game.step([{ id: 3, order: { type: "start_front_attack", front: front.id } }]));
   let captured = false;
   for (let i = 0; i < 3000 && !captured; i++) {

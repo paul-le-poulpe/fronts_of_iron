@@ -211,8 +211,7 @@ function onInit(s: Session, init: InitMessage): void {
   s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
-  s.frontPanel = new FrontPanel($("front-panel"), init.military, { send: sendOrder, chooseAxis: startAxisMode });
-  axisFront = 0;
+  s.frontPanel = new FrontPanel($("front-panel"), init.military, sendOrder);
   s.infobar = new InfoBar(
     $("infobar"),
     init.catalog,
@@ -245,10 +244,7 @@ function onTick(s: Session, msg: TickMessage): void {
     view.frontsChanged();
     s.infobar?.setFronts(msg.fronts);
   }
-  s.frontPanel?.refresh(mirror.fronts, msg.tick);
-  if (msg.failedBreakthroughs > 0) {
-    toast("Percée arrêtée : aucune unité à engager (seconde ligne vide, ou « Motorisé seulement » sans unité motorisée).", 6000);
-  }
+  s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
   for (const c of msg.captured) {
     if (c.from === localPlayer() || c.to === localPlayer()) {
       const other = c.from === localPlayer() ? c.to : c.from;
@@ -264,8 +260,8 @@ function onTick(s: Session, msg: TickMessage): void {
       notify({
         text:
           c.from === localPlayer()
-            ? `Encerclement : vos troupes ont coupé la retraite de ${playerName(other)} à la ville n° ${c.city} (${num(c.lost)} unités perdues).`
-            : `Encerclement : vos troupes sont coupées de leur arrière par la perte de la ville n° ${c.city} (${num(c.lost)} unités perdues).`,
+            ? `Encerclement : vos troupes ont coupé la retraite de ${playerName(other)} à la ville n° ${c.city} (${num(c.divisions)} divisions touchées).`
+            : `Encerclement : vos divisions sont coupées de leur arrière par la perte de la ville n° ${c.city} (${num(c.divisions)} divisions touchées).`,
         color: rgbCss(playerColor(other)),
       });
     }
@@ -441,7 +437,6 @@ function endSession(): void {
   if (s === null) return;
   s.worker.terminate();
   s.frontPanel?.close();
-  axisFront = 0;
   session = null;
   clearNotifications();
   diplomacy.reset();
@@ -487,10 +482,6 @@ function showHover(tile: number): void {
       id === 0
         ? "aucune zone"
         : `n° ${id}${m.cities[id - 1]!.tile === tile ? " (ici)" : ""}${m.stats[m.cities[id - 1]!.player - 1]?.capital === id ? ", capitale" : ""}`;
-  }
-  if (axisFront !== 0 && session?.view) {
-    session.view.axisHover = tile >= 0 ? nearestConnection(m, axisFront, tile) : null;
-    session.view.requestDraw();
   }
   if (factoryArmed !== null && tile >= 0) {
     const target = factoryTarget(m, tile);
@@ -539,7 +530,6 @@ document.addEventListener("keydown", (e) => {
   session?.infobar?.closeMenu();
   if (placement) setPlacement(false);
   if (factoryArmed !== null || !factoryMenu.hidden) setFactoryArmed(null);
-  if (axisFront !== 0) stopAxisMode();
 });
 
 /**
@@ -569,16 +559,6 @@ function foundingProblem(m: Mirror, tile: number): string | null {
 
 function onMapClick(tile: number): void {
   const m = session?.mirror;
-  if (m && axisFront !== 0) {
-    // Mode choix d'axe : le clic lance une percée sur la connexion du front la plus proche (05-Fronts §11.1), et le mode se
-    // désactive : pour en lancer une seconde, on rouvre le panneau du front.
-    const axis = nearestConnection(m, axisFront, tile);
-    if (axis !== null) {
-      sendOrder({ type: "start_breakthrough", front: axisFront, city1: axis.city1, city2: axis.city2 });
-      stopAxisMode();
-    }
-    return;
-  }
   if (m && factoryArmed !== null) {
     const target = factoryTarget(m, tile);
     if (target.problem !== null) {
@@ -675,10 +655,7 @@ function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; pr
   return { city, ok: problem === null, problem };
 }
 
-// ---- fronts : panneau, mode choix d'axe (05-Fronts §11) ----
-
-/** Front dont le joueur choisit l'axe d'une percée (0 : hors du mode). */
-let axisFront = 0;
+// ---- fronts : fenêtre d'un front (05-Fronts §11.4) ----
 
 function openFront(id: number): void {
   const s = session;
@@ -688,50 +665,6 @@ function openFront(id: number): void {
   s.frontPanel?.open(front);
 }
 
-/** « Percée » : le panneau se ferme et la carte passe en mode choix d'axe. */
-function startAxisMode(frontId: number): void {
-  const s = session;
-  if (s === null) return;
-  s.frontPanel?.close();
-  setPlacement(false);
-  setFactoryArmed(null);
-  axisFront = frontId;
-  s.view?.setAxisMode(frontId);
-  $("bar-hint").textContent = "Percée : cliquez sur une route du front pour lancer la percée. Échap : annuler.";
-}
-
-function stopAxisMode(): void {
-  axisFront = 0;
-  session?.view?.setAxisMode(0);
-  $("bar-hint").textContent = "";
-}
-
-/** Connexion du front la plus proche de la case cliquée (choix provisoire, 05-Fronts §11.1). */
-function nearestConnection(m: Mirror, frontId: number, tile: number): { city1: number; city2: number } | null {
-  const front = m.fronts.find((f) => f.id === frontId);
-  if (front === undefined) return null;
-  const w = m.width;
-  const px = (tile % w) + 0.5;
-  const py = Math.floor(tile / w) + 0.5;
-  let best: { city1: number; city2: number } | null = null;
-  let bestD = Infinity;
-  for (const c of front.connections) {
-    const a = m.cities[c.city1 - 1]!.tile;
-    const b = m.cities[c.city2 - 1]!.tile;
-    const ax = (a % w) + 0.5;
-    const ay = Math.floor(a / w) + 0.5;
-    const dx = (b % w) + 0.5 - ax;
-    const dy = Math.floor(b / w) + 0.5 - ay;
-    const len2 = dx * dx + dy * dy;
-    const k = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2));
-    const d = (ax + dx * k - px) ** 2 + (ay + dy * k - py) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = { city1: c.city1, city2: c.city2 };
-    }
-  }
-  return best;
-}
 
 function sendOrder(order: HumanOrder): void {
   const s = session;

@@ -5,6 +5,7 @@
 
 export * from "./config/armament.ts";
 export * from "./config/cities.ts";
+export * from "./config/divisions.ts";
 export * from "./config/diplomacy.ts";
 export * from "./config/factories.ts";
 export * from "./config/fronts.ts";
@@ -13,5 +14,4 @@ export * from "./config/limits.ts";
 export * from "./config/map.ts";
 export * from "./config/resources.ts";
 export * from "./config/sea-zones.ts";
-export * from "./config/units.ts";
 export * from "./config/workforce.ts";

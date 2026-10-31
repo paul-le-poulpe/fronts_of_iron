@@ -5,6 +5,7 @@
 
 import { fmix32, mixWord } from "./bits.ts";
 import { factoryTypeIndex, productIndex } from "./factories.ts";
+import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import type { GameMap } from "./map.ts";
 import type { GameState } from "./state.ts";
@@ -34,7 +35,7 @@ function mixList(h: number, list: readonly number[]): number {
   return h;
 }
 
-/** Un front : joueurs, groupes, connexions avec leurs positions, puis chaque camp avec tous ses champs (05-Fronts §13.3). */
+/** Un front : joueurs, groupes, connexions avec leurs positions, attaque de chaque camp (05-Fronts §13.3). */
 function hashFront(h: number, f: Front): number {
   h = mixWord(h, f.id);
   h = mixWord(h, f.players[0]);
@@ -47,38 +48,22 @@ function hashFront(h: number, f: Front): number {
     h = mixWord(h, c.city2);
     h = mixWord(h, c.position);
   }
-  for (const s of f.sides) {
-    h = mixList(h, s.firstLine);
-    h = mixList(h, s.secondLine);
-    h = mixWord(h, s.transfers.length);
-    for (const t of s.transfers) {
-      h = mixWord(h, t.unit);
-      h = mixWord(h, t.count);
-      h = mixWord(h, t.toFront ? 1 : 0);
-      h = mixWord(h, t.line);
-      h = mixWord(h, t.arrival);
-    }
-    h = mixWord(h, s.priorityIndex);
-    h = mixWord(h, s.reassign ? 1 : 0);
-    h = mixList(h, s.lineMode);
-    for (const a of s.allowed) h = mixWord(h, a ? 1 : 0);
-    h = mixWord(h, s.motorizedOnly ? 1 : 0);
-    h = mixWord(h, s.frontAttack ? 1 : 0);
-    h = mixList(h, s.lostFirst);
-    h = mixList(h, s.lostSecond);
-    h = mixWord(h, s.breakthroughs.length);
-    for (const b of s.breakthroughs) {
-      h = mixWord(h, b.id);
-      h = mixWord(h, b.city1);
-      h = mixWord(h, b.city2);
-      h = mixWord(h, b.startTick);
-      h = mixWord(h, b.phase);
-      h = mixList(h, b.attackers);
-      h = mixList(h, b.defenders1);
-      h = mixList(h, b.defenders2);
-      h = mixWord(h, b.startHp);
-    }
-  }
+  for (const s of f.sides) h = mixWord(h, s.frontAttack ? 1 : 0);
+  return h;
+}
+
+/** Une division : tous ses champs (05-Fronts §13.3). */
+function hashDivision(h: number, d: Division): number {
+  h = mixWord(h, d.id);
+  h = mixWord(h, d.owner);
+  h = mixWord(h, d.type);
+  h = mixList(h, d.counts);
+  h = mixWord(h, d.front);
+  h = mixWord(h, d.line);
+  h = mixWord(h, d.engaged);
+  h = mixWord(h, d.arrivalTick);
+  h = mixWord(h, d.formedTick);
+  h = mixWord(h, d.fleeUntilTick);
   return h;
 }
 
@@ -88,7 +73,7 @@ function hashFront(h: number, f: Front): number {
  * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
  * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
  * déblocage, biens produits, réserves d'armement, mobilisation forcée, soldats), villes (joueur, case, port, groupe), routes,
- * fronts (troupes, mouvements, réglages, attaques, percées), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
+ * fronts (connexions, positions, attaques), divisions (tous leurs champs), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
  * Pas `state.events` (liste du dernier tour, jamais lue par les règles).
  */
 export function hashState(state: GameState): number {
@@ -168,11 +153,13 @@ export function hashState(state: GameState): number {
     h = mixWord(h, road[0]);
     h = mixWord(h, road[1]);
   }
-  // Fronts (05-Fronts §13.3) : compteurs d'identifiants, puis chaque front dans l'ordre des identifiants.
+  // Fronts et divisions (05-Fronts §13.3) : compteurs d'identifiants, puis chacun dans l'ordre des identifiants.
   h = mixWord(h, state.nextFrontId);
-  h = mixWord(h, state.nextBreakthroughId);
   h = mixWord(h, state.fronts.length);
   for (const f of state.fronts) h = hashFront(h, f);
+  h = mixWord(h, state.nextDivisionId);
+  h = mixWord(h, state.divisions.length);
+  for (const d of state.divisions) h = hashDivision(h, d);
   // Diplomatie : les statuts (les deux cases de chaque paire), puis les propositions dans l'ordre de création.
   // `state.events` n'y est pas : rien ne le lit dans les règles.
   h = mixBytes(h, state.diplomacy);

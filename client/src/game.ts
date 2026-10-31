@@ -12,7 +12,9 @@ import {
   armamentReserveMax,
   CITY,
   createGame,
-  deployedEquipment,
+  DIVISION_DATA,
+  DIVISIONS,
+  divisionEquipment,
   DIPLOMACY,
   FACTORY,
   FACTORY_TYPE_IDS,
@@ -26,24 +28,24 @@ import {
   foundingCost,
   generateTestMap,
   GOOD_IDS,
+  inFormation,
   isActive,
-  KIND_ARMOR,
-  KIND_INFANTRY,
+  isFleeing,
   MINING,
   NICHES,
   POPULATION,
   PRODUCT_IDS,
-  previewBreakthrough,
   productConfig,
-  UNITS,
+  STATE_SCALE,
+  stateOf,
   RESOURCES,
   STATUS_PACT,
   STATUS_WAR,
   statusOf,
-  UNIT_DATA,
   waterYieldMilli,
   workersForLines,
   machineReference,
+  type Division,
   type Front,
   type GameState,
   type ProductId,
@@ -61,7 +63,7 @@ import { dominantGood } from "./names.ts";
 import {
   type DiplomacyView,
   type FactoryCatalog,
-  type FrontSideView,
+  type DivisionView,
   type FrontView,
   type HumanDetail,
   type MilitaryCatalog,
@@ -144,75 +146,74 @@ export function factoryCatalog(): FactoryCatalog {
   };
 }
 
-/** Fronts et unités militaires que la page affiche (05-Fronts §3, §12) : tout vient du moteur. */
+/** Types de division, niches et réglages des fronts que la page affiche (05-Fronts §3, §12) : tout vient du moteur. */
 export function militaryCatalog(): MilitaryCatalog {
+  const armamentName = (k: number): string => ARMAMENT_IDS[k]!;
   return {
-    units: UNIT_DATA.map((u) => {
-      const config = UNITS[u.id] as { readonly icon: string; readonly description?: string };
+    divisions: DIVISION_DATA.map((d) => {
+      const config = DIVISIONS[d.id] as { readonly icon: string; readonly description?: string };
+      const firstArmament = d.components.find((c) => c.resource >= 0);
+      const fallback = firstArmament === undefined ? undefined : (ARMAMENT.types[armamentName(firstArmament.resource) as keyof typeof ARMAMENT.types] as { readonly description?: string }).description;
       return {
-        id: u.id,
-        index: u.index,
-        niche: Object.keys(NICHES)[u.niche]!,
-        equipment: ARMAMENT_IDS[u.equipment]!,
-        equipmentCount: u.equipmentCount,
-        population: u.population,
+        id: d.id,
+        index: d.index,
+        niche: Object.keys(NICHES)[d.niche]!,
+        rank: d.rank,
+        support: d.support,
+        components: d.components.map((c) => ({
+          resource: c.resource < 0 ? "men" : armamentName(c.resource),
+          count: c.count,
+          required: c.required,
+          weight: c.weight,
+          softAttack: c.softAttack,
+          hardAttack: c.hardAttack,
+          airAttack: c.airAttack,
+          lossMultiplier: c.lossMultiplier,
+        })),
         icon: config.icon,
-        description: config.description ?? (ARMAMENT.types[ARMAMENT_IDS[u.equipment]!] as { readonly description?: string }).description ?? "",
-        softAttack: u.softAttack,
-        hardAttack: u.hardAttack,
-        frontWidth: u.frontWidth,
-        breakthroughWidth: u.breakthroughWidth,
-        kind: u.kind === KIND_INFANTRY ? "infantry" : u.kind === KIND_ARMOR ? "armor" : "equipment",
-        hitPoints: u.hitPoints,
-        motorized: u.motorized,
-        releasePriority: u.releasePriority,
+        description: config.description ?? fallback ?? "",
+        frontWidth: d.width / 1000,
+        hitPoints: d.hitPoints,
+        defenseHitPointsMultiplier: d.defenseHitPointsMultiplier,
+        attackMultiplier: d.attackMultiplier,
+        armorPercent: d.armorPercent,
+        motorized: d.motorized,
       };
     }),
-    niches: Object.entries(NICHES).map(([id, units]) => ({ id, units: [...units] })),
-    metersPerConnection: FRONTS.metersPerConnection,
-    priorityPercent: [...FRONTS.priorityPercent],
-    transferTurns: FRONTS.transferTurns,
+    niches: Object.entries(NICHES).map(([id, n]) => ({ id, support: n.support, types: [...n.types] })),
     combatTurns: FRONTS.combatTurns,
-    breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
-    breakthroughExhaustionPercent: FRONTS.breakthroughExhaustionPercent,
+    formationTurns: FRONTS.formationTurns,
+    transferTurns: FRONTS.transferRounds * FRONTS.combatTurns,
+    stateScale: STATE_SCALE,
   };
 }
 
 /** Un front tel que la page le lit (05-Fronts §13.4). */
 export function frontView(state: GameState, f: Front): FrontView {
-  const side = (i: number): FrontSideView => {
-    const s = f.sides[i]!;
-    const transit = new Array<number>(UNIT_DATA.length).fill(0);
-    for (const tr of s.transfers) if (tr.toFront) transit[tr.unit] = transit[tr.unit]! + tr.count;
-    return {
-      first: s.firstLine.slice(),
-      second: s.secondLine.slice(),
-      lostFirst: s.lostFirst.slice(),
-      lostSecond: s.lostSecond.slice(),
-      transit,
-      priority: s.priorityIndex,
-      reassign: s.reassign,
-      lineMode: s.lineMode.slice(),
-      allowed: s.allowed.slice(),
-      motorizedOnly: s.motorizedOnly,
-      frontAttack: s.frontAttack,
-      breakthroughs: s.breakthroughs.map((b) => ({
-        id: b.id,
-        city1: b.city1,
-        city2: b.city2,
-        phase: b.phase,
-        startTick: b.startTick,
-        ...previewBreakthrough(f, i, b),
-      })),
-    };
-  };
   return {
     id: f.id,
     players: [f.players[0], f.players[1]],
     groups: [f.groups[0], f.groups[1]],
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
-    sides: [side(0), side(1)],
+    sides: [{ frontAttack: f.sides[0].frontAttack }, { frontAttack: f.sides[1].frontAttack }],
+  };
+}
+
+/** Une division telle que la page la lit (05-Fronts §13.4). Statut : formation, puis déplacement, puis fuite. */
+export function divisionView(state: GameState, d: Division): DivisionView {
+  const status = inFormation(state, d) ? "formation" : d.arrivalTick !== 0 ? "moving" : isFleeing(state, d) ? "fleeing" : "ready";
+  return {
+    id: d.id,
+    owner: d.owner,
+    type: d.type,
+    counts: d.counts.slice(),
+    front: d.front,
+    line: d.line === 0 ? "first" : "second",
+    engaged: d.engaged,
+    state: stateOf(d),
+    status,
+    until: status === "formation" ? d.formedTick : status === "moving" ? d.arrivalTick : status === "fleeing" ? d.fleeUntilTick : 0,
   };
 }
 
@@ -239,6 +240,8 @@ export class Game {
   private sentMarks = "";
   /** Les fronts tels qu'envoyés à la page (JSON), pour n'envoyer que les changements. */
   private sentFronts = "";
+  /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
+  private sentDivisions = "";
 
   private readonly options: GameOptions;
 
@@ -386,6 +389,14 @@ export class Game {
         fronts = views;
       }
     }
+    // Divisions : renfort, arrivées et pertes les changent à n'importe quel tour.
+    let divisions: DivisionView[] | null = null;
+    const divisionViews = state.divisions.map((d) => divisionView(state, d));
+    const divisionsKey = JSON.stringify(divisionViews);
+    if (full || divisionsKey !== this.sentDivisions) {
+      this.sentDivisions = divisionsKey;
+      divisions = divisionViews;
+    }
 
     const players: PlayerStats[] = state.players.map((p) => {
       // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
@@ -396,7 +407,7 @@ export class Game {
       id: p.id,
       soldiers: p.soldiers,
       forcedMobilization: p.forcedMobilization,
-      frontEquipment: deployedEquipment(state, p.id),
+      divisionEquipment: divisionEquipment(state, p.id),
       population: p.population,
       farmers: p.farmers,
       fishers: p.fishers,
@@ -442,9 +453,9 @@ export class Game {
       results,
       diplomacy: this.diplomacyView(full),
       fronts,
-      failedBreakthroughs: full ? 0 : state.events.filter((e) => e.type === "breakthrough_failed" && e.from === you).length,
+      divisions,
       captured,
-      encircled: full ? [] : state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, lost: e.lost }] : [])),
+      encircled: full ? [] : state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, divisions: e.divisions }] : [])),
       paused: false,
       perf: { bots: context.botsMs ?? 0, apply: t2 - t1, pack: t3 - t2 },
     };
@@ -461,9 +472,11 @@ export class Game {
       const p = this.state.players[this.you - 1]!;
       p.population = Math.max(0, p.population + amount);
     }
-    // Un lot d'armement : de quoi former 100 unités de chaque type (l'équipement de `UNITS`).
+    // Un lot d'armement : de quoi équiper 10 divisions de chaque type (l'armement de `DIVISIONS`).
     const grant = (p: GameState["players"][number], lots: number): void => {
-      for (const u of UNIT_DATA) p.armamentReserve[u.equipment] = p.armamentReserve[u.equipment]! + 100 * lots * u.equipmentCount;
+      for (const d of DIVISION_DATA) {
+        for (const c of d.components) if (c.resource >= 0) p.armamentReserve[c.resource] = p.armamentReserve[c.resource]! + 10 * lots * c.count;
+      }
     };
     if (action === "addArmament") grant(this.state.players[this.you - 1]!, amount);
     if (action === "armBots") {
@@ -492,7 +505,7 @@ export class Game {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "breakthrough_failed" && e.type !== "encirclement" && mine(e.from, e.to) ? [e] : [])),
+      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "encirclement" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 
@@ -608,24 +621,16 @@ export class Game {
       // Fronts : le réglage demandé est dans l'état.
       case "set_forced_mobilization":
         return me.forcedMobilization === order.enabled;
-      case "set_front_priority":
-        return this.mySide(order.front)?.priorityIndex === order.priority;
-      case "set_front_reassign":
-        return this.mySide(order.front)?.reassign === order.enabled;
-      case "set_breakthrough_motorized_only":
-        return this.mySide(order.front)?.motorizedOnly === order.enabled;
-      case "set_unit_line_mode":
-        return this.mySide(order.front)?.lineMode[UNIT_DATA.findIndex((u) => u.id === order.unit)] === ["first", "balanced", "second"].indexOf(order.mode);
-      case "set_unit_allowed":
-        return this.mySide(order.front)?.allowed[UNIT_DATA.findIndex((u) => u.id === order.unit)] === order.enabled;
+      case "create_division":
+        return state.divisions.some((d) => d.owner === this.you && DIVISION_DATA[d.type]!.id === order.division && d.formedTick === state.tick + FRONTS.formationTurns);
+      case "delete_division":
+        return !state.divisions.some((d) => d.id === order.id);
+      case "move_division":
+        return order.ids.some((id) => state.divisions.find((d) => d.id === id)?.front === order.front);
       case "start_front_attack":
         return this.mySide(order.front)?.frontAttack === true;
       case "stop_front_attack":
         return this.mySide(order.front)?.frontAttack === false;
-      case "start_breakthrough":
-        return this.mySide(order.front)?.breakthroughs.some((b) => b.city1 === order.city1 && b.city2 === order.city2) === true;
-      case "cancel_breakthrough":
-        return !state.fronts.some((f) => f.sides.some((s) => s.breakthroughs.some((b) => b.id === order.id)));
     }
   }
 }

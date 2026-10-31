@@ -1,5 +1,5 @@
-// Fronts terrestres : détection, positions, guerre et paix, ordres de réglage, fondation en
-// guerre, hash (Docs/Design/05-Fronts.md §2, §5, §8, §13.7).
+// Fronts terrestres : détection, positions, guerre et paix, divisions d'un front qui change,
+// ordres, fondation en guerre, hash (Docs/Design/05-Fronts.md §2, §3, §5, §8, §13.7).
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -8,16 +8,18 @@ import {
   applyIntent,
   applyTurn,
   createGame,
+  DIVISIONS,
   FRONTS,
+  frontWidth,
   hashState,
   NICHES,
-  UNITS,
   updateFronts,
+  type DivisionComponentConfig,
   type GameState,
   type Intent,
 } from "../src/index.ts";
 import { bruteFronts } from "./helpers.ts";
-import { at, duel, found, front, MAP, play, R, turn, U } from "./war-helpers.ts";
+import { at, duel, found, front, MAP, play, put, R, turn } from "./war-helpers.ts";
 
 /** Les fronts de l'état, dans la forme de `bruteFronts`. */
 function actual(s: GameState): ReturnType<typeof bruteFronts> {
@@ -26,24 +28,21 @@ function actual(s: GameState): ReturnType<typeof bruteFronts> {
     .sort((x, y) => x.connections[0]![0] - y.connections[0]![0] || x.connections[0]![1] - y.connections[0]![1]);
 }
 
-describe("config des unités (05-Fronts §3)", () => {
+describe("config des divisions (05-Fronts §3)", () => {
   it("les multiplicateurs ont deux décimales au plus", () => {
-    for (const [id, u] of Object.entries(UNITS)) {
-      const config = u as Record<string, unknown>;
-      for (const key of ["attackMultiplier", "breakthroughMultiplier", "counterAttackMultiplier", "lossMultiplier"]) {
-        const x = config[key];
-        if (x === undefined) continue;
-        assert.equal(typeof x, "number");
-        assert.ok(Math.abs((x as number) * 100 - Math.round((x as number) * 100)) < 1e-9, `${id}.${key} = ${x} a plus de deux décimales`);
-      }
+    const decimals = (x: number, name: string): void =>
+      assert.ok(Math.abs(x * 100 - Math.round(x * 100)) < 1e-9, `${name} = ${x} a plus de deux décimales`);
+    for (const [id, d] of Object.entries(DIVISIONS)) {
+      for (const key of ["defenseHitPointsMultiplier", "attackMultiplier", "breakthroughMultiplier", "counterAttackMultiplier"] as const) decimals(d[key], `${id}.${key}`);
+      for (const c of d.components as readonly DivisionComponentConfig[]) if (c.lossMultiplier !== undefined) decimals(c.lossMultiplier, `${id}.${c.resource}.lossMultiplier`);
     }
   });
 
-  it("chaque type d'unité est dans une seule niche, et l'infanterie est la première", () => {
+  it("chaque type de division est dans une seule niche, et l'infanterie est la première", () => {
     const seen = new Map<string, number>();
-    for (const units of Object.values(NICHES)) for (const id of units) seen.set(id, (seen.get(id) ?? 0) + 1);
-    for (const id of Object.keys(UNITS)) assert.equal(seen.get(id), 1, `${id} doit être dans une seule niche`);
-    assert.equal((UNITS[Object.values(NICHES)[0]![0] as keyof typeof UNITS] as { damageType: string }).damageType, "infantry");
+    for (const niche of Object.values(NICHES)) for (const id of niche.types) seen.set(id, (seen.get(id) ?? 0) + 1);
+    for (const id of Object.keys(DIVISIONS)) assert.equal(seen.get(id), 1, `${id} doit être dans une seule niche`);
+    assert.equal(Object.keys(NICHES)[0], "infantry");
   });
 });
 
@@ -89,9 +88,9 @@ describe("détection des fronts (05-Fronts §2)", () => {
     for (let i = 1; i < s.fronts.length; i++) assert.ok(s.fronts[i - 1]!.id < s.fronts[i]!.id);
   });
 
-  it("la largeur d'un front est son nombre de connexions × metersPerConnection", () => {
+  it("la largeur d'un front est son nombre de connexions, en millièmes de liaison", () => {
     const { s } = crowded();
-    for (const f of s.fronts) assert.equal(f.connections.length * FRONTS.metersPerConnection, f.connections.length * 1000);
+    for (const f of s.fronts) assert.equal(frontWidth(f), f.connections.length * 1000);
   });
 
   it("en paix : pas de position ; le front reste ; il n'y a rien d'actif", () => {
@@ -116,24 +115,21 @@ describe("détection des fronts (05-Fronts §2)", () => {
     for (const p of positions) if (!(p[0] === 1 && p[1] === 2)) assert.equal(p[2], 500, "la nouvelle connexion est au milieu");
   });
 
-  it("les réglages d'un front se retrouvent après un recalcul ; un nouveau front a les réglages par défaut", () => {
+  it("l'attaque d'un front se retrouve après un recalcul", () => {
     const s = duel();
     s.players.forEach((p) => (p.population = 1_000_000));
     const id = front(s).id;
-    assert.ok(applyIntent(s, { type: "set_front_priority", player: 1, front: id, priority: 2 }, []));
-    assert.ok(applyIntent(s, { type: "set_unit_line_mode", player: 1, front: id, unit: "artillery", mode: "second" }, []));
+    turn(s, { type: "declare_war", player: 1, target: 2 });
+    assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     turn(s, found(1, at(9.5, 12.6)));
     assert.equal(front(s).id, id, "l'identifiant du front est gardé");
-    assert.equal(front(s).sides[0]!.priorityIndex, 2);
-    assert.equal(front(s).sides[0]!.lineMode[U.artillery], 2);
-    assert.equal(front(s).sides[1]!.priorityIndex, 0);
-    assert.equal(front(s).sides[1]!.motorizedOnly, true);
-    assert.equal(front(s).sides[1]!.reassign, false);
+    assert.equal(front(s).sides[0]!.frontAttack, true);
+    assert.equal(front(s).sides[1]!.frontAttack, false);
   });
 });
 
-describe("troupes d'un front qui change de taille (05-Fronts §2.5)", () => {
-  /** Deux fronts de même joueur, dont les troupes sont fixées à la main. */
+describe("divisions d'un front qui change (05-Fronts §2.5)", () => {
+  /** Un front de deux connexions. */
   function twoConnections(): GameState {
     const s = createGame({ seed: 4, map: MAP, playerCount: 2 });
     s.players.forEach((p) => (p.population = 1_000_000));
@@ -143,110 +139,89 @@ describe("troupes d'un front qui change de taille (05-Fronts §2.5)", () => {
     return s;
   }
 
-  it("coupure : les troupes sont partagées entre les morceaux au prorata de leurs connexions, le reste au plus petit identifiant", () => {
+  it("coupure : les divisions sont partagées au prorata des connexions, au plus grand reste, le reste au plus petit identifiant", () => {
     const s = twoConnections();
     const f = front(s);
     assert.equal(f.connections.length, 2);
-    f.sides[0]!.firstLine[U.infantry] = 11;
-    f.sides[0]!.secondLine[U.infantry] = 5;
-    const total = f.sides[0]!.firstLine[U.infantry]! + f.sides[0]!.secondLine[U.infantry]!;
+    for (let k = 0; k < 3; k++) put(s, 1, "infantry", f.id);
     // Les deux villes du joueur 2 passent dans deux groupes différents : le front se coupe en deux.
     s.cities[2]!.group = 3;
     updateFronts(s);
     assert.equal(s.fronts.length, 2);
     assert.equal(s.fronts[0]!.id, f.id, "le morceau de plus petit identifiant garde l'identifiant");
-    assert.ok(s.fronts[1]!.id > f.id);
-    // Au prorata (1 connexion sur 2) : arrondi pour le second morceau, le reste au plus petit identifiant ; rien n'est perdu.
-    const own = (g: (typeof s.fronts)[number]): [number, number] => [g.sides[0]!.firstLine[U.infantry]! + g.sides[0]!.secondLine[U.infantry]!, 0];
-    assert.equal(own(s.fronts[1]!)[0], 6 + 3, "11 en première ligne : arrondi(5,5) = 6 ; 5 en seconde ligne : arrondi(2,5) = 3");
-    assert.equal(own(s.fronts[0]!)[0], 5 + 2);
-    assert.equal(own(s.fronts[0]!)[0] + own(s.fronts[1]!)[0], total);
+    const on = (id: number): number[] => s.divisions.filter((d) => d.front === id).map((d) => d.id);
+    assert.deepEqual(on(s.fronts[0]!.id), [1, 2], "1,5 et 1,5 : le reste au plus petit identifiant ; divisions par identifiant");
+    assert.deepEqual(on(s.fronts[1]!.id), [3]);
   });
 
-  it("une ville prise sans autre connexion : les unités d'un front disparu retournent à la réserve sans délai", () => {
+  it("front disparu : ses divisions retournent à la réserve avec le délai de déplacement", () => {
     const s = duel();
-    const f = front(s);
-    f.sides[0]!.firstLine[U.infantry] = 7;
-    f.sides[0]!.secondLine[U.artillery] = 3;
-    s.players[0]!.soldiers = 7 * 10 + 3 * 10;
-    s.players[0]!.armamentReserve.fill(0);
+    const d = put(s, 1, "infantry", front(s).id);
     s.roads.length = 0;
     updateFronts(s);
     assert.equal(s.fronts.length, 0);
-    assert.equal(s.players[0]!.armamentReserve[0], 70, "7 infanteries rendent 70 fusils");
-    assert.equal(s.players[0]!.soldiers, 0);
+    assert.equal(d.front, 0);
+    assert.equal(d.arrivalTick, s.tick + 1 + FRONTS.transferRounds * FRONTS.combatTurns);
   });
 });
 
 describe("guerre et paix (05-Fronts §2.3)", () => {
-  it("la déclaration de guerre met chaque connexion au milieu ; la paix supprime tout sauf les troupes", () => {
+  it("la déclaration de guerre met chaque connexion au milieu ; la paix supprime tout sauf les divisions", () => {
     const s = duel();
     s.players.forEach((p) => (p.population = 1_000_000));
     const id = front(s).id;
     turn(s, { type: "declare_war", player: 1, target: 2 });
     assert.deepEqual(front(s).connections.map((c) => c.position), [500]);
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
-    assert.ok(applyIntent(s, { type: "start_breakthrough", player: 2, front: id, city1: 1, city2: 2 }, []));
-    front(s).sides[0]!.firstLine[U.infantry] = 9;
+    const d = put(s, 1, "infantry", id);
     turn(s, { type: "propose_peace", player: 1, target: 2 });
     turn(s, { type: "answer_proposal", player: 2, from: 1, accept: true });
     const f = front(s);
     assert.deepEqual(f.connections.map((c) => c.position), [0]);
     assert.equal(f.sides[0]!.frontAttack, false);
-    assert.equal(f.sides[1]!.breakthroughs.length, 0);
-    assert.equal(f.sides[0]!.firstLine[U.infantry], 9, "les troupes restent sur le front");
+    assert.equal(d.front, id, "les divisions restent sur le front");
   });
 });
 
-describe("ordres de réglage et d'attaque (05-Fronts §5)", () => {
+describe("ordres des fronts (05-Fronts §5)", () => {
   it("un ordre invalide ne change rien", () => {
     const s = duel();
     const id = front(s).id;
+    const mine = put(s, 1, "infantry");
+    const theirs = put(s, 2, "infantry");
     const before = hashState(s);
     const bad: Record<string, unknown>[] = [
-      { type: "set_front_priority", player: 1, front: id, priority: 3 },
-      { type: "set_front_priority", player: 1, front: id, priority: -1 },
-      { type: "set_front_priority", player: 1, front: id, priority: 0.5 },
-      { type: "set_front_priority", player: 1, front: 99, priority: 0 },
-      { type: "set_front_priority", player: 1, front: "1", priority: 0 },
-      { type: "set_front_reassign", player: 1, front: id, enabled: "oui" },
-      { type: "set_unit_line_mode", player: 1, front: id, unit: "char", mode: "first" },
-      { type: "set_unit_line_mode", player: 1, front: id, unit: "infantry", mode: "third" },
-      { type: "set_breakthrough_motorized_only", player: 1, front: id },
+      { type: "create_division", player: 1, division: "char" },
+      { type: "create_division", player: 1, division: "infantry" }, // ni armement ni inactifs
+      { type: "delete_division", player: 1, id: theirs.id },
+      { type: "delete_division", player: 1, id: 99 },
+      { type: "move_division", player: 1, ids: [theirs.id], front: id },
+      { type: "move_division", player: 1, ids: [mine.id], front: 99 },
+      { type: "move_division", player: 1, ids: [mine.id], front: id, line: "third" },
+      { type: "move_division", player: 1, ids: mine.id, front: id },
+      { type: "move_division", player: 1, ids: [mine.id], front: 0 }, // déjà dans la réserve
       { type: "set_forced_mobilization", player: 1, enabled: 1 },
       { type: "start_front_attack", player: 1, front: id }, // front en paix
-      { type: "start_breakthrough", player: 1, front: id, city1: 1, city2: 2 }, // front en paix
-      { type: "cancel_breakthrough", player: 1, id: 1 },
     ];
     for (const intent of bad) assert.ok(!applyIntent(s, intent as unknown as Intent, []), JSON.stringify(intent));
     assert.equal(hashState(s), before);
-    // Un joueur étranger au front ne règle pas ses camps (il y en a trois joueurs ici).
+    // Un joueur étranger au front n'y envoie pas de division (il y a trois joueurs ici).
     const t = createGame({ seed: 1, map: MAP, playerCount: 3 });
     turn(t, found(1, at(8, 10)), found(2, at(11, 10)));
-    assert.ok(!applyIntent(t, { type: "set_front_priority", player: 3, front: 1, priority: 1 }, []));
-    assert.ok(applyIntent(t, { type: "set_front_priority", player: 2, front: 1, priority: 1 }, []));
-    assert.equal(front(t).sides[1]!.priorityIndex, 1);
+    const third = put(t, 3, "infantry");
+    assert.ok(!applyIntent(t, { type: "move_division", player: 3, ids: [third.id], front: 1 }, []));
   });
 
-  it("attaque sur tout le front : interrupteur ; percée : une par axe et par camp ; annulation par son propriétaire", () => {
+  it("attaque sur tout le front : interrupteur de chaque camp, les deux peuvent attaquer en même temps", () => {
     const s = duel();
     const id = front(s).id;
     turn(s, { type: "declare_war", player: 1, target: 2 });
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     assert.ok(!applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
-    // Les deux joueurs peuvent attaquer en même temps.
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 2, front: id }, []));
     assert.ok(applyIntent(s, { type: "stop_front_attack", player: 1, front: id }, []));
     assert.equal(front(s).sides[0]!.frontAttack, false);
     assert.equal(front(s).sides[1]!.frontAttack, true);
-    assert.ok(!applyIntent(s, { type: "start_breakthrough", player: 1, front: id, city1: 2, city2: 1 }, []), "la connexion n'est pas dans ce front");
-    assert.ok(applyIntent(s, { type: "start_breakthrough", player: 1, front: id, city1: 1, city2: 2 }, []));
-    assert.ok(!applyIntent(s, { type: "start_breakthrough", player: 1, front: id, city1: 1, city2: 2 }, []), "une percée par axe et par camp");
-    assert.ok(applyIntent(s, { type: "start_breakthrough", player: 2, front: id, city1: 1, city2: 2 }, []));
-    const mine = front(s).sides[0]!.breakthroughs[0]!;
-    assert.ok(!applyIntent(s, { type: "cancel_breakthrough", player: 2, id: mine.id }, []), "pas la percée de l'autre");
-    assert.ok(applyIntent(s, { type: "cancel_breakthrough", player: 1, id: mine.id }, []));
-    assert.equal(front(s).sides[0]!.breakthroughs.length, 0);
   });
 });
 
@@ -271,37 +246,31 @@ describe("fondation pendant une guerre (05-Fronts §8)", () => {
   });
 });
 
-describe("hash des fronts (05-Fronts §13.3)", () => {
-  it("chaque champ d'un front, d'un camp et d'une percée change le hash", () => {
+describe("hash des fronts et des divisions (05-Fronts §13.3)", () => {
+  it("chaque champ d'un front et d'une division change le hash", () => {
     const base = (): GameState => {
       const s = duel();
       s.players.forEach((p) => (p.population = 1_000_000));
       turn(s, { type: "declare_war", player: 1, target: 2 });
-      turn(s, { type: "start_front_attack", player: 1, front: 1 }, { type: "start_breakthrough", player: 1, front: 1, city1: 1, city2: 2 });
-      front(s).sides[0]!.transfers.push({ unit: 0, count: 2, toFront: true, line: 1, arrival: 999 });
+      turn(s, { type: "start_front_attack", player: 1, front: 1 });
+      put(s, 1, "infantry", 1);
       return s;
     };
     const reference = hashState(base());
     assert.equal(hashState(base()), reference);
+    const div = (s: GameState) => s.divisions[0]!;
     const mutations: [string, (s: GameState) => void][] = [
       ["position", (s) => void front(s).connections[0]!.position++],
-      ["première ligne", (s) => void front(s).sides[1]!.firstLine[2]!++],
-      ["seconde ligne", (s) => void front(s).sides[0]!.secondLine[1]!++],
-      ["mouvement : nombre", (s) => void front(s).sides[0]!.transfers[0]!.count++],
-      ["mouvement : arrivée", (s) => void (front(s).sides[0]!.transfers[0] = { ...front(s).sides[0]!.transfers[0]!, arrival: 1000 })],
-      ["mouvement : sens", (s) => void (front(s).sides[0]!.transfers[0] = { ...front(s).sides[0]!.transfers[0]!, toFront: false })],
-      ["priorité", (s) => void front(s).sides[1]!.priorityIndex++],
-      ["réassignation", (s) => void (front(s).sides[0]!.reassign = true)],
-      ["interrupteur d'un type", (s) => void (front(s).sides[1]!.lineMode[3] = 1)],
-      ["motorisé seulement", (s) => void (front(s).sides[0]!.motorizedOnly = false)],
       ["attaque", (s) => void (front(s).sides[0]!.frontAttack = false)],
-      ["phase d'une percée", (s) => void front(s).sides[0]!.breakthroughs[0]!.phase++],
-      ["unités engagées", (s) => void front(s).sides[0]!.breakthroughs[0]!.attackers[0]!++],
-      ["tranche engagée", (s) => void front(s).sides[0]!.breakthroughs[0]!.defenders1[0]!++],
-      ["force de contre-attaque", (s) => void front(s).sides[0]!.breakthroughs[0]!.defenders2[0]!++],
-      ["PV de départ", (s) => void front(s).sides[0]!.breakthroughs[0]!.startHp++],
       ["nextFrontId", (s) => void s.nextFrontId++],
-      ["nextBreakthroughId", (s) => void s.nextBreakthroughId++],
+      ["nextDivisionId", (s) => void s.nextDivisionId++],
+      ["exemplaires d'un composant", (s) => void div(s).counts[1]!--],
+      ["front", (s) => void (div(s).front = 0)],
+      ["ligne", (s) => void (div(s).line = 0)],
+      ["largeur engagée", (s) => void div(s).engaged++],
+      ["arrivée", (s) => void (div(s).arrivalTick = 999)],
+      ["fin de formation", (s) => void ((div(s) as { formedTick: number }).formedTick = 999)],
+      ["fuite", (s) => void (div(s).fleeUntilTick = 999)],
       ["mobilisation forcée", (s) => void (s.players[1]!.forcedMobilization = true)],
       ["soldats", (s) => void s.players[0]!.soldiers++],
       ["statut de guerre", (s) => void s.diplomacy.fill(1)],

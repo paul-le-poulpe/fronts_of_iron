@@ -59,7 +59,7 @@ function snapshot(state: GameState, turn: number): void {
       connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
       sides: [],
     } as unknown as FrontView;
-    const soldiers = f.sides.map((s) => s.firstLine.reduce((a, b) => a + b, 0) + s.secondLine.reduce((a, b) => a + b, 0)) as [number, number];
+    const soldiers = f.players.map((p) => state.divisions.filter((d) => d.front === f.id && d.owner === p).length) as [number, number];
     return {
       id: f.id,
       players: [f.players[0], f.players[1]] as [number, number],
@@ -130,7 +130,7 @@ function draw(i) {
     for (const p of pts) { ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, 7); ctx.fillStyle = "#000"; ctx.fill(); }
   }
   for (const [x, y, p] of s.cities) { ctx.beginPath(); ctx.arc(x * Z, y * Z, 3.5, 0, 7); ctx.fillStyle = hue(p + 40); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke(); }
-  const rows = ["<tr><th>Front</th><th>Joueur</th><th>Île</th><th>Adversaire</th><th>Île adverse</th><th>Connexions</th><th>État</th><th>Unités (eux / adversaire)</th><th>Chaînes</th></tr>"];
+  const rows = ["<tr><th>Front</th><th>Joueur</th><th>Île</th><th>Adversaire</th><th>Île adverse</th><th>Connexions</th><th>État</th><th>Divisions (eux / adversaire)</th><th>Chaînes</th></tr>"];
   for (const f of s.fronts) for (const k of [0, 1]) rows.push("<tr><td>" + f.id + "</td><td><span class=sw style='background:" + hue(f.players[k]) + "'></span>" + f.players[k] + "</td><td>" + f.groups[k] + "</td><td>" + f.players[1 - k] + "</td><td>" + f.groups[1 - k] + "</td><td>" + f.connections.length + "</td><td>" + (f.active ? "guerre" : "paix") + "</td><td>" + f.soldiers[k] + " / " + f.soldiers[1 - k] + "</td><td>" + f.chains.map((ch) => ch.join("→")).join(" | ") + "</td></tr>");
   document.getElementById("table").innerHTML = rows.join("");
 }
