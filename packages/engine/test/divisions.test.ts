@@ -62,14 +62,10 @@ describe("état d'une division (05-Fronts §3.3)", () => {
 });
 
 describe("création d'une division (05-Fronts §3.5)", () => {
-  it("refusée sans armement, sans mitrailleuses (la division est remplie entièrement) ou sans inactifs", () => {
+  it("refusée sans armement requis ou sans inactifs ; les mitrailleuses (optionnelles) ne sont pas demandées", () => {
     const s = duel();
     const p = s.players[0]!;
     p.idle = 5000;
-    p.armamentReserve[RIFLE] = 1000;
-    p.armamentReserve[MACHINE_GUN] = 99;
-    assert.ok(!order(s, create(1, "infantry")), "99 mitrailleuses sur 100");
-    p.armamentReserve[MACHINE_GUN] = 100;
     p.armamentReserve[RIFLE] = 999;
     assert.ok(!order(s, create(1, "infantry")), "999 fusils sur 1 000");
     p.armamentReserve[RIFLE] = 1000;
@@ -82,9 +78,14 @@ describe("création d'une division (05-Fronts §3.5)", () => {
     p.population = 5_000_000;
     p.forcedMobilization = true;
     assert.ok(!order(s, create(1, "infantry")));
+    // Composants requis seulement : sans aucune mitrailleuse, la création est valide.
+    p.idle = 1000;
+    p.forcedMobilization = false;
+    p.armamentReserve[MACHINE_GUN] = 0;
+    assert.ok(order(s, create(1, "infantry")));
   });
 
-  it("une division naît dans la réserve nationale, en formation, et prend ses hommes et son armement", () => {
+  it("une division naît dans la réserve nationale, en formation, avec ses composants requis ; les optionnels partent de 0", () => {
     const s = duel();
     stock(s, 1, { infantry: 1 });
     const p = s.players[0]!;
@@ -92,10 +93,10 @@ describe("création d'une division (05-Fronts §3.5)", () => {
     assert.ok(order(s, create(1, "infantry")));
     const d = s.divisions[0]!;
     assert.deepEqual([d.id, d.owner, d.type, d.front, d.line, d.engaged, d.arrivalTick], [1, 1, 0, 0, LINE_SECOND, 0, 0]);
-    assert.deepEqual(d.counts, [1000, 1000, 100]);
+    assert.deepEqual(d.counts, [1000, 1000, 0]);
     assert.equal(d.formedTick, s.tick + 1 + FRONTS.formationTurns);
     assert.ok(inFormation(s, d));
-    assert.deepEqual([p.idle, p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [idle - 1000, rifles - 1000, guns - 100, soldiers + 1000]);
+    assert.deepEqual([p.idle, p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [idle - 1000, rifles - 1000, guns, soldiers + 1000]);
   });
 
   it("en formation pendant formationTurns tours : ni déplacement ni suppression, puis les deux", () => {
@@ -120,10 +121,13 @@ describe("suppression d'une division (05-Fronts §3.5)", () => {
     turn(s, create(1, "infantry"));
     const p = s.players[0]!;
     play(s, FRONTS.formationTurns);
+    // Les mitrailleuses sont arrivées par le renfort (le stock a décliné d'une au premier tour, avant le renfort).
+    const guns = s.divisions[0]!.counts[2]!;
+    assert.ok(guns > 0);
     assert.deepEqual([p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [0, 0, 1000]);
     assert.ok(order(s, remove(1, 1)));
     assert.equal(s.divisions.length, 0);
-    assert.deepEqual([p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [1000, 100, 0]);
+    assert.deepEqual([p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [1000, guns, 0]);
   });
 
   it("refusée sur un front, ou en déplacement, ou pour la division d'un autre joueur", () => {

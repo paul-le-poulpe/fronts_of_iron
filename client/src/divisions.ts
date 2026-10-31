@@ -70,9 +70,10 @@ export function supportable(type: DivisionTypeInfo, stats: PlayerStats, detail: 
   return Number.isFinite(best) ? best : 0;
 }
 
-/** Peut-on créer une division du type maintenant ? Copie de la condition du moteur (05-Fronts §3.5) : les inactifs et le stock la remplissent entièrement. */
+/** Peut-on créer une division du type maintenant ? Copie de la condition du moteur (05-Fronts §3.5) : les inactifs et le stock remplissent ses composants requis. */
 export function creatable(type: DivisionTypeInfo, stats: PlayerStats, detail: HumanDetail, armamentIds: readonly string[]): boolean {
   for (const c of type.components) {
+    if (!c.required) continue;
     const has = c.resource === "men" ? stats.idle : (detail.reserve[armamentIds.indexOf(c.resource)] ?? 0);
     if (has < c.count) return false;
   }

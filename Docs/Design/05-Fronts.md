@@ -279,8 +279,9 @@ Attributs :
 
 - **Création** (ordre `create_division`, depuis l'onglet des forces, §11.2) :
   le joueur choisit un type dans la liste des types. Valide seulement si le
-  stock national d'armement et les **inactifs** suffisent à **remplir la
-  division entièrement**. Sinon, l'ordre est sans effet. Les hommes ne sont
+  stock national d'armement et les **inactifs** suffisent à remplir ses
+  **composants requis**. Sinon, l'ordre est sans effet. Les **composants
+  optionnels** partent de 0 et arrivent par le renfort (§4.3). Les hommes ne sont
   pris que parmi les inactifs, même en mobilisation forcée (*provisoire* pour
   ce dernier point).
 - Les hommes et l'équipement sont pris **au tour de l'ordre**. La division
@@ -348,7 +349,8 @@ place.
   divisions se renforcent, première ligne comprise. Une bonne seconde ligne
   est donc ce qui permet de tenir longtemps.
 - *Provisoire* : pas de renfort non plus pour une division en déplacement ou
-  en fuite ; une division en formation est déjà pleine.
+  en fuite. Une division en formation est renforcée comme les autres (ses
+  composants optionnels, §3.5).
 - *Provisoire* — **calcul** : à chaque tour, ressource par ressource, part égale
   plafonnée au besoin de chaque division, le surplus repartagé entre celles qui
   en manquent encore ; parties entières, une unité de plus aux divisions de

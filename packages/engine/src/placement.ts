@@ -37,19 +37,21 @@ const transferTurns = (): number => FRONTS.transferRounds * FRONTS.combatTurns;
 
 /**
  * `create_division` (05-Fronts §3.5) : valide seulement si le stock d'armement et
- * les inactifs suffisent à remplir la division entièrement. Les hommes ne sont pris
- * que parmi les inactifs, même en mobilisation forcée (provisoire). La division
- * apparaît aussitôt dans la réserve nationale, en formation.
+ * les inactifs suffisent à remplir ses composants requis. Les composants optionnels
+ * partent de 0 et arrivent par le renfort (§4.3). Les hommes ne sont pris que parmi
+ * les inactifs, même en mobilisation forcée (provisoire). La division apparaît
+ * aussitôt dans la réserve nationale, en formation.
  */
 export function createDivision(state: GameState, player: number, type: unknown): boolean {
   if (!isDivisionId(type)) return false;
   const p = state.players[player - 1]!;
   const data = DIVISION_DATA[DIVISION_IDS.indexOf(type)]!;
-  for (const c of data.components) {
+  const required = data.components.filter((c) => c.required);
+  for (const c of required) {
     const has = c.resource === MEN ? p.idle : p.armamentReserve[c.resource]!;
     if (has < c.count) return false;
   }
-  for (const c of data.components) {
+  for (const c of required) {
     if (c.resource === MEN) p.idle -= c.count;
     else p.armamentReserve[c.resource] = p.armamentReserve[c.resource]! - c.count;
   }
@@ -58,7 +60,7 @@ export function createDivision(state: GameState, player: number, type: unknown):
     id: state.nextDivisionId++,
     owner: player,
     type: data.index,
-    counts: data.components.map((c) => c.count),
+    counts: data.components.map((c) => (c.required ? c.count : 0)),
     front: 0,
     line: LINE_SECOND,
     engaged: 0,
