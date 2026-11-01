@@ -302,7 +302,11 @@ export class InfoBar {
   update(detail: HumanDetail, stats: PlayerStats): void {
     this.last = { detail, stats };
     for (const s of this.sections) s.head(detail, stats);
-    if (this.open >= 0) this.sections[this.open]!.body(detail, stats);
+    if (this.open >= 0) {
+      this.sections[this.open]!.body(detail, stats);
+      // La largeur suit le texte, qui change d'un tour à l'autre : le détail ne doit pas déborder à droite.
+      this.place();
+    }
   }
 
   private toggle(index: number): void {

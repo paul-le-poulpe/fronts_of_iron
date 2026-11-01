@@ -293,7 +293,7 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 
 /* ---- onglet des forces ---- */
 
-.ib-pane.forces { width: min(720px, 100%); padding: 8px; background: var(--t-panel); border-color: var(--t-line); }
+.ib-pane.forces { display: block; width: max-content; min-width: min(720px, 100%); padding: 8px; background: var(--t-panel); border-color: var(--t-line); }
 .fx { position: relative; display: flex; flex-direction: column; gap: 6px; }
 .fx.menu-open { min-height: 360px; }
 .fx-bar { display: flex; gap: 6px; height: 40px; }

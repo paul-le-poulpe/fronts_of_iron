@@ -1094,6 +1094,10 @@ Comportement de `OnlineGame` :
 - **Peindre une ville prise comme une ville fondée** : `tileCity` ne change pas à une prise. `SoloGame` renvoie les cases de
   sa zone, `Mirror` retire la zone des histogrammes de l'ancien joueur avant de remplacer les villes, et la remet dans ceux du
   nouveau après ; sans cela, les rayons d'exploitation des deux joueurs seraient faux.
+- **Fixer la largeur des colonnes d'un détail de la barre d'informations** (`.ib-pane`) : un texte plus long que la colonne (autre police,
+  nombres à plus de chiffres) déborde et fait apparaître une barre de défilement horizontale. Le détail est une grille dont les colonnes
+  étiquette et valeurs sont `max-content` ; les lignes (`.ib-row`) les partagent en `subgrid`, ce qui garde les barres alignées. Sa
+  largeur est celle du contenu (minimum 640 px, 720 px pour les forces), plafonnée par `place()`, rappelé à chaque tour.
 - **Compiler `frontgeom.ts` avec des dépendances du DOM** : le moteur le charge pour `viz:fronts`, sous Node.
 - **Un Worker à qui on envoie le tableau du moteur** : le transfert détache le
   tableau chez l'expéditeur. `SoloGame.init` envoie des copies ; envoyer
