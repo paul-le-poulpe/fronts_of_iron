@@ -1091,7 +1091,10 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
 
 **Bandeau du haut**, coupé en deux par la barre verticale :
 
-- moitié du joueur : titre du front ; à sa droite, l'interrupteur
+- moitié du joueur : titre du front (« Front contre Bot k ») ; à sa droite,
+  après un espace, « Largeur du front : », le symbole de largeur (16 × 16 px)
+  et le nombre de liaisons en gras ; puis « paix » en bleu ou « guerre » en
+  rouge ; puis l'interrupteur
   **« Sélection avancée »** (éteint par défaut ; un vrai **interrupteur** : une
   piste grise avec une pastille à gauche éteint, bleue avec la pastille à droite
   allumé) ; alignés à droite dans cette
@@ -1125,9 +1128,17 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
   ligne**, du côté de la barre, **pointe contre la barre** : à droite des
   rangées du joueur (vers la droite), à gauche de celles de l'adversaire (vers
   la gauche). Les deux camps peuvent en avoir ; une colonne de 28 px les porte.
-- Chaque colonne a un petit titre gris centré au-dessus (« Seconde ligne »,
-  « Première ligne », « Réaction rapide », « Forces de percée » ; « Percée »
-  pour la colonne comprimée de l'adversaire).
+- Chaque colonne a un titre gris **en haut à gauche** (14 px ; « Seconde
+  ligne », « Première ligne », « Réaction rapide », « Forces de percée » ;
+  « Percée » pour la colonne comprimée de l'adversaire). Les colonnes
+  comprimées de l'adversaire gardent un titre de 11 px, qui tient dans leur
+  largeur.
+- **Pertes du dernier round** : en haut de chaque **première ligne** (du
+  joueur et de l'adversaire), alignées à droite sur la ligne du titre, en
+  rouge : « Pertes : x hommes / tour », `x` = les hommes perdus par les
+  divisions de cette première ligne au dernier round de combat (une seconde),
+  tranches de première ligne des percées comprises (`FrontSide.lastLoss`,
+  remis à 0 à chaque round ; 0 sans combat).
 
 **Rangées par niche** (dans chaque ligne) : une rangée par niche, dans l'ordre
 infanterie, chars, antichar, antiaérien, artillerie (*provisoire*). Fond gris
@@ -1428,7 +1439,10 @@ interface Division {              // divisions.ts
   readonly formedTick: number;    // fin de formation
   fleeUntilTick: number;          // en fuite jusqu'à ce tour exclu
 }
-interface FrontSide { frontAttack: boolean }      // fronts.ts, un par camp
+interface FrontSide {            // fronts.ts, un par camp
+  frontAttack: boolean;
+  lastLoss: number;               // hommes perdus par sa première ligne au dernier round (§11.4) ; remis à 0 à chaque round
+}
 interface Front {
   readonly id: number;
   readonly players: readonly [number, number];   // p1 < p2
@@ -1476,7 +1490,7 @@ combat de chaque front actif (§6, §7) ; prises de villes et encerclement (§10
 
 Tout ce qui est dans `GameState` entre dans le hash : chaque division (tous ses
 champs), `nextDivisionId`, chaque front (id, joueurs, groupes, connexions avec
-positions, attaques), la mobilisation forcée de chaque joueur, son état
+positions, attaques, pertes du dernier round), la mobilisation forcée de chaque joueur, son état
 d'élimination (`defeated`).
 
 ### 13.4 Client

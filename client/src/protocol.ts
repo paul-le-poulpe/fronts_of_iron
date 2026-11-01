@@ -252,6 +252,8 @@ export interface FrontConnectionView {
 export interface FrontSideView {
   /** Attaque sur tout le front en cours (05-Fronts §5.1). */
   readonly frontAttack: boolean;
+  /** Hommes perdus par sa première ligne au dernier round de combat (05-Fronts §11.4). */
+  readonly lastLoss: number;
 }
 
 /** Une boîte de percée (05-Fronts §4.6), dans l'ordre de création de son camp. */

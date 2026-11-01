@@ -27,6 +27,8 @@ export interface FrontConnection {
 export interface FrontSide {
   /** Attaque sur tout le front en cours (05-Fronts §5.1). */
   frontAttack: boolean;
+  /** Hommes perdus par sa première ligne au dernier round de combat (05-Fronts §11.4) ; remis à 0 à chaque round. */
+  lastLoss: number;
 }
 
 export interface Front {
@@ -214,8 +216,8 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
     });
     const before = matched.get(b.id);
     const sides: [FrontSide, FrontSide] = [
-      { frontAttack: before?.sides[0].frontAttack ?? false },
-      { frontAttack: before?.sides[1].frontAttack ?? false },
+      { frontAttack: before?.sides[0].frontAttack ?? false, lastLoss: before?.sides[0].lastLoss ?? 0 },
+      { frontAttack: before?.sides[1].frontAttack ?? false, lastLoss: before?.sides[1].lastLoss ?? 0 },
     ];
     return { id: b.id, players: [b.p1, b.p2], groups: [b.g1, b.g2], connections, sides };
   });

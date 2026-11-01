@@ -385,7 +385,10 @@ export class ProductionPanel {
         if (cell) {
           const workers = el("b");
           workers.textContent = num(g.workers);
-          cell.replaceChildren(workers, workerIcon());
+          // Ouvriers par ligne : la moyenne des lignes remplies (le coût baisse avec le rang, 00-Game §8.1) ;
+          // sans ligne remplie, le coût de la première.
+          const avg = g.filled > 0 ? Math.round(g.workers / g.filled) : (this.catalog.workersPerLine[g.good] ?? 0);
+          cell.replaceChildren(workers, workerIcon(), ` (${num(avg)}/ligne)`);
           // Armement : combien de divisions de référence le stock cible de cette ligne équipe
           // (même formule que le trait du stock cible, 00-Game §8.3 ; arrondi vers le bas).
           const unit = this.catalog.equipUnit[g.good];

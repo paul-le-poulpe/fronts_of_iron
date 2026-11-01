@@ -89,7 +89,10 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-head { flex: none; height: 44px; display: flex; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
 .fw-hl { flex: 0 0 62%; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
 .fw-hr { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 12px; border-left: 3px solid var(--t-muted); }
-.fw-title { flex: none; white-space: nowrap; }
+.fw-title { flex: none; display: flex; align-items: center; gap: 24px; white-space: nowrap; }
+/* « paix » en bleu, « guerre » en rouge. */
+.fw-peace { color: var(--t-blue); font-weight: 600; }
+.fw-war { color: var(--t-red); font-weight: 600; }
 .fw-muted { color: var(--t-muted); }
 .fw-spacer { flex: 1; }
 .fw-sw { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t-muted); cursor: pointer; user-select: none; white-space: nowrap; }
@@ -159,7 +162,11 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-side.theirs .fw-capsule { flex: none; }
 .fw-col { flex: 1; min-width: 0; display: flex; flex-direction: column; border-radius: 6px; }
 .fw-col.comp { flex: none; width: 76px; }
-.fw-lab { flex: none; height: 16px; font-size: 11px; color: var(--t-muted); text-align: center; white-space: nowrap; }
+/* Titre d'une colonne, en haut à gauche ; à droite, en première ligne, les pertes du dernier round (rouge). Même hauteur
+   dans toutes les colonnes : les rangées restent alignées. Colonnes comprimées de l'adversaire : plus petit, pour tenir. */
+.fw-lab { flex: none; height: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 18px; color: var(--t-muted); white-space: nowrap; }
+.fw-col.comp > .fw-lab { font-size: 11px; }
+.fw-loss { color: var(--t-red); font-weight: 600; font-size: 12px; }
 .fw-rows { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
 .fw-row {
   --pz-open-bg: var(--n-bg);
@@ -242,11 +249,11 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-cdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--t-muted); }
 .fw-cpop {
   position: absolute;
-  top: 16px;
+  top: 20px;
   right: 0;
   z-index: 40;
   width: 330px;
-  max-height: calc(100% - 16px);
+  max-height: calc(100% - 20px);
   overflow-y: auto;
   box-sizing: border-box;
   padding: 6px;

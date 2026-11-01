@@ -357,7 +357,7 @@ Une `City.player` change à la prise de la ville.
 - **Détection** (`updateFronts`, appelée à la fin de `foundCity` et par `captureCity`, jamais à chaque tour) :
   une connexion est une route dont les deux villes sont à deux joueurs ; un front est l'ensemble des
   connexions d'un couple de groupes. Les positions se retrouvent par la clé `(p1, p2, city1, city2)` ; le
-  front garde l'identifiant et l'attaque (`frontAttack`) de l'ancien front qui partage le plus de connexions
+  front garde l'identifiant, l'attaque (`frontAttack`) et les pertes du dernier round (`lastLoss`) de l'ancien front qui partage le plus de connexions
   avec lui (à égalité, le plus petit identifiant ; un identifiant n'est repris qu'une fois). Les divisions
   des anciens fronts (sur place et en route) suivent leurs connexions gardées (05-Fronts §2.5) : fusion,
   mises ensemble ; coupure, réparties au prorata des connexions (`splitProportional`, divisions et morceaux
@@ -712,7 +712,7 @@ sa capitale : `cities[capital - 1].group`.
    (0 ou 1), groupe ;
 6. le nombre de routes, puis pour chacune : a, b ;
 7. les fronts : `nextFrontId`, le nombre de fronts, puis pour chacun (par identifiant) : id, joueurs, groupes,
-   nombre de connexions et pour chacune villes et position, puis `frontAttack` de chaque camp ; puis les divisions :
+   nombre de connexions et pour chacune villes et position, puis `frontAttack` et `lastLoss` de chaque camp ; puis les divisions :
    `nextDivisionId`, le nombre de divisions, puis pour chacune (par identifiant) : id, joueur, type, `counts` (nombre,
    valeurs), front, ligne, largeur engagée, boîte, percée, largeur engagée dans la percée, tour d'arrivée, tour de fin de
    formation, tour de fin de fuite ; puis les boîtes (`nextBoxId`, nombre, puis id, front, joueur) et les percées

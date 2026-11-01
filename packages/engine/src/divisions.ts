@@ -287,11 +287,13 @@ export function attackOf(d: Division, mult: number, engaged: number = d.engaged,
  * partie entière toujours perdue, un exemplaire de plus si `nextInt(rng, q) < reste`.
  * Composants dans l'ordre de `components`. Les hommes perdus ne sont plus soldats : ils
  * deviennent des blessés du joueur (00-Game §4.2) ; l'équipement perdu disparaît.
+ * Renvoie le nombre d'hommes perdus.
  */
-export function applyLoss(state: GameState, d: Division, f: number): void {
-  if (f <= 0) return;
+export function applyLoss(state: GameState, d: Division, f: number): number {
+  if (f <= 0) return 0;
   const q = LOSS_SCALE * MULT_SCALE;
   const menComponent = dataOf(d).menComponent;
+  let men = 0;
   dataOf(d).components.forEach((c, i) => {
     const has = d.counts[i]!;
     if (has === 0) return;
@@ -301,8 +303,12 @@ export function applyLoss(state: GameState, d: Division, f: number): void {
     if (r > 0 && nextInt(state.rng, q) < r) lost++;
     const taken = Math.min(has, lost);
     d.counts[i] = has - taken;
-    if (i === menComponent) state.players[d.owner - 1]!.hurt += taken;
+    if (i === menComponent) {
+      state.players[d.owner - 1]!.hurt += taken;
+      men = taken;
+    }
   });
+  return men;
 }
 
 /**

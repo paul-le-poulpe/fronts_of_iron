@@ -232,7 +232,10 @@ export function frontView(state: GameState, f: Front): FrontView {
     groups: [f.groups[0], f.groups[1]],
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
-    sides: [{ frontAttack: f.sides[0].frontAttack }, { frontAttack: f.sides[1].frontAttack }],
+    sides: [
+      { frontAttack: f.sides[0].frontAttack, lastLoss: f.sides[0].lastLoss },
+      { frontAttack: f.sides[1].frontAttack, lastLoss: f.sides[1].lastLoss },
+    ],
     boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
     breakthroughs: state.breakthroughs
       .filter((b) => b.front === f.id)

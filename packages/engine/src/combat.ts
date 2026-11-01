@@ -191,7 +191,11 @@ function fightFront(state: GameState, front: Front): Arrival[] {
 
   // Application, divisions par identifiant (pertes tirées, 05-Fronts §1).
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
-  for (const d of hit) applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
+  // Hommes perdus par la première ligne de chaque camp (05-Fronts §11.4), percées comprises (tranche de première ligne).
+  for (const d of hit) {
+    const men = applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
+    if (d.line === LINE_FIRST && d.front === front.id) front.sides[front.players.indexOf(d.owner)]!.lastLoss += men;
+  }
   trimAll(state);
   removeDestroyed(state, hit);
   applyFlight(state, front);
@@ -227,6 +231,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
  */
 export function combatRound(state: GameState, changed: number[]): void {
   const pending: Arrival[] = [];
+  for (const front of state.fronts) for (const s of front.sides) s.lastLoss = 0;
   for (const front of state.fronts) {
     if (hasRound(state, front)) pending.push(...fightFront(state, front));
   }

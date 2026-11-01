@@ -38,6 +38,8 @@ interface RowRefs {
 interface Column {
   readonly col: HTMLElement;
   readonly rows: RowRefs[];
+  /** Pertes du dernier round, à droite du titre (première ligne seulement). */
+  readonly loss: HTMLElement | null;
 }
 
 /** Une boîte de percée du joueur : sa carte dans la liste, et sa vue étendue (rangées par niche), construites une fois. */
@@ -468,10 +470,22 @@ export class FrontWindow implements DndHost {
     return { root, arrows };
   }
 
-  /** Une colonne de cinq rangées, une par niche. `coverage` : première ligne, avec le pourcentage de couverture ; `compressed` : zone comprimée. */
+  /**
+   * Une colonne de cinq rangées, une par niche. `coverage` : première ligne, avec le pourcentage de couverture (et, avec un
+   * titre, les pertes du dernier round à droite du titre) ; `compressed` : zone comprimée.
+   */
   private column(label: string | null, coverage: boolean, compressed: boolean): Column {
     const col = el("div", `fw-col${compressed ? " comp" : ""}`);
-    if (label !== null) col.append(el("div", "fw-lab", label));
+    let loss: HTMLElement | null = null;
+    if (label !== null) {
+      const lab = el("div", "fw-lab");
+      lab.append(el("span", undefined, label));
+      if (coverage) {
+        loss = el("span", "fw-loss");
+        lab.append(loss);
+      }
+      col.append(lab);
+    }
     const rows: RowRefs[] = [];
     const box = el("div", "fw-rows");
     for (const niche of this.military.niches) {
@@ -494,7 +508,7 @@ export class FrontWindow implements DndHost {
       box.append(row);
     }
     col.append(box);
-    return { col, rows };
+    return { col, rows, loss };
   }
 
   // ---- dessin ----
@@ -520,11 +534,12 @@ export class FrontWindow implements DndHost {
     const m = this.military;
     const nicheOf = (d: DivisionView): string => typeOf(m, d).niche;
 
+    const width = el("span", "fw-width", "Largeur du front : ");
+    width.append(frontWidthIcon("inline-width-icon"), el("strong", undefined, String(front.connections.length)));
     this.title.replaceChildren(
       el("strong", undefined, `Front contre ${playerName(other)}`),
-      el("span", "fw-muted", " · "),
-      frontWidthIcon("inline-width-icon"),
-      el("span", "fw-muted", `${front.connections.length} · ${front.active ? "guerre" : "paix"}`),
+      width,
+      el("span", front.active ? "fw-war" : "fw-peace", front.active ? "guerre" : "paix"),
     );
     this.title.title = `Largeur du front : ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""}`;
     const attacking = front.sides[me]!.frontAttack;
@@ -534,6 +549,10 @@ export class FrontWindow implements DndHost {
     this.attackButton.title = front.active ? "Interrupteur : un clic lance l'attaque, un second l'arrête." : "Seulement sur un front actif.";
     for (const a of this.arrowsOurs) a.classList.toggle("on", front.active && attacking);
     for (const a of this.arrowsTheirs) a.classList.toggle("on", front.active && front.sides[1 - me]!.frontAttack);
+    // Hommes perdus par chaque première ligne au dernier round de combat (une seconde).
+    const loss = (n: number): string => `Pertes : ${n.toLocaleString("fr-FR")} hommes / tour`;
+    this.columns.o1.loss!.textContent = loss(front.sides[me]!.lastLoss);
+    this.columns.t1.loss!.textContent = loss(front.sides[1 - me]!.lastLoss);
 
     // La première ligne adverse a la largeur de celle du joueur (§11.4) ; le reste de son côté est comprimé.
     const lineWidth = this.columns.o1.col.getBoundingClientRect().width;

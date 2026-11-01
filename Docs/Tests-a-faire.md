@@ -209,6 +209,11 @@ lancé (seul `npm run typecheck` a passé). À écrire :
 
 ## Demande des tracteurs et des bateaux au remplissage (1er novembre 2026, 00-Game §8.2, provisoire)
 
+## Pertes du dernier round (1er novembre 2026, 05-Fronts §11.4)
+
+- `FrontSide.lastLoss` = hommes perdus au dernier round par les divisions de la première ligne de ce camp (tranches de première ligne des percées comprises ; pas la force qui perce) ; remis à 0 à chaque round, y compris sur un front sans combat.
+- Gardé quand le front est recalculé (même règle que `frontAttack`) ; entre dans le hash.
+
 Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste :
 
 - Une ligne de tracteurs n'est remplie que si la production déjà remplie est sous la demande calculée avec les personnes qui resteraient, ses ouvriers et ses mineurs comptés. Cas de référence (une ville, 1 764 cases cultivables, une usine de pompes avec 5 lignes de pompes puis des lignes de tracteurs, population figée à 3 800) : 11 lignes de tracteurs remplies, stable d'un tour à l'autre.

@@ -27,7 +27,7 @@ function world(cities: [number, number][], roads: [number, number][]): GeomWorld
 
 /** Un front à la main, en paix ou en guerre. */
 function view(connections: [number, number, number][], active: boolean, id = 1): FrontView {
-  const empty = { frontAttack: false };
+  const empty = { frontAttack: false, lastLoss: 0 };
   return {
     id,
     players: [1, 2],

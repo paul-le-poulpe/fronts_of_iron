@@ -213,7 +213,8 @@ Worker → page (`FromWorker`) :
     mêmes champs que `DiplomacyEvent`, 02-Engine §4). Pas d'envoi « seulement si
     changé » : c'est petit, et la liste est la source des cartes de proposition (§7) ;
   - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions avec leur position,
-    et pour chaque camp `frontAttack`, l'attaque sur tout le front), ou `null` si rien n'a changé depuis le dernier
+    et pour chaque camp `frontAttack`, l'attaque sur tout le front, et `lastLoss`, les hommes perdus par sa première
+    ligne au dernier round), ou `null` si rien n'a changé depuis le dernier
     envoi. `SoloGame` les reconstruit à chaque round de combat (`combatTurns`), quand le joueur donne un ordre et quand
     des villes changent, et compare le JSON au dernier envoyé ; les positions changent à chaque round.
     Pas de brouillard de guerre : les fronts de tous les joueurs, pas seulement ceux du joueur 1 ;
@@ -500,7 +501,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
     ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
     groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
-    suivis de l'icône d'ouvrier (`population/pop-worker.png`) ; pour un type
+    suivis de l'icône d'ouvrier (`population/pop-worker.png`) et de « (X/ligne) »,
+    la moyenne par ligne remplie (`workers / filled`, arrondie ; sans ligne
+    remplie, `workersPerLine`) ; pour un type
     d'armement, « approprié pour : » le nombre de divisions de référence que
     le stock cible de **cette ligne** équipe, en gras, et l'icône de la division :
     `⌊ lignes × productionPerLine × stockTurns ÷ exemplaires par division ⌋`,
