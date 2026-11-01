@@ -817,8 +817,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   `pointerdown` et `click` ; il n'est refait que si `fronts` ou `divisions` (objets du `Mirror`) ont changé ou si la fenêtre change de taille
   (`ResizeObserver`). Dépose : sur une ligne du joueur ou la réaction rapide, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
   réserve ; les divisions déjà à leur destination sont filtrées.
-- **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la sixième section de la barre d'informations. Barre du haut : le « + »
-  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue`). Réserve nationale en deux sections (`resSection`) :
+- **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la cinquième section de la barre d'informations. Barre du haut : le « + »
+  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue` ; fond du bouton `--t-recruit-bg`, bleu clair). Réserve nationale en deux sections (`resSection`) :
   « FORMATION » (divisions `status === "formation"`, zone `"form"`) au-dessus de « RÉSERVE » (toutes les autres divisions de la réserve, zone `"res"`, seule
   section avec `data-drop="reserve"`) ; le libellé est un `.fx-mlab` (même style que les lettres du menu « + »), premier enfant de la section donc
   sous la zone des pions, couleur `--t-res-ink`. Dans chaque section, de vrais

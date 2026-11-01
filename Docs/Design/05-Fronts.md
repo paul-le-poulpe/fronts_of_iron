@@ -935,7 +935,8 @@ joueur, sous forme de pions (§11.3). Largeur d'exemple : 700 px (à fixer à
 l'implémentation). De haut en bas :
 
 1. **Barre du haut** : le **bouton « + »** (icône `misc-plus-lighter.png`,
-   suivie du mot « RECRUTEMENT » en gras, majuscules, 22 px, bleu) occupe la
+   suivie du mot « RECRUTEMENT » en gras, majuscules, 22 px, bleu clair, sur un fond bleu très clair : `#dbeaff` en
+   thème clair, `#2d4262` en thème sombre) occupe la
    **moitié gauche** ; la **corbeille** occupe la **moitié droite**
    et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
    réserve nationale les supprime (§3.5). Icône de corbeille : *provisoire*.

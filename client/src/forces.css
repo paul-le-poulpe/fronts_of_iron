@@ -25,7 +25,8 @@
   --t-sq: #5a6070;
   --t-plus-filter: none;
   --t-red: #ff5a4d;
-  --t-blue: #3b82f6;
+  --t-blue: #8cbdff;
+  --t-recruit-bg: #2d4262;
   --t-res-ink: #181a1e;
   color: var(--t-fg);
 }
@@ -52,7 +53,8 @@ html[data-theme="light"] .ip {
   /* Pour l'instant, le même bouton « + » dans les deux thèmes. */
   --t-plus-filter: none;
   --t-red: #d32f2f;
-  --t-blue: #2563eb;
+  --t-blue: #5c9ef8;
+  --t-recruit-bg: #dbeaff;
   --t-res-ink: #b3b9c5;
 }
 
@@ -304,7 +306,7 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .fx-bar { display: flex; gap: 6px; height: 40px; }
 .fx-half { flex: 1; display: flex; }
 .fx-plus, .fx-trash { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 0; color: var(--t-fg); }
-.fx-plus { gap: 12px; }
+.fx-plus { gap: 12px; background: var(--t-recruit-bg); }
 .fx-plus-lab { font: 800 22px/1 system-ui, sans-serif; letter-spacing: 0.04em; color: var(--t-blue); }
 .fx-plus:hover:not(:disabled) { border-color: var(--t-fg); }
 .fx-plus-icon { width: 24px; height: 24px; image-rendering: pixelated; filter: var(--t-plus-filter); }
