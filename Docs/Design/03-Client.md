@@ -151,7 +151,7 @@ Page → Worker (`ToWorker`) :
   graine, les joueurs et `you` : la partie est créée de la même façon chez
   tous (`new Game`, même graine de partie qu'en solo).
 - `order { id, order }` : `found_city { tile }`, `set_farm_share { percent }`, ou un
-  ordre d'usine : `build_factory { city, factoryType }`, `create_line { city,
+  ordre d'usine : `build_factory { city, factoryType }`, `delete_factory { city }`, `create_line { city,
   good }`, `set_active_lines { city, good, count }`, `set_city_priority { city,
   position }`, `set_line_priority { city, good, position }` (02-Engine §4), ou un
   ordre de diplomatie : `declare_war { target }`, `propose_pact { target }`,
@@ -471,7 +471,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   nœud porte l'icône du bien, ou un carré en pointillés s'il n'en a pas (le
   symbole texte répéterait le nom). Pas de condition de déblocage : elle est la
   même pour tous les nœuds (`FACTORY.unlockTurns`, décision de l'auteur,
-  25 octobre 2026). Le choix arme le bouton
+  25 octobre 2026). Les types dont le joueur a déjà une usine sont grisés à
+  l'ouverture du menu (une usine par type, 00-Game §8). Le choix arme le bouton
   et ferme le menu. En survolant la zone d'une ville du joueur qui n'a pas
   d'usine, la zone est verte ; ailleurs, rouge (autre joueur, ville qui a déjà une
   usine, hors de toute zone), avec la raison dans la barre. Un clic sur une zone
@@ -488,7 +489,10 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     (`FACTORY_NAMES` dans `names.ts` : manufacture d'armes, chantier naval, usine
     mécanique ; le même nom est dans le menu « Inaugurer une usine »), niveau (nombre de lignes) ; une poignée
     `⋮⋮` à glisser change la priorité de la ville (`set_city_priority`, position
-    = indice de la section sur laquelle on dépose) ;
+    = indice de la section sur laquelle on dépose) ; une croix `×` discrète en
+    haut à droite de la section (`.fdelete`) demande confirmation (`window.confirm`,
+    avec le nom du type et le nombre de lignes perdues), puis envoie
+    `delete_factory` ;
   - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
     la section seulement), puis sur la première ligne, pour les lignes remplies
     au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),

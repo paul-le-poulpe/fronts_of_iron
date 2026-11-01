@@ -640,6 +640,8 @@ export class Game {
           if (c.player === this.you && c.tile === order.tile) return true;
         }
         return false;
+      case "delete_factory":
+        return linesBefore?.has(`${order.city}:`) === true && factoryOf(me, order.city) === undefined;
       case "build_factory":
         return !linesBefore?.has(`${order.city}:`) && factoryOf(me, order.city)?.type === order.factoryType;
       case "create_line": {

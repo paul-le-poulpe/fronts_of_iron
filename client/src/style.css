@@ -281,12 +281,15 @@ input[type="number"] {
 .prod-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .prod-cities { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
 .prod-reserves { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-.fsec { --fsec-line: #8f8b80; border: 2px solid var(--fsec-line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.fsec { --fsec-line: #8f8b80; position: relative; border: 2px solid var(--fsec-line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+/* Suppression de l'usine : croix discrète en haut à droite de la section. */
+.fdelete { position: absolute; top: 2px; right: 3px; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; font-size: 15px; line-height: 1; color: var(--muted); }
+.fdelete:hover:not(:disabled) { color: var(--fg); border: 0; }
 .fsec.dragging, .grow.dragging { opacity: 0.5; }
 .fsec.drop, .grow.drop { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Trait entre deux lignes de l'usine, de même épaisseur et couleur que le contour (la première n'en a pas : l'en-tête la précède). */
 .fsec > :is(.grow, .unlocked, .locked) ~ :is(.grow, .unlocked, .locked) { border-top: 2px solid var(--fsec-line); padding-top: 6px; }
-.fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-right: 18px; }
 .grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
 .grow { display: grid; grid-template-columns: auto auto minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
 .grow > .muted { grid-column: 2 / -1; margin-top: -4px; }

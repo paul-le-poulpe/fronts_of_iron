@@ -4,7 +4,7 @@
 //
 // Les règles viennent de Docs/Design/00-Game.md. Ordres pour l'instant : fonder
 // une ville (§3.3), régler la part fermiers / pêcheurs (§4, §9), et les ordres des
-// usines (§8, §9) : construire une usine, créer une ligne, régler les lignes
+// usines (§8, §9) : construire une usine, supprimer une usine, créer une ligne, régler les lignes
 // actives, changer les priorités, et les ordres de diplomatie (§1, §9) : déclarer
 // la guerre, proposer un pacte, rompre un pacte, proposer la paix, répondre à une
 // proposition, et les ordres des fronts (05-Fronts §5.2) : créer, supprimer,
@@ -21,6 +21,7 @@ import { createDivision, deleteDivision, moveDivisions, setForcedMobilization } 
 import {
   buildFactory,
   createLine,
+  deleteFactory,
   isFactoryTypeId,
   isProductId,
   setActiveLines,
@@ -58,6 +59,13 @@ export interface BuildFactoryIntent {
   /** Identifiant de la ville. */
   readonly city: number;
   readonly factoryType: FactoryTypeId;
+}
+
+/** Supprimer l'usine d'une ville du joueur, avec toutes ses lignes (00-Game §8, §9). */
+export interface DeleteFactoryIntent {
+  readonly type: "delete_factory";
+  readonly player: number;
+  readonly city: number;
 }
 
 /** Créer une ligne d'un bien dans l'usine d'une ville (00-Game §8.2, §9). */
@@ -203,6 +211,7 @@ export type Intent =
   | FoundCityIntent
   | SetFarmShareIntent
   | BuildFactoryIntent
+  | DeleteFactoryIntent
   | CreateLineIntent
   | SetActiveLinesIntent
   | SetCityPriorityIntent
@@ -229,6 +238,10 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
     case "build_factory": {
       const { city, factoryType } = fields;
       return Number.isInteger(city) && isFactoryTypeId(factoryType) && buildFactory(state, player, city as number, factoryType);
+    }
+    case "delete_factory": {
+      const { city } = fields;
+      return Number.isInteger(city) && deleteFactory(state, player, city as number);
     }
     case "create_line": {
       const { city, good } = fields;

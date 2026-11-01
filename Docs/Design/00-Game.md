@@ -72,7 +72,8 @@ dans cette même barre :
   déplie vers le haut la liste des types d'usine de base (§8.4). Le choix d'un
   type arme le bouton. Le joueur promène la souris : sur la zone (§3.2) d'une
   de ses villes sans usine, un clic crée l'usine de ce type dans cette ville,
-  et le bouton est désarmé. Ordre « Construire une usine » (§9) ;
+  et le bouton est désarmé. Les types dont le joueur a déjà une usine sont
+  grisés (§8). Ordre « Construire une usine » (§9) ;
 - **production** : ouvre ou ferme le panneau latéral des lignes de production
   (§8.1).
 
@@ -875,6 +876,14 @@ vaut 0 (§2).
   sans second clic (décision de l'auteur, 24 octobre 2026). Nombre maximal de
   types d'usines différents par ville : `FACTORY.maxTypesPerCity` (fichier de
   configuration), 1 pour commencer.
+- **Une seule usine par type et par joueur** (décision de l'auteur,
+  1er novembre 2026) : plusieurs usines du même type ne servent à rien, une
+  seule ligne par bien est plus efficace (spécialisation, ci-dessous). Plus tard,
+  une usine aura un nombre maximal de lignes ; non implémenté.
+- **Supprimer une usine** (décision de l'auteur, 1er novembre 2026) : ordre du
+  joueur (§9), par une petite croix en haut à droite de la section de l'usine
+  dans le panneau de production (§8.1), après une confirmation. L'usine disparaît avec toutes ses lignes
+  et sa progression de déblocage.
 - Le logo d'une usine est l'icône du bien qui a le plus de lignes construites
   dans l'usine (actives ou non ; à égalité, le premier de l'arbre ; sans ligne,
   la racine de l'arbre). Il est affiché à côté de la ville où elle est
@@ -947,7 +956,8 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
 - **Panneau latéral** (décrit par l'auteur, 24 octobre 2026), ouvert par le
   bouton « Production » (§1) :
   - une section par ville qui a une usine : nom de la ville, type d'usine,
-    niveau (nombre de lignes) ;
+    niveau (nombre de lignes), et en haut à droite une croix discrète qui
+    supprime l'usine (§8) ;
   - dans la section, une sous-section par bien produit : les lignes de ce bien,
     leur nombre de lignes actives (curseur) ;
   - les biens encore verrouillés de l'arbre de l'usine (§8.4) apparaissent
@@ -1164,7 +1174,8 @@ fusils                                        production de base de l'usine
 | --- | --- | --- | --- |
 | Fonder une ville | la case | §3.3 | retire le coût en population ; crée la ville ; recalcule les zones (§3.2) et les totaux (§6.1, §7) des joueurs touchés |
 | Régler la part fermiers / pêcheurs | la proportion | format à définir (§13) | change la répartition du §4 |
-| Construire une usine | la ville, le type d'usine (§8.4) | la ville appartient au joueur ; elle a moins de `FACTORY.maxTypesPerCity` types d'usines. Gratuit pour l'instant | crée une usine de ce type, avec une ligne active de son bien de base |
+| Construire une usine | la ville, le type d'usine (§8.4) | la ville appartient au joueur ; elle a moins de `FACTORY.maxTypesPerCity` types d'usines ; le joueur n'a pas déjà une usine de ce type (§8). Gratuit pour l'instant | crée une usine de ce type, avec une ligne active de son bien de base |
+| Supprimer une usine | la ville (l'usine) | la ville appartient au joueur et a une usine | retire l'usine, ses lignes et sa progression (§8) |
 | Créer une ligne de production | la ville (l'usine), le bien | maximum de lignes non atteint ; conditions et coût à définir (§8.2) | ajoute une ligne |
 | Régler les lignes actives | l'usine, le bien, le nombre de lignes actives | entre 0 et le nombre de lignes de ce bien dans cette usine | change les lignes qui reçoivent des ouvriers (§8.1) |
 | Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de remplissage (§4, §8.1) |

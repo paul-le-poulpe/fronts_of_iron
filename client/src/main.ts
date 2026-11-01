@@ -684,6 +684,7 @@ function buildFactoryMenu(catalog: InitMessage["catalog"]): void {
     const root = type.tree[0]!.good;
     if (productIconPath(root) === undefined) b.textContent = `${productSymbol(root)} ${factoryName(type.id)}`;
     else b.append(productIcon(root, 32), ` ${factoryName(type.id)}`);
+    b.dataset["type"] = type.id;
     attachFactoryTreeTip(b, type, factoryMenu);
     b.addEventListener("click", () => setFactoryArmed(type.id));
     factoryMenu.appendChild(b);
@@ -709,7 +710,12 @@ factoryButton.addEventListener("click", () => {
   if (factoryArmed !== null) setFactoryArmed(null);
   else {
     factoryMenu.hidden = !factoryMenu.hidden;
-    if (!factoryMenu.hidden) setPlacement(false);
+    if (!factoryMenu.hidden) {
+      setPlacement(false);
+      // Une usine par type et par joueur (00-Game §8) : les types déjà construits sont grisés.
+      const built = new Set(session?.mirror?.detail?.factories.map((f) => f.type) ?? []);
+      for (const b of factoryMenu.querySelectorAll<HTMLButtonElement>("button[data-type]")) b.disabled = built.has(b.dataset["type"]!);
+    }
   }
 });
 
@@ -732,6 +738,7 @@ function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; pr
   if (city === 0) problem = "Cette case n'est dans la zone d'aucune ville.";
   else if (m.cities[city - 1]!.player !== localPlayer()) problem = "Cette zone appartient à un autre joueur.";
   else if (m.factoryMarks.has(city)) problem = `La ville n° ${city} a déjà une usine.`;
+  else if (m.detail?.factories.some((f) => f.type === factoryArmed)) problem = `Vous avez déjà une usine de ce type : ${factoryName(factoryArmed!)}.`;
   return { city, ok: problem === null, problem };
 }
 

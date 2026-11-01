@@ -107,12 +107,16 @@ function ownCity(state: GameState, playerId: number, city: number): boolean {
   return city >= 1 && city <= state.cities.length && state.cities[city - 1]!.player === playerId;
 }
 
-/** `build_factory` (00-Game §9) : gratuit pour l'instant ; au plus `FACTORY.maxTypesPerCity` types, une usine par ville ; une ligne de base active. */
+/**
+ * `build_factory` (00-Game §9) : gratuit pour l'instant ; au plus `FACTORY.maxTypesPerCity` types, une usine par ville,
+ * une usine par type et par joueur ; une ligne de base active.
+ */
 export function buildFactory(state: GameState, playerId: number, city: number, type: FactoryTypeId): boolean {
   if (!ownCity(state, playerId, city)) return false;
   const player = state.players[playerId - 1]!;
   // Une seule usine par ville dans l'état (02-Engine §7) : `maxTypesPerCity` ≥ 1 la permet.
   if (FACTORY.maxTypesPerCity < 1 || factoryOf(player, city) !== undefined) return false;
+  if (player.factories.some((f) => f.type === type)) return false;
   // L'usine naît avec une ligne active de son bien de base, la racine de son arbre (00-Game §8).
   player.factories.push({
     city,
@@ -120,6 +124,19 @@ export function buildFactory(state: GameState, playerId: number, city: number, t
     groups: [{ good: treeOf(type)[0]!.good, lines: 1, active: 1, filled: 0, growth: 0 }],
     progress: new Array<number>(treeOf(type).length).fill(0),
   });
+  return true;
+}
+
+/**
+ * `delete_factory` (00-Game §9) : retire l'usine de la ville, avec ses lignes et sa progression de déblocage,
+ * comme à la prise de la ville (conquest.ts). Le stock cible d'armement suit (`armamentReserveMax`).
+ */
+export function deleteFactory(state: GameState, playerId: number, city: number): boolean {
+  if (!ownCity(state, playerId, city)) return false;
+  const list = state.players[playerId - 1]!.factories;
+  const i = list.findIndex((f) => f.city === city);
+  if (i < 0) return false;
+  list.splice(i, 1);
   return true;
 }
 

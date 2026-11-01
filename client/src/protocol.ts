@@ -14,6 +14,7 @@ export type HumanOrder =
   | { readonly type: "found_city"; readonly tile: number }
   | { readonly type: "set_farm_share"; readonly percent: number }
   | { readonly type: "build_factory"; readonly city: number; readonly factoryType: string }
+  | { readonly type: "delete_factory"; readonly city: number }
   | { readonly type: "create_line"; readonly city: number; readonly good: string }
   | { readonly type: "set_active_lines"; readonly city: number; readonly good: string; readonly count: number }
   | { readonly type: "set_city_priority"; readonly city: number; readonly position: number }

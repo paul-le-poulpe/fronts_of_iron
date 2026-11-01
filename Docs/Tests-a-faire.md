@@ -200,6 +200,13 @@ lancé (seul `npm run typecheck` a passé). À écrire :
   panneau latéral, tableau des joueurs), segment noir à gauche de la jauge de nourriture et de sa mini-barre.
 - **Réglage** : `POPULATION.hurtDivisor` = 2 400 (valeur de l'auteur) ; lire la valeur de la configuration dans les tests.
 
+## Usines : une par type, suppression (1er novembre 2026, 00-Game §8, §9)
+
+- `build_factory` refusé quand le joueur a déjà une usine de ce type, dans une autre ville.
+- `delete_factory` : l'usine disparaît (groupes, progression), le stock cible d'armement baisse ; refusé sans usine ou pour la ville d'un autre joueur ; la ville peut ensuite recevoir une nouvelle usine.
+- Le scénario (`packages/engine/test/scenario.ts`) n'envoie pas `delete_factory`, et ses `build_factory` réussissent moins souvent : les mesures de 02-Engine §8 sont à refaire.
+- **Tests périmés** : `withTwoFactories` de `packages/engine/test/factories.test.ts` construit deux manufactures d'armes (villes 1 et 2) et sert à plusieurs tests (priorité des villes, ordres invalides, hash). À réécrire avec deux types d'usine différents.
+
 ## Client
 
 - Bouclier « défend une percée » et ligne de statut rouge du panneau de pion (1er novembre 2026), à vérifier à la

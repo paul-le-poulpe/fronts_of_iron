@@ -12,7 +12,7 @@ usines, leurs lignes de production et leurs ouvriers (§4 étape 1, §8), les
 machines (tracteurs, bateaux de pêche, pompes à vapeur), l'extraction du fer (§7),
 l'armement et ses réserves (§8.3), la diplomatie (§1 : statut de chaque paire de
 joueurs, propositions), et leurs ordres : `found_city`,
-`set_farm_share`, `build_factory`, `create_line`, `set_active_lines`,
+`set_farm_share`, `build_factory`, `delete_factory`, `create_line`, `set_active_lines`,
 `set_city_priority`, `set_line_priority`, `declare_war`, `propose_pact`,
 `break_pact`, `propose_peace`, `answer_proposal`. **Les fronts terrestres (version 1 : les divisions)**
 sont implémentés le 31 octobre 2026 (`05-Fronts.md`, qui fait foi) : détection des fronts, divisions
@@ -43,7 +43,7 @@ fronts aériens et maritimes.
 | `src/state.ts` | `GameState`, `Player`, `City`, `Factory`, `LineGroup`, `createGame`, `setOwner` |
 | `src/cities.ts` | `foundCity` : validité, zones, ports, groupes (00-Game §3.2 à §3.6) |
 | `src/roads.ts` | réseau de routes terrestres (00-Game §3.5) : `addCityToRoads` (mise à jour à chaque fondation), `computeRoads` (calcul complet, référence des tests), `segmentsCross` |
-| `src/factories.ts` | usines et lignes (00-Game §8) : indices des produits et des types d'usine (pour le hash), `isUnlocked`, `armamentReserveMax`, et les cinq ordres d'usine (`buildFactory`, `createLine`, `setActiveLines`, `setCityPriority`, `setLinePriority`) |
+| `src/factories.ts` | usines et lignes (00-Game §8) : indices des produits et des types d'usine (pour le hash), `isUnlocked`, `armamentReserveMax`, et les six ordres d'usine (`buildFactory`, `deleteFactory`, `createLine`, `setActiveLines`, `setCityPriority`, `setLinePriority`) |
 | `src/economy.ts` | population, remplissage des lignes, extraction du fer, production, agriculture, pêche, nourriture, armement (00-Game §4, §6, §7, §8) : `stepEconomy` (une étape par tour), `harvest`, `mechanization`, `mechanizationCurve`, `minersFor` |
 | `src/diplomacy.ts` | diplomatie (00-Game §1) : statut d'une paire (`statusOf`), propositions, les cinq ordres (`declareWar`, `breakPact`, `propose`, `answerProposal`), `expireProposals`, type des événements |
 | `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
@@ -473,7 +473,7 @@ refusé ne modifie rien) :
 prend cette valeur. L'ordre est appliqué avec les autres, avant l'étape du tour : il
 compte tout de suite.
 
-### `build_factory`, `create_line`, `set_active_lines`, `set_city_priority`, `set_line_priority`
+### `build_factory`, `delete_factory`, `create_line`, `set_active_lines`, `set_city_priority`, `set_line_priority`
 
 Ordres des usines (00-Game §8, §9), dans `factories.ts`. Tous : `player` écrit
 par le serveur, `city` entier, ville du joueur. Les chaînes (`factoryType`,
@@ -482,7 +482,8 @@ par le serveur, `city` entier, ville du joueur. Les chaînes (`factoryType`,
 
 | Ordre | Champs | Valide si | Effet |
 | --- | --- | --- | --- |
-| `build_factory` | `city`, `factoryType` | la ville n'a pas d'usine (et `FACTORY.maxTypesPerCity` ≥ 1) | ajoute l'usine à la fin de `factories`, avec une ligne active de la racine de son arbre (00-Game §8) ; gratuit |
+| `build_factory` | `city`, `factoryType` | la ville n'a pas d'usine (et `FACTORY.maxTypesPerCity` ≥ 1) ; aucune usine du joueur n'a ce type (00-Game §8) | ajoute l'usine à la fin de `factories`, avec une ligne active de la racine de son arbre (00-Game §8) ; gratuit |
+| `delete_factory` | `city` | la ville a une usine | retire l'usine de `factories` (groupes et `progress` compris), comme à la prise de la ville ; le stock cible d'armement baisse avec ses lignes (`armamentReserveMax`) |
 | `create_line` | `city`, `good` | la ville a une usine ; `good` est dans son arbre et créable : la racine, ou un enfant dont le compteur du parent est ≥ `FACTORY.unlockTurns` | `lines + 1` et `active + 1` du groupe de `good` (créé en fin de liste s'il n'existe pas) ; gratuit, sans maximum |
 | `set_active_lines` | `city`, `good`, `count` | le groupe existe, `count` entier de 0 à `lines` | `active = count` |
 | `set_city_priority` | `city`, `position` | la ville a une usine, `position` entier de 0 à nombre d'usines − 1 | l'usine est retirée de `factories` et remise à l'indice `position` |

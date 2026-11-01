@@ -131,8 +131,18 @@ export class ProductionPanel {
     meta.textContent = `${factoryName(f.type)} · niveau ${f.level}`;
     // Le bien qui a le plus de lignes construites représente l'usine (actives ou non).
     const mark = productIcon(dominantGood(this.tree(f.type), f.groups), 32);
+    // Croix en haut à droite de la section : envoie `delete_factory` (l'usine et toutes ses lignes).
+    const remove = el("button", "fdelete") as HTMLButtonElement;
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.title = `Supprimer l'usine de la ville n° ${f.city} (lignes et progression de déblocage perdues)`;
+    remove.addEventListener("click", () => {
+      if (!window.confirm(`Supprimer l'usine de la ville n° ${f.city} (${factoryName(f.type)}) ? Ses ${f.level} lignes et sa progression de déblocage seront perdues.`)) return;
+      this.holdUntil = 0;
+      this.send({ type: "delete_factory", city: f.city });
+    });
     head.append(grip, title, mark, meta);
-    section.append(head);
+    section.append(head, remove);
 
     // Une ligne par bien de l'arbre (00-Game §8.1) : d'abord les biens en production,
     // dans l'ordre de priorité (glissables), avec un bouton + pour une ligne de plus ;
