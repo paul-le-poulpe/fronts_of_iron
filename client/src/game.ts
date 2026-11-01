@@ -331,8 +331,8 @@ export class Game {
     const citiesBefore = state.cities.length;
     // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
     const linesBefore = human.length > 0 ? this.lineCounts() : null;
-    // Les machines que l'étape va utiliser : celles produites au tour d'avant, remplacées par `applyTurn`.
-    const machinesUsed = state.players.map((p) => Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goods[i]!])));
+    // Les machines que l'étape va utiliser : les effectives (00-Game §12), remplacées par `applyTurn`.
+    const machinesUsed = state.players.map((p) => Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsEffective[i]!])));
     const t1 = performance.now();
     this.advance(turn);
     const t2 = performance.now();
@@ -426,7 +426,7 @@ export class Game {
       // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
       // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
       const fishRef = machineReference(FISHING, p.farmers + p.fishers + p.idle, p.seaTiles);
-      const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goods[FISHING_BOAT]!)) / 1000);
+      const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goodsEffective[FISHING_BOAT]!)) / 1000);
       return {
       id: p.id,
       soldiers: p.soldiers,

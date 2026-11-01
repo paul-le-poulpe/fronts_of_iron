@@ -239,6 +239,7 @@ describe("hash des usines", () => {
       ["progression", (s) => void s.players[0]!.factories[0]!.progress[0]!++],
       ["type d'usine", (s) => void ((s.players[0]!.factories[1] as { type: string }).type = "miningMachines")],
       ["biens produits", (s) => void s.players[0]!.goods[1]!++],
+      ["biens effectifs", (s) => void s.players[0]!.goodsEffective[1]!++],
       ["réserve d'armement", (s) => void s.players[0]!.armamentReserve[0]!++],
       ["reste de baisse", (s) => void s.players[0]!.armamentRemainder[1]!++],
       ["ouvriers", (s) => void s.players[0]!.factoryWorkers++],

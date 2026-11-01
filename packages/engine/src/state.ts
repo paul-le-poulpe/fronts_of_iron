@@ -87,8 +87,13 @@ export interface Player {
    * villes pour le remplissage des lignes (00-Game §4, §8.1).
    */
   readonly factories: Factory[];
-  /** Biens produits au dernier tour, dans l'ordre des clés de `GOODS` : les machines du tour suivant (00-Game §12). */
+  /** Biens produits au dernier tour, dans l'ordre des clés de `GOODS` : lus par les usines et affichés (00-Game §12). */
   readonly goods: number[];
+  /**
+   * Biens effectifs, dans l'ordre des clés de `GOODS` : les machines que la mécanisation utilise au tour suivant (00-Game §12).
+   * Monte tout de suite à `goods` ; baisse vers `goods` par paliers (`GOODS_DECAY`).
+   */
+  readonly goodsEffective: number[];
   /**
    * Demande de chaque bien au dernier tour, dans l'ordre des clés de `GOODS` : les
    * machines d'une mécanisation totale (00-Game §6.2, §8.2). La croissance
@@ -244,6 +249,7 @@ export function createGame(setup: GameSetup): GameState {
       miners: 0,
       minedTiles: 0,
       mineMechanization: 0,
+      goodsEffective: new Array<number>(Object.keys(GOODS).length).fill(0),
       ironExtracted: 0,
       forcedMobilization: false,
       soldiers: 0,

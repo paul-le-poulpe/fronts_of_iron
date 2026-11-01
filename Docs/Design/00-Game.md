@@ -1370,6 +1370,21 @@ valider sur la visualisation.
 - Voisinage entre zones, et lien entre une ville côtière et une zone : avec les
   routes maritimes.
 
+- **Valeur produite et valeur effective** (décision de l'auteur du 1er novembre
+  2026). Une machine (tracteur, bateau de pêche, pompe à vapeur) a deux valeurs :
+  la **produite** (ce que les lignes ont fabriqué au tour ; lue par les usines
+  pour ajuster leurs lignes, affichée dans les barres) et l'**effective** (ce que
+  la mécanisation, la récolte et l'extraction utilisent au tour suivant). Si la
+  produite est au moins égale à l'effective, l'effective devient la produite
+  tout de suite. Sinon l'effective baisse vers la produite, une fois par seconde
+  (tous les 10 tours) : du plus grand de 1 unité et de 1 % de l'effective,
+  arrondi vers le bas, sans passer sous la produite. Cela évite que le parc de
+  machines tombe à 0 un tour où les lignes ne sont pas remplies (la population
+  alternait alors entre ouvriers et fermiers). Réglages : `GOODS_DECAY`
+  (`config/goods.ts`). Le fer n'a pas de valeur effective propre : les mineurs
+  sont dimensionnés sur le fer des lignes remplies du même tour, donc produit et
+  consommé sont égaux. L'aluminium, quand il sera extrait, suivra la règle des
+  machines si un écart apparaît.
 **Villes**
 - Les autres règles de placement annoncées par l'auteur.
 - Un joueur qui a perdu toutes ses villes peut-il de nouveau en poser une
@@ -1423,7 +1438,9 @@ valider sur la visualisation.
   exploitent les cases à pleine mécanisation (§6.2, décision de l'auteur du
   24 octobre 2026 ; avant : aux mineurs sans pompe, choix provisoire du moteur).
 - Machines (tracteurs, bateaux de pêche, pompes à vapeur) : choix provisoire du
-  moteur, celles produites au tour précédent (proposition du §12).
+  moteur, les effectives, qui suivent les produites du tour précédent (§12).
+  Le lissage de la baisse est un essai de l'auteur, à mesurer : la demande que
+  les usines lisent (`goodsDemand`) n'est pas lissée.
 
 **Usines**
 - Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :

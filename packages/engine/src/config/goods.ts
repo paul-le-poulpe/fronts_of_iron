@@ -16,6 +16,22 @@ export interface ProductConfig {
 }
 
 /**
+ * Baisse de la valeur effective d'un bien vers la valeur produite (00-Game §12) :
+ * elle monte tout de suite à la production, et baisse seulement quand le tour est
+ * un multiple de `everyTurns`, du plus grand de `minUnits` et de `percent` % de la
+ * valeur effective (arrondi vers le bas), sans passer sous la production.
+ * Valeurs de l'auteur (1er novembre 2026).
+ */
+export const GOODS_DECAY = {
+  /** Intervalle des baisses, en tours : 10 tours = 1 seconde. */
+  everyTurns: 10,
+  /** Baisse minimale, en unités. */
+  minUnits: 1,
+  /** Baisse en pourcentage de la valeur effective. */
+  percent: 1,
+} as const;
+
+/**
  * Valeurs d'essai : 30 machines par tour et par ligne (à 1 000 fermiers,
  * `FARMING.maxMachinesPer1000` = 100 demande 100 tracteurs pour la pleine
  * mécanisation). Tracteur et pompe à vapeur : 10, valeurs de l'auteur

@@ -14,6 +14,7 @@ import {
   FARMING,
   FISHING,
   FOOD,
+  GOODS_DECAY,
   MINING,
   POPULATION,
   RESOURCES,
@@ -269,6 +270,25 @@ function produce(p: Player, deployed: readonly number[]): void {
 }
 
 /**
+ * Valeur effective des biens (00-Game §12) : monte tout de suite à la production
+ * du tour ; sinon, aux tours de baisse (`decay`), elle perd le plus grand de
+ * `GOODS_DECAY.minUnits` et de `percent` % d'elle-même (arrondi vers le bas), sans
+ * passer sous la production. Les machines que la mécanisation utilise au tour
+ * suivant sont les effectives, pas les produites.
+ */
+function settleGoods(p: Player, decay: boolean): void {
+  for (let b = 0; b < p.goods.length; b++) {
+    const made = p.goods[b]!;
+    const kept = p.goodsEffective[b]!;
+    if (made >= kept) p.goodsEffective[b] = made;
+    else if (decay) {
+      const step = Math.max(GOODS_DECAY.minUnits, Math.floor((kept * GOODS_DECAY.percent) / 100));
+      p.goodsEffective[b] = Math.max(made, kept - step);
+    }
+  }
+}
+
+/**
  * Croissance automatique des lignes de biens (00-Game §8.2) : un groupe dont toutes
  * les lignes ont produit ce tour avance d'autant de tours-lignes qu'il a de lignes
  * (proportionnel à sa production, comme le déblocage) ; à `FACTORY.growthTurns`
@@ -316,9 +336,9 @@ interface Allocation {
  * joueur, avec le report de l'un à l'autre. Ne change que `filled` des groupes de lignes (recalculé à chaque appel).
  */
 function allocate(p: Player, people: number): Allocation {
-  const tractors = p.goods[TRACTOR]!;
-  const fishingBoats = p.goods[FISHING_BOAT]!;
-  const lines = fillLines(p, p.goods[MINING_MACHINE]!, people);
+  const tractors = p.goodsEffective[TRACTOR]!;
+  const fishingBoats = p.goodsEffective[FISHING_BOAT]!;
+  const lines = fillLines(p, p.goodsEffective[MINING_MACHINE]!, people);
   // Ce qui reste après les ouvriers et les mineurs passe à l'étape 2 du §4, fermiers et pêcheurs selon le réglage du joueur.
   const remaining = people - lines.workers - lines.miners;
   const availableFarmers = Math.floor((remaining * p.farmPercent) / 100);
@@ -347,9 +367,10 @@ export function workersNeeded(p: Player): number {
  * Étape d'un joueur (00-Game §4, §4.1, §6, §7, §8) : remplissage des lignes, répartition du reste en fermiers et pêcheurs, récolte,
  * production, nourriture, croissance avec reste. Les résultats sont calculés sur
  * la population du début de l'étape, puis la croissance la change. Les machines
- * utilisées sont celles produites au tour précédent (00-Game §12).
+ * utilisées sont les effectives, qui suivent la production du tour précédent
+ * (00-Game §12).
  */
-function stepPlayer(p: Player, deployed: readonly number[]): void {
+function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): void {
   // Les hommes des divisions comptent dans la population mais ne travaillent pas (00-Game §4, point 5) : la répartition
   // se fait sur le reste. En mobilisation forcée, le renfort des divisions est déjà passé avant (05-Fronts §4.3).
   const people = Math.max(0, p.population - p.soldiers);
@@ -369,7 +390,7 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
   p.miners = lines.miners;
   p.minedTiles = ironTilesFor(lines.iron);
   // Celle de `minersFor` pour le fer de toutes les lignes remplies (00-Game §7).
-  p.mineMechanization = mechanization(MINING, fullMechanizationWorkers(MINING, p.minedTiles), p.goods[MINING_MACHINE]!);
+  p.mineMechanization = mechanization(MINING, fullMechanizationWorkers(MINING, p.minedTiles), p.goodsEffective[MINING_MACHINE]!);
   p.ironExtracted = lines.iron;
   // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2).
   const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);
@@ -386,6 +407,7 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
   );
   produce(p, deployed);
 
+  settleGoods(p, decay);
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
   // fraction d'un tour à l'autre. Les négatifs sont arrondis vers zéro (Math.trunc).
   const surplus = p.food - p.population * POPULATION.foodPerHead;
@@ -402,5 +424,7 @@ function stepPlayer(p: Player, deployed: readonly number[]): void {
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
   // Les hommes des divisions ne retournent jamais d'eux-mêmes à l'économie (05-Fronts §3.5) : il faut supprimer la division.
-  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id));
+  // Le tour que l'étape joue est `state.tick + 1` (`applyTurn` avance `tick` à la fin).
+  const decay = (state.tick + 1) % GOODS_DECAY.everyTurns === 0;
+  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id), decay);
 }

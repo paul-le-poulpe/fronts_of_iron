@@ -122,6 +122,7 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.goods.length);
     for (const n of p.goods) h = mixWord(h, n);
     for (const n of p.goodsDemand) h = mixWord(h, n);
+    for (const n of p.goodsEffective) h = mixWord(h, n);
     h = mixWord(h, p.armamentReserve.length);
     for (let a = 0; a < p.armamentReserve.length; a++) {
       h = mixWord(h, p.armamentReserve[a]!);

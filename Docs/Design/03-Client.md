@@ -650,9 +650,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (`--occ-mine`, `stats.ironTiles`). La jauge montre un effet commun à tous les
   travailleurs (00-Game §6.2 : une seule mécanisation pour tous), pas une part
   de travailleurs équipés. `stats.machinesUsed` est lu par `SoloGame` dans
-  `goods` **avant** `applyTurn` : ce sont les machines que l'étape a utilisées,
-  celles qui donnent la jauge, pas celles produites pendant le tour (qui servent
-  au tour suivant et que les lignes de machines du détail Ressources affichent).
+  `goodsEffective` **avant** `applyTurn` : ce sont les machines que l'étape a utilisées
+  (la valeur effective, 00-Game §12), celles qui donnent la jauge, pas celles
+  produites pendant le tour (`goods`, que les lignes de machines du détail Ressources affichent).
   1. **Population** : « Population n  ±v  / max ». `v` est la croissance du
      tour (population − somme des occupations, qui est la population au début du
      tour : une fondation de ville, qui retire des habitants avant l'étape, n'y

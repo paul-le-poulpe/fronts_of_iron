@@ -680,7 +680,7 @@ sa capitale : `cities[capital - 1].group`.
    `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`,
    `farmMechanization`, `fished`, `fishMechanization`,
    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
-   `mineMechanization`, `ironExtracted`, `forcedMobilization`, `soldiers`, `defeated`, puis `goods` (nombre, valeurs), puis pour chaque type
+   `mineMechanization`, `ironExtracted`, `forcedMobilization`, `soldiers`, `defeated`, puis `goods` (nombre, valeurs), puis `goodsEffective` (valeurs), puis pour chaque type
    d'armement : réserve, reste, puis le nombre d'usines et pour
    chacune, dans l'ordre de priorité : ville, indice du type d'usine, `progress`
    (nombre, valeurs), nombre de groupes et pour chacun, dans son ordre : indice du
@@ -807,9 +807,10 @@ ils sont donc dans le hash (§6).
   écrire une seule des deux cases de `diplomacy`** : le statut ne serait plus le
   même vu des deux côtés, ou une proposition resterait pour un statut qu'elle ne
   peut plus changer.
-- **Lire `Player.goods` après l'étape pour savoir quelles machines le tour a
-  utilisées** : l'étape les remplace à la fin par la production du tour, qui
-  servira au tour suivant.
+- **Lire `Player.goods` ou `Player.goodsEffective` après l'étape pour savoir
+  quelles machines le tour a utilisées** : l'étape les remplace à la fin
+  (production du tour, puis effective mise à jour), pour le tour suivant. Le
+  client lit `goodsEffective` avant l'étape.
 - **Écrire `filled` ailleurs que dans `fillLines`** : c'est le résultat du dernier
   remplissage, remis à 0 au début de chaque étape. Le compteur de déblocage et la
   production le lisent juste après.
@@ -959,9 +960,15 @@ points 31 et 32 sont des choix de plus.
     porte qu'**une usine par ville** (`Player.factories` est indexé par ville) :
     une valeur plus grande ne ferait rien tant que la structure ne change pas.
 26. **Machines du tour précédent** (00-Game §12) : le remplissage et la récolte du
-    tour t utilisent `Player.goods` tel que produit au tour t − 1 ; `goods` est
-    remis à 0 puis recalculé à la fin de l'étape. Un joueur qui n'a pas de ligne
-    de machines a donc 0 machine, comme avant.
+    tour t utilisent `Player.goodsEffective`, mis à jour à la fin du tour t − 1
+    (`settleGoods`) à partir de `Player.goods`, la production de ce tour ;
+    `goods` est remis à 0 puis recalculé à la fin de l'étape. L'effective monte
+    tout de suite à `goods`, et baisse vers `goods` quand `(tick + 1) %
+    GOODS_DECAY.everyTurns === 0`, de `max(minUnits, floor(effective × percent
+    / 100))`, sans passer sous `goods`. Les deux tableaux sont hachés. Un joueur
+    qui n'a pas de ligne de machines a 0 machine, comme avant. Les usines
+    (`fillLines`) et la demande lisent la production et `goodsDemand`, pas
+    l'effective.
 27. **Mécanisation minière** (00-Game §6.2, §13) : pompes par mineur = pompes ÷
     mineurs qui exploitent les cases à pleine mécanisation
     (`fullMechanizationWorkers(MINING, cases)`, à `MINING.mechanizationMax` ;

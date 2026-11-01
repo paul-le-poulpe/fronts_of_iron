@@ -28,7 +28,7 @@ typecheck`, puis `npm test` (certains tests comparent des résultats chiffrés).
 | `cities.ts` | rayons d'expansion et de contrôle, coût de fondation | `cities.ts`, `client/src/bots.ts`, `client/src/solo.ts` |
 | `workforce.ts` | population de départ, nourriture, fertilité, mécanisation de l'agriculture, de la pêche et de l'extraction | `economy.ts`, `cities.ts`, `mapgen.ts`, `client/src/bots.ts`, `client/src/solo.ts` |
 | `resources.ts` | présence du fer et de l'aluminium sur la carte (`threshold` : plus haut = plus rare ; `mountainBonus` : plus haut = plus en montagne), capacité d'extraction d'une case de fer. Régler avec `npm run viz:resources` | `map.ts`, `mapgen.ts`, `resources.ts`, `economy.ts` |
-| `goods.ts` | production, ouvriers et fer par ligne, pour chaque machine | `factories.ts` (`productConfig`), `economy.ts` |
+| `goods.ts` | production, ouvriers et fer par ligne, pour chaque machine ; baisse de la valeur effective (`GOODS_DECAY`) | `factories.ts` (`productConfig`), `economy.ts` |
 | `armament.ts` | idem pour chaque type d'armement ; stock cible et déclin | `factories.ts`, `economy.ts` |
 | `factories.ts` | délais de déblocage et de croissance, spécialisation, arbres de production | `economy.ts`, `factories.ts`, `state.ts` |
 | `fronts.ts` | réglages des fronts : délais de déplacement et de combat, seuils de fuite et d'échange, avancée, vitesses, prise de ville, encerclement, percée (délai, saut, facteur de réaction, essoufflement : `breakthroughDelayTurns` (un seul réglage pour tous les délais d'une percée), `breakthroughJumpRounds`, `slowReactionFactor`, `breakthroughExhaustionPercent`, valeurs de la version 0.1, 05-Fronts §12) | `fronts.ts`, `placement.ts`, `combat.ts`, `breakthroughs.ts`, `conquest.ts`, `client/src/solo.ts` |
@@ -62,7 +62,7 @@ résultat faux ou une division par zéro, pas un message.
 
 ## 2. L'ordre des clés compte
 
-Les tableaux de l'état d'un joueur (`goods`, `goodsDemand`, `armamentReserve`,
+Les tableaux de l'état d'un joueur (`goods`, `goodsEffective`, `goodsDemand`, `armamentReserve`,
 `armamentRemainder`, `resourceTiles`) sont indexés par la position de la clé
 dans `GOODS`, `ARMAMENT.types` ou `RESOURCES`. Le hash de l'état (`hash.ts`) les
 parcourt dans cet ordre.
@@ -153,7 +153,8 @@ Demande du code, pas seulement de la configuration.
    n'est remplie que si la demande du bien est supérieure à ce qui est déjà
    produit. Pour un nouveau bien, la demande reste à 0 : ses lignes ne se
    remplissent jamais tant qu'aucun code ne la calcule. De même, `p.goods`
-   recevra sa production, mais rien ne la consomme.
+   recevra sa production, mais rien ne la consomme : `p.goodsEffective` la suit
+   (`settleGoods`, réglages `GOODS_DECAY`) et c'est elle que la mécanisation lira.
 
 ### Une ressource naturelle
 
