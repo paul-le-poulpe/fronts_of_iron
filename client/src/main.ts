@@ -218,14 +218,13 @@ function onInit(s: Session, init: InitMessage): void {
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
   s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces(), startAxisMode);
-  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, (id) => openFront(id, true), (id) => s.view?.highlightFront(id), s.frontPanel);
+  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
   s.infobar = new InfoBar(
     $("infobar"),
     init.catalog,
     setMapOption,
     (percent) => sendOrder({ type: "set_farm_share", percent }),
     (enabled) => sendOrder({ type: "set_forced_mobilization", enabled }),
-    (id) => openFront(id, false),
     s.forces,
   );
   buildFactoryMenu(init.catalog);
@@ -249,10 +248,7 @@ function onTick(s: Session, msg: TickMessage): void {
   painter.paintTiles(repaint);
   view.upload(repaint);
   if (msg.cities !== null || msg.factoryMarks !== null) view.refresh();
-  if (msg.fronts !== null) {
-    view.frontsChanged();
-    s.infobar?.setFronts(msg.fronts);
-  }
+  if (msg.fronts !== null) view.frontsChanged();
   s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
   s.forces?.setData(mirror.fronts, mirror.divisions);
   if (msg.failedBreakthroughs > 0) toast("Percée arrêtée : plus aucune division à engager dans la force qui perce.", 6000);
@@ -805,13 +801,13 @@ function nearestConnection(m: Mirror, frontId: number, tile: number): { city1: n
   return best;
 }
 
-/** `fromTab` : ouverte depuis l'onglet des forces, donc avec le bouton « ← Retour » ; depuis la liste des fronts, sans. */
-function openFront(id: number, fromTab: boolean): void {
+/** Ouvre la fenêtre d'un front depuis l'onglet des forces, donc avec le bouton « ← Retour ». */
+function openFront(id: number): void {
   const s = session;
   const front = s?.mirror?.fronts.find((f) => f.id === id);
   if (s === null || front === undefined) return;
   s.infobar?.closeAll();
-  s.frontPanel?.open(front, fromTab);
+  s.frontPanel?.open(front, true);
 }
 
 

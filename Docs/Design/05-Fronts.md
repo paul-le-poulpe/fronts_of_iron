@@ -1306,8 +1306,9 @@ toutes les boîtes, rangées par niche non vides et pourcentages ; titre
 
 ### 11.6 Hors des fronts
 
-- **Liste des fronts** (barre d'informations, cinquième bouton) : fronts
-  actifs, puis en paix ; un clic ouvre la fenêtre du front.
+- **Liste des fronts** : il n'y a pas d'onglet à part, c'est l'onglet des forces
+  (§11.2) qui les range, en guerre d'abord puis en paix, chaque groupe du plus
+  long au plus court.
 - **Onglet Population** : les soldats (hommes des divisions) gardent leur
   place, avant les inactifs ; les blessés (00-Game §4.2) sont en dernier. Interrupteur **« MOBILISATION FORCÉE »** : rouge,
   éteint par défaut ; il sert à remplir les divisions (§4.3).

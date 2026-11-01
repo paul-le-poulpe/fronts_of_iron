@@ -46,7 +46,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
-| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), fronts, forces ; DOM construit une fois, pas de règle |
+| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), forces ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
 | `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; noms des types de division, des niches (et leurs lettres) et de l'équipement des divisions ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
@@ -59,7 +59,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
 | `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable`. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
-| `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la sixième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
+| `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la cinquième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
 | `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales, « supportable » et « créable » du menu « + », couverture d'un front, rangement des fronts |
 | `src/infopanels.ts` | panneaux de survol (§11.7) : panneau d'un type (menu « + ») et panneau d'un pion, posés sur `document.body` |
@@ -760,11 +760,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      texte « stock / cible · +production par tour · n sur les fronts ». Légende : l'excès disparaît à
      `armamentDecayPercent` % par tour ; l'équipement des fronts compte dans le stock, mais seul
      l'équipement non déployé décline (05-Fronts §4.6).
-  5. **Fronts** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2) : « Fronts n / m » (actifs / tous ceux du
-     joueur). Détail : deux sections, **fronts actifs** puis **fronts en paix**, une ligne par front rangée par île
-     (groupe du joueur) puis par adversaire : pastille de l'adversaire, « Île n° g · Bot k », et en petit l'île adverse et le
-     nombre de connexions. Un clic sur une ligne ouvre la fenêtre du front (`openFront`, `main.ts`).
-  6. **Forces** (sixième position ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
+  5. **Forces** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
      (§ « Onglet des forces » ci-dessous). Le volet (`.ib-pane.forces`) a la classe `themed` : fond et couleurs de son thème.
   L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) avant les inactifs, qui sont en dernier, même en mobilisation forcée, et un
   interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie

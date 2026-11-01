@@ -5,15 +5,15 @@
 //
 // Chaque bouton porte, sous ses chiffres, la barre la plus pertinente de son détail
 // (mini-barre, mise à jour par `head` à chaque tour, détail ouvert ou non) : répartition
-// de la population, population et capacité, fer, armement, fronts actifs.
+// de la population, population et capacité, fer, armement.
 //
 // Le DOM est construit une seule fois, dans le constructeur. Ensuite `update`
 // écrit seulement des textes et des largeurs : rien n'est détruit entre deux tours.
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
 //
-// La cinquième section est la liste des fronts (05-Fronts §11.6), juste à droite d'Armement ; la sixième, l'onglet des
-// forces (05-Fronts §11.2, `forcestab.ts`), dont la barre ne fait que poser le détail.
+// La cinquième section est l'onglet des forces (05-Fronts §11.2, `forcestab.ts`), juste à droite d'Armement ; la barre
+// ne fait que poser son détail.
 //
 // Le dernier élément de la barre, contre le bord droit, est le bouton « Carte » : il
 // ouvre un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
@@ -26,10 +26,8 @@
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
-import { frontWidthIcon } from "./infopanels.ts";
-import { localPlayer, playerName, productName } from "./names.ts";
-import { playerColor, rgbCss } from "./painter.ts";
-import { type FactoryCatalog, type FrontView, type HumanDetail, type PlayerStats } from "./protocol.ts";
+import { productName } from "./names.ts";
+import { type FactoryCatalog, type HumanDetail, type PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
 const num = (n: number): string => fmt.format(n);
@@ -193,22 +191,17 @@ export class InfoBar {
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
   private readonly onFarmShare: (percent: number) => void;
   private readonly onForcedMobilization: (enabled: boolean) => void;
-  private readonly onOpenFront: (id: number) => void;
   private readonly forcesTab: ForcesTab;
   /** Vrai pendant que le joueur tient le curseur de la part de fermiers : les tours n'y touchent pas. */
   private farmSliderActive = false;
   /** Jusqu'à cette heure, la case « mobilisation forcée » n'est pas réécrite par les tours (l'ordre n'est pas encore appliqué). */
   private forcedUntil = 0;
-  /** Tous les fronts de la partie, au dernier message. */
-  private fronts: readonly FrontView[] = [];
-  private frontsKey = "";
 
   /**
    * `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée ;
    * `onFarmShare`, au relâchement du curseur de la part de fermiers ;
    * `onForcedMobilization`, au changement de l'interrupteur de l'onglet Population ;
-   * `onOpenFront`, au clic sur une ligne de la liste des fronts ;
-   * `forces`, l'onglet des forces (sixième section).
+   * `forces`, l'onglet des forces (cinquième section).
    */
   constructor(
     root: HTMLElement,
@@ -216,17 +209,15 @@ export class InfoBar {
     onMapOption: (option: MapOption, checked: boolean) => void,
     onFarmShare: (percent: number) => void,
     onForcedMobilization: (enabled: boolean) => void,
-    onOpenFront: (id: number) => void,
     forces: ForcesTab,
   ) {
     this.root = root;
     this.catalog = catalog;
     this.onFarmShare = onFarmShare;
     this.onForcedMobilization = onForcedMobilization;
-    this.onOpenFront = onOpenFront;
     this.forcesTab = forces;
     this.bar = el("div", "ib-bar");
-    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.frontList(), this.forcesSection(forces)];
+    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.forcesSection(forces)];
     root.replaceChildren(this.bar);
     this.sections.forEach((s, i) => {
       s.pane.hidden = true;
@@ -795,71 +786,7 @@ export class InfoBar {
     };
   }
 
-  // ---- 5. Fronts (05-Fronts §11.2) ----
-
-  /** À appeler quand le message d'un tour apporte de nouveaux fronts. */
-  setFronts(fronts: readonly FrontView[]): void {
-    this.fronts = fronts;
-  }
-
-  private frontList(): Section {
-    const count = el("strong", "ib-num");
-    // Mini-barre : part des fronts du joueur qui sont actifs.
-    const miniFronts = track("flow");
-    const button = this.button("fronts", [el("span", "ib-name", "Fronts"), count], miniFronts.root);
-    button.title = "Fronts de votre pays · actifs";
-    const activeTitle = el("h4", undefined, "Fronts actifs");
-    const peaceTitle = el("h4", undefined, "Fronts en paix");
-    const activeList = el("div", "fl-list");
-    const peaceList = el("div", "fl-list");
-    const empty = el("p", "muted", "Aucun front : aucune de vos routes ne touche un autre joueur.");
-    const pane = this.pane("fronts", el("h3", undefined, "Fronts"), activeTitle, activeList, peaceTitle, peaceList, empty);
-    const mine = (f: FrontView): number => f.players.indexOf(localPlayer());
-    const render = (): void => {
-      const list = this.fronts
-        .filter((f) => mine(f) >= 0)
-        .sort((a, b) => a.groups[mine(a)]! - b.groups[mine(b)]! || a.players[1 - mine(a)]! - b.players[1 - mine(b)]! || a.id - b.id);
-      const key = list.map((f) => `${f.id}:${f.active ? 1 : 0}:${f.connections.length}`).join(",");
-      if (key === this.frontsKey) return;
-      this.frontsKey = key;
-      const row = (f: FrontView): HTMLElement => {
-        const i = mine(f);
-        const other = f.players[1 - i]!;
-        const b = el("button", "fl-row");
-        b.type = "button";
-        const sw = el("span", "sw");
-        sw.style.background = rgbCss(playerColor(other));
-        b.append(
-          sw,
-          el("span", "fl-main", `Île n° ${f.groups[i]} · ${playerName(other)}`),
-          el("span", "muted small", `île n° ${f.groups[1 - i]} · `),
-          frontWidthIcon("inline-width-icon"),
-          el("span", "muted small", String(f.connections.length)),
-        );
-        b.title = `Largeur du front : ${f.connections.length} liaison${f.connections.length > 1 ? "s" : ""}`;
-        b.addEventListener("click", () => this.onOpenFront(f.id));
-        return b;
-      };
-      activeList.replaceChildren(...list.filter((f) => f.active).map(row));
-      peaceList.replaceChildren(...list.filter((f) => !f.active).map(row));
-      activeTitle.hidden = activeList.childElementCount === 0;
-      peaceTitle.hidden = peaceList.childElementCount === 0;
-      empty.hidden = list.length > 0;
-    };
-    return {
-      button,
-      pane,
-      head: () => {
-        const mineList = this.fronts.filter((f) => mine(f) >= 0);
-        const active = mineList.filter((f) => f.active).length;
-        count.textContent = `${active} / ${mineList.length}`;
-        span(miniFronts.fill, 0, pct(active, mineList.length));
-      },
-      body: render,
-    };
-  }
-
-  // ---- 6. Forces (05-Fronts §11.2) ----
+  // ---- 5. Forces (05-Fronts §11.2) ----
 
   private forcesSection(tab: ForcesTab): Section {
     const count = el("strong", "ib-num");

@@ -1,4 +1,4 @@
-// Onglet des forces (05-Fronts §11.2) : le détail de la sixième section de la barre d'informations. Barre du haut
+// Onglet des forces (05-Fronts §11.2) : le détail de la cinquième section de la barre d'informations. Barre du haut
 // (bouton « + » « RECRUTEMENT » à gauche, corbeille à droite pendant un glisser), réserve nationale en deux sections,
 // formation puis réserve (de vrais pions, un groupe par type), puis une section par front (fronts en guerre active, puis en paix, du plus long au plus court :
 // statut diplomatique, et par niche une icône et le nombre de divisions). Menu « + » : une ligne par niche, les types
