@@ -1,6 +1,6 @@
 // Onglet des forces (05-Fronts §11.2) : le détail de la sixième section de la barre d'informations. Barre du haut
-// (bouton « + » à gauche, corbeille à droite pendant un glisser), réserve nationale détaillée (de vrais pions, un
-// groupe par type), puis une section par front (fronts en guerre active, puis en paix, du plus long au plus court :
+// (bouton « + » « RECRUTEMENT » à gauche, corbeille à droite pendant un glisser), réserve nationale en deux sections,
+// formation puis réserve (de vrais pions, un groupe par type), puis une section par front (fronts en guerre active, puis en paix, du plus long au plus court :
 // statut diplomatique, et par niche une icône et le nombre de divisions). Menu « + » : une ligne par niche, les types
 // côte à côte avec « actuel / supportable », un clic crée une division.
 //
@@ -26,6 +26,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   return e;
 }
 
+/** La fenêtre d'un front, cible des glissers partis de l'onglet : elle reçoit les déposes sur ses lignes et ses boîtes. */
+export interface DropWindow {
+  drop(target: string, ids: readonly number[]): void;
+  /** Un glisser parti de l'onglet commence ou se termine : ses zones de dépose s'affichent. */
+  externalDrag(on: boolean): void;
+}
+
 export class ForcesTab implements DndHost {
   readonly military: MilitaryCatalog;
   /** Contenu du détail (la barre d'informations le pose dans son volet). */
@@ -37,8 +44,10 @@ export class ForcesTab implements DndHost {
   private readonly dnd: Dnd;
   private readonly plus: HTMLButtonElement;
   private readonly menu: HTMLElement;
+  private readonly formationZone: HTMLElement;
   private readonly reserveZone: HTMLElement;
   private readonly fronts: HTMLElement;
+  private readonly frontWindow: DropWindow;
   private readonly entries: { readonly index: number; readonly root: HTMLElement; readonly count: HTMLElement; readonly row: HTMLElement }[] = [];
   private frontViews: readonly FrontView[] = [];
   private divisions: readonly DivisionView[] = [];
@@ -49,14 +58,19 @@ export class ForcesTab implements DndHost {
   /** Front mis en évidence (survolé sur la carte ou dans la liste), 0 : aucun. */
   private highlighted = 0;
 
-  /** `highlightOnMap` : met en évidence la zone d'un front sur la carte (0 : retire), au survol de sa section. */
+  /**
+   * `highlightOnMap` : met en évidence la zone d'un front sur la carte (0 : retire), au survol de sa section.
+   * `frontWindow` : reçoit les déposes sur la fenêtre d'un front ouverte en même temps que l'onglet.
+   */
   constructor(
     military: MilitaryCatalog,
     catalog: FactoryCatalog,
     send: (order: HumanOrder) => void,
     openFront: (id: number) => void,
     highlightOnMap: (id: number) => void,
+    frontWindow: DropWindow,
   ) {
+    this.frontWindow = frontWindow;
     this.military = military;
     this.armamentIds = catalog.armamentIds;
     this.send = send;
@@ -74,7 +88,7 @@ export class ForcesTab implements DndHost {
     const plusImg = el("img", "fx-plus-icon");
     plusImg.src = "icons/miscellaneous/misc-plus-lighter.png";
     plusImg.alt = "Créer une division";
-    this.plus.append(plusImg);
+    this.plus.append(plusImg, el("span", "fx-plus-lab", "RECRUTEMENT"));
     this.plus.addEventListener("click", () => (this.menu.hidden ? this.openMenu() : this.closeMenu()));
     left.append(this.plus);
     const right = el("div", "fx-half");
@@ -91,13 +105,14 @@ export class ForcesTab implements DndHost {
     this.menu.hidden = true;
     this.buildMenu();
 
-    const reserve = el("div", "fx-sec fx-res");
-    reserve.dataset.drop = "reserve";
-    reserve.append(el("div", "fx-dip spacer"));
-    this.reserveZone = el("div", "fx-zone");
-    reserve.append(this.reserveZone);
+    // Formation en haut, réserve en bas : deux sections séparées comme les fronts. Seule la réserve reçoit une dépose.
+    const formation = this.resSection("FORMATION");
+    this.formationZone = formation.zone;
+    const reserve = this.resSection("RÉSERVE");
+    this.reserveZone = reserve.zone;
+    reserve.root.dataset.drop = "reserve";
     this.fronts = el("div", "fx-fronts");
-    this.content.append(bar, this.menu, reserve, this.fronts);
+    this.content.append(bar, this.menu, formation.root, reserve.root, this.fronts);
 
     document.addEventListener("pointerdown", (e) => {
       if (!this.menu.hidden && e.target instanceof Node && !this.menu.contains(e.target) && !this.plus.contains(e.target)) this.closeMenu();
@@ -119,9 +134,13 @@ export class ForcesTab implements DndHost {
 
   dragging(on: boolean): void {
     this.content.classList.toggle("dragging", on);
+    this.frontWindow.externalDrag(on);
   }
 
-  /** Dépose sur la corbeille (`trash`) ou sur la section d'un front (`front:id`) : seconde ligne (05-Fronts §4.1). */
+  /**
+   * Dépose sur la corbeille (`trash`), sur la section d'un front (`front:id`) : seconde ligne (05-Fronts §4.1), ou sur
+   * une ligne ou une boîte de la fenêtre d'un front ouverte (`line:…`, `box:…`), que la fenêtre traite.
+   */
   drop(target: string, ids: readonly number[]): void {
     const [kind, id] = target.split(":");
     if (kind === "trash") {
@@ -137,6 +156,8 @@ export class ForcesTab implements DndHost {
         return d !== undefined && !(d.front === front && d.status !== "moving");
       });
       if (list.length > 0) this.send({ type: "move_division", ids: list, front });
+    } else if (kind === "line" || kind === "box") {
+      this.frontWindow.drop(target, ids);
     }
   }
 
@@ -174,15 +195,25 @@ export class ForcesTab implements DndHost {
     if (!this.menu.hidden) this.updateMenu();
   }
 
-  // ---- réserve nationale ----
+  // ---- formation et réserve ----
 
+  /** Section de la réserve nationale : le libellé en gris derrière (premier enfant, donc sous la zone des pions), puis la zone. */
+  private resSection(label: string): { readonly root: HTMLElement; readonly zone: HTMLElement } {
+    const root = el("div", "fx-sec fx-res");
+    const zone = el("div", "fx-zone");
+    root.append(el("div", "fx-mlab", label), el("div", "fx-dip spacer"), zone);
+    return { root, zone };
+  }
+
+  /** Les divisions de la réserve nationale : en formation d'un côté, tout le reste (prêtes, en route vers la réserve) de l'autre. */
   private drawReserve(): void {
     const me = localPlayer();
     const mine = divisionsAt(this.divisions, 0, me);
     const key = mine.map((d) => `${d.id}:${d.state}:${d.status}`).join(",") + `|${this.reserveZone.clientWidth}`;
     if (key === this.reserveKey) return;
     this.reserveKey = key;
-    this.dnd.zone("res", true, true).set([{ el: this.reserveZone, divisions: mine }]);
+    this.dnd.zone("form", true, true).set([{ el: this.formationZone, divisions: mine.filter((d) => d.status === "formation") }]);
+    this.dnd.zone("res", true, true).set([{ el: this.reserveZone, divisions: mine.filter((d) => d.status !== "formation") }]);
   }
 
   // ---- fronts ----

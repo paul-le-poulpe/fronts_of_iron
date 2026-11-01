@@ -934,11 +934,20 @@ Un nouvel onglet en haut de l'écran : un aperçu de **toutes les divisions** du
 joueur, sous forme de pions (§11.3). Largeur d'exemple : 700 px (à fixer à
 l'implémentation). De haut en bas :
 
-1. **Barre du haut** : le **bouton « + »** (icône `misc-plus-lighter.png`)
-   occupe la **moitié gauche** ; la **corbeille** occupe la **moitié droite**
+1. **Barre du haut** : le **bouton « + »** (icône `misc-plus-lighter.png`,
+   suivie du mot « RECRUTEMENT » en gras, majuscules, 22 px, bleu) occupe la
+   **moitié gauche** ; la **corbeille** occupe la **moitié droite**
    et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
    réserve nationale les supprime (§3.5). Icône de corbeille : *provisoire*.
-2. **Réserve nationale**, détaillée : de vrais pions, **un groupe par type**
+2. **Réserve nationale**, en **deux sections séparées** comme les fronts
+   (même écart, même fond), **formation en haut, réserve en bas**
+   (décision de l'auteur, 1er novembre 2026). La section « formation » reçoit
+   les divisions en formation (§3.5) ; la section « réserve » toutes les
+   autres divisions de la réserve nationale (prêtes, ou en route vers elle).
+   Chaque section porte son libellé (« FORMATION », « RÉSERVE ») en gros et en
+   gras, en gris proche du fond, à droite et **derrière** les pions : un
+   libellé caché par les pions n'est pas gênant. Seule la section « réserve »
+   reçoit des déposes. Chacune est détaillée : de vrais pions, **un groupe par type**
    (§11.3 : espacé, puis piles), **jamais deux types dans la même pile**. Pas
    de colonnes de niche. Elle est **toujours déployée**, sans mode « trop de
    pions » ni survol : quand les piles ne tiennent pas sur une ligne, elles
@@ -976,7 +985,10 @@ l'implémentation). De haut en bas :
      *nom* : cliquez pour l'ouvrir. » (« Front en paix contre … » sinon).
 - **Glisser-déposer** (sélection : §11.4) d'une section à l'autre : une
   division déposée sur un front va en **seconde ligne** (§4.2) ; sur la
-  réserve nationale, elle y retourne. Pour retirer des divisions d'un front,
+  réserve nationale, elle y retourne. **Quand la fenêtre d'un front est
+  ouverte en même temps que l'onglet**, une division de l'onglet se dépose
+  aussi directement sur ses lignes, sa réaction rapide et ses boîtes de percée
+  (les mêmes déposes que depuis la fenêtre elle-même, §11.4). Pour retirer des divisions d'un front,
   le joueur **clique sur le front** : sa fenêtre s'ouvre (§11.4), avec le
   bouton « ← Retour ».
 

@@ -218,7 +218,7 @@ function onInit(s: Session, init: InitMessage): void {
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
   s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces(), startAxisMode);
-  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, (id) => openFront(id, true), (id) => s.view?.highlightFront(id));
+  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, (id) => openFront(id, true), (id) => s.view?.highlightFront(id), s.frontPanel);
   s.infobar = new InfoBar(
     $("infobar"),
     init.catalog,

@@ -814,8 +814,11 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (`ResizeObserver`). Dépose : sur une ligne du joueur ou la réaction rapide, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
   réserve ; les divisions déjà à leur destination sont filtrées.
 - **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la sixième section de la barre d'informations. Barre du haut : le « + »
-  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Réserve nationale : de vrais
-  pions, un groupe par type (`renderZone` avec `wrap`, via `Dnd.zone("res", true, true)`, redessinée si ses divisions ou sa largeur changent) :
+  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue`). Réserve nationale en deux sections (`resSection`) :
+  « FORMATION » (divisions `status === "formation"`, zone `"form"`) au-dessus de « RÉSERVE » (toutes les autres divisions de la réserve, zone `"res"`, seule
+  section avec `data-drop="reserve"`) ; le libellé est un `.fx-mlab` (même style que les lettres du menu « + »), premier enfant de la section donc
+  sous la zone des pions, couleur `--t-res-ink`. Dans chaque section, de vrais
+  pions, un groupe par type (`renderZone` avec `wrap`, via `Dnd.zone(clé, true, true)`, redessinée si ses divisions ou sa largeur changent) :
   toujours déployée, jamais en mode « trop de pions » ; sans place sur une ligne, les piles passent sur plusieurs lignes (blocs par niche, une
   niche sur une ligne si possible ; un type trop long est tronqué avec un « + » en `.pz-num`, `layout.groups` garde tous ses ids) et la hauteur de la
   section (`ZoneLayout.height`) suit, ce qui repousse les fronts vers le bas. Sections de front : fronts en guerre active puis
@@ -825,7 +828,10 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   ouvre la fenêtre du front ; `title` : « Front en guerre|paix contre *nom de l'adversaire* : cliquez pour l'ouvrir. » ; **surbrillance liée à la carte** :
   `pointerenter` / `pointerleave` d'une section appellent `MapView.highlightFront(id)` (zone dessinée comme au survol de la carte, `listFront`
   prime sur `hoverFront`), et `MapViewHooks.onHoverFront` (changement de front sous la souris) appelle `ForcesTab.setHighlight(id)`, qui met la
-  classe `hl` sur la section ; le repli du volet retire la surbrillance de la carte ; `data-drop="front:id"` : une dépose envoie `move_division { ids, front }` (seconde ligne). Les sections sont
+  classe `hl` sur la section ; le repli du volet retire la surbrillance de la carte ; `data-drop="front:id"` : une dépose envoie `move_division { ids, front }` (seconde ligne). **Glisser vers la fenêtre d'un front ouverte en même temps** :
+  `Dnd` trouve la cible par `document.elementsFromPoint`, donc les `data-drop` `line:…` et `box:…` de la fenêtre sont atteints ; `ForcesTab.drop` les
+  transmet à `FrontWindow.drop` (interface `DropWindow`, passée au constructeur), et `ForcesTab.dragging` appelle `FrontWindow.externalDrag` (classes `dragging ext` :
+  les zones de dépose s'affichent, pas la zone de retour). Les sections sont
   reconstruites seulement si leur contenu change. La sélection y est simple (l'interrupteur « Sélection avancée » est dans la fenêtre d'un front).
   **Menu « + »** : sous le bouton, une ligne par niche (fond de la niche, lettres à droite), les types côte à côte, du moins prioritaire au plus prioritaire
   (`NICHES[].types` parcouru à l'envers ; icône de 32 px et

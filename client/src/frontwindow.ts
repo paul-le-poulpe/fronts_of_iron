@@ -258,6 +258,12 @@ export class FrontWindow implements DndHost {
     this.win.classList.toggle("dragging", on);
   }
 
+  /** Un glisser parti de l'onglet des forces : comme un glisser de la fenêtre, sans la zone de retour (les pions viennent de la réserve). */
+  externalDrag(on: boolean): void {
+    this.win.classList.toggle("dragging", on);
+    this.win.classList.toggle("ext", on);
+  }
+
   /**
    * Dépose sur une ligne du joueur (`line:front:ligne`, ligne `first`, `second` ou `rapid`), sur une boîte de percée
    * (`box:front:boîte`, boîte 0 : la boîte « + », qui en crée une) ou sur la zone de retour (`reserve`).
