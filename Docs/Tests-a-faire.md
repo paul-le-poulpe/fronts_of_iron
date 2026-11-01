@@ -207,6 +207,16 @@ lancé (seul `npm run typecheck` a passé). À écrire :
 - Le scénario (`packages/engine/test/scenario.ts`) n'envoie pas `delete_factory`, et ses `build_factory` réussissent moins souvent : les mesures de 02-Engine §8 sont à refaire.
 - **Tests périmés** : `withTwoFactories` de `packages/engine/test/factories.test.ts` construit deux manufactures d'armes (villes 1 et 2) et sert à plusieurs tests (priorité des villes, ordres invalides, hash). À réécrire avec deux types d'usine différents.
 
+## Demande des tracteurs et des bateaux au remplissage (1er novembre 2026, 00-Game §8.2, provisoire)
+
+Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste :
+
+- Une ligne de tracteurs n'est remplie que si la production déjà remplie est sous la demande calculée avec les personnes qui resteraient, ses ouvriers et ses mineurs comptés. Cas de référence (une ville, 1 764 cases cultivables, une usine de pompes avec 5 lignes de pompes puis des lignes de tracteurs, population figée à 3 800) : 11 lignes de tracteurs remplies, stable d'un tour à l'autre.
+- Pas d'alternance : population figée entre 3 000 et 4 000 dans ce cas, le nombre de lignes de tracteurs remplies ne change plus après le premier tour.
+- `goodsDemand` des tracteurs et des bateaux = production retenue quand une ligne est refusée, sinon demande de la dernière ligne remplie ; la croissance des lignes et le trait noir du client tombent sur le même nombre de lignes que le moteur.
+- Les pompes gardent la demande du tour précédent.
+- **Test périmé** : `determinism.test.ts`. Le déterminisme tient (mêmes hashes), mais avec `botSeed` 4242 le scénario par défaut ne crée plus de division : ni soldats, ni prise, ni famine (`starvingPlayerTurns` = 0), et le garde-fou « le surplus négatif n'est pas testé » échoue. Les joueurs sans ligne de machines ne passent pas par la règle : c'est la trajectoire des bots qui diverge vers le tour 700. Avec `botSeed` 4243, 4244, 4245, 1 ou 2, tous les seuils du test sont atteints (4243 : 18 divisions, 18 prises, 2 789 tours-joueurs de famine). À changer à la passe finale.
+
 ## Client
 
 - Bouclier « défend une percée » et ligne de statut rouge du panneau de pion (1er novembre 2026), à vérifier à la

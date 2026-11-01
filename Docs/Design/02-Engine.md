@@ -510,13 +510,17 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
      pour chaque usine dans l'ordre de factories,
        pour chaque groupe dans l'ordre de l'usine,
          pour j de 1 à active :
-           si le groupe est un bien b et produit[b] ≥ goodsDemand[b] :
+           si le groupe est la pompe b et produit[b] ≥ goodsDemand[b] :
              groupe suivant (pas un ARRÊT : 00-Game §8.2, la production d'un
              bien ne dépasse pas sa demande du tour précédent)
            demande = fer + ironPerLine(bien)
            si demande > capacité : ARRÊT (de tout le remplissage)
            m = mineurs(demande, pompes)
            si travailleurs + workersForRank(bien, j + 1) + m > population : ARRÊT
+           si le groupe est le tracteur ou le bateau b (provisoire, 00-Game §8.2) :
+             d = fieldMachineDemand(b, population − travailleurs − workersForRank(bien, j + 1) − m)
+             si produit[b] ≥ d : demandeRetenue[b] = produit[b] ; groupe suivant
+             demandeRetenue[b] = d
            travailleurs += workersForRank(bien, j + 1) ; mineurs = m ; fer = demande ; filled++
            si bien : produit[b] += productionPerLine
 
@@ -1029,7 +1033,16 @@ points 31 et 32 sont des choix de plus.
     est ≥ `goodsDemand` du bien. `goodsDemand` (dans l'état, haché) = machines
     d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
     la référence étant `machineReference(cfg, disponibles + report, surface)`
-    pour les tracteurs et les bateaux. Pour les pompes, la référence est les
+    pour les tracteurs et les bateaux (`fieldMachineDemand`). Tracteurs et
+    bateaux, provisoire (00-Game §8.2, peut-être retiré) : la demande retenue
+    au remplissage, c'est-à-dire la production déjà remplie si une ligne a été
+    refusée, sinon la demande calculée pour la dernière ligne remplie, les
+    disponibles étant ceux qui resteraient avec cette ligne ; sans ligne
+    examinée, les disponibles après toutes les lignes. Le remplissage ne lit
+    plus `goodsDemand` pour eux : calculée au tour précédent, elle faisait
+    alterner les lignes à chaque tour (boucle de gain environ −2 : une ligne
+    de tracteurs de moins rend 200 fermiers, donc 20 tracteurs de demande, donc
+    2 lignes). Pour les pompes, la référence est les
     mineurs à pleine mécanisation des cases qu'il faudrait pour le fer de **toutes les
     lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
     une usine de pompes seule, plafonnée à une demande nulle (§4, remplissage),

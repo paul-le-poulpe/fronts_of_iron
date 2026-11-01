@@ -746,7 +746,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      précédent), barre pleine = machines d'une mécanisation totale,
      `stats.fullMachines`, recopié de `Player.goodsDemand` du moteur (la
      demande qui arrête aussi la croissance automatique des lignes, 00-Game
-     §8.2). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
+     §8.2 ; pour les tracteurs et les bateaux, la demande retenue au
+     remplissage, provisoire). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
      ligne de légende.
   4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
      type d'armement qui a des lignes, un stock ou de l'équipement sur les fronts, barre de gauche à droite :

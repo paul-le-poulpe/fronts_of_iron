@@ -179,6 +179,29 @@ interface LineFill {
   readonly miners: number;
   /** Fer demandé = extrait : celui des lignes remplies. */
   readonly iron: number;
+  /**
+   * Par bien, tracteurs et bateaux : la production déjà remplie si une ligne a été refusée pour sa demande, sinon la
+   * demande calculée pour la dernière ligne remplie (`fieldMachineDemand`) ; -1 si aucune ligne n'a été examinée (et
+   * pour les pompes).
+   */
+  readonly fieldDemand: readonly number[];
+}
+
+/**
+ * Demande de tracteurs (`b` = TRACTOR) ou de bateaux de pêche (FISHING_BOAT) si `rest` personnes restent pour les
+ * champs et la pêche (00-Game §4, §6.2, §8.2) : machines d'une mécanisation totale (référence × m_max), la référence
+ * étant les disponibles de l'activité plus le report de l'autre, comme dans `allocate`. Les machines du report sont
+ * les effectives.
+ */
+function fieldMachineDemand(p: Player, b: number, rest: number): number {
+  const farmers = Math.floor((rest * p.farmPercent) / 100);
+  const fishers = rest - farmers;
+  const ref =
+    b === TRACTOR
+      ? machineReference(FARMING, farmers + Math.max(0, fishers - requiredWorkers(FISHING, fishers, p.goodsEffective[FISHING_BOAT]!, p.seaTiles)), p.farmTiles)
+      : machineReference(FISHING, fishers + Math.max(0, farmers - requiredWorkers(FARMING, farmers, p.goodsEffective[TRACTOR]!, p.farmTiles)), p.seaTiles);
+  const cfg = b === TRACTOR ? FARMING : FISHING;
+  return Math.ceil((ref * cfg.maxMachinesPer1000) / MILLI);
 }
 
 /**
@@ -187,9 +210,12 @@ interface LineFill {
  * `workersPerLine` ouvriers (propre à son bien) et les mineurs du fer qu'elle ajoute, en entier ou
  * pas du tout ; la première ligne qui ne peut pas être remplie arrête tout le
  * remplissage. Une ligne de bien n'est pas remplie quand la production déjà
- * remplie pour ce bien atteint sa demande du tour précédent (`goodsDemand`,
- * 00-Game §8.2) : ses ouvriers vont ailleurs, et le remplissage continue avec les
- * groupes suivants. Écrit `filled` dans les groupes.
+ * remplie pour ce bien atteint sa demande (00-Game §8.2) : ses ouvriers vont
+ * ailleurs, et le remplissage continue avec les groupes suivants. Pompes : la
+ * demande du tour précédent (`goodsDemand`). Tracteurs et bateaux : la demande
+ * calculée ici, avec les personnes qui resteraient si la ligne était remplie
+ * (`fieldMachineDemand`, ses ouvriers et ses mineurs comptés) ; calculée au tour
+ * précédent, elle faisait alterner les lignes à chaque tour. Écrit `filled` dans les groupes.
  * Les ouvriers d'une ligne dépendent de son rang dans le groupe (`workersForRank`).
  * `people` : la population qui peut travailler, soldats déduits (05-Fronts §4.1).
  */
@@ -200,17 +226,26 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
   for (const f of p.factories) for (const g of f.groups) g.filled = 0;
   const capacity = p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile;
   const produced = new Array<number>(p.goods.length).fill(0);
+  const fieldDemand = new Array<number>(p.goods.length).fill(-1);
   scan: for (const f of p.factories) {
     for (const g of f.groups) {
       const { ironPerLine } = productConfig(g.good);
       const b = armamentIndex(g.good) < 0 ? goodIndex(g.good) : -1;
       for (let j = 0; j < g.active; j++) {
-        if (b >= 0 && produced[b]! >= p.goodsDemand[b]!) break;
+        const field = b === TRACTOR || b === FISHING_BOAT;
+        if (b >= 0 && !field && produced[b]! >= p.goodsDemand[b]!) break;
         const demand = iron + ironPerLine;
         if (demand > capacity) break scan;
         const needed = minersFor(demand, machines);
         const lineWorkers = workersForRank(g.good, j + 1);
         if (workers + lineWorkers + needed > people) break scan;
+        if (field) {
+          const want = fieldMachineDemand(p, b, people - workers - lineWorkers - needed);
+          // Ligne refusée : la demande retenue est la production déjà remplie, que les lignes utiles du client et la
+          // croissance des lignes retrouvent ; ligne remplie : la demande qui la justifie.
+          fieldDemand[b] = produced[b]! >= want ? produced[b]! : want;
+          if (produced[b]! >= want) break;
+        }
         workers += lineWorkers;
         miners = needed;
         iron = demand;
@@ -219,7 +254,7 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
       }
     }
   }
-  return { workers, miners, iron };
+  return { workers, miners, iron, fieldDemand };
 }
 
 /**
@@ -375,7 +410,7 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
   // se fait sur le reste, blessés exclus (00-Game §4.2). En mobilisation forcée, le renfort des divisions est déjà passé
   // avant (05-Fronts §4.3).
   const people = Math.max(0, p.population - p.soldiers - p.hurt);
-  const { lines, remaining, availableFarmers, availableFishers, spareFarmers, spareFishers, farm, sea } = allocate(p, people);
+  const { lines, remaining, farm, sea } = allocate(p, people);
 
   p.farmers = farm.workers;
   p.fishers = sea.workers;
@@ -393,10 +428,13 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
   // Celle de `minersFor` pour le fer de toutes les lignes remplies (00-Game §7).
   p.mineMechanization = mechanization(MINING, fullMechanizationWorkers(MINING, p.minedTiles), p.goodsEffective[MINING_MACHINE]!);
   p.ironExtracted = lines.iron;
-  // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2).
+  // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2). Tracteurs et bateaux :
+  // celle de la dernière ligne examinée au remplissage, celle qui l'a arrêté, pour que la croissance des lignes et le
+  // client voient la même ; sans ligne examinée, celle des personnes restées après les lignes.
   const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);
-  p.goodsDemand[TRACTOR] = full(machineReference(FARMING, availableFarmers + spareFishers, p.farmTiles), FARMING.maxMachinesPer1000);
-  p.goodsDemand[FISHING_BOAT] = full(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), FISHING.maxMachinesPer1000);
+  for (const b of [TRACTOR, FISHING_BOAT]) {
+    p.goodsDemand[b] = lines.fieldDemand[b]! >= 0 ? lines.fieldDemand[b]! : fieldMachineDemand(p, b, remaining);
+  }
   // Pompes : sur le fer demandé par toutes les lignes actives, pas sur le fer extrait.
   // Sinon une usine de pompes seule, plafonnée à une demande nulle, n'extrairait
   // jamais de fer et sa demande resterait nulle.
