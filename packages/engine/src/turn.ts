@@ -6,7 +6,7 @@ import { FRONTS } from "./config.ts";
 import { countSoldiers } from "./divisions.ts";
 import { stepEconomy } from "./economy.ts";
 import { applyIntent, type Intent } from "./intents.ts";
-import { applyArrivals, arrangeAll, reinforceAfterEconomy, reinforceBeforeEconomy, trimAll } from "./placement.ts";
+import { applyArrivals, arrangeAll, reinforceAfterEconomy, reinforceBeforeEconomy, swapAtRest, trimAll } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 export interface Turn {
@@ -38,7 +38,7 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   expireProposals(state);
   // Ordre du tour (05-Fronts §13.2, provisoire) : ordres ; renfort en mobilisation forcée ; économie (population,
   // nourriture, croissance, pour chaque joueur dans l'ordre des identifiants) ; renfort parmi les inactifs ;
-  // arrivées ; excédents ; rangement des lignes ; round de combat et prises de villes.
+  // arrivées ; excédents ; rangement des lignes ; échange hors combat ; round de combat et prises de villes.
   countSoldiers(state);
   reinforceBeforeEconomy(state);
   stepEconomy(state);
@@ -47,6 +47,7 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   trimAll(state);
   countSoldiers(state);
   arrangeAll(state);
+  swapAtRest(state);
   if (turn.turn % FRONTS.combatTurns === 0) combatRound(state, changed);
   for (const t of changed) state.changedMark[t] = 0;
   state.tick = turn.turn;

@@ -314,7 +314,8 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .fx-dip.peace { background: #3b82f6; }
 .fx-dip.spacer { visibility: hidden; }
 .fx-width { flex: none; display: flex; align-items: center; gap: 4px; }
-.fx-width-icon { width: 16px; height: 16px; background: #888; }
+.fx-width-icon { width: 16px; height: 16px; image-rendering: pixelated; display: block; }
+.inline-width-icon { width: 16px; height: 16px; image-rendering: pixelated; vertical-align: -3px; margin-right: 2px; }
 .fx-width-num { font: 700 20px/32px system-ui, sans-serif; color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; min-width: 14px; }
 .fx-zone { position: relative; flex: 1; min-width: 0; min-height: 50px; }
 .fx-tags { display: flex; align-items: center; gap: 16px; }
@@ -357,6 +358,7 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .ip-name { display: inline-flex; align-items: center; gap: 6px; }
 .ip-name b { font-weight: 700; }
 .ip-niche { color: var(--t-ip-niche); font-size: 12px; }
+.ip-status { color: var(--t-red); font-weight: 700; margin-bottom: 4px; }
 .ip-desc { color: var(--t-ip-desc); margin-bottom: 6px; }
 .ip-sep { height: 1px; margin: 6px 0; background: var(--t-ip-sep); }
 .ip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }

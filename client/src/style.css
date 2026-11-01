@@ -281,14 +281,14 @@ input[type="number"] {
 .prod-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .prod-cities { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
 .prod-reserves { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-.fsec { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.fsec { --fsec-line: #8f8b80; border: 2px solid var(--fsec-line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
 .fsec.dragging, .grow.dragging { opacity: 0.5; }
 .fsec.drop, .grow.drop { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* Trait très léger entre deux lignes de l'usine (la première n'en a pas : l'en-tête la précède). */
-.fsec > :is(.grow, .unlocked, .locked) ~ :is(.grow, .unlocked, .locked) { border-top: 1px solid #0000001f; padding-top: 6px; }
+/* Trait entre deux lignes de l'usine, de même épaisseur et couleur que le contour (la première n'en a pas : l'en-tête la précède). */
+.fsec > :is(.grow, .unlocked, .locked) ~ :is(.grow, .unlocked, .locked) { border-top: 2px solid var(--fsec-line); padding-top: 6px; }
 .fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
-.grow { display: grid; grid-template-columns: auto minmax(0, 7.5em) minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
+.grow { display: grid; grid-template-columns: auto auto minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
 .grow > .muted { grid-column: 2 / -1; margin-top: -4px; }
 .grow input[type="range"] { width: 100%; min-width: 0; }
 /* Curseur des lignes : la piste native est transparente ; dessous, une piste grise
@@ -308,6 +308,8 @@ input.lines-slider::-moz-range-thumb { width: 10px; height: 10px; border-radius:
 .cnt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cost { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .grow > .muted .ib-img { vertical-align: middle; margin: 0 2px; }
+.grow > .muted b { color: var(--fg); font-weight: 700; }
+.unit-ic { width: 16px; height: 16px; vertical-align: middle; margin: 0 2px; }
 .locked { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; opacity: 0.85; }
 .arrow { position: relative; display: inline-block; width: 64px; height: 8px; border: 1px solid var(--muted); border-radius: 4px; overflow: hidden; }
 .arrow i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }

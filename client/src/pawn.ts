@@ -4,6 +4,7 @@
 // positions. Chaque pion porte `data-id` (identifiant de la division).
 
 import "./pawn.css";
+import { defendsBreakthrough } from "./divisions.ts";
 import { icon32Path } from "./icons.ts";
 import type { DivisionView, MilitaryCatalog } from "./protocol.ts";
 
@@ -171,6 +172,8 @@ function pawnHtml(p: Placed, scale: number, lifted: boolean, military: MilitaryC
     h += `<img class="pz-status" src="icons/miscellaneous/icon-clock.png" alt="" draggable="false">`;
   } else if (d.status === "fleeing") {
     h += `<img class="pz-status" src="icons/miscellaneous/icon-white-flag.png" alt="" draggable="false">`;
+  } else if (defendsBreakthrough(d)) {
+    h += `<img class="pz-status" src="icons/miscellaneous/icon-shield.png" alt="" draggable="false">`;
   }
   if (d.state < scale) {
     const state = Math.max(0, d.state);

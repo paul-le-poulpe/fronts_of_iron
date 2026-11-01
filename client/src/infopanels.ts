@@ -3,7 +3,7 @@
 // (position fixe : aucun conteneur à défilement ne le coupe). La page n'applique aucune règle : elle écrit ce que le
 // moteur envoie (`DivisionTypeInfo`, `DivisionView`).
 
-import { currentAttacks, maxAttacks, statePercent, typeOf } from "./divisions.ts";
+import { currentAttacks, maxAttacks, statePercent, statusLabel, typeOf } from "./divisions.ts";
 import { icon32Path, productIconPath } from "./icons.ts";
 import { equipmentName, nicheName, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
@@ -44,6 +44,15 @@ export function motorIcon(motorized: boolean): HTMLImageElement {
   return img;
 }
 
+/** Icône de 16 × 16 px de la largeur de front ; `className` change la mise en forme (`ip-misc` : dans une ligne de panneau). */
+export function frontWidthIcon(className = "ip-misc"): HTMLImageElement {
+  const img = el("img", className);
+  img.src = "icons/miscellaneous/icon-front-width.png";
+  img.alt = "Largeur de front";
+  img.draggable = false;
+  return img;
+}
+
 /** Une statistique : petite icône (provisoire : un carré de 16 × 16 px), libellé, valeur. */
 const stat = (label: string, value: string): HTMLElement => line(el("span", "ip-sq"), label, value);
 
@@ -66,8 +75,8 @@ const ratio = (scale100: number): string => `× ${fmt.format(scale100 / 100)}`;
 function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
   if (type.hitPoints > 0) p.append(stat("PV", num(type.hitPoints)));
   if (type.armorPercent > 0) p.append(stat("Blindage", `${type.armorPercent} %`));
-  p.append(stat("Largeur de front", `${type.frontWidth} liaison${type.frontWidth > 1 ? "s" : ""}`));
-  if (type.breakthroughWidth > 0) p.append(stat("Largeur de front en percée", `${type.breakthroughWidth} liaison${type.breakthroughWidth > 1 ? "s" : ""}`));
+  p.append(line(frontWidthIcon(), "Largeur de front", `${type.frontWidth} liaison${type.frontWidth > 1 ? "s" : ""}`));
+  if (type.breakthroughWidth > 0) p.append(line(frontWidthIcon(), "Largeur de front en percée", `${type.breakthroughWidth} liaison${type.breakthroughWidth > 1 ? "s" : ""}`));
   if (type.attackMultiplier !== 100) p.append(stat("Multiplicateur en attaque", ratio(type.attackMultiplier)));
   if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) p.append(stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier)));
   p.append(line(motorIcon(type.motorized), "Déplacement", type.motorized ? "Motorisé" : "À pied"));
@@ -93,6 +102,9 @@ export function typePanel(type: DivisionTypeInfo): HTMLElement {
 export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLElement {
   const type = typeOf(military, d);
   const p = el("div", "ip");
+  // Ligne optionnelle au-dessus du nom : ce que veut dire l'icône de statut du pion.
+  const status = statusLabel(d);
+  if (status !== null) p.append(el("div", "ip-status", status));
   // Icône du type, puis rang : le rang n'existe pas encore dans les règles (05-Fronts §16), donc 0 ; l'icône de 8 × 10 est agrandie ×2 (16 × 20).
   const icon = el("img", "ip-icon");
   icon.src = `icons/${icon32Path(type.icon)}`;

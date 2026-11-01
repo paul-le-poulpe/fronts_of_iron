@@ -446,12 +446,21 @@ place.
   en manquent encore ; parties entières, une unité de plus aux divisions de
   plus petit identifiant pour le reste. Le renfort respecte « pas
   d'excédent » (§3.2).
+- **Progressif** (`FRONTS.reinforcePercentPerRound`, **5**) : le renfort n'a
+  lieu qu'une fois par round de combat (tours multiples de `combatTurns`) ; un
+  composant ne regagne alors que 5 % de son effectif complet (au moins 1
+  exemplaire), hommes compris. Une division vide est pleine en 20 rounds (20 s). L'état
+  d'une division se déduit de ses exemplaires (§3.3) : il remonte donc de la
+  même façon, sans second compteur. Ce qui n'est pas pris reste au stock.
 
 ### 4.4 Déplacement
 
-- Tout déplacement entre la réserve nationale et un front, ou entre deux
+- Tout déplacement de la réserve nationale vers un front, ou entre deux
   fronts, prend `FRONTS.transferRounds` **rounds de combat** (**10**, soit
-  100 tours, 10 s).
+  100 tours, 10 s). Le retour d'un front vers la réserve nationale se fait
+  **sans délai** (décision de l'auteur, 1er novembre 2026) : le délai est payé
+  à la réaffectation vers un front. Une division en route vers un front et
+  rappelée à la réserve y est aussitôt.
 - **Sans délai** entre la seconde ligne, la réaction rapide et les boîtes de
   percée d'un même front (§4.6). *Provisoire* : sans délai aussi entre la
   première ligne et ces endroits. Un nouvel ordre vers la destination d'un déplacement en cours ne
@@ -493,8 +502,8 @@ Règles :
   boîte n'est supprimée que quand elle n'a plus aucune division, ni dans la
   boîte ni engagée dans une de ses percées.
 - **Déplacements** : sans délai entre la seconde ligne, la réaction rapide et
-  les boîtes du même front (§4.4) ; avec le délai habituel vers la réserve ou
-  un autre front.
+  les boîtes du même front (§4.4), et vers la réserve ; avec le délai habituel
+  vers un autre front.
 - **Renfort** (§4.3) : comme toute division qui n'est pas en combat. Une
   division engagée dans une percée (attaquant, tranche de première ligne ou
   force de contre-attaque) est en combat : pas de renfort.
@@ -540,6 +549,16 @@ l'état est **inférieur à la moitié** de celui d'une division disponible de l
 seconde ligne **de la même niche** (*provisoire* : même niche) **échange sa
 place** avec elle. Division choisie en seconde ligne : la meilleure selon
 l'ordre du §4.2. Sans délai.
+
+**Hors combat** (front sans attaque sur tout le front ni percée en combat,
+c'est-à-dire sans renfort coupé en première ligne, §4.3) : à chaque tour, une
+division de première ligne est remplacée par la division disponible de la
+seconde ligne **de plus grand état**, si celle-ci est de la même niche, **du même
+type ou d'un type prioritaire** (rang de la niche, §4.2) et a un état
+**strictement supérieur** au sien. Si aucune division de seconde ligne ne
+remplit ces conditions (type moins prioritaire, ou état pas supérieur), la
+règle de la moitié ci-dessus s'applique. *Provisoire* : « type prioritaire » =
+rang de la niche (§4.2) égal ou meilleur.
 
 ### 5.4 Fuite
 
@@ -1003,9 +1022,15 @@ division » (30 octobre 2026) et la session de l'interface (31 octobre 2026).
   pion (§16).
 - **Statut** : icône de 16 × 16 en taille réelle, coin **bas gauche** :
   `icons/miscellaneous/icon-clock.png` en formation ou en déplacement,
-  `icon-white-flag.png` en fuite. Le rang et le statut ne se chevauchent pas.
+  `icon-white-flag.png` en fuite, `icon-shield.png` (bouclier) pour une
+  division qui **défend une percée** (tranche de première ligne ou force de
+  contre-attaque : elle reste dans sa colonne, et compte aussi dans la colonne
+  « Défense » du petit tableau de la percée, §11.4). Le rang et le statut ne se
+  chevauchent pas. La force qui perce n'a pas de pion dans les colonnes : elle
+  est dans le petit tableau.
 - **Transparence** : avec une horloge ou un drapeau, l'icône du type est à
-  **50 % d'opacité**. Rang, statut et barre gardent leurs couleurs.
+  **50 % d'opacité**. Rang, statut et barre gardent leurs couleurs. Le bouclier
+  ne rend pas l'icône transparente : la division combat.
 - **Rectangle de sélection** : fond gris-bleu clair
   `rgba(159, 182, 209, 0.60)`, coins arrondis de 4 px, derrière les pions.
   48 px de haut (8 px au-dessus et au-dessous des pions), 3 px de marge à
@@ -1303,6 +1328,11 @@ la ligne survolée (*provisoire*) :
 - apparaît **14 px au-dessus du pion**, jamais collé à la souris ;
 - **disparaît dès qu'une sélection avancée (après le premier clic) ou un
   glisser commence** ;
+- **ligne de statut**, optionnelle, **au-dessus de l'en-tête**, en **rouge et en
+  gras** : ce que veut dire l'icône de statut du pion (§11.3) — « En
+  entraînement » (en formation), « En route vers le front » (ou « vers la
+  réserve »), « En repli » (en fuite), « Défend une percée ». Rien d'écrit quand
+  la division n'a pas de statut ;
 - en-tête : l'**icône du type** (32 × 32 px), puis l'**icône de rang** (rang 0
   compris ; agrandie ×2 : 16 × 20 px), puis le **nom du type en gras** ;
   **niche en gris** à droite ;
@@ -1341,6 +1371,7 @@ la ligne survolée (*provisoire*) :
 | `fleeStatePercent` | 25 | état sous lequel (ou auquel) une division fuit |
 | `fleeRounds` | 10 | rounds avant qu'une division en fuite puisse revenir en première ligne |
 | `swapStatePercent` | 50 | une division de première ligne échange quand son état est sous ce % de celui d'une division de seconde ligne |
+| `reinforcePercentPerRound` | 5 | part de son effectif complet qu'un composant regagne par round de combat (§4.3) |
 | `capturePercent` | 1 | position du front, en % de la route depuis la ville prise |
 | `minEncirclementLengthPercent` | 25 | part de la route que le perdant doit tenir pour que la route soit encerclée |
 | `encirclementLossPercent` | 50 | pertes d'encerclement |
@@ -1425,7 +1456,7 @@ interface Breakthrough {          // breakthroughs.ts
 
 Ordres ; économie (00-Game §4 : répartition sur `population − hommes des
 divisions − blessés`) ; renfort (§4.3) ; fins de formation et arrivées ; excédents
-(§3.2) ; rangement des lignes (§4.2) ; si `tick % combatTurns = 0`, le round de
+(§3.2) ; rangement des lignes (§4.2) ; échange hors combat (§5.3) ; si `tick % combatTurns = 0`, le round de
 combat de chaque front actif (§6, §7) ; prises de villes et encerclement (§10).
 
 ### 13.3 Hash (02-Engine §5)
@@ -1517,7 +1548,8 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - renfort : ni en déplacement, ni en fuite ; calcul par parts égales et reste
   par identifiant (§4.3) ;
 - déplacement entre les lignes d'un même front sans délai ; nouvel ordre vers
-  la destination en cours sans nouveau délai (§4.4) ;
+  la destination en cours sans nouveau délai ; retour à la réserve sans délai
+  (§4.4) ;
 - interface : sélection avancée seulement dans la fenêtre d'un front (pas dans
   l'onglet des forces) ; une division en fuite peut être déplacée (§11.4) ;
 - `move_division` : divisions invalides ignorées (§5.2) ;

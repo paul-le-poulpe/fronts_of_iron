@@ -26,6 +26,7 @@
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
+import { frontWidthIcon } from "./infopanels.ts";
 import { localPlayer, playerName, productName } from "./names.ts";
 import { playerColor, rgbCss } from "./painter.ts";
 import { type FactoryCatalog, type FrontView, type HumanDetail, type PlayerStats } from "./protocol.ts";
@@ -406,7 +407,6 @@ export class InfoBar {
         tip: "Hommes de vos divisions. Ils mangent mais ne travaillent pas. Une famine ne les retire jamais.",
       },
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
-    ];
       // Dernier (00-Game §4.2) : non comptés dans le total affiché, ni dans les parts ; ni emploi ni recrutement.
       {
         label: "Blessés",
@@ -415,8 +415,9 @@ export class InfoBar {
         read: (s: PlayerStats) => s.hurt,
         tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque tour, un petit nombre disparaît (au moins un).",
       },
-    const stacked = el("div", "ib-stack");
+    ];
     const hurtRow = occupations.length - 1;
+    const stacked = el("div", "ib-stack");
     const stackParts = (bar: HTMLElement): HTMLElement[] =>
       occupations.map((o) => {
         const part = el("i");
@@ -440,8 +441,8 @@ export class InfoBar {
       value.title = "Personnes · part";
       const label = el("span", "ib-label");
       label.append(icon(`population/${o.icon}.png`), o.label);
-      // L'engrenage dit que ce métier se mécanise ; son infobulle est celle de la machine.
       if (o.tip !== undefined) label.title = o.tip;
+      // L'engrenage dit que ce métier se mécanise ; son infobulle est celle de la machine.
       if (o.machine !== undefined) label.append(gearIcon(o.machine));
       r.append(sw, label, t.root, value);
       return { r, fill: t.fill, need, track: t.root, value };
@@ -827,8 +828,11 @@ export class InfoBar {
         b.append(
           sw,
           el("span", "fl-main", `Île n° ${f.groups[i]} · ${playerName(other)}`),
-          el("span", "muted small", `île n° ${f.groups[1 - i]} · ${f.connections.length} connexion${f.connections.length > 1 ? "s" : ""}`),
+          el("span", "muted small", `île n° ${f.groups[1 - i]} · `),
+          frontWidthIcon("inline-width-icon"),
+          el("span", "muted small", String(f.connections.length)),
         );
+        b.title = `Largeur du front : ${f.connections.length} liaison${f.connections.length > 1 ? "s" : ""}`;
         b.addEventListener("click", () => this.onOpenFront(f.id));
         return b;
       };

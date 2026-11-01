@@ -9,10 +9,11 @@
 // simple (un clic, §11.4) : l'interrupteur « Sélection avancée » est dans la fenêtre d'un front.
 
 import "./forces.css";
+import { onPress } from "./burst.ts";
 import { countTag } from "./counttag.ts";
 import { creatable, divisionsAt, eliteAllowed, opponentOf, sortedFronts, supportable, typeOf } from "./divisions.ts";
 import { Dnd, type DndHost } from "./dnd.ts";
-import { hidePanel, showTypePanel, typePanel } from "./infopanels.ts";
+import { frontWidthIcon, hidePanel, showTypePanel, typePanel } from "./infopanels.ts";
 import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, nicheName, playerName } from "./names.ts";
 import { playerColor, rgbCss } from "./painter.ts";
@@ -206,10 +207,10 @@ export class ForcesTab implements DndHost {
         section.dataset.front = String(f.id);
         section.style.background = rgbCss(playerColor(opponentOf(f, me)));
         section.append(el("div", `fx-dip ${f.active ? "war" : "peace"}`));
-        // Largeur du front (nombre de connexions, 05-Fronts §2) : symbole provisoire (carré gris) puis le nombre.
+        // Largeur du front (nombre de connexions, 05-Fronts §2) : l'icône de largeur de front, puis le nombre.
         const width = el("div", "fx-width");
         width.title = "Largeur du front, en liaisons";
-        width.append(el("div", "fx-width-icon"), el("span", "fx-width-num", String(f.connections.length)));
+        width.append(frontWidthIcon("fx-width-icon"), el("span", "fx-width-num", String(f.connections.length)));
         section.append(width);
         const opponent = playerName(opponentOf(f, me));
         section.title = `${f.active ? "Front en guerre" : "Front en paix"} contre ${opponent} : cliquez pour l'ouvrir.`;
@@ -253,7 +254,7 @@ export class ForcesTab implements DndHost {
         img.draggable = false;
         const count = el("span", "fx-cnt");
         root.append(img, count);
-        root.addEventListener("click", () => this.create(type.index));
+        onPress(root, (n) => this.create(type.index, n));
         root.addEventListener("pointerenter", () => showTypePanel(typePanel(type), this.menu.getBoundingClientRect(), row.getBoundingClientRect()));
         root.addEventListener("pointerleave", hidePanel);
         types.append(root);
@@ -296,12 +297,15 @@ export class ForcesTab implements DndHost {
     }
   }
 
-  /** Un clic sur un type crée une division s'il le peut (05-Fronts §3.5) ; sans effet sinon. */
-  private create(index: number): void {
+  /**
+   * Un appui sur un type crée `count` divisions s'il le peut (05-Fronts §3.5) ; sans effet sinon. `count` vaut 5 avec
+   * Maj, 10 avec Ctrl (burst.ts) : le moteur écarte les ordres que les inactifs ou le stock ne permettent plus.
+   */
+  private create(index: number, count: number): void {
     if (this.last === null) return;
     const type = this.military.divisions[index]!;
     if (!this.canCreate(type, this.last.stats, this.last.detail)) return;
-    this.send({ type: "create_division", division: type.id });
+    for (let i = 0; i < count; i++) this.send({ type: "create_division", division: type.id });
   }
 
   /** Équipement et inactifs suffisent, et la limite des élites n'est pas atteinte (05-Fronts §3.5). */

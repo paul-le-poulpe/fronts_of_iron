@@ -21,6 +21,11 @@ export const FRONTS = {
   /** Une division de première ligne échange sa place quand son état est sous ce % de celui d'une division de seconde ligne. */
   swapStatePercent: 50,
   /**
+   * Renfort : part de son effectif complet (en %, par composant) qu'une division peut regagner par round de combat
+   * (5 : une division vide est pleine en 20 rounds, 20 s). Le renfort n'a lieu qu'aux tours multiples de `combatTurns`.
+   */
+  reinforcePercentPerRound: 5,
+  /**
    * Position du front, en % de la longueur de la route depuis la ville prise, sur
    * les connexions créées par une prise de ville (1 : l'attaquant tient 1 %, le
    * défenseur 99 %).

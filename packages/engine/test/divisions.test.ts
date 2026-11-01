@@ -163,11 +163,22 @@ describe("déplacement (05-Fronts §4.4, §5.2)", () => {
     assert.deepEqual([d.arrivalTick, d.line, d.engaged], [0, LINE_FIRST, 1000]);
   });
 
-  it("front → réserve : le même délai", () => {
+  it("front → réserve : sans délai ; le délai est payé à la réaffectation vers un front", () => {
     const s = duel();
     const d = put(s, 1, "regulars", front(s).id);
     turn(s, move(1, [d.id], 0));
-    assert.deepEqual([d.front, d.line, d.engaged, d.arrivalTick], [0, LINE_SECOND, 0, s.tick + 100]);
+    assert.deepEqual([d.front, d.line, d.engaged, d.arrivalTick], [0, LINE_SECOND, 0, 0]);
+    turn(s, move(1, [d.id], front(s).id, "first"));
+    assert.deepEqual([d.front, d.arrivalTick], [front(s).id, s.tick + 100]);
+  });
+
+  it("en route vers un front puis rappelée à la réserve : sans délai", () => {
+    const s = duel();
+    const d = put(s, 1, "regulars");
+    turn(s, move(1, [d.id], front(s).id, "first"));
+    assert.ok(isMoving(d));
+    turn(s, move(1, [d.id], 0));
+    assert.deepEqual([d.front, d.arrivalTick], [0, 0]);
   });
 
   it("entre les deux lignes d'un même front : sans délai, la ligne demandée est prise tout de suite", () => {

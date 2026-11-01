@@ -112,6 +112,23 @@ export interface PendingOrder {
   readonly order: HumanOrder;
 }
 
+/** Division de référence de chaque type d'armement (`FactoryCatalog.equipUnit`) : les réguliers s'ils l'utilisent, sinon la première division de `DIVISIONS` qui l'utilise. */
+function equipUnits(): FactoryCatalog["equipUnit"] {
+  type Component = { readonly resource: string; readonly count: number };
+  const out: Record<string, { division: string; count: number; icon: string }> = {};
+  for (const id of ARMAMENT_IDS) {
+    const ids = ["regulars", ...Object.keys(DIVISIONS)] as (keyof typeof DIVISIONS)[];
+    for (const division of ids) {
+      const config = DIVISIONS[division] as { readonly components: readonly Component[]; readonly icon: string };
+      const c = config.components.find((x) => x.resource === id);
+      if (c === undefined) continue;
+      out[id] = { division, count: c.count, icon: config.icon };
+      break;
+    }
+  }
+  return out;
+}
+
 /** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */
 export function factoryCatalog(): FactoryCatalog {
   return {
@@ -133,6 +150,8 @@ export function factoryCatalog(): FactoryCatalog {
       const icon = productConfig(id).icon;
       return icon === undefined ? [] : [[id, icon]];
     })),
+    stockTurns: ARMAMENT.maxStockTurns,
+    equipUnit: equipUnits(),
     economy: {
       foodPerHead: POPULATION.foodPerHead,
       foodMinimum: FOOD.minimum,

@@ -407,8 +407,8 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
     MINING.maxMachinesPer1000,
   );
   produce(p, deployed);
-
   settleGoods(p, decay);
+
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
   // fraction d'un tour à l'autre. Les négatifs sont arrondis vers zéro (Math.trunc).
   const surplus = p.food - p.population * POPULATION.foodPerHead;

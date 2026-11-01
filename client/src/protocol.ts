@@ -170,6 +170,13 @@ export interface FactoryCatalog {
   readonly ironPerLine: Readonly<Record<string, number>>;
   /** Icône d'un bien ou d'un type d'armement (chemin sous `public/icons/`) ; absent : symbole texte. */
   readonly icons: Readonly<Record<string, string>>;
+  /** `ARMAMENT.maxStockTurns` : tours de production d'une ligne qui forment son stock cible (00-Game §8.3). */
+  readonly stockTurns: number;
+  /**
+   * Par type d'armement, la division de référence de l'indication « approprié pour » : les réguliers
+   * quand ils l'utilisent, sinon la première division qui l'utilise. `count` : exemplaires dans une division complète.
+   */
+  readonly equipUnit: Readonly<Record<string, { readonly division: string; readonly count: number; readonly icon: string }>>;
   /** Réglages que la barre d'informations lit (envoyés une fois). */
   readonly economy: EconomyInfo;
 }
@@ -312,6 +319,7 @@ export interface DivisionView {
   readonly state: number;
   /**
    * `formation` (§3.5) et `moving` (§4.4) : icône horloge ; `fleeing` (§5.4) : drapeau blanc ; `ready` sinon.
+   * Une division de `ready` qui défend une percée (`breakthrough ≠ 0`, `line ≠ "box"`) porte l'icône bouclier.
    * Une division en déplacement est comptée à sa destination.
    */
   readonly status: "ready" | "formation" | "moving" | "fleeing";
@@ -326,14 +334,14 @@ export interface PlayerStats {
   readonly forcedMobilization: boolean;
   /** Armement dans les divisions du joueur, par type d'armement dans l'ordre de `FactoryCatalog.armamentIds` (05-Fronts §4.5, §11.6). */
   readonly divisionEquipment: readonly number[];
-  readonly population: number;
   /** Population entière, blessés compris (ils mangent et occupent des places de maximum). Le total affiché est `population − hurt`. */
+  readonly population: number;
   readonly farmers: number;
   readonly fishers: number;
   readonly idle: number;
-  readonly food: number;
   /** Blessés (00-Game §4.2). */
   readonly hurt: number;
+  readonly food: number;
   readonly wheat: number;
   readonly fish: number;
   readonly cultivated: number;

@@ -49,7 +49,7 @@ fronts aériens et maritimes.
 | `src/intents.ts` | types d'ordres, vérification des champs, `found_city`, `set_farm_share`, ordres d'usine, ordres de diplomatie (la guerre déclarée et la paix acceptée appellent `startWar` et `endWar`), ordres des fronts |
 | `src/divisions.ts` | divisions en entiers (05-Fronts §3) : `Division`, `DIVISION_DATA` (types de `config/divisions.ts` avec multiplicateurs convertis à l'échelle 100, `toScale100`), `NICHE_TYPES`, échelles (`MULT_SCALE`, `WIDTH_SCALE`, `STATE_SCALE`, `LOSS_SCALE`), `stateOf` (état), `isEmpty`, `trimExcess` (excédent rendu au stock), `emptyDivision`, `attackOf` (attaques d'une division engagée), `applyLoss` (pertes tirées), `byChoice`, `countSoldiers`, `divisionEquipment` |
 | `src/fronts.ts` | états `Front`, `FrontSide`, `FrontConnection` ; `updateFronts` (détection, identité, répartition des divisions), `startWar`, `endWar`, `frontWidth`, `inCombat` et `hasRound`, `endOf`, `activeFrontCities`, `splitProportional`, `frontsByPlayer` |
-| `src/placement.ts` | divisions hors du combat (05-Fronts §3.5, §4, §5.3, §5.4) : ordres `createDivision`, `deleteDivision`, `moveDivisions` (réserve, première ou seconde ligne, réaction rapide, boîte de percée), `setForcedMobilization` ; renfort à parts égales (`shareEqually`, `reinforceBeforeEconomy`, `reinforceAfterEconomy`) ; `applyArrivals`, `trimAll`, `removeDestroyed` ; rangement des lignes (`arrangeSide`, `arrangeAll`) ; `applyFlight` (fuite), `applySwaps` (échange) |
+| `src/placement.ts` | divisions hors du combat (05-Fronts §3.5, §4, §5.3, §5.4) : ordres `createDivision`, `deleteDivision`, `moveDivisions` (réserve, première ou seconde ligne, réaction rapide, boîte de percée), `setForcedMobilization` ; renfort à parts égales (`shareEqually`, `reinforceBeforeEconomy`, `reinforceAfterEconomy`) ; `applyArrivals`, `trimAll`, `removeDestroyed` ; rangement des lignes (`arrangeSide`, `arrangeAll`) ; `applyFlight` (fuite), `applySwaps` (échange), `swapAtRest` (échange hors combat, chaque tour) |
 | `src/attacks.ts` | ordres d'attaque : `startFrontAttack`, `stopFrontAttack` |
 | `src/breakthroughs.ts` | percées (05-Fronts §4.6, §7.2) : états `Box` et `Breakthrough` ; ordres `startBreakthrough` (force prise au lancement) et `cancelBreakthrough` ; `beginCombat1` (tranche de première ligne), `assignCounterForces` (forces de contre-attaque, recalculées à chaque round), `checkBreakthrough` (fin de round : saut, seconde ligne percée, essoufflement), `breakthroughFlight`, `reactionFactor100`, `removeEmptyBoxes`, `afterFrontsChanged` (nettoyage après un recalcul des fronts), `endBreakthroughsBetween` (paix) |
 | `src/combat.ts` | `combatRound` : un round par front qui a un round (`hasRound`) ; `Fight` et `fightLosses` (un combat : dégâts des deux forces, appui-feu compris), un combat par attaque sur tout le front et un par percée, tous dans le même round ; application des pertes, fuite, vérifications des percées, échange, rangement, avancée ; puis les prises de villes ; `frontAdvance` |
@@ -215,6 +215,7 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
      divisions qui viennent de subir des pertes ; une division vidée par une fondation reste) ;
   8. `countSoldiers` ;
   9. `arrangeAll` : rangement des lignes de chaque camp de chaque front (05-Fronts §4.2) ;
+  9 bis. `swapAtRest` : sur chaque front qui n'est pas en combat (`inCombat`), `applySwaps` en mode hors combat (la division de seconde ligne de plus grand état, du même type ou d'un type de rang égal ou meilleur et d'état supérieur, remplace la division de première ligne ; sinon la règle `swapStatePercent`), puis rangement des lignes (05-Fronts §5.3) ;
   10. si le numéro du tour est un multiple de `FRONTS.combatTurns`, `combatRound` (un round par front qui a un round, puis les prises de villes, puis `removeEmptyBoxes`).
 
   Il passe ensuite `state.tick` à `turn`, et renvoie la liste des cases dont le
@@ -367,13 +368,15 @@ Une `City.player` change à la prise de la ville.
   front de sa boîte passe en seconde ligne ; une division engagée dans une percée d'un autre front est libérée.
 - **Création et déplacement** (`placement.ts`) : `createDivision` retire les hommes de `Player.idle` et
   l'armement de `armamentReserve`, et pose la division dans la réserve, en formation jusqu'à
-  `formedTick` (tour + `formationTurns` du type, 0 : aucune ; `eliteAllowed` et `nicheCounts` de `divisions.ts` pour la limite des élites). `moveDivisions` écrit la destination et `arrivalTick` = tour + `transferRounds × combatTurns`,
+  `formedTick` (tour + `formationTurns` du type, 0 : aucune ; `eliteAllowed` et `nicheCounts` de `divisions.ts` pour la limite des élites). `moveDivisions` écrit la destination et `arrivalTick` = tour + `transferRounds × combatTurns` (0 vers la réserve),
   sauf sur le même front (ou vers la destination d'un déplacement en cours), sans délai. Vers `"box"`,
   `box` désigne une boîte du joueur sur ce front, ou 0 (absent) pour en créer une, ce qui n'arrive que si une
   division y va ; une division engagée dans une percée est ignorée. `deleteDivision` rend tout au stock.
   Les hommes d'une division ne redeviennent actifs que si on la supprime.
 - **Renfort** (`reinforcePlayer`) : ressource par ressource (les hommes, puis chaque armement par indice),
-  le stock est partagé à parts égales (`shareEqually`) entre les divisions qui en manquent, puis `trimExcess`
+  le stock est partagé à parts égales (`shareEqually`) entre les divisions qui en manquent, le besoin de chaque
+  composant étant plafonné à `reinforceStep` (`FRONTS.reinforcePercentPerRound` % de son effectif complet, au moins 1) ; le renfort n'a lieu qu'aux tours multiples de `combatTurns`,
+  puis `trimExcess`
   rend l'excédent. Ni en déplacement, ni en fuite, ni engagée dans une percée, ni en première ligne d'un front
   en combat (05-Fronts §4.3, §4.6). Les hommes viennent des inactifs, ou de toute la population hors soldats et hors
   blessés en mobilisation forcée.
@@ -566,9 +569,6 @@ reste    = reste + surplus × POPULATION.growthPerMillion
 delta    = trunc(reste / 1 000 000)                               vers zéro
 population = population + delta ; reste = reste − delta × 1 000 000
 si population < 0 : population = 0 et reste = 0
-```
-
-Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
 
 4. blessés (00-Game §4.2), avec avant = population avant la croissance, perdu = avant − population si > 0 :
      famine : base = avant − soldiers ; si blessés > 0 et base > 0 :
@@ -576,13 +576,16 @@ Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` 
      plafond : blessés = min(blessés, max(0, population − soldiers))
      guérison : si blessés > 0 : g = min(blessés, max(1, floor(population / POPULATION.hurtDivisor)))
                 blessés −= g ; population −= g
-travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
-`cultivated` et `fished` = les deux surfaces, `farmMechanization` et
+```
+
 Les blessés entrent par `applyLoss` (`divisions.ts`) : les hommes perdus par une division s'ajoutent à
 `Player.hurt` du propriétaire. La fondation d'une ville (`payFoundingCost`, `cities.ts`) refuse si
 `population − hurt < foundingCost(n)` ; le manque `coût − (population − soldiers − hurt)` est retiré aux divisions par
 `removeSoldiers` (`divisions.ts`, 05-Fronts §3.5), sans passer par les blessés.
 
+Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
+travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
+`cultivated` et `fished` = les deux surfaces, `farmMechanization` et
 `fishMechanization` = M de l'agriculture et de la pêche, `wheat`, `fish`, `food`,
 `factoryWorkers` = travailleurs, `miners` = mineurs, `mineMechanization` = M de
 l'extraction, `minedTiles` =

@@ -58,6 +58,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
+| `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable`. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
 | `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la sixième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
 | `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales, « supportable » et « créable » du menu « + », couverture d'un front, rangement des fronts |
@@ -489,19 +490,26 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     `⋮⋮` à glisser change la priorité de la ville (`set_city_priority`, position
     = indice de la section sur laquelle on dépose) ;
   - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
-    la section seulement), consommation d'une ligne (`ironPerLine`, icône du fer,
-    →, icône du bien produit), curseur de 0 à `lines`, « actives / total »,
-    puis quelques nombres seulement, pour les lignes remplies au dernier tour
-    (simplification demandée par l'auteur, 25 octobre 2026) : « produit : »
-    production totale (lignes remplies × `productionPerLine` du catalogue),
-    « X/ligne » (`productionPerLine`), fer consommé au total (lignes remplies ×
-    `ironPerLine`) suivi de l'icône du fer, ouvriers employés (`workers` du
+    la section seulement), puis sur la première ligne, pour les lignes remplies
+    au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),
+    icône du fer, →, production totale (lignes remplies × `productionPerLine`),
+    icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
+    ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
     groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
-    suivis de l'icône d'ouvrier (`population/pop-worker.png`). Plus de nombre de
-    lignes remplies ni de raison du manque sur cette ligne ;
+    suivis de l'icône d'ouvrier (`population/pop-worker.png`) ; pour un type
+    d'armement, « approprié pour : » le nombre de divisions de référence que
+    le stock cible de **cette ligne** équipe, en gras, et l'icône de la division :
+    `⌊ lignes × productionPerLine × stockTurns ÷ exemplaires par division ⌋`,
+    la formule du stock cible de l'onglet « Armement » (00-Game §8.3) appliquée
+    aux lignes construites du groupe. Division de référence
+    (`FactoryCatalog.equipUnit`, calculée dans `game.ts`) : les réguliers s'ils
+    utilisent l'armement (fusils, mitrailleuses), sinon la première division de
+    `DIVISIONS` qui l'utilise. Les biens n'ont pas ce second bloc. Plus de
+    nombre de lignes remplies ni de raison du manque sur cette ligne ;
     l'infobulle donne le coût d'une ligne : ouvriers de la 1re ligne et
     minimum (`workersPerLine`, `workersFloor`), fer, produits. L'ordre `set_active_lines` part au
-    relâchement du curseur ;
+    relâchement du curseur. Contour des sections et séparations entre lignes :
+    même trait, 2 px (`--fsec-line`, `style.css`) ;
   - un bien verrouillé de l'arbre (pas encore créé et dont le parent n'a pas
     `unlockTurns` tours-lignes) : `[parent]`, « compteur / unlockTurns », barre qui se remplit,
     cadenas (`icons/miscellaneous/misc-padlock.png`), `[bien]` ;
@@ -746,7 +754,6 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie
   `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
   affichée tient compte des soldats.
-
   **Blessés** (00-Game §4.2) : dernière ligne de l'onglet (icône `pop-hurt`, noir `--occ-hurt`), après les inactifs, avec
   son segment noir à la fin de la barre ; son nombre n'a pas de part (les parts des autres lignes sont calculées sans lui).
   Le total de population (bouton de la barre, panneau latéral `s-pop`, tableau des joueurs) est `population − hurt`, et la
@@ -755,6 +762,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   `population` ; son texte est « population sans blessés + blessés / nourrie / potentielle ». Le maximum nourri compte
   les places des blessés. Les bots (`bots.ts`) et `foundingProblem` (`main.ts`) testent `population − hurt`
   contre le coût d'une ville.
+
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
   mécanisation totale, l'échelle et la zone hachurée de l'armement, la production
@@ -804,8 +812,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   niche sur une ligne si possible ; un type trop long est tronqué avec un « + » en `.pz-num`, `layout.groups` garde tous ses ids) et la hauteur de la
   section (`ZoneLayout.height`) suit, ce qui repousse les fronts vers le bas. Sections de front : fronts en guerre active puis
   en paix, du plus long au plus court (`sortedFronts`), fond de la couleur de l'adversaire (`playerColor`), carré de 32 × 32 px de statut
-  diplomatique (rouge guerre, bleu paix ; provisoire), à droite la largeur du front (`connections.length`, `.fx-width` : carré gris de
-  16 px provisoire à la place de la double flèche, puis le nombre), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
+  diplomatique (rouge guerre, bleu paix ; provisoire), à droite la largeur du front (`connections.length`, `.fx-width` : icône
+  `icon-front-width.png` (`frontWidthIcon` de `infopanels.ts`, 16 px), puis le nombre), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
   ouvre la fenêtre du front ; `title` : « Front en guerre|paix contre *nom de l'adversaire* : cliquez pour l'ouvrir. » ; **surbrillance liée à la carte** :
   `pointerenter` / `pointerleave` d'une section appellent `MapView.highlightFront(id)` (zone dessinée comme au survol de la carte, `listFront`
   prime sur `hoverFront`), et `MapViewHooks.onHoverFront` (changement de front sous la souris) appelle `ForcesTab.setHighlight(id)`, qui met la
@@ -832,7 +840,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
 - **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
   nom en gras et niche en gris, description, composants (icône 32 × 32 : `icon32Path`, nom, quantité), statistiques non nulles (attaques, PV,
   blindage, largeur de front, largeur de front en percée, multiplicateurs d'attaque et de PV en défense s'ils diffèrent de × 1, déplacement),
-  carrés provisoires ; le déplacement a l'icône camion / pieds (`motorIcon`). Ces statistiques sont écrites par `typeStats`, commune aux deux panneaux.
+  carrés provisoires, sauf les deux largeurs de front (icône `icon-front-width.png`, `frontWidthIcon`) et le déplacement (icône camion / pieds, `motorIcon`). Ces statistiques sont écrites par `typeStats`, commune aux deux panneaux.
   Panneau d'un pion : icône du type (32 × 32), rang (icône 8 × 10 agrandie ×2), nom, niche, description,
   composants « présents / requis », état (« 92 % »), attaques actuelles / maximales (`currentAttacks`, `maxAttacks` : stat × taux, sans
   multiplicateur), puis `typeStats`. Il apparaît 120 ms après le survol, 14 px au-dessus du pion (au-dessous s'il n'y a pas la place), disparaît dès qu'un

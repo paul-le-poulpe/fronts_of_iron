@@ -109,7 +109,7 @@ const LINES: Readonly<Record<string, number>> = { first: LINE_FIRST, second: LIN
  * sur ce front, ou 0 (ou absent) pour une nouvelle boîte, créée seulement si une division y va. Chaque division doit
  * être au joueur, hors formation et hors percée ; le joueur doit être un camp du front. Provisoire : les divisions
  * invalides de la liste sont ignorées, les autres déplacées. Sur le même front (ou vers la destination d'un
- * déplacement en cours), sans délai ; sinon `transferRounds` rounds. Valide si au moins une division est déplacée.
+ * déplacement en cours) ou vers la réserve, sans délai ; sinon `transferRounds` rounds. Valide si au moins une division est déplacée.
  */
 export function moveDivisions(state: GameState, player: number, ids: unknown, frontId: unknown, line: unknown, box?: unknown): boolean {
   if (!Array.isArray(ids) || !Number.isInteger(frontId)) return false;
@@ -142,7 +142,8 @@ export function moveDivisions(state: GameState, player: number, ids: unknown, fr
     }
     if (!sameFront) {
       d.front = dest;
-      d.arrivalTick = turn + transferTurns();
+      // Retour à la réserve : sans délai (le délai est payé à la réaffectation vers un front).
+      d.arrivalTick = dest === 0 ? 0 : turn + transferTurns();
     }
     // Sur le même front, ou vers la destination d'un déplacement en cours : sans nouveau délai (provisoire) ; le
     // rangement des lignes décide de la place en première et seconde ligne.
@@ -197,14 +198,22 @@ function reinforceable(state: GameState, d: Division, fighting: ReadonlySet<numb
   return !(d.front !== 0 && d.line === LINE_FIRST && fighting.has(d.front));
 }
 
+/** Plus gros gain d'un composant en un round : `reinforcePercentPerRound` % de son effectif complet, au moins 1 (entiers). */
+function reinforceStep(full: number): number {
+  return Math.max(1, Math.ceil((full * FRONTS.reinforcePercentPerRound) / 100));
+}
+
 /**
  * Renfort des divisions de `player` (05-Fronts §4.3) : ressource par ressource,
- * le stock est partagé à parts égales entre les divisions qui en ont besoin. Les
+ * le stock est partagé à parts égales entre les divisions qui en ont besoin, chaque
+ * composant ne regagnant par round que `reinforceStep` exemplaires ; hors des
+ * tours multiples de `combatTurns`, rien n'est donné. Les
  * hommes viennent de `men` (inactifs, ou toute la population hors soldats en
  * mobilisation forcée). L'excédent créé retourne au stock (§3.2). Renvoie les
  * hommes ajoutés aux divisions, net de l'excédent rendu.
  */
 function reinforcePlayer(state: GameState, p: Player, men: number, fighting: ReadonlySet<number>): number {
+  if (currentTurn(state) % FRONTS.combatTurns !== 0) return 0;
   const divs = state.divisions.filter((d) => d.owner === p.id && reinforceable(state, d, fighting));
   if (divs.length === 0) return 0;
   let before = 0;
@@ -218,7 +227,7 @@ function reinforcePlayer(state: GameState, p: Player, men: number, fighting: Rea
       dataOf(d).components.forEach((c, i) => {
         if (c.resource !== r) return;
         slots.push({ d, i });
-        needs.push(c.count - d.counts[i]!);
+        needs.push(Math.min(c.count - d.counts[i]!, reinforceStep(c.count)));
       });
     }
     const stock = r === MEN ? men : p.armamentReserve[r]!;
@@ -360,6 +369,18 @@ export function arrangeAll(state: GameState): void {
 }
 
 /**
+ * Échange hors combat (05-Fronts §5.3) : à chaque tour, sur les fronts qui ne sont pas en combat (ceux qui le sont
+ * échangent à la fin de chaque round, `applySwaps`), puis rangement des lignes.
+ */
+export function swapAtRest(state: GameState): void {
+  for (const front of state.fronts) {
+    if (inCombat(state, front)) continue;
+    applySwaps(state, front);
+    for (const p of front.players) arrangeSide(state, front, p);
+  }
+}
+
+/**
  * Fuite (05-Fronts §5.4) : une division de première ligne dont l'état tombe à
  * `fleeStatePercent` ou moins repasse en seconde ligne, et ne peut pas revenir en
  * première ligne pendant `fleeRounds` rounds.
@@ -384,8 +405,13 @@ export function applyFlight(state: GameState, front: Front): void {
  * disponible de la seconde ligne de la même niche échange sa place avec la
  * meilleure d'entre elles (ordre de choix). Divisions de première ligne par
  * identifiant ; chaque division de seconde ligne n'est prise qu'une fois.
+ * Hors combat (front qui n'est pas `inCombat`), d'abord : une division de première
+ * ligne est remplacée par la division de seconde ligne de plus grand état parmi
+ * celles du même type ou d'un type prioritaire (rang de la niche, `byChoice`) dont
+ * l'état est supérieur au sien ; sinon la règle des `swapStatePercent` s'applique.
  */
 export function applySwaps(state: GameState, front: Front): void {
+  const rest = !inCombat(state, front);
   for (const player of front.players) {
     const divs = sideDivisions(state, front, player);
     for (const types of NICHE_TYPES) {
@@ -394,9 +420,13 @@ export function applySwaps(state: GameState, front: Front): void {
       const reserve = niche.filter((d) => d.line === LINE_SECOND && !isFleeing(state, d) && d.breakthrough === 0).sort(byChoice);
       for (const d of niche) {
         if (d.line !== LINE_FIRST || d.breakthrough !== 0 || reserve.length === 0) continue;
-        const best = reserve[0]!;
-        if (stateOf(d) * 100 >= FRONTS.swapStatePercent * stateOf(best)) continue;
-        reserve.shift();
+        // `reserve` est triée par état décroissant : le premier qui convient est celui de plus grand état.
+        let k = rest ? reserve.findIndex((x) => dataOf(x).rank <= dataOf(d).rank && stateOf(x) > stateOf(d)) : -1;
+        if (k < 0) {
+          if (stateOf(d) * 100 >= FRONTS.swapStatePercent * stateOf(reserve[0]!)) continue;
+          k = 0;
+        }
+        const best = reserve.splice(k, 1)[0]!;
         best.line = LINE_FIRST;
         best.engaged = d.engaged;
         d.line = LINE_SECOND;

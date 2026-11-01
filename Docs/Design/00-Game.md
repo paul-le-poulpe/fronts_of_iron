@@ -1370,6 +1370,21 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   des pompes à vapeur, qui viennent des usines. Proposition : à chaque tour, les
   machines utilisées sont celles produites au tour précédent (100 ms de
   décalage). À valider.
+- **Valeur produite et valeur effective** (décision de l'auteur du 1er novembre
+  2026). Une machine (tracteur, bateau de pêche, pompe à vapeur) a deux valeurs :
+  la **produite** (ce que les lignes ont fabriqué au tour ; lue par les usines
+  pour ajuster leurs lignes, affichée dans les barres) et l'**effective** (ce que
+  la mécanisation, la récolte et l'extraction utilisent au tour suivant). Si la
+  produite est au moins égale à l'effective, l'effective devient la produite
+  tout de suite. Sinon l'effective baisse vers la produite, une fois par seconde
+  (tous les 10 tours) : du plus grand de 1 unité et de 1 % de l'effective,
+  arrondi vers le bas, sans passer sous la produite. Cela évite que le parc de
+  machines tombe à 0 un tour où les lignes ne sont pas remplies (la population
+  alternait alors entre ouvriers et fermiers). Réglages : `GOODS_DECAY`
+  (`config/goods.ts`). Le fer n'a pas de valeur effective propre : les mineurs
+  sont dimensionnés sur le fer des lignes remplies du même tour, donc produit et
+  consommé sont égaux. L'aluminium, quand il sera extrait, suivra la règle des
+  machines si un écart apparaît.
 
 ## 13. Points ouverts
 
@@ -1410,21 +1425,6 @@ valider sur la visualisation.
 - Voisinage entre zones, et lien entre une ville côtière et une zone : avec les
   routes maritimes.
 
-- **Valeur produite et valeur effective** (décision de l'auteur du 1er novembre
-  2026). Une machine (tracteur, bateau de pêche, pompe à vapeur) a deux valeurs :
-  la **produite** (ce que les lignes ont fabriqué au tour ; lue par les usines
-  pour ajuster leurs lignes, affichée dans les barres) et l'**effective** (ce que
-  la mécanisation, la récolte et l'extraction utilisent au tour suivant). Si la
-  produite est au moins égale à l'effective, l'effective devient la produite
-  tout de suite. Sinon l'effective baisse vers la produite, une fois par seconde
-  (tous les 10 tours) : du plus grand de 1 unité et de 1 % de l'effective,
-  arrondi vers le bas, sans passer sous la produite. Cela évite que le parc de
-  machines tombe à 0 un tour où les lignes ne sont pas remplies (la population
-  alternait alors entre ouvriers et fermiers). Réglages : `GOODS_DECAY`
-  (`config/goods.ts`). Le fer n'a pas de valeur effective propre : les mineurs
-  sont dimensionnés sur le fer des lignes remplies du même tour, donc produit et
-  consommé sont égaux. L'aluminium, quand il sera extrait, suivra la règle des
-  machines si un écart apparaît.
 **Villes**
 - Les autres règles de placement annoncées par l'auteur.
 - Un joueur qui a perdu toutes ses villes peut-il de nouveau en poser une

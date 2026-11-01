@@ -13,7 +13,7 @@ import "./forces.css";
 import { countTag } from "./counttag.ts";
 import { coveragePercent, divisionsAt, opponentOf, statePercent, typeOf } from "./divisions.ts";
 import { Dnd, type DndHost, type ZoneView } from "./dnd.ts";
-import { attachPawnPanels, attachTextPanel, hidePanel, motorIcon, textPanel } from "./infopanels.ts";
+import { attachPawnPanels, attachTextPanel, frontWidthIcon, hidePanel, motorIcon, textPanel } from "./infopanels.ts";
 import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
@@ -516,8 +516,11 @@ export class FrontWindow implements DndHost {
 
     this.title.replaceChildren(
       el("strong", undefined, `Front contre ${playerName(other)}`),
-      el("span", "fw-muted", ` · ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""} · ${front.active ? "guerre" : "paix"}`),
+      el("span", "fw-muted", " · "),
+      frontWidthIcon("inline-width-icon"),
+      el("span", "fw-muted", `${front.connections.length} · ${front.active ? "guerre" : "paix"}`),
     );
+    this.title.title = `Largeur du front : ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""}`;
     const attacking = front.sides[me]!.frontAttack;
     this.attackButton.classList.toggle("on", attacking);
     this.attackButton.disabled = !front.active;

@@ -11,8 +11,9 @@
 // curseur ou un glisser en cours n'est pas détruit par le tour suivant.
 
 import { attachGoodTip } from "./goodtips.ts";
-import { productIcon } from "./icons.ts";
-import { dominantGood, factoryName, productName, productSymbol } from "./names.ts";
+import { onPress } from "./burst.ts";
+import { icon32Path, productIcon } from "./icons.ts";
+import { dominantGood, factoryName, productName, productSymbol, unitName } from "./names.ts";
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
@@ -176,9 +177,9 @@ export class ProductionPanel {
     b.type = "button";
     b.append(miscIcon("misc-plus-lighter.png", title));
     b.title = `${title} : ${productName(good)}`;
-    b.addEventListener("click", () => {
+    onPress(b, (n) => {
       this.holdUntil = 0;
-      this.send({ type: "create_line", city, good });
+      for (let i = 0; i < n; i++) this.send({ type: "create_line", city, good });
     });
     return b;
   }
@@ -247,9 +248,13 @@ export class ProductionPanel {
       mark.title = "Lignes utiles : au-delà, la production dépasserait la demande et les ouvriers vont ailleurs.";
       wrap.append(mark);
     }
-    // Consommation d'une ligne : fer → bien produit.
+    // Total des lignes remplies : fer consommé → bien produit (mis à jour à chaque tour).
     const cost = el("span", "cost");
-    cost.append(num(this.catalog.ironPerLine[g.good] ?? 0), ironIcon(), "→", sym);
+    const ironNum = el("span");
+    ironNum.dataset["costIron"] = `${f.city}:${g.good}`;
+    const outNum = el("span");
+    outNum.dataset["costOut"] = `${f.city}:${g.good}`;
+    cost.append(ironNum, ironIcon(), "→", outNum, sym);
     row.append(grip, cost, wrap, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
     // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
     if (!this.catalog.armamentIds.includes(g.good)) {
@@ -349,16 +354,31 @@ export class ProductionPanel {
       for (const g of f.groups) {
         active += g.active;
         filled += g.filled;
+        // Seulement les lignes qui travaillent ce tour (remplies) : fer consommé et
+        // production totale sur la première ligne, ouvriers employés sur la seconde.
+        const perLine = this.catalog.productionPerLine[g.good] ?? 0;
+        const ironNum = this.cities.querySelector<HTMLElement>(`[data-cost-iron="${f.city}:${g.good}"]`);
+        if (ironNum) ironNum.textContent = num(g.filled * (this.catalog.ironPerLine[g.good] ?? 0));
+        const outNum = this.cities.querySelector<HTMLElement>(`[data-cost-out="${f.city}:${g.good}"]`);
+        if (outNum) outNum.textContent = num(g.filled * perLine);
         const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
         if (cell) {
-          // Seulement les lignes qui travaillent ce tour (remplies) : production
-          // totale, production par ligne, fer consommé, ouvriers employés.
-          const perLine = this.catalog.productionPerLine[g.good] ?? 0;
-          const iron = g.filled * (this.catalog.ironPerLine[g.good] ?? 0);
-          cell.replaceChildren(
-            `produit : ${num(g.filled * perLine)} · ${num(perLine)}/ligne · ${num(iron)}`, ironIcon(),
-            ` · ${num(g.workers)}`, workerIcon(),
-          );
+          const workers = el("b");
+          workers.textContent = num(g.workers);
+          cell.replaceChildren(workers, workerIcon());
+          // Armement : combien de divisions de référence le stock cible de cette ligne équipe
+          // (même formule que le trait du stock cible, 00-Game §8.3 ; arrondi vers le bas).
+          const unit = this.catalog.equipUnit[g.good];
+          if (unit !== undefined) {
+            const fit = Math.floor((g.lines * perLine * this.catalog.stockTurns) / unit.count);
+            const n = el("b");
+            n.textContent = num(fit);
+            const img = el("img", "unit-ic") as HTMLImageElement;
+            img.src = `icons/${icon32Path(unit.icon)}`;
+            img.alt = unitName(unit.division);
+            img.title = `${unitName(unit.division)} : ${num(unit.count)} par division`;
+            cell.append(" · approprié pour : ", n, img);
+          }
         }
         const inService = Math.min(g.active, g.usefulLines);
         const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);

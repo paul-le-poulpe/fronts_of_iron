@@ -37,8 +37,8 @@ Règles : 05-Fronts §4.6, §7.2, §12, §15. Code : `packages/engine/src/breakt
 **Boîtes et réaction rapide (§4.6)**
 - `move_division` vers une nouvelle boîte (`line: "box", box: 0`), vers une
   boîte existante, vers la réaction rapide.
-- Sans délai sur le même front ; délai de `transferRounds` depuis la réserve ou
-  un autre front.
+- Sans délai sur le même front et vers la réserve ; délai de `transferRounds`
+  depuis la réserve ou un autre front.
 - Refusé : boîte d'un autre joueur, boîte d'un autre front, division engagée
   dans une percée.
 - Une boîte vide et sans percée est supprimée ; une boîte dont toutes les
@@ -156,6 +156,23 @@ Règles : 05-Fronts §10.3, §11.6. Code : `packages/engine/src/conquest.ts`
 - Une mutation n'est détectée par aucun test : dégâts reçus calculés avec la
   largeur de la division au lieu de sa largeur engagée.
 
+## Renfort progressif (1er novembre 2026)
+
+- `divisions.test.ts`, « renfort » : les attentes à un seul `reinforceAfterEconomy` supposent un renfort complet en
+  un tour (500 fusils manquants, 100 manquants, +50 chacune) ; avec `reinforcePercentPerRound` = 5, un composant de
+  1 000 ne gagne que 50 par round, et rien aux tours qui ne sont pas multiples de `combatTurns` (les tests qui
+  appellent `reinforceAfterEconomy` à `tick` 0 ne reçoivent rien : mettre `tick` à 9). À recalculer.
+- À ajouter : une division à 0 % pleine après 20 rounds ; plafond minimum de 1 exemplaire ; la part non prise reste au stock.
+
+## Échange hors combat (1er novembre 2026)
+
+- Les tests qui posent deux divisions du même type sur un front sans attaque (ex. « entre les deux lignes d'un même
+  front », `divisions.test.ts`) peuvent voir la première ligne changer : `swapAtRest` remplace à chaque tour une
+  division de première ligne par une de seconde ligne d'état strictement supérieur. À vérifier.
+- À ajouter : hors combat, état supérieur et même type → échange avec la meilleure ; type moins prioritaire → règle
+  des 50 % ; en combat → règle des 50 % seule ; état égal → pas d'échange (pas d'oscillation) ; division en fuite ou
+  en percée jamais choisie.
+
 ## Blessés (2 novembre 2026, 00-Game §4.2)
 
 Implémentés (`hurt`, `applyLoss`, `healHurt`, `cutHurtOnLoss`, `removeSoldiers`, `payFoundingCost`) ; aucun test écrit ni
@@ -185,6 +202,9 @@ lancé (seul `npm run typecheck` a passé). À écrire :
 
 ## Client
 
+- Bouclier « défend une percée » et ligne de statut rouge du panneau de pion (1er novembre 2026), à vérifier à la
+  main : pion de première ligne attaqué par une percée, pion de réaction rapide ou de seconde ligne dans une force de
+  contre-attaque, ligne de statut des quatre cas, thème clair et sombre.
 - Fenêtre d'un front, onglet des forces, menu « + », sélection simple et
   avancée, glisser-déposer, panneaux de survol, thèmes : rien n'est vérifié
   dans le navigateur par un test.
