@@ -183,8 +183,9 @@ lancé (seul `npm run typecheck` a passé). À écrire :
   division et excédent rendu (`trimExcess`) : hommes inactifs, `hurt` inchangé.
 - **Emplois et renfort** : la répartition se fait sur `population − soldiers − hurt` ; création de division et renfort ne
   prennent que des inactifs ; mobilisation forcée : `population − soldiers − hurt`, jamais les blessés.
-- **Guérison** : `max(1, floor(population / hurtDivisor))` par tour, borné à `hurt`, avec `population < hurtDivisor` ; la
-  population baisse du même nombre.
+- **Guérison** : `max(hurtMinimum, floor(population / hurtDivisor))` par tour, borné à `hurt` ; la population baisse du même
+  nombre. Cas : grande population (le quotient l'emporte), petite population (le plancher l'emporte), `hurt < hurtMinimum`
+  (tous guéris), population presque entièrement blessée (le nombre de blessés baisse d'au moins `hurtMinimum` par tour).
 - **Famine** : population qui baisse de `L` avec des soldats ; blessés retirés `ceil(H × L / (P − S))` ; exemple
   100 de population, 10 blessés, 10 % perdus, sans soldats : 1 blessé et 9 autres ; plafond `hurt ≤ max(0, population −
   soldiers)` ; `population < soldiers` : jamais de soldat retiré.
@@ -198,7 +199,8 @@ lancé (seul `npm run typecheck` a passé). À écrire :
   fondation `population ≥ coût` avec des soldats, ou qui fixent un hash.
 - **Client, à vérifier à la main** : ligne « Blessés » noire en dernier de l'onglet Population, total sans blessés (bouton,
   panneau latéral, tableau des joueurs), segment noir à gauche de la jauge de nourriture et de sa mini-barre.
-- **Réglage** : `POPULATION.hurtDivisor` = 2 400 (valeur de l'auteur) ; lire la valeur de la configuration dans les tests.
+- **Réglage** : `POPULATION.hurtDivisor` = 2 400 et `POPULATION.hurtMinimum` = 5 (valeurs de l'auteur) ; lire les valeurs de la
+  configuration dans les tests.
 
 ## Usines : une par type, suppression (1er novembre 2026, 00-Game §8, §9)
 

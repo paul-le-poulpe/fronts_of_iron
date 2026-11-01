@@ -70,7 +70,8 @@ pour le tracteur.
   Soldats : hommes des divisions, ils mangent mais ne travaillent pas, une
   famine ne les retire jamais. Blessés : hommes blessés au combat, ils mangent
   et occupent des places de population maximale, ne travaillent pas et ne sont
-  pas recrutés, un petit nombre disparaît chaque tour, au moins un (00-Game §4.2).
+  pas recrutés, un petit nombre disparaît chaque tour (00-Game §4.2 ; le plancher
+  `hurtMinimum` n'est pas écrit dans le texte, pour ne pas dupliquer la valeur).
 - `pop-sailor`, `pop-fisherman-beard` : fichiers présents, pas
   encore utilisés ; pas d'infobulle avant que le métier existe.
 

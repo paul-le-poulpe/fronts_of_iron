@@ -10,10 +10,15 @@ export const POPULATION = {
   /** `taux_de_croissance`, en millionièmes : personnes gagnées par tour = nourriture restante × growthPerMillion / 1 000 000. */
   growthPerMillion: 5000,
   /**
-   * Dénominateur de la guérison des blessés (00-Game §4.2) : chaque tour, `max(1, floor(population / hurtDivisor))` blessés
-   * disparaissent. 2 400 : valeur donnée par l'auteur.
+   * Dénominateur de la guérison des blessés (00-Game §4.2) : chaque tour, `max(hurtMinimum, floor(population / hurtDivisor))`
+   * blessés disparaissent. 2 400 : valeur donnée par l'auteur.
    */
   hurtDivisor: 2400,
+  /**
+   * Plancher de la guérison des blessés (00-Game §4.2) : chaque tour, au moins `hurtMinimum` blessés disparaissent. 5 par
+   * tour, soit 50 par seconde à 100 ms par tour : valeur donnée par l'auteur.
+   */
+  hurtMinimum: 5,
 } as const;
 
 /** Nourriture (00-Game §6.5). */

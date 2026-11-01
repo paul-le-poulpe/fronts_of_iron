@@ -612,9 +612,13 @@ Un blessé ne revient jamais à un autre état.
   ou par encerclement (05-Fronts §6, §7, §10). Les hommes qui quittent une
   division autrement (suppression, excédent rendu, §3.2 de 05-Fronts) restent des
   inactifs. L'équipement perdu disparaît.
-- **Guérison** : à chaque tour, `max(1, floor(population / POPULATION.hurtDivisor))`
+- **Guérison** : à chaque tour, `max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor))`
   blessés disparaissent (au plus tous). `hurtDivisor` est un dénominateur entier de
-  la configuration, jamais une fraction. Ils quittent aussi la population ; la
+  la configuration, jamais une fraction ; `hurtMinimum` est un nombre d'hommes par
+  tour. Le plancher `hurtMinimum` évite qu'une population presque entièrement
+  blessée, donc sans main-d'œuvre pour produire de la nourriture, ne puisse plus
+  repartir : quand la population est petite, la deuxième règle l'emporte, et quand
+  elle est grande, c'est la première. Ils quittent aussi la population ; la
   croissance (§4.1) les remplace ensuite.
 - **Famine** : quand la population baisse de `L` (nourriture restante négative),
   les blessés baissent avec elle. Les soldats ne sont jamais retirés : toute la
@@ -1233,6 +1237,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
 | `POPULATION.hurtDivisor` | dénominateur de la guérison des blessés (§4.2) ; 2 400, valeur donnée par l'auteur |
+| `POPULATION.hurtMinimum` | plancher de la guérison des blessés, en hommes par tour (§4.2) ; 5 (50 par seconde à 100 ms par tour), valeur donnée par l'auteur |
 | `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) ; 1 500, valeur donnée par l'auteur |
 | `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
 | `TEST_MAP.mountainAltitude` | altitude à partir de laquelle une case est une montagne : fertilité 0, fer plus fréquent (§2) |

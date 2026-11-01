@@ -408,7 +408,7 @@ export class InfoBar {
         icon: "pop-hurt",
         color: "var(--occ-hurt)",
         read: (s: PlayerStats) => s.hurt,
-        tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque tour, un petit nombre disparaît (au moins un).",
+        tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque tour, un petit nombre disparaît.",
       },
     ];
     const hurtRow = occupations.length - 1;

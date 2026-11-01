@@ -477,12 +477,13 @@ function cutHurtOnLoss(p: Player, lost: number): void {
 }
 
 /**
- * Guérison (00-Game §4.2) : chaque tour, `max(1, floor(population / hurtDivisor))` blessés disparaissent, au plus tous. Ils
- * quittent aussi la population ; la croissance les remplace ensuite.
+ * Guérison (00-Game §4.2) : chaque tour, `max(hurtMinimum, floor(population / hurtDivisor))` blessés disparaissent, au plus
+ * tous. Le plancher empêche une population presque entièrement blessée de rester sans main-d'œuvre. Ils quittent aussi la
+ * population ; la croissance les remplace ensuite.
  */
 function healHurt(p: Player): void {
   if (p.hurt === 0) return;
-  const healed = Math.min(p.hurt, Math.max(1, Math.floor(p.population / POPULATION.hurtDivisor)));
+  const healed = Math.min(p.hurt, Math.max(POPULATION.hurtMinimum, Math.floor(p.population / POPULATION.hurtDivisor)));
   p.hurt -= healed;
   p.population -= healed;
 }

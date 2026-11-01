@@ -50,6 +50,9 @@ résultat faux ou une division par zéro, pas un message.
   `curveExponent` entier ≥ 1. `FISHING.tileYieldMax` ≥ `FISHING.tileYield`.
 - **`workforce.ts`, `POPULATION.hurtDivisor`** : entier ≥ 1, dénominateur de la
   guérison des blessés (00-Game §4.2). 2 400, valeur de l'auteur.
+- **`workforce.ts`, `POPULATION.hurtMinimum`** : entier ≥ 1, plancher de la
+  guérison des blessés, en hommes par tour (00-Game §4.2). 5, soit 50 par
+  seconde à 100 ms par tour, valeur de l'auteur.
 - **`cities.ts`** : `EXPANSION_RADIUS` est la seule valeur à modifier ;
   `controlRadius` en est la moitié, calculée. Garder `EXPANSION_RADIUS` pair.
 - **`factories.ts`, `specialization`** : `decayPercent + floorPercent` < 100.

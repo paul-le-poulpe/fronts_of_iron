@@ -579,7 +579,7 @@ si population < 0 : population = 0 et reste = 0
      famine : base = avant − soldiers ; si blessés > 0 et base > 0 :
               blessés −= min(blessés, ceil(blessés × perdu / base))
      plafond : blessés = min(blessés, max(0, population − soldiers))
-     guérison : si blessés > 0 : g = min(blessés, max(1, floor(population / POPULATION.hurtDivisor)))
+     guérison : si blessés > 0 : g = min(blessés, max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor)))
                 blessés −= g ; population −= g
 ```
 
