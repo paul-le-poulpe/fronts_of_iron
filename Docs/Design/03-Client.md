@@ -987,7 +987,11 @@ de Google Fonts (`index.html`). La page ne contient aucune règle de jeu.
   et `main.ts` crée le Worker (`startOnline`), qui rouvre une connexion avec
   le même jeton ; le premier message `init` remplace `#lobby` par `#app` et le
   jeu. « Reprendre » à l'accueil (ou la reprise automatique au chargement)
-  suit le même chemin. « Retour à l'accueil » abandonne le chargement.
+  suit le même chemin. « Retour à l'accueil » abandonne le chargement. Une
+  erreur avant le premier `init` (le Worker ne se charge pas, ou `onInit` lève
+  une exception) ramène à l'accueil avec son texte : `#toast` est dans `#app`,
+  caché tant que le lobby est affiché, et l'écran resterait sinon figé sans
+  message.
 - **Partie en ligne** (`#app`, même écran que le solo) : `main.ts` lit `you` et
   `playerNames` de `init` (`setRoster`) ; « Vous » désigne le joueur de la page,
   les autres joueurs ont le nom du message de départ (tableau des joueurs,
@@ -1100,14 +1104,14 @@ Comportement de `OnlineGame` :
   de survol retrouve le pion par `ZoneView.pawnEl` (l'élément lu au survol a pu être remplacé par un changement d'aperçu).
 - **Rendre une rangée dans un volet fermé** : `clientWidth` vaut 0. `ZoneView.render` saute alors la rangée ; le volet rend à l'ouverture
   (`toggle` appelle `body` après l'avoir affiché) et la clé de la réserve contient la largeur.
-- **Mettre les panneaux de survol dans un conteneur à défilement** : ils seraient coupés ; ils sont sur `document.body`.
-- **Peindre une ville prise comme une ville fondée** : `tileCity` ne change pas à une prise. `SoloGame` renvoie les cases de
-  sa zone, `Mirror` retire la zone des histogrammes de l'ancien joueur avant de remplacer les villes, et la remet dans ceux du
-  nouveau après ; sans cela, les rayons d'exploitation des deux joueurs seraient faux.
 - **Fixer la largeur des colonnes d'un détail de la barre d'informations** (`.ib-pane`) : un texte plus long que la colonne (autre police,
   nombres à plus de chiffres) déborde et fait apparaître une barre de défilement horizontale. Le détail est une grille dont les colonnes
   étiquette et valeurs sont `max-content` ; les lignes (`.ib-row`) les partagent en `subgrid`, ce qui garde les barres alignées. Sa
   largeur est celle du contenu (minimum 640 px, 720 px pour les forces), plafonnée par `place()`, rappelé à chaque tour.
+- **Mettre les panneaux de survol dans un conteneur à défilement** : ils seraient coupés ; ils sont sur `document.body`.
+- **Peindre une ville prise comme une ville fondée** : `tileCity` ne change pas à une prise. `SoloGame` renvoie les cases de
+  sa zone, `Mirror` retire la zone des histogrammes de l'ancien joueur avant de remplacer les villes, et la remet dans ceux du
+  nouveau après ; sans cela, les rayons d'exploitation des deux joueurs seraient faux.
 - **Compiler `frontgeom.ts` avec des dépendances du DOM** : le moteur le charge pour `viz:fronts`, sous Node.
 - **Un Worker à qui on envoie le tableau du moteur** : le transfert détache le
   tableau chez l'expéditeur. `SoloGame.init` envoie des copies ; envoyer

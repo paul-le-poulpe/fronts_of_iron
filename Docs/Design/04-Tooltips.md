@@ -50,6 +50,11 @@ base ». Pas de règle ni de nombre : la condition de déblocage est la même
 partout (`FACTORY.unlockTurns`), l'afficher n'apprend rien. Détail :
 03-Client.md (« Inaugurer une usine »).
 
+Panneau de production : toute icône de bien (ligne en production, ligne
+verrouillée ou « aucune ligne », icône de l'usine dans l'en-tête de ville) qui
+n'a pas d'infobulle construite porte un `title` avec son nom (`productName`,
+par exemple « char de cavalerie »).
+
 ## À faire
 
 Ordre proposé ; le contenu exact de chacune est à valider avec l'auteur comme

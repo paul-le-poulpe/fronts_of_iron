@@ -1049,10 +1049,6 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   demande baisse, la production baisse d'elle-même. Exemple de l'auteur : ne
   pas produire des milliers de bateaux de pêche quand les pêcheurs sont partis
   dans les usines.
-- Sur le curseur des lignes actives (§8.1), un **trait noir** (rouge jusqu'au
-  1er novembre 2026) marque le
-  nombre de lignes utiles de ce groupe : tout à droite si toutes ses lignes ne
-  suffisent pas à la demande, au milieu sinon. Ne concerne pas l'armement.
 - **Demande des tracteurs et des bateaux calculée au remplissage**
   (**provisoire, peut-être inutile** : ajouté le 1er novembre 2026 pour
   l'alternance ouvriers / fermiers, à confirmer par l'auteur ; voir §13). Les
@@ -1073,6 +1069,10 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   population. La demande affichée et comparée à la capacité (croissance des
   lignes, trait noir) est la production retenue quand une ligne a été refusée,
   sinon la demande calculée pour la dernière ligne remplie.
+- Sur le curseur des lignes actives (§8.1), un **trait noir** (rouge jusqu'au
+  1er novembre 2026) marque le
+  nombre de lignes utiles de ce groupe : tout à droite si toutes ses lignes ne
+  suffisent pas à la demande, au milieu sinon. Ne concerne pas l'armement.
 - **Curseur et barre bleue sont deux informations distinctes** (précision de
   l'auteur, 24 octobre 2026) : le **curseur** reste là où le joueur l'a placé,
   c'est le maximum de lignes qu'il autorise ; la **barre bleue** sous le
@@ -1518,17 +1518,17 @@ valider sur la visualisation.
   moteur, les effectives, qui suivent les produites du tour précédent (§12).
   Le lissage de la baisse est un essai de l'auteur, à mesurer : la demande que
   les usines lisent (`goodsDemand`) n'est pas lissée.
-
-**Usines**
-- Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
-  plus tard.
-- Croissance automatique des lignes (§8.2) :
 - **À confirmer : la demande calculée au remplissage (§8.2) est peut-être
   inutile.** Ajoutée sans relecture de l'auteur (1er novembre 2026), en plus de
   la valeur effective (§12). Mesure faite (une ville, des tracteurs, population
   figée) : avant, une ligne de tracteurs changeait d'état à chaque tour entre
   3 000 et 3 800 habitants ; après, le nombre de lignes s'ajuste en un tour et
   ne bouge plus. À retirer si la valeur effective suffit en partie réelle.
+
+**Usines**
+- Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :
+  plus tard.
+- Croissance automatique des lignes (§8.2) :
   - **Version finale : bouton + retiré ou payant.** Aujourd'hui, cliquer + est
     toujours plus rapide qu'attendre. Il faut retirer le bouton ou lui donner
     un coût ; pas d'argent dans le jeu, donc trouver autre chose à dépenser.

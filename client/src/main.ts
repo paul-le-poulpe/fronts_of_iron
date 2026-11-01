@@ -119,7 +119,11 @@ function openSession(online: boolean): Session {
     const msg = e.data;
     switch (msg.type) {
       case "init":
-        onInit(s, msg);
+        try {
+          onInit(s, msg);
+        } catch (error) {
+          failBeforeGame(s, `Impossible d'afficher la partie : ${error instanceof Error ? error.message : String(error)}`);
+        }
         break;
       case "tick":
         onTick(s, msg);
@@ -136,9 +140,21 @@ function openSession(online: boolean): Session {
     }
   };
   worker.onerror = (e) => {
-    toast(`Erreur du moteur : ${e.message}`, 10000);
+    const text = `Erreur du moteur : ${e.message === "" ? "le Web Worker n'a pas pu se charger" : e.message}`;
+    if (s.online && s.mirror === null) failBeforeGame(s, text);
+    else toast(text, 10000);
   };
   return s;
+}
+
+/**
+ * Une partie en ligne échoue avant son premier `init` : la page affiche encore l'écran « Partie lancée », et
+ * `#toast` est caché avec `#app`. La session est fermée et l'accueil affiche le texte.
+ */
+function failBeforeGame(s: Session, text: string): void {
+  if (session !== s) return;
+  endSession();
+  showHome(text, true);
 }
 
 function startGame(mapSeed: number, bots: number): void {

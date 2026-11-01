@@ -209,12 +209,12 @@ lancé (seul `npm run typecheck` a passé). À écrire :
 - Le scénario (`packages/engine/test/scenario.ts`) n'envoie pas `delete_factory`, et ses `build_factory` réussissent moins souvent : les mesures de 02-Engine §8 sont à refaire.
 - **Tests périmés** : `withTwoFactories` de `packages/engine/test/factories.test.ts` construit deux manufactures d'armes (villes 1 et 2) et sert à plusieurs tests (priorité des villes, ordres invalides, hash). À réécrire avec deux types d'usine différents.
 
-## Demande des tracteurs et des bateaux au remplissage (1er novembre 2026, 00-Game §8.2, provisoire)
-
 ## Pertes du dernier round (1er novembre 2026, 05-Fronts §11.4)
 
 - `FrontSide.lastLoss` = hommes perdus au dernier round par les divisions de la première ligne de ce camp (tranches de première ligne des percées comprises ; pas la force qui perce) ; remis à 0 à chaque round, y compris sur un front sans combat.
 - Gardé quand le front est recalculé (même règle que `frontAttack`) ; entre dans le hash.
+
+## Demande des tracteurs et des bateaux au remplissage (1er novembre 2026, 00-Game §8.2, provisoire)
 
 Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste :
 
