@@ -201,7 +201,7 @@ export class ProductionPanel {
     // dans le moteur et revient quand la demande remonte.
     // Deux informations distinctes (00-Game §8.1) : le curseur est le maximum réglé
     // par le joueur (`active`) ; la barre bleue, les lignes en service, ce réglage
-    // ramené aux lignes utiles (trait rouge, 00-Game §8.2). La production est
+    // ramené aux lignes utiles (trait noir, 00-Game §8.2). La production est
     // celle de la barre bleue.
     slider.value = String(g.active);
     slider.className = "lines-slider";
@@ -240,8 +240,18 @@ export class ProductionPanel {
     const track = el("i", "slider-track");
     const fill = el("i", "slider-fill");
     fill.dataset["fill"] = `${f.city}:${g.good}`;
-    fill.style.width = onTrack(inService, g.lines);
-    wrap.append(track, fill, slider);
+    fill.style.width = onTrack(Math.min(g.filled, inService), g.lines);
+    // Manque de main-d'œuvre : de la production réelle (lignes remplies) aux lignes en service,
+    // une barre rouge et, à la production réelle, un trait rouge.
+    const short = el("i", "slider-short");
+    short.dataset["short"] = `${f.city}:${g.good}`;
+    const shortMark = el("i", "short-mark");
+    shortMark.dataset["shortMark"] = `${f.city}:${g.good}`;
+    // Besoin inférieur à la production cible : du dernier cran utile au réglage du joueur, une barre verte.
+    const slack = el("i", "slider-slack");
+    slack.dataset["slack"] = `${f.city}:${g.good}`;
+    wrap.dataset["bar"] = `${f.city}:${g.good}`;
+    wrap.append(track, fill, short, slack, slider, shortMark);
     if (!this.catalog.armamentIds.includes(g.good)) {
       const mark = el("i", "useful-mark");
       mark.dataset["useful"] = `${f.city}:${g.good}`;
@@ -382,7 +392,36 @@ export class ProductionPanel {
         }
         const inService = Math.min(g.active, g.usefulLines);
         const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);
-        if (fill) fill.style.width = onTrack(inService, g.lines);
+        const real = Math.min(g.filled, inService);
+        if (fill) fill.style.width = onTrack(real, g.lines);
+        // Lignes en service mais pas remplies : barre et trait rouges (absents quand tout est rempli).
+        const missing = real < inService;
+        const short = this.cities.querySelector<HTMLElement>(`[data-short="${f.city}:${g.good}"]`);
+        if (short) {
+          short.hidden = !missing;
+          short.style.left = `calc(7px + ${onTrack(real, g.lines)})`;
+          short.style.width = onTrack(inService - real, g.lines);
+        }
+        const shortMark = this.cities.querySelector<HTMLElement>(`[data-short-mark="${f.city}:${g.good}"]`);
+        if (shortMark) {
+          shortMark.hidden = !missing;
+          shortMark.style.left = `calc(7px + ${onTrack(real, g.lines)})`;
+        }
+        // Lignes réglées au-delà des lignes utiles : la demande est couverte avant la production cible.
+        const surplus = g.active > inService;
+        const slack = this.cities.querySelector<HTMLElement>(`[data-slack="${f.city}:${g.good}"]`);
+        if (slack) {
+          slack.hidden = !surplus;
+          slack.style.left = `calc(7px + ${onTrack(inService, g.lines)})`;
+          slack.style.width = onTrack(g.active - inService, g.lines);
+        }
+        const bar = this.cities.querySelector<HTMLElement>(`[data-bar="${f.city}:${g.good}"]`);
+        if (bar) {
+          const notes: string[] = [];
+          if (missing) notes.push("Pas assez de main-d'œuvre ou de ressources pour remplir toutes les lignes en service (trait rouge : production réelle).");
+          if (surplus) notes.push("Le besoin est inférieur à la production cible : les lignes en vert ne produisent pas.");
+          bar.title = notes.join("\n");
+        }
         const act = this.cities.querySelector<HTMLElement>(`[data-in-service="${f.city}:${g.good}"]`);
         if (act) act.textContent = String(inService);
         const mark = this.cities.querySelector<HTMLElement>(`[data-useful="${f.city}:${g.good}"]`);

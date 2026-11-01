@@ -957,7 +957,7 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
     provisoire les remplace ;
   - **une ligne de panneau par bien de l'arbre de l'usine** (précision de
     l'auteur, 24 octobre 2026), dans l'un de trois états : en production
-    (curseur des lignes actives avec un trait rouge aux lignes utiles, §8.2,
+    (curseur des lignes actives avec un trait noir aux lignes utiles, §8.2,
     bouton **+** pour une ligne à la main, et
     dessous, pour une machine, une jauge de croissance qui se remplit jusqu'à
     la ligne suivante, §8.2), débloqué sans
@@ -1035,14 +1035,15 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   demande baisse, la production baisse d'elle-même. Exemple de l'auteur : ne
   pas produire des milliers de bateaux de pêche quand les pêcheurs sont partis
   dans les usines.
-- Sur le curseur des lignes actives (§8.1), un **trait rouge** marque le
+- Sur le curseur des lignes actives (§8.1), un **trait noir** (rouge jusqu'au
+  1er novembre 2026) marque le
   nombre de lignes utiles de ce groupe : tout à droite si toutes ses lignes ne
   suffisent pas à la demande, au milieu sinon. Ne concerne pas l'armement.
 - **Curseur et barre bleue sont deux informations distinctes** (précision de
   l'auteur, 24 octobre 2026) : le **curseur** reste là où le joueur l'a placé,
   c'est le maximum de lignes qu'il autorise ; la **barre bleue** sous le
   curseur montre les lignes en service, ce maximum ramené au pas juste
-  au-dessus du trait rouge (lignes utiles arrondies vers le haut). La vraie
+  au-dessus du trait noir (lignes utiles arrondies vers le haut). La vraie
   production est celle de la barre bleue. Quand la demande remonte, la barre
   remonte jusqu'au curseur.
 - **Armement : pas de croissance automatique pour l'instant.** Une mécanique

@@ -517,14 +517,22 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     envoie `create_line` (une ligne de plus, à la main) et, pour une machine,
     une jauge de croissance automatique dessous, précédée de l'icône `misc-up-lighter.png` (les boutons +
     portent `misc-plus-lighter.png`, dans `icons/miscellaneous/`) (`growth / growthTurns` en tours-lignes, ou
-    « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait rouge sur
+    « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait noir sur
     le curseur à `usefulLines / lines` : lignes utiles, calculées par
     `SoloGame.humanDetail` dans l'ordre de remplissage du moteur
     (`ceil((goodsDemand − production des groupes d'avant) / productionPerLine)`,
     borné à `lines`). Le curseur (`input.lines-slider`, piste native
     transparente) est à `active`, le maximum réglé par le joueur ; dessous, une
-    piste grise et une barre bleue (`.slider-fill`) de longueur `min(active,
-    usefulLines)` : les lignes en service, que le moteur remplit. Barre et trait
+    piste grise et une barre bleue (`.slider-fill`) de longueur
+    `min(filled, active, usefulLines)` : la production réelle. Quand les lignes
+    en service (`min(active, usefulLines)`) dépassent les lignes remplies (pas
+    assez d'ouvriers), une barre rouge (`.slider-short`) couvre l'écart et un
+    trait rouge (`.short-mark`) marque la production réelle ; sans manque,
+    ni l'un ni l'autre (auteur, 1er novembre 2026). Quand le réglage du joueur
+    dépasse les lignes utiles (`active > usefulLines`, la demande est couverte), une
+    barre verte (`.slider-slack`) va des lignes en service au réglage. L'infobulle
+    du curseur (`data-bar`) explique chaque cas : « pas assez de main-d'œuvre ou de
+    ressources » (rouge), « le besoin est inférieur à la production cible » (vert). Barre et traits
     sont placés entre les centres extrêmes du pouce (7 px de chaque côté). Le
     compte affiche « en service · max réglé / lignes ». Débloqué sans
     ligne, un bouton + crée la première ; verrouillé, la flèche de
