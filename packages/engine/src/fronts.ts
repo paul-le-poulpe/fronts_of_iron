@@ -10,7 +10,7 @@
 import { afterFrontsChanged, endBreakthroughsBetween } from "./breakthroughs.ts";
 import { FRONTS } from "./config.ts";
 import { STATUS_WAR, statusOf } from "./diplomacy.ts";
-import { LINE_SECOND, WIDTH_SCALE, currentTurn, type Division } from "./divisions.ts";
+import { LINE_SECOND, WIDTH_SCALE, type Division } from "./divisions.ts";
 import type { GameState } from "./state.ts";
 
 /** Une route dont les deux villes sont à deux joueurs différents. */
@@ -55,11 +55,17 @@ export const frontWidth = (front: Front): number => front.connections.length * W
 /** Les deux joueurs du front sont-ils en guerre ? (front actif) */
 export const isActive = (state: GameState, front: Front): boolean => statusOf(state, front.players[0], front.players[1]) === STATUS_WAR;
 
+/**
+ * Phases d'une percée où l'on combat (05-Fronts §7.2) : 1 contre la première ligne, 3 contre la réaction rapide. Les phases
+ * 0, 2 et 4 sont des délais (avant le combat 1, entre les deux combats, avant la chute de la ville).
+ */
+export const isBreakthroughCombat = (phase: number): boolean => phase === 1 || phase === 3;
+
 /** Un front est en combat quand il est actif et qu'un camp attaque sur tout le front, ou qu'une percée y combat (05-Fronts §4.3, §6, §7.2). */
 export const inCombat = (state: GameState, front: Front): boolean =>
-  isActive(state, front) && (front.sides.some((s) => s.frontAttack) || state.breakthroughs.some((b) => b.front === front.id && b.phase > 0));
+  isActive(state, front) && (front.sides.some((s) => s.frontAttack) || state.breakthroughs.some((b) => b.front === front.id && isBreakthroughCombat(b.phase)));
 
-/** Un round est joué sur ce front : il est en combat, ou une percée y attend la fin de son délai. */
+/** Un round est joué sur ce front : il est en combat, ou une percée y attend la fin d'un de ses délais. */
 export const hasRound = (state: GameState, front: Front): boolean => inCombat(state, front) || (isActive(state, front) && state.breakthroughs.some((b) => b.front === front.id));
 
 /** Villes qui ont au moins une connexion dans un front actif (05-Fronts §8) : leur rayon d'expansion ne compte pas pour fonder. */
@@ -133,8 +139,8 @@ export interface CaptureInfo {
  * ville changent : fondation, prise. Les positions des connexions retrouvées sont
  * gardées ; les identifiants et l'état d'attaque suivent la règle du §2.5 ; les
  * divisions des anciens fronts suivent leurs connexions (§2.5) : fusion, mises
- * ensemble ; coupure, réparties au prorata des connexions ; front disparu, retour
- * à la réserve avec le délai de déplacement.
+ * ensemble ; coupure, réparties au prorata des connexions ; front disparu, divisions
+ * au front le plus proche, sinon retour à la réserve sans délai.
  */
 export function updateFronts(state: GameState, capture?: CaptureInfo): void {
   const old = state.fronts;
@@ -218,7 +224,6 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
 
   // 5. Divisions : chaque ancien front donne ses divisions (sur place et en route vers lui) aux nouveaux
   // fronts qui contiennent ses connexions gardées, au prorata de leur nombre (05-Fronts §2.5).
-  const turn = currentTurn(state);
   const target = new Map<number, { ids: number[]; weights: number[] }>();
   for (const o of old) {
     const weights = new Map<number, number>();
@@ -228,6 +233,35 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
       weights.set(t.id, (weights.get(t.id) ?? 0) + 1);
     }
     const ids = [...weights.keys()].sort((x, y) => x - y);
+    if (ids.length === 0) {
+      // Aucune connexion gardée (ville prise, fusion avec un autre front) : le successeur est le front des mêmes joueurs le plus
+      // proche, à zéro ou une route d'une ville de l'ancien ; à égalité de distance le plus petit identifiant (05-Fronts §2.5).
+      const cities = new Set<number>();
+      for (const c of o.connections) {
+        cities.add(c.city1);
+        cities.add(c.city2);
+      }
+      const hop = (city: number): number => {
+        if (cities.has(city)) return 0;
+        for (const [a, b] of state.roads) if ((a === city && cities.has(b)) || (b === city && cities.has(a))) return 1;
+        return 2;
+      };
+      let best = 0;
+      let bestDist = 2;
+      for (const b of fresh) {
+        if (b.p1 !== o.players[0] || b.p2 !== o.players[1]) continue;
+        let dist = 2;
+        for (const c of b.conns) dist = Math.min(dist, hop(c.city1), hop(c.city2));
+        if (dist < bestDist || (dist === bestDist && best !== 0 && b.id < best)) {
+          best = b.id;
+          bestDist = dist;
+        }
+      }
+      if (best !== 0) {
+        target.set(o.id, { ids: [best], weights: [1] });
+        continue;
+      }
+    }
     target.set(o.id, { ids, weights: ids.map((id) => weights.get(id)!) });
   }
   const groups = new Map<string, Division[]>();
@@ -244,13 +278,13 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
       const divs = groups.get(`${o.id}:${player}`);
       if (divs === undefined) continue;
       if (t.ids.length === 0) {
-        // Front disparu (provisoire, 05-Fronts §2.5) : retour à la réserve avec le délai de déplacement.
+        // Front disparu sans successeur (05-Fronts §2.5) : retour à la réserve, sans délai.
         for (const d of divs) {
           d.front = 0;
           d.line = LINE_SECOND;
           d.box = 0;
           d.engaged = 0;
-          d.arrivalTick = turn + FRONTS.transferRounds * FRONTS.combatTurns;
+          d.arrivalTick = 0;
         }
         continue;
       }

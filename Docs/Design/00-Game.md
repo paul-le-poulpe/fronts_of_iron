@@ -1085,7 +1085,7 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   | --- | --- | --- |
   | Manufacture d'armes | fusils | décrites ci-dessous |
   | Chantier naval | bateaux de pêche | plus tard ; exemple de l'auteur : navires de transport (§3.6), puis navires de guerre |
-  | Usine mécanique | pompes à vapeur | tracteurs, puis chenillettes (premier char, débloqué par les tracteurs ; 25 octobre 2026) ; plus tard, d'autres chars à partir des tracteurs |
+  | Usine mécanique | pompes à vapeur | tracteurs, puis chenillettes (premier char, débloqué par les tracteurs ; 25 octobre 2026) ; puis, à partir de la chenillette, le char d'infanterie et le char de cavalerie, et à partir de celui-ci le char moyen (1er novembre 2026) |
 
   Pour l'instant : l'arbre de l'infanterie, les bateaux de pêche seuls, et
   pompes à vapeur → tracteurs → chenillettes. La chenillette est un type
@@ -1095,15 +1095,22 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
 **Usine d'armement d'infanterie** (premier arbre décrit) :
 
 ```
-fusils                       production de base de l'usine
-├── mitrailleuses            débloquées par une ligne de fusils
-│   └── canons anti-aériens  débloqués par une ligne de mitrailleuses
-└── artillerie               débloquée par une ligne de fusils
-    └── canons anti-chars    débloqués par une ligne d'artillerie
+fusils                                        production de base de l'usine
+├── mitrailleuses                             débloquées par une ligne de fusils
+│   └── canons anti-aériens                   débloqués par une ligne de mitrailleuses
+│       └── canons anti-aériens autopropulsés débloqués par une ligne de canons anti-aériens
+└── artillerie                                débloquée par une ligne de fusils
+    ├── artillerie autopropulsée              débloquée par une ligne d'artillerie
+    └── canons anti-chars                     débloqués par une ligne d'artillerie
+        └── canons anti-chars blindés         débloqués par une ligne de canons anti-chars
 ```
 
-- Cinq types d'armement dans cet arbre (§8.3) ; un sixième, la chenillette,
-  vient de l'usine mécanique.
+- Huit types d'armement dans cet arbre (§8.3) : les cinq à pied et les trois pièces
+  sur châssis blindé (artillerie autopropulsée, canon anti-aérien autopropulsé,
+  canon anti-char blindé). Chaque pièce blindée est débloquée directement par
+  l'appui-feu à pied associé (décision de l'auteur, 1er novembre 2026). La
+  chenillette et les trois chars (char d'infanterie, char de cavalerie, char
+  moyen) viennent de l'usine mécanique.
 - Débloquer une branche ajoute une production, sans remplacer les
   précédentes : une même usine peut avoir des lignes de fusils, de
   mitrailleuses et d'artillerie en même temps.

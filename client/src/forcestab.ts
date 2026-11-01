@@ -10,13 +10,13 @@
 
 import "./forces.css";
 import { countTag } from "./counttag.ts";
-import { creatable, divisionsAt, opponentOf, sortedFronts, supportable, typeOf } from "./divisions.ts";
+import { creatable, divisionsAt, eliteAllowed, opponentOf, sortedFronts, supportable, typeOf } from "./divisions.ts";
 import { Dnd, type DndHost } from "./dnd.ts";
 import { hidePanel, showTypePanel, typePanel } from "./infopanels.ts";
 import { icon32Path } from "./icons.ts";
-import { localPlayer, nicheLetters, nicheName } from "./names.ts";
+import { localPlayer, nicheLetters, nicheName, playerName } from "./names.ts";
 import { playerColor, rgbCss } from "./painter.ts";
-import { type DivisionView, type FactoryCatalog, type FrontView, type HumanDetail, type HumanOrder, type MilitaryCatalog, type PlayerStats } from "./protocol.ts";
+import { type DivisionTypeInfo, type DivisionView, type FactoryCatalog, type FrontView, type HumanDetail, type HumanOrder, type MilitaryCatalog, type PlayerStats } from "./protocol.ts";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -32,6 +32,7 @@ export class ForcesTab implements DndHost {
   private readonly armamentIds: readonly string[];
   private readonly send: (order: HumanOrder) => void;
   private readonly openFront: (id: number) => void;
+  private readonly highlightOnMap: (id: number) => void;
   private readonly dnd: Dnd;
   private readonly plus: HTMLButtonElement;
   private readonly menu: HTMLElement;
@@ -44,12 +45,22 @@ export class ForcesTab implements DndHost {
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
   private reserveKey = "";
   private frontsKey = "";
+  /** Front mis en évidence (survolé sur la carte ou dans la liste), 0 : aucun. */
+  private highlighted = 0;
 
-  constructor(military: MilitaryCatalog, catalog: FactoryCatalog, send: (order: HumanOrder) => void, openFront: (id: number) => void) {
+  /** `highlightOnMap` : met en évidence la zone d'un front sur la carte (0 : retire), au survol de sa section. */
+  constructor(
+    military: MilitaryCatalog,
+    catalog: FactoryCatalog,
+    send: (order: HumanOrder) => void,
+    openFront: (id: number) => void,
+    highlightOnMap: (id: number) => void,
+  ) {
     this.military = military;
     this.armamentIds = catalog.armamentIds;
     this.send = send;
     this.openFront = openFront;
+    this.highlightOnMap = highlightOnMap;
     this.dnd = new Dnd(this);
 
     this.content = el("div", "fx themed");
@@ -151,6 +162,7 @@ export class ForcesTab implements DndHost {
     this.closeMenu();
     this.dnd.cancel();
     hidePanel();
+    this.highlightOnMap(0);
   }
 
   /** Mise à jour du détail ouvert (à chaque tour) : réserve, sections de front, menu. */
@@ -169,7 +181,7 @@ export class ForcesTab implements DndHost {
     const key = mine.map((d) => `${d.id}:${d.state}:${d.status}`).join(",") + `|${this.reserveZone.clientWidth}`;
     if (key === this.reserveKey) return;
     this.reserveKey = key;
-    this.dnd.zone("res").set([{ el: this.reserveZone, divisions: mine }]);
+    this.dnd.zone("res", true, true).set([{ el: this.reserveZone, divisions: mine }]);
   }
 
   // ---- fronts ----
@@ -191,9 +203,19 @@ export class ForcesTab implements DndHost {
         const section = el("button", "fx-sec fx-front");
         section.type = "button";
         section.dataset.drop = `front:${f.id}`;
+        section.dataset.front = String(f.id);
         section.style.background = rgbCss(playerColor(opponentOf(f, me)));
         section.append(el("div", `fx-dip ${f.active ? "war" : "peace"}`));
-        section.title = f.active ? "Front en guerre : cliquez pour l'ouvrir." : "Front en paix : cliquez pour l'ouvrir.";
+        // Largeur du front (nombre de connexions, 05-Fronts §2) : symbole provisoire (carré gris) puis le nombre.
+        const width = el("div", "fx-width");
+        width.title = "Largeur du front, en liaisons";
+        width.append(el("div", "fx-width-icon"), el("span", "fx-width-num", String(f.connections.length)));
+        section.append(width);
+        const opponent = playerName(opponentOf(f, me));
+        section.title = `${f.active ? "Front en guerre" : "Front en paix"} contre ${opponent} : cliquez pour l'ouvrir.`;
+        section.classList.toggle("hl", f.id === this.highlighted);
+        section.addEventListener("pointerenter", () => this.highlightOnMap(f.id));
+        section.addEventListener("pointerleave", () => this.highlightOnMap(0));
         const here = divisionsAt(this.divisions, f.id, me);
         const tags = el("div", "fx-tags");
         for (const niche of this.military.niches) {
@@ -207,13 +229,22 @@ export class ForcesTab implements DndHost {
     );
   }
 
+  /** Front survolé sur la carte (0 : aucun) : sa section de la liste prend la classe `hl`, comme au survol de la souris. */
+  setHighlight(front: number): void {
+    this.highlighted = front;
+    for (const section of this.fronts.children) {
+      if (section instanceof HTMLElement) section.classList.toggle("hl", section.dataset.front === String(front));
+    }
+  }
+
   // ---- menu « + » ----
 
   private buildMenu(): void {
     for (const niche of this.military.niches) {
       const row = el("div", `fx-mrow n-${niche.id}`);
       const types = el("div", "fx-types");
-      for (const id of niche.types) {
+      // Du type le moins prioritaire au plus prioritaire : l'inverse de l'ordre de la niche (05-Fronts §3.1).
+      for (const id of [...niche.types].reverse()) {
         const type = this.military.divisions.find((t) => t.id === id)!;
         const root = el("div", "fx-ment");
         const img = el("img", "fx-ment-icon");
@@ -261,7 +292,7 @@ export class ForcesTab implements DndHost {
       e.count.replaceChildren();
       const now = el("span", have > can ? "red" : undefined, String(have));
       e.count.append(now, document.createTextNode(`/${can}`));
-      e.root.classList.toggle("unavailable", !creatable(type, stats, detail, this.armamentIds));
+      e.root.classList.toggle("unavailable", !this.canCreate(type, stats, detail));
     }
   }
 
@@ -269,7 +300,12 @@ export class ForcesTab implements DndHost {
   private create(index: number): void {
     if (this.last === null) return;
     const type = this.military.divisions[index]!;
-    if (!creatable(type, this.last.stats, this.last.detail, this.armamentIds)) return;
+    if (!this.canCreate(type, this.last.stats, this.last.detail)) return;
     this.send({ type: "create_division", division: type.id });
+  }
+
+  /** Équipement et inactifs suffisent, et la limite des élites n'est pas atteinte (05-Fronts §3.5). */
+  private canCreate(type: DivisionTypeInfo, stats: PlayerStats, detail: HumanDetail): boolean {
+    return creatable(type, stats, detail, this.armamentIds) && eliteAllowed(this.military, type, this.divisions, localPlayer());
   }
 }

@@ -5,7 +5,8 @@
   box-sizing: border-box;
   user-select: none;
 }
-.pz-root.pz-collapsed:hover {
+.pz-root.pz-collapsed:hover,
+.pz-root.pz-collapsed.pz-keep {
   z-index: 50;
 }
 
@@ -100,9 +101,11 @@
   border-radius: 4px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
-.pz-collapsed:hover .pz-open {
+.pz-collapsed:hover .pz-open,
+.pz-collapsed.pz-keep .pz-open {
   display: block;
 }
-.pz-collapsed:hover .pz-rest {
+.pz-collapsed:hover .pz-rest,
+.pz-collapsed.pz-keep .pz-rest {
   visibility: hidden;
 }

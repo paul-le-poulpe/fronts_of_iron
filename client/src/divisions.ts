@@ -80,6 +80,24 @@ export function creatable(type: DivisionTypeInfo, stats: PlayerStats, detail: Hu
   return true;
 }
 
+/**
+ * Le joueur peut-il créer une division de ce type, vu ses élites ? Copie de la condition du moteur (05-Fronts §3.5) :
+ * `eliteTroopsRatio × (élites + 1) ≤ divisions de la niche + 1`, en formation ou non. Toujours oui hors des élites.
+ */
+export function eliteAllowed(military: MilitaryCatalog, type: DivisionTypeInfo, divisions: readonly DivisionView[], me: number): boolean {
+  if (!type.elite) return true;
+  let elites = 0;
+  let total = 0;
+  for (const d of divisions) {
+    if (d.owner !== me) continue;
+    const t = military.divisions[d.type]!;
+    if (t.niche !== type.niche) continue;
+    total++;
+    if (t.elite) elites++;
+  }
+  return military.eliteTroopsRatio * (elites + 1) <= total + 1;
+}
+
 /** Longueur d'un front : son nombre de connexions (05-Fronts §2.2). */
 export const frontLength = (f: FrontView): number => f.connections.length;
 

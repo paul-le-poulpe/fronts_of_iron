@@ -16,6 +16,8 @@ export interface MapViewHooks {
   onHover(tile: number): void;
   /** Clic (sans glisser) sur une case de la carte. */
   onClick(tile: number): void;
+  /** Front dont la zone est sous la souris (0 : aucun), à chaque changement. */
+  onHoverFront?(front: number): void;
 }
 
 const MAX_ZOOM = 48;
@@ -63,6 +65,9 @@ export const RESOURCE_LEGEND = {
   aluminium: { name: "Aluminium", icon: "goods/goods-aluminium-ingot.png", rgba: [31, 63, 168, 190] },
 } as const satisfies Record<string, { name: string; icon: string; rgba: Rgba }>;
 
+/** Taille de la pointe de la flèche d'une percée, en pixels de l'écran. */
+const ARROW_PX = 14;
+
 export class MapView {
   /** Mode « Créer une ville » actif. */
   placement = false;
@@ -80,8 +85,13 @@ export class MapView {
   showFactoryLogos = true;
   /** Case « Zones de front » du menu Carte (05-Fronts §11.1) : hachures rouges des fronts actifs. */
   showFrontZones = true;
+  /** Mode choix d'axe (05-Fronts §11.1) : front dont on choisit la connexion (0 : hors du mode), et la connexion visée par la souris. */
+  axisFront = 0;
+  axisHover: { readonly city1: number; readonly city2: number } | null = null;
   /** Front dont la zone est survolée (0 : aucun) : sa zone s'affiche toujours. */
   private hoverFront = 0;
+  /** Front survolé dans la liste de l'onglet des forces (0 : aucun) ; prime sur `hoverFront`. */
+  private listFront = 0;
   private readonly frontLayer: FrontLayer;
   private readonly frontHatchRed: Hatching;
   private readonly frontHatchBlue: Hatching;
@@ -213,7 +223,14 @@ export class MapView {
     this.minZoom = Math.min(this.cssW / this.mirror.width, this.cssH / this.mirror.height) * 0.9;
     if (!this.fitted && rect.width > 1) this.fit();
     else this.clampPan();
-    this.requestDraw();
+    // Changer canvas.width / height efface le canvas : redessiner tout de suite, dans le même rappel de
+    // ResizeObserver et donc avant la peinture. Avec requestDraw() (prochain frame), un frame vide
+    // (le fond sombre de #stage) s'affichait à chaque changement de taille.
+    if (this.frame !== 0) {
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+    }
+    this.draw();
   }
 
   /** Carte entière dans la fenêtre. */
@@ -308,7 +325,15 @@ export class MapView {
     const front = tile >= 0 ? (this.frontLayer.frontAt(tile)?.id ?? 0) : 0;
     const frontChanged = front !== this.hoverFront;
     this.hoverFront = front;
-    if (this.placement || this.factoryMode || frontChanged) this.requestDraw();
+    if (frontChanged) this.hooks.onHoverFront?.(front);
+    if (this.placement || this.factoryMode || this.axisFront !== 0 || frontChanged) this.requestDraw();
+  }
+
+  /** Met en évidence la zone du front `front` comme au survol (0 : retire) : la liste des fronts de l'onglet des forces. */
+  highlightFront(front: number): void {
+    if (front === this.listFront) return;
+    this.listFront = front;
+    this.requestDraw();
   }
 
   /** Front dont la zone contient la case (05-Fronts §11.1), affichée ou non. */
@@ -322,9 +347,17 @@ export class MapView {
     this.requestDraw();
   }
 
+  /** Mode choix d'axe : `frontId` 0 pour en sortir. */
+  setAxisMode(frontId: number): void {
+    this.axisFront = frontId;
+    this.axisHover = null;
+    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || frontId !== 0);
+    this.requestDraw();
+  }
+
   /** À rappeler quand un mode (placement, usine), les villes ou les usines changent. */
   refresh(): void {
-    this.canvas.classList.toggle("placing", this.placement || this.factoryMode);
+    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || this.axisFront !== 0);
     this.zoneLayers.clear();
     this.highlightMask = null;
     this.requestDraw();
@@ -430,7 +463,8 @@ export class MapView {
   private drawFrontZones(): void {
     const { ctx, zoom } = this;
     const px = 1 / zoom;
-    const hovered = this.hoverFront === 0 ? undefined : this.mirror.fronts.find((f) => f.id === this.hoverFront);
+    const shown = this.listFront !== 0 ? this.listFront : this.hoverFront;
+    const hovered = shown === 0 ? undefined : this.mirror.fronts.find((f) => f.id === shown);
     const shapes: { shape: ZoneShape | null; hatch: Hatching; stroke: string }[] = [];
     const RED = "rgba(200,30,30,0.95)";
     const BLUE = "rgba(40,90,210,0.95)";
@@ -453,6 +487,44 @@ export class MapView {
         ctx.lineWidth = 5 * px;
         ctx.strokeStyle = hovered.active ? "rgba(200,30,30,1)" : "rgba(40,90,210,1)";
         ctx.stroke(shape.outline);
+      }
+    }
+  }
+
+  /** Les percées lancées, de l'un et l'autre camp, vues de la même façon. */
+  private drawBreakthroughs(ctx: CanvasRenderingContext2D, px: number): void {
+    const { mirror } = this;
+    const w = mirror.width;
+    const at = (id: number): { x: number; y: number } => {
+      const t = mirror.cities[id - 1]!.tile;
+      return { x: (t % w) + 0.5, y: Math.floor(t / w) + 0.5 };
+    };
+    for (const front of mirror.fronts) {
+      for (const bt of front.breakthroughs) {
+        // Celui qui perce part de sa propre ville et va vers celle de son adversaire.
+        const own = mirror.cities[bt.city1 - 1]!.player === bt.owner;
+        const from = at(own ? bt.city1 : bt.city2);
+        const to = at(own ? bt.city2 : bt.city1);
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.lineWidth = 3 * px;
+        ctx.strokeStyle = "#d11b1b";
+        ctx.stroke();
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        const mx = (from.x + to.x) / 2;
+        const my = (from.y + to.y) / 2;
+        const s = ARROW_PX * px;
+        ctx.beginPath();
+        ctx.moveTo(mx + Math.cos(angle) * s, my + Math.sin(angle) * s);
+        ctx.lineTo(mx + Math.cos(angle + 2.5) * s, my + Math.sin(angle + 2.5) * s);
+        ctx.lineTo(mx + Math.cos(angle - 2.5) * s, my + Math.sin(angle - 2.5) * s);
+        ctx.closePath();
+        ctx.fillStyle = "#d11b1b";
+        ctx.fill();
+        ctx.lineWidth = 1.5 * px;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
       }
     }
   }
@@ -578,6 +650,22 @@ export class MapView {
         ctx.fill();
         ctx.stroke();
       }
+    }
+
+    // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
+    // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.
+    this.drawBreakthroughs(ctx, px);
+
+    // Mode choix d'axe : la connexion du front la plus proche de la souris.
+    if (this.axisFront !== 0 && this.axisHover !== null) {
+      const a = cities[this.axisHover.city1 - 1]!;
+      const b = cities[this.axisHover.city2 - 1]!;
+      ctx.beginPath();
+      ctx.moveTo(cx(a.tile), cy(a.tile));
+      ctx.lineTo(cx(b.tile), cy(b.tile));
+      ctx.strokeStyle = "rgba(255,60,40,0.95)";
+      ctx.lineWidth = 5 * px;
+      ctx.stroke();
     }
 
     // Villes : un point, une étoile pour la capitale, un carré bleu pour le port.

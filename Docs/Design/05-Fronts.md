@@ -134,9 +134,17 @@ Fusion, coupure, ville prise ou perdue, nouvelle connexion : **pas de règle
 d'identité à part** (décision de l'auteur).
 
 - **Front qui disparaît** (plus aucune connexion) : ses divisions retournent
-  dans la réserve nationale. *Provisoire* : avec le délai de déplacement
-  (§4.4), comme un déplacement ordonné par le joueur.
-- **Fusion** : les divisions des fronts fusionnés sont mises ensemble.
+  dans la réserve nationale, **sans délai** (voir « Fusion » pour le front
+  le plus proche).
+- **Fusion** : les divisions des fronts fusionnés sont mises ensemble, **dans
+  le nouveau front**, sans retour à la réserve. Un ancien front dont aucune
+  connexion n'est gardée (par exemple après la prise d'une ville) donne ses
+  divisions au front des mêmes joueurs le plus proche : celui qui a une
+  connexion dont une ville est une ville de l'ancien front ou à une route
+  d'elle (à égalité, la plus petite distance, puis le plus petit
+  identifiant) ; sans tel front, elles retournent à la réserve. Les
+  nouveaux fronts sont tous calculés avant la répartition, donc l'ordre de
+  création et de suppression n'a pas d'effet.
 - **Coupure** (un front devient plusieurs) : les divisions de chaque camp sont
   réparties entre les morceaux **en proportion de leur nombre de connexions**.
   *Provisoire* : nombre de divisions par morceau au plus grand reste, à égalité
@@ -172,8 +180,8 @@ niche, et une niche range ses types du meilleur au moins bon :
 | artillerie | appui-feu |
 
 Les niches principales tiennent le front et reçoivent les dégâts directement ;
-les niches d'appui-feu attaquent depuis l'arrière et ne subissent que des
-pertes dérivées de celles de l'infanterie (§6.3).
+les niches d'appui-feu attaquent depuis l'arrière et reçoivent des dégâts
+proportionnels à la largeur qu'elles occupent (§6.3).
 
 ### 3.2 Composants
 
@@ -230,6 +238,8 @@ composants de poids 0, est perdu).
 | `armorPercent` | de 0 (infanterie) à 100 (chars) : part des dégâts antiblindés qu'elle prend, le reste en anti-infanterie (§6.2) |
 | `movement` | `foot` ou `motorized` |
 | `breakthroughWidth` | largeur tenue dans une percée, en liaisons (§7.2) |
+| `formationTurns` | durée de formation d'une division créée, en tours (§3.5) ; 0 : aucune |
+| `elite` | le type est limité par `ELITE_TROOPS_RATIO` à la création (§3.5) ; absent : non |
 | `breakthroughMultiplier` | multiplie les attaques de la division quand elle perce (§7.2) |
 | `counterAttackMultiplier` | multiplie les attaques de la division dans une force de contre-attaque (§7.2) |
 
@@ -241,41 +251,95 @@ Composants (`count`, requis, `weight`, `softAttack`, `hardAttack`, `airAttack`,
 
 | Type | Ressource | count | requis | weight | soft | hard | air | lossMult |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `infantry` | hommes | 1 000 | oui | 2 | 0 | 0 | 0 | 1 |
+| `regulars` | hommes | 1 000 | oui | 2 | 0 | 0 | 0 | 1 |
 | | `rifle` | 1 000 | oui | 2 | 1 000 | 100 | 0 | 1 |
-| | `machineGun` | 100 | non | 1 | 500 | 0 | 100 | 1 |
+| | `machineGun` | 100 | non | 1 | 500 | 0 | 0 | 1 |
+| `militia` | hommes | 1 000 | oui | 2 | 0 | 0 | 0 | 1 |
+| | `rifle` | 500 | oui | 2 | 600 | 20 | 0 | 1 |
+| `elite` | hommes | 1 000 | oui | 2 | 0 | 0 | 0 | 1 |
+| | `rifle` | 1 500 | oui | 2 | 1 000 | 200 | 0 | 1 |
+| | `machineGun` | 300 | non | 1 | 1 000 | 0 | 0 | 1 |
 | `tankette` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 0,5 |
 | | `tankette` | 50 | oui | 1 | 2 500 | 500 | 0 | 1 |
+| `infantryTank` | hommes | 400 | oui | 1 | 0 | 0 | 0 | 0,5 |
+| | `infantryTank` | 40 | oui | 1 | 4 000 | 1 500 | 0 | 1 |
+| `cruiserTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 0,5 |
+| | `cruiserTank` | 50 | oui | 1 | 3 000 | 1 000 | 0 | 1 |
+| `mediumTank` | hommes | 400 | oui | 1 | 0 | 0 | 0 | 0,5 |
+| | `mediumTank` | 40 | oui | 1 | 3 000 | 1 750 | 0 | 1 |
 | `antiTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `antiTankGun` | 100 | oui | 1 | 0 | 5 000 | 0 | 1 |
 | `antiAir` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `antiAirGun` | 100 | oui | 1 | 1 000 | 0 | 5 000 | 1 |
-| `artillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 0,5 |
-| | `artillery` | 50 | oui | 1 | 2 500 | 250 | 0 | 0,5 |
+| `artillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `artillery` | 50 | oui | 1 | 2 500 | 250 | 0 | 1 |
+| `armoredAntiTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `armoredAntiTankGun` | 100 | oui | 1 | 0 | 10 000 | 0 | 1 |
+| `selfPropelledAntiAir` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `selfPropelledAntiAirGun` | 100 | oui | 1 | 2 000 | 0 | 10 000 | 1 |
+| `selfPropelledArtillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
+| | `selfPropelledArtilleryGun` | 50 | oui | 1 | 3 000 | 0 | 0 | 1 |
 
 - Les mitrailleuses sont servies par les 1 000 hommes de l'infanterie, sans
-  homme de plus.
-- Tankette : 10 hommes par char (5 à bord, 5 à l'entretien) ; les hommes en
+  homme de plus. Elles n'ont pas d'attaque antiaérienne (`airAttack` 0).
+- Chaque composant a sa propre attaque (§3.2) : les 300 mitrailleuses des élites
+  ont 1 000 en tout, soit moins par mitrailleuse que les 500 des 100 des
+  réguliers, mais un plafond plus haut.
+- Chars (tankette, char d'infanterie, char de cavalerie, char moyen) : 10 hommes par char (5 à bord, 5 à l'entretien) ; les hommes en
   trop après des pertes de chars retournent à la population (§3.2).
 
 Attributs :
 
 | Type | Nom | Niche | frontWidth | breakthroughWidth | hitPoints | defenseHP× | attack× | breakthrough× | counterAttack× | armorPercent | movement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `infantry` | Infanterie | infanterie | 1 | 1 | 50 000 | 2 | 0,5 | 0,2 | 0,7 | 0 | foot |
+| `elite` | Forces spéciales | infanterie | 1 | 1 | 70 000 | 2 | 0,8 | 0,6 | 0,8 | 0 | foot |
+| `regulars` | Réguliers | infanterie | 1 | 1 | 50 000 | 2 | 0,5 | 0,2 | 0,7 | 0 | foot |
+| `militia` | Milice | infanterie | 1 | 1 | 40 000 | 2 | 0,3 | 0,2 | 0,7 | 0 | foot |
 | `tankette` | Chenillette | chars | 2 | 1 | 50 000 | 1 | 1 | 1 | 1 | 100 | foot |
-| `antiTank` | Canon anti-char | antichar | 5 | 5 | — | — | 0,2 | 0,2 | 0,7 | — | foot |
-| `antiAir` | Canon anti-aérien | antiaérien | 5 | 5 | — | — | 0,2 | 0,2 | 0,7 | — | foot |
-| `artillery` | Artillerie | artillerie | 5 | 5 | — | — | 1 | 1 | 1 | — | foot |
+| `infantryTank` | Char d'infanterie | chars | 2 | 1 | 250 000 | 1 | 1 | 0,8 | 0,8 | 100 | foot |
+| `cruiserTank` | Char de cavalerie | chars | 2 | 1 | 100 000 | 1 | 1 | 1 | 1 | 100 | motorized |
+| `mediumTank` | Char moyen | chars | 2 | 1 | 200 000 | 1 | 1 | 1,2 | 1,2 | 100 | motorized |
+| `antiTank` | Canon anti-char | antichar | 5 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
+| `antiAir` | Canon anti-aérien | antiaérien | 5 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
+| `artillery` | Artillerie | artillerie | 5 | 5 | 50 000 | 2 | 1 | 1 | 1 | 0 | foot |
+| `armoredAntiTank` | Canon anti-char blindé | antichar | 5 | 1 | 200 000 | 1 | 0,8 | 1 | 1,2 | 100 | motorized |
+| `selfPropelledAntiAir` | Canon anti-aérien autopropulsé | antiaérien | 5 | 1 | 100 000 | 1 | 0,8 | 1 | 1 | 100 | motorized |
+| `selfPropelledArtillery` | Artillerie autopropulsée | artillerie | 5 | 1 | 100 000 | 1 | 1 | 1,2 | 1 | 100 | motorized |
 
-- « — » : l'appui-feu ne reçoit pas de dégâts directs (§6.3) ; ces champs ne
-  sont jamais lus (0, 1 et 0 dans la configuration).
-- Icônes : `population/pop-soldier.png`, `armament/armament-tankette.png`,
+Formation (`formationTurns`) : élites 200 tours (20 s), réguliers 100 (10 s),
+milice 0, les autres types 100. Dans la niche d'infanterie, du meilleur au moins
+bon : élites (nommées « forces spéciales » dans le client, décision de l'auteur du
+1er novembre 2026), réguliers, milice.
+
+- L'appui-feu reçoit des dégâts directs (§6.3) : ses PV, son multiplicateur de PV
+  en défense et son blindage sont lus comme ceux des niches principales. Les PV
+  des appuis-feu à pied sont ceux des réguliers (50 000, ×2 en défense) ; ceux des
+  variantes blindées sont de l'auteur (1er novembre 2026). Ces trois variantes
+  (`armoredAntiTank`, `selfPropelledAntiAir`, `selfPropelledArtillery`) ont les
+  attaques de leurs variantes à pied, doublées (sauf l'artillerie autopropulsée :
+  3 000 de soft, 0 de hard), une `breakthroughWidth` de 1 (5 pour les variantes à
+  pied), un blindage de 100 % (elles prennent les dégâts antiblindés, les
+  variantes à pied les dégâts anti-infanterie) et sont motorisées.
+- Icônes : `armament/icon-inf-elite.png`, `armament/icon-inf-regulars.png`,
+  `armament/icon-inf-milicia.png`, `armament/armament-tankette.png` (32 × 32 :
+  `icon-armament-tankette-32.png`), `armament/icon-armament-infantry-tank-32.png`,
+  `armament/icon-armament-cruiser-tank-32.png`, `armament/icon-armament-medium-tank-32.png`
+  (ces trois chars n'existent qu'en 32 × 32),
   `armament/armament-AT-gun.png`, `armament/armament-AA-gun.png`,
-  `armament/armament-artillery.png` (version 32 × 32 par `icon32Path`).
+  `armament/armament-artillery.png` (version 32 × 32 par `icon32Path`),
+  `armament/icon-armament-armored-AT-32.png`, `armament/icon-armament-SPAA-32.png`,
+  `armament/icon-armament-armored-SPART-32.png` (32 × 32 seulement).
 - Descriptions : celle de l'armement (`ARMAMENT.types`), sauf l'infanterie :
-  « La base de toutes vos armées. Elle devra recevoir de l'équipement
-  supplémentaire pour être vraiment efficace : canons, mitrailleuses, etc. »
+  réguliers : « La base de toutes vos armées. Elle devra recevoir de
+  l'équipement supplémentaire pour être vraiment efficace : canons, mitrailleuses,
+  etc. » ; milice : « Des hommes avec quelques fusils. Mieux que rien. » ;
+  élites : « La crème de la crème. Limités à 10 % de votre infanterie totale. »
+  (le pourcentage vient de `ELITE_TROOPS_RATIO`). Les trois nouveaux chars n'ont
+  pas de description propre : celle de leur armement (`config/armament.ts`).
+- Niche des chars, du meilleur au moins bon : char moyen, char d'infanterie, char
+  de cavalerie, chenillette (*provisoire* : ordre choisi pour l'implémentation).
+  Chaque niche d'appui-feu range sa variante blindée avant celle à pied
+  (*provisoire*, même raison).
 
 ### 3.5 Création et suppression
 
@@ -288,8 +352,17 @@ Attributs :
   ce dernier point).
 - Les hommes et l'équipement sont pris **au tour de l'ordre**. La division
   apparaît aussitôt dans la réserve nationale, **en formation** pendant
-  `FRONTS.formationTurns` tours (**100**, 10 s). En formation, elle n'est pas
+  `formationTurns` tours **de son type** (§3.4 : 100 pour les réguliers, 200 pour
+  les élites, 0 pour la milice, prête aussitôt). En formation, elle n'est pas
   déplaçable (*provisoire*) ; son pion porte l'icône de statut horloge (§11.3).
+- **Limite des élites** : `ELITE_TROOPS_RATIO` (`config/divisions.ts`, **10**, décision de l'auteur du
+  1er novembre 2026 : une élite pour dix divisions d'infanterie) ;
+  une division d'un type `elite` n'est créée que si
+  `ELITE_TROOPS_RATIO × (élites + 1) ≤ divisions d'infanterie + 1`, divisions du
+  joueur de la niche, élites comprises, en formation ou non, où qu'elles soient.
+  Avec 10 : les élites sont au plus 10 % de l'infanterie, la première demande 9
+  divisions d'une autre sorte. Vérifiée **à la création seulement** : supprimer ou
+  perdre de l'infanterie ne supprime aucune élite. Sinon, l'ordre est sans effet.
 - **Suppression** (ordre `delete_division`) : seulement une division de la
   **réserve nationale**, ni en déplacement, ni en formation (*provisoire* pour
   la formation). Ses hommes retournent à la population et son équipement au
@@ -391,7 +464,7 @@ Chaque camp d'un front a, en plus de ses deux lignes :
   à l'attaque sur tout le front ; elles défendent contre les percées adverses
   (§7.2, combat 2). De préférence des unités motorisées (§7.2, facteur de
   réaction).
-- des **boîtes de percée**, dans un ordre (« Percée 1 », « Percée 2 »…) :
+- des **boîtes de percée**, dans un ordre de création :
   chacune est un groupe de divisions, sans ligne. Elles ne prennent pas part à
   l'attaque sur tout le front ; elles servent à lancer des percées (§7.2).
 
@@ -510,23 +583,36 @@ l'attaquant de ce combat ; aucun quand il défend.
 
 Des dégâts sans cible (aucune division principale engagée) sont perdus.
 
-### 6.3 Pertes de l'appui-feu
+### 6.3 Dégâts reçus par l'appui-feu
 
-L'appui-feu ne reçoit pas de dégâts directs.
+Décision de l'auteur du 1er novembre 2026 (remplace les pertes dérivées de celles
+de l'infanterie et le facteur de blindage de la version du 30 octobre, voir
+l'historique). Notations : `F` la largeur du front en liaisons (une liaison en
+percée, tranche de première ligne comprise), `W_chars` la somme des largeurs
+engagées de la ligne de chars du camp qui reçoit, `l` la largeur pleine de la
+division d'appui-feu dans ce combat (`frontWidth`, ou `breakthroughWidth` en
+percée et en contre-attaque), `part = largeur engagée / l`.
 
 ```
-f_inf   = Σ (f de chaque infanterie engagée × sa largeur engagée) / Σ largeurs engagées
-f_comp  = f_inf × part engagée de la division d'appui-feu × lossMultiplier
-pertes  = f_comp × count             (pertes tirées, §1)
+niche principale : dégâts = mixte × largeur engagée / (W_inf + W_chars)
+appui-feu        : dégâts = mixte × part engagée / (F + W_chars)
+mixte            = (armorPercent × antiblindé + (100 − armorPercent) × anti-infanterie) / 100
 ```
 
-- `f_inf` : moyenne des pertes de l'infanterie engagée **en fraction de sa
-  capacité totale**, pondérée par la largeur engagée. Mesurée avant les
-  échanges et fuites du round. Deux infanteries de même largeur qui perdent
-  10 % et 5 % donnent 7,5 %. Pour une infanterie, `f` est celui du §6.2
-  (point 4), avant le tirage.
-- Exemple : artillerie, hommes et canons à `lossMultiplier` 0,5 → elle perd
-  moitié moins que l'infanterie.
+- L'appui-feu prend les dégâts d'**une liaison** de la ligne d'infanterie,
+  multipliés par sa part engagée, **quelle que soit sa largeur**. Une division
+  de largeur 5 est peu dense : elle ne prend que le cinquième de ce qu'elle
+  recevrait sur ses 5 liaisons (`mixte × (F/(F+W_chars)) × (largeur engagée/F) / l`).
+- **L'infanterie compte comme si elle occupait tout le front** : en avoir moins
+  ne protège pas l'appui-feu. Plus de chars le protègent (jusqu'à moitié moins,
+  quand ils occupent tout le front).
+- Le type de dégât reçu (soft, hard ou mélange) vient de l'`armorPercent` de la
+  division, comme pour les niches principales : plus de rapport entre dégâts
+  légers et durs.
+- Perte : `f = dégâts / (PV × multiplicateur de PV en défense)`, puis chaque
+  composant perd `f × lossMultiplier × count` (pertes tirées, §1), comme au §6.2
+  (points 4 et 5).
+- L'appui-feu n'est engagé que s'il y a de l'infanterie engagée (§4.2, §7.2).
 - Les chars ne suivent pas cette règle : ils sont dans une niche principale
   (§6.2).
 
@@ -556,21 +642,29 @@ avancée      = arrondi(déséquilibre × v)     en millièmes de route
 
 - `a`, `d` : **largeur d'infanterie engagée** en première ligne de
   l'attaquant et du défenseur, en liaisons (somme de `frontWidth × part
-  engagée`). Seule l'infanterie compte ; une division abîmée compte pour toute
-  sa largeur.
+  engagée`). **Seule l'infanterie fait avancer le front** (décision de
+  l'auteur, 1er novembre 2026) ; une division abîmée compte pour toute sa
+  largeur.
 - `A` = `FRONTS.advanceThresholdA` = **2** : rapport sous lequel le front
-  n'avance pas. `B` = `FRONTS.advanceThresholdB` = **5** : rapport à partir
-  duquel il avance à vitesse maximale ; entre les deux, la vitesse croît en
-  ligne droite. *Provisoire* : valeurs reprises de la version 0.1.
-- `v` : vitesse. À pied `FRONTS.footSpeedPermille` = **5** (0,5 % de la route
-  par round) ; motorisée `FRONTS.motorizedSpeedPermille` = **15**.
-  *Provisoire* : motorisée seulement si toute l'infanterie engagée de
-  l'attaquant l'est.
+  n'avance pas (*provisoire*, repris de la version 0.1). `B` =
+  `FRONTS.advanceThresholdB` = **10** (décision de l'auteur, 1er novembre 2026) :
+  rapport à partir duquel il avance à vitesse maximale ; entre les deux, la
+  vitesse croît en ligne droite.
+- `v` : vitesse maximale, **progressive** (décision de l'auteur, 1er novembre
+  2026) : de `FRONTS.footSpeedPermille` = **10** (1 % de la route par round,
+  aucune division motorisée) à `FRONTS.motorizedSpeedPermille` = **20**
+  (toutes motorisées), au prorata de la largeur engagée des divisions
+  motorisées, toutes niches :
+  `v = foot + floor((motorisée − foot) × M / T)`, `M` = largeur engagée des
+  divisions motorisées, `T` = largeur engagée de toutes (50 % motorisé : 15).
+  Les deux vitesses servent aussi au saut d'une percée (§7.2), qui est tout
+  ou rien.
 - En entiers (largeurs comptées en millièmes de liaison) : `x = a − A × d`,
   borné à `[0, (B − A) × d]` ;
   `avancée = floor((2 × x × v + (B − A) × d) / (2 × (B − A) × d))`.
 - **Défenseur sans infanterie engagée** (`d = 0`) : vitesse maximale.
-  **Attaquant sans infanterie engagée** : aucune avancée.
+  **Attaquant sans infanterie engagée** : aucune avancée. La vitesse `v`
+  compte au contraire toutes les niches ; sans division engagée, elle est à pied.
 
 ### 7.2 Percée (version 2)
 
@@ -579,7 +673,9 @@ Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
 
 1. **Lancement** (ordre `start_breakthrough`) : le joueur choisit une boîte de
    percée, puis un **axe** sur la carte, une connexion du front (mode choix
-   d'axe, §11.1). Front actif seulement.
+   d'axe, §11.1). Front actif seulement. **La boîte doit contenir de
+   l'infanterie** (disponible : ni en déplacement, ni en fuite) ; sinon l'ordre
+   est invalide. Une force de chars seuls est refusée.
 2. **Largeur de la percée** : **une liaison** (une connexion), quelle que soit
    la largeur du front. Les divisions y comptent avec leur
    **`breakthroughWidth`** (une tankette : 2 en première ligne, 1 en percée).
@@ -594,7 +690,12 @@ Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
    n'est pas engagé).
 4. **Délai** : le combat commence `FRONTS.breakthroughDelayTurns` tours après
    le lancement (**50**, 5 s). Pendant le délai, la force est déjà prise (elle
-   ne combat pas).
+   ne combat pas). Une percée a **sept phases**, pour que le joueur voie ce qui
+   se passe (décision de l'auteur, 31 octobre 2026) : 0 délai, 1 combat contre
+   la première ligne, 2 délai, 3 combat contre la réaction rapide, 4 délai
+   (réussite), 5 délai (échec du combat 1), 6 délai (échec du combat 2).
+   **Tous les délais ont la même durée**, `FRONTS.breakthroughDelayTurns`,
+   un seul réglage.
 5. **Combat 1, contre la première ligne** : le défenseur engage une **tranche
    de sa première ligne** de largeur une liaison par niche, en `frontWidth`,
    dans l'ordre de choix (*provisoire*). Cette tranche **reste en première
@@ -606,8 +707,17 @@ Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
    - le front **avance d'un coup** sur l'axe :
      `saut = arrondi(N × v × facteur de réaction)`, `N` =
      `FRONTS.breakthroughJumpRounds` = **10** ; `v` la vitesse de la force qui
-     perce (§7.1 : motorisée seulement si toute son infanterie l'est) ;
-   - le combat 2 commence.
+     perce : motorisée (`FRONTS.motorizedSpeedPermille`) seulement si **toutes** les
+     divisions disponibles de la boîte au lancement sont motorisées, sans
+     exception — y compris celles que la percée ne prend pas et les chars qui
+     roulent au pas, comme la chenillette ; sinon à pied
+     (`FRONTS.footSpeedPermille`). Fixé au lancement ; le
+     facteur de réaction est lu sur la force de contre-attaque telle qu'elle
+     serait choisie à cet instant (point 8) ;
+   - **délai** (phase 2), sans combat de la percée, **même sans infanterie dans
+     la défense** (le délai sert à ce que les joueurs comprennent ce qui se
+     passe) ;
+   - puis le combat 2 commence (phase 3).
 7. **Facteur de réaction** du défenseur, selon le pourcentage `m` de
    motorisation de sa force de contre-attaque (largeur des divisions
    motorisées / largeur de toutes, en `breakthroughWidth`, niches principales
@@ -622,8 +732,9 @@ Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
    la seconde ligne se partagent **équitablement** entre elles, recalculé à
    chaque round. Les divisions de la force restent dans leur ligne.
 9. **Seconde ligne percée** : quand plus aucune infanterie de la force de
-   contre-attaque n'est engagée, ou qu'il n'y en a pas : le front avance
-   jusqu'à la ville au bout de l'axe, qui tombe (§10).
+   contre-attaque n'est engagée, ou qu'il n'y en a pas : **délai** (phase 4),
+   puis le front avance jusqu'à la ville au bout de l'axe, qui tombe (§10). Pendant
+   ce délai, la force de contre-attaque est libérée.
 10. **Multiplicateurs** : la force qui perce attaque avec son
     **`breakthroughMultiplier`**, dans les deux combats. La force de
     contre-attaque (réaction rapide et seconde ligne) attaque avec son
@@ -637,14 +748,22 @@ Décisions de l'auteur du 31 octobre 2026, reprises en partie de la version 0.1
 12. **Essoufflement** : la percée s'arrête quand l'état moyen de la force qui
     perce, pondéré par la largeur engagée, tombe sous
     `FRONTS.breakthroughExhaustionPercent` = **35** % de sa valeur au début du
-    combat 1. L'avancée déjà gagnée reste.
-13. **Fin de la percée** (réussie, essoufflée, annulée, front passé en paix,
-    axe disparu) : les divisions survivantes de la force qui perce
-    **retournent dans leur boîte**, sans délai ; celles du défenseur n'ont
+    combat 1 (ou qu'elle est détruite). C'est un **échec** : la défense est
+    libérée et un délai laisse la percée disparaître et ses divisions revenir
+    dans la boîte — phase 5 après le combat 1, phase 6 après le combat 2.
+    L'avancée déjà gagnée (le saut) reste ; si elle a mené le front au bout
+    de la route, la ville tombe quand même à la fin du délai.
+13. **Fin de la percée** : après le délai de la phase 4 (réussite : la ville
+    tombe), 5 ou 6 (échec) ; **sans délai** si elle est annulée, si le front
+    passe en paix ou si l'axe disparaît. Les divisions survivantes de la force
+    qui perce **retournent dans leur boîte** ; celles du défenseur n'ont
     jamais quitté leur ligne.
-14. *Provisoire* : boîte sans division disponible au lancement : l'ordre est
-    invalide. Plus aucune division dans la force au début du combat 1 : la
-    percée s'arrête, le joueur est prévenu.
+14. *Provisoire* : boîte sans division d'infanterie disponible au lancement :
+    l'ordre est invalide. Plus aucune division dans la force au début du
+    combat 1 (elles ont fui pendant le délai) : c'est un échec, avec le délai de
+    repli (phase 5) ; le joueur est prévenu (événement `breakthrough_failed`).
+    Une force détruite ou en fuite pendant un délai d'échec (phases 5 et 6) ne
+    raccourcit pas le délai.
 
 ## 8. Fondation pendant une guerre
 
@@ -707,8 +826,27 @@ ville X à B :
   - l'usine de X (00-Game §8) est détruite ;
   - si X était la capitale de B, sa ville de plus petit identifiant devient
     sa capitale ;
-  - un joueur sans ville garde sa population et ne peut plus que refonder une
-    première ville (00-Game §13, Villes).
+  - si X était la dernière ville de B, B est éliminé (§10.3).
+
+### 10.3 Élimination
+
+- **Cas** : la prise de X laisse B sans ville. Le joueur nomade du début de
+  partie, qui n'a pas encore fondé de première ville, n'est pas concerné : il
+  n'a jamais eu de ville à perdre.
+- **Effet**, au tour de la prise, après le recalcul des fronts (§10.1) :
+  - B est marqué **éliminé** (`Player.defeated`) ; cela ne se défait pas ;
+  - toutes ses divisions disparaissent, avec ses boîtes de percée et ses
+    percées en cours ; ses propositions diplomatiques en attente sont
+    supprimées ;
+  - le moteur **ignore tous ses ordres** : il ne refonde donc pas de première
+    ville gratuite. Les autres joueurs ne peuvent plus lui déclarer la guerre
+    ni lui proposer un pacte ;
+  - sa population est gardée (*provisoire*), pour le mode résistance.
+- **Notification** : le moteur écrit l'événement `player_eliminated` (`from` :
+  le preneur, `to` : l'éliminé). Voir §11.6 pour ce que la page affiche.
+- **Mode résistance** : annoncé, **pas encore écrit** ; il est à décrire par
+  l'auteur. En attendant, le joueur éliminé reste dans la partie en
+  **spectateur**.
 
 ## 11. Interface
 
@@ -748,7 +886,9 @@ contraire.
 - **Mode choix d'axe** (bouton « Lancer » d'une boîte de percée) : la fenêtre
   du front se ferme le temps du choix ; un clic sur la carte lance la percée
   sur la connexion du front la plus proche du clic (*provisoire*), surlignée
-  au survol ; Échap annule. Repris de la version 0.1.
+  au survol ; Échap ou le bouton **« Annuler la percée »**, en haut à droite
+  de la carte, annule sans lancer la percée ; dans les deux cas la fenêtre se
+  rouvre dans l'état d'avant (§11.4). Repris de la version 0.1.
 - **Percée en cours** : un trait rouge sur le segment droit entre les deux
   villes de l'axe et une flèche au milieu, de la ville de celui qui perce vers
   celle de son adversaire. Les deux joueurs voient la même chose. Repris de la
@@ -765,8 +905,19 @@ l'implémentation). De haut en bas :
    et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
    réserve nationale les supprime (§3.5). Icône de corbeille : *provisoire*.
 2. **Réserve nationale**, détaillée : de vrais pions, **un groupe par type**
-   (§11.3 : espacé, piles, « trop de pions »), **jamais deux types dans la
-   même pile**. Pas de colonnes de niche.
+   (§11.3 : espacé, puis piles), **jamais deux types dans la même pile**. Pas
+   de colonnes de niche. Elle est **toujours déployée**, sans mode « trop de
+   pions » ni survol : quand les piles ne tiennent pas sur une ligne, elles
+   passent à la ligne. Les types d'une même niche se suivent et sont posés
+   sur une seule ligne si possible (une niche n'est coupée qu'entre deux
+   types, jamais au milieu d'un type) ; décalage de pile le plus grand qui
+   fait tenir chaque niche sur une ligne (au plus petit : 8 px), le même pour
+   toutes les piles. Un type qui ne tient pas seul sur une ligne montre le
+   maximum de pions (le dessus de la pile) puis un « + », dans la police du
+   nombre de divisions (20 px, blanc, contour noir) ; les pions cachés ne se
+   sélectionnent pas tant que ceux du dessus sont là. La section
+   grandit vers le bas, **les fronts sont repoussés dessous** et la fenêtre
+   s'agrandit (défilement à partir de sa hauteur maximale).
 3. **Les fronts**, chacun dans sa section : d'abord les **fronts en guerre
    active**, puis les **fronts en paix**, chaque groupe trié par longueur
    (*provisoire* : du plus long au plus court). Une section de front :
@@ -775,10 +926,20 @@ l'implémentation). De haut en bas :
      à bord noir, **rouge en guerre, bleu en paix** (*provisoire* : carrés en
      attendant les icônes) ; la réserve a une case vide de même largeur, pour
      l'alignement ;
+   - à droite du carré, la **largeur du front** (nombre de connexions, §2) :
+     un symbole de double flèche haut/bas (*provisoire* : carré gris de
+     16 px en attendant l'icône) puis le nombre (police de 20 px, blanc,
+     contour noir) ;
    - puis, côte à côte, pour chaque niche non vide : **une icône** (celle du
      type le plus nombreux de la niche) et, à côté, le **nombre total** de
      divisions de la niche (police de 20 px, blanc, contour noir de 1 px). Pas
-     de pile, pas de case vide, pas de tri par ligne.
+     de pile, pas de case vide, pas de tri par ligne ;
+   - **survol** (décision de l'auteur, 1er novembre 2026) : la souris sur une
+     section met en évidence la zone de ce front sur la carte, comme si la
+     souris était sur la carte (§11.1) ; réciproquement, la souris sur la zone
+     d'un front de la carte met sa section en évidence dans la liste. L'infobulle
+     de la section donne le nom de l'adversaire : « Front en guerre contre
+     *nom* : cliquez pour l'ouvrir. » (« Front en paix contre … » sinon).
 - **Glisser-déposer** (sélection : §11.4) d'une section à l'autre : une
   division déposée sur un front va en **seconde ligne** (§4.2) ; sur la
   réserve nationale, elle y retourne. Pour retirer des divisions d'un front,
@@ -791,7 +952,9 @@ l'implémentation). De haut en bas :
   clic en dehors le ferme**.
 - **Une ligne par niche** (fond de la niche, §11.4 ; nom de la niche à droite
   en lettres sombres, 36 px), **les types de la niche côte à côte** (icône de
-  32 px). Un nouveau type se place **à droite** des types existants.
+  32 px), **du moins prioritaire au plus prioritaire** : l'inverse de l'ordre de
+  la niche (§3.1), le meilleur type est à droite (décision de l'auteur, 1er
+  novembre 2026). Un nouveau type se place **à droite** des types existants.
 - À côté de chaque type, **« actuel / supportable »** : « actuel » = nombre de
   divisions du type ; « supportable » = nombre de divisions complètes que le
   pays peut équiper avec ce qu'il a (dans les divisions et en stock),
@@ -859,7 +1022,13 @@ de la fenêtre d'un front)
    1 px) ; 16 px entre les types. **Au survol**, le rectangle de la zone
    s'élargit et grandit vers le bas le temps de la sélection : toutes les
    divisions y sont visibles côte à côte, une ligne ou plus par type, dans
-   l'ordre de la pile, 3 px entre pions. Pas de hauteur maximale.
+   l'ordre de la pile, 3 px entre pions. Pas de hauteur maximale. Ce
+   rectangle élargi **reste ouvert tant que la souris est dessus**, même hors du
+   rectangle de base de la zone et même quand la zone est redessinée (survol d'un
+   autre pion, tour suivant). Même principe pour toute vue de survol dans laquelle
+   on peut sélectionner. Les boîtes de percée du joueur (§11.4) n'ont pas ce
+   rectangle : leurs types passent à la ligne suivante quand ils ne tiennent pas
+   sur une ligne.
 
 ### 11.4 Fenêtre d'un front
 
@@ -870,7 +1039,9 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
 **Bandeau du haut**, coupé en deux par la barre verticale :
 
 - moitié du joueur : titre du front ; à sa droite, l'interrupteur
-  **« Sélection avancée »** (éteint par défaut) ; alignés à droite dans cette
+  **« Sélection avancée »** (éteint par défaut ; un vrai **interrupteur** : une
+  piste grise avec une pastille à gauche éteint, bleue avec la pastille à droite
+  allumé) ; alignés à droite dans cette
   moitié, les boutons **« Attaque sur tout le front »** (interrupteur, §5.1) et
   **« Barrage d'artillerie »** (grisé, sans effet). Pas de bouton de percée en
   V1 ;
@@ -895,6 +1066,12 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
   percée **n'ont pas de couleur de niche**.
 - **Zone des avions** : en bas, sur toute la largeur, un cinquième de la
   hauteur, réservée et vide.
+- **Flèches de l'attaque sur tout le front** : quand un camp attaque sur tout
+  le front (§5.1) sur un front actif, une **flèche rouge clignotante** (cycle
+  de 1 s, `blink.ts`) apparaît à côté de **chaque rangée de sa première
+  ligne**, du côté de la barre, **pointe contre la barre** : à droite des
+  rangées du joueur (vers la droite), à gauche de celles de l'adversaire (vers
+  la gauche). Les deux camps peuvent en avoir ; une colonne de 28 px les porte.
 - Chaque colonne a un petit titre gris centré au-dessus (« Seconde ligne »,
   « Première ligne », « Réaction rapide », « Forces de percée » ; « Percée »
   pour la colonne comprimée de l'adversaire).
@@ -970,28 +1147,81 @@ apparaît en bas de la colonne de gauche ; y déposer des divisions les renvoie
 **Forces de percée du joueur** (colonne de 170 px) :
 
 - une **liste de boîtes** qui défile verticalement (pas de compression des
-  boîtes) ; chaque boîte : son nom (« Percée 1 », « Percée 2 »…) à gauche et
-  un petit **bouton « Lancer »** à droite (mode choix d'axe, §11.1) ; dessous,
+  boîtes) ; chaque boîte : un petit **bouton « Lancer »** à gauche (mode choix
+  d'axe, §11.1) et, à droite, la **motorisation de la boîte**, « Motorisée »
+  ou « Au pas », suivie d'un symbole de 16 × 16 px (`icon-motorized.png`, un
+  camion, ou `icon-on-foot.png`, des pieds, dans `miscellaneous/`) — le bouton est à gauche pour **ne pas
+  bouger** quand la vue étendue s'ouvre (son en-tête a la même largeur et la
+  même place que celui de la boîte). « Motorisée » : **toutes** les
+  divisions de la boîte sont motorisées, sans exception (la règle de la
+  vitesse de la force qui perce, §7.2 ; les divisions en déplacement ou en
+  fuite ne comptent pas) ; sinon « Au pas ». Au survol du texte ou du symbole,
+  un panneau (texte de l'auteur) : *Motorisée — Toutes les unités de ce groupe
+  sont motorisées. Quand la première ligne adverse est percée, le front fait
+  un saut trois fois plus long que celui d’une force à pied.* *Au pas — Une
+  partie des unités de ce groupe avance au pas. Donc il avance lentement. Pour
+  avancer plus loin, ne mettre que des unités motorisées.* Le bouton
+  « Lancer » est **grisé sans infanterie** dans la boîte, avec le message
+  « Vous avez besoin d'infanterie pour la percée. » au survol ; dessous,
   ses pions **groupés par type** (3 px entre pions, 10 px entre types), sans
-  fond coloré, jusqu'à 3 lignes ;
-- sous la liste, fixe : la **boîte « + »** à bord pointillé. **Y déposer des
+  fond coloré ; quand ils ne tiennent pas sur une ligne (trop de types), ils
+  passent à la ligne suivante et la boîte grandit, rien ne dépasse à droite ;
+- **dernier élément de la liste** : la **boîte « + »** à bord pointillé, juste
+  après la dernière boîte (tout en haut de la colonne s'il n'y en a pas)
+  (décision de l'auteur, 1er novembre 2026). **Y déposer des
   divisions crée une nouvelle boîte** (§4.6) ; déposer sur une boîte existante
   les y ajoute ;
 - **pendant un glisser**, la zone « Retour à la réserve nationale » apparaît
-  sous la boîte « + » ;
-- **au survol d'une boîte**, une vue étendue s'ouvre vers la droite (330 px) :
-  nom et bouton Lancer, rangées par niche colorées (seulement les non vides),
-  pourcentages de couverture d'une liaison (largeur de percée, §7.2), pions.
+  sous la liste ;
+- **au survol d'une boîte**, une vue étendue s'ouvre vers la droite : la
+  même vue que les **premières lignes face à face**, sans les secondes lignes.
+  À gauche, la boîte (bouton Lancer et motorisation, **cinq rangées par niche
+  colorées**, pourcentage de couverture d'une liaison — largeur de percée,
+  §7.2 —, pions) ; à droite, la première ligne adverse (rangées colorées,
+  pourcentage de couverture du front, pions). Les pions de la boîte se
+  sélectionnent et se glissent ; le survol d'un pion, de l'un ou de l'autre
+  côté, ouvre son panneau (§11.7).
 
 **Réaction rapide du joueur** (colonne de 170 px) : rangées par niche, comme
 une ligne ; on y dépose des divisions.
 
 **Percées en cours** : la force engagée d'une percée quitte sa boîte (la boîte
 reste dans la liste avec ses autres divisions) et s'affiche **en haut de la
-fenêtre du front**, dans une petite fenêtre par percée, avec les icônes des
-unités des deux camps engagés (force qui perce ; tranche de première ligne ou
-force de contre-attaque). *À proposer* par la session de l'interface et à
-valider par l'auteur (reprend l'idée de la section des percées de la v0.1).
+fenêtre du front**, sous le bandeau, dans un **petit tableau par percée**
+(décision de l'auteur, 31 octobre 2026), de gauche à droite, des deux camps :
+
+- titre « Percée n » (« Percée de Bot k » pour l'adversaire), sans les numéros
+  de villes de l'axe ; bord gauche bleu pour les percées du joueur, rouge pour
+  celles de l'adversaire ; **juste à droite du titre**, une petite **flèche
+  rouge clignotante** (cycle de 1 s) pendant les deux combats (phases 1 et 3),
+  vers la droite pour le joueur, vers la gauche pour l'adversaire ;
+- une **croix** en haut à droite, sur les percées du joueur seulement :
+  elle **arrête la percée** (`cancel_breakthrough`) ;
+- un tableau : une rangée par niche engagée (icône), deux colonnes « Perce »
+  (la force qui perce) et « Défense » (la tranche de première ligne ou la force
+  de contre-attaque), chacune avec le **nombre de divisions** et leur **état
+  moyen** ; « · » quand il n'y en a pas (pendant le délai, la défense n'est pas
+  encore engagée) ;
+- en bas, un **texte par phase** (§7.2, textes de l'auteur), les délais
+  décomptés en secondes (`n s`) :
+  0. « Préparation de l'assaut : n s » ;
+  1. « Assaut première ligne » ;
+  2. « Première ligne percée, contre-attaque en préparation : n s » ;
+  3. « Contre-attaque des défenseurs en cours » ;
+  4. « Percée accomplie, avancée du front dans : n s » (réussite) ;
+  5. « Percée échouée, repli : n s » (échec du combat 1) ;
+  6. « Première ligne percée, mais une contre-attaque a limité l'avancée. n s »
+     (échec du combat 2) ;
+- sous ce texte, « **Avancée de x% sur ce front** », mise à jour à chaque
+  phase : `x` = l'avancée de la percée sur la route de son axe, en millièmes
+  de route divisés par 10 (une décimale au plus). Zéro avant le saut ; le
+  saut ensuite (§7.2, point 6) ; en phase 4 (réussite), le saut plus la
+  distance qui reste jusqu'à la ville, que le front va parcourir à la fin du
+  délai (`advanceOf`).
+
+**Lancer une percée** : le bouton « Lancer » ferme la fenêtre pour le mode
+choix d'axe (§11.1) ; à la fin du mode (clic ou Échap), la fenêtre **se
+rouvre dans l'état d'avant** (même front, avec ou sans « ← Retour »).
 
 **Colonnes comprimées de l'adversaire** : sa réaction rapide (comme sa seconde
 ligne comprimée) ; ses forces de percée (une boîte comprimée par boîte, icône
@@ -1019,6 +1249,20 @@ toutes les boîtes, rangées par niche non vides et pourcentages ; titre
   éteint par défaut ; il sert à remplir les divisions (§4.3).
 - **Barre de stock de chaque armement** : la portion jaune foncé montre
   l'équipement des divisions.
+- **Élimination d'un joueur (§10.3)** :
+  - *Aux autres joueurs* : une notification (carte, 60 s) « X est éliminé : Y a
+    pris sa dernière ville et ses troupes ont disparu », qui ajoute qu'un mode
+    résistance arrivera bientôt dans le jeu et n'est pas encore implémenté.
+  - *Au joueur éliminé* : une fenêtre au centre de la carte, « Vous êtes
+    éliminé », qui dit qui a pris sa dernière ville, annonce le mode résistance
+    (pas encore implémenté) et propose **« Continuer en spectateur »** ou
+    **« Quitter la partie »**.
+  - *Spectateur* : bandeau « Éliminé — spectateur » en haut, boutons « Créer
+    une ville » et « Inaugurer une usine » désactivés, pas de menu de
+    diplomatie au clic sur la carte ; la carte, les fronts et le tableau des
+    joueurs (« (éliminé) » à côté du nom) restent affichés. Le moteur ignore de
+    toute façon ses ordres. Un joueur qui rejoint après coup (rejeu) est
+    spectateur sans fenêtre : l'événement n'est pas rejoué.
 
 ### 11.7 Panneaux de survol
 
@@ -1033,24 +1277,30 @@ la ligne survolée (*provisoire*) :
 - **statistiques** : attaque anti-infanterie, attaque antiblindée, attaque
   antiaérienne, PV, blindage en %, largeur de front, déplacement (à pied ou
   motorisé). **Une attaque nulle n'est pas affichée** ; le blindage non plus
-  s'il est nul ; *provisoire* : PV non affichés pour l'appui-feu (jamais lus,
-  §3.4). Chaque statistique a une petite icône (*provisoire* : carré de
-  16 × 16 px).
+  s'il est nul. Chaque statistique a une petite icône (*provisoire* : carré de
+  16 × 16 px), sauf le déplacement : camion (motorisé) ou pieds (à pied),
+  `icon-motorized.png` / `icon-on-foot.png`. S'y ajoutent la **largeur de
+  front en percée** (`breakthroughWidth`), le **multiplicateur en attaque** et
+  le **multiplicateur de PV en défense**, **seulement s'ils diffèrent de × 1**.
 
 **Panneau d'un pion** (fenêtre d'un front et onglet des forces), 280 px :
 
 - apparaît **14 px au-dessus du pion**, jamais collé à la souris ;
 - **disparaît dès qu'une sélection avancée (après le premier clic) ou un
   glisser commence** ;
-- en-tête : l'**icône de rang** à gauche, avant le nom (rang 0 compris ;
-  agrandie ×2 : 16 × 20 px), puis le **nom du type en gras** ; **niche en
-  gris** à droite ;
+- en-tête : l'**icône du type** (32 × 32 px), puis l'**icône de rang** (rang 0
+  compris ; agrandie ×2 : 16 × 20 px), puis le **nom du type en gras** ;
+  **niche en gris** à droite ;
 - **description** ;
 - **équipement** : icône 32 × 32, nom, **quantité actuelle / quantité
   requise** (hommes compris) ;
 - **état** : le pourcentage seul (« 92 % ») ;
 - **attaques non nulles** : valeur actuelle / valeur maximale
-  (anti-infanterie, antiblindée, antiaérienne), avec les mêmes icônes.
+  (anti-infanterie, antiblindée, antiaérienne), avec les mêmes icônes ;
+- puis **les statistiques du type** du panneau d'un type : PV, blindage,
+  largeur de front, largeur de front en percée, multiplicateurs, déplacement
+  (mêmes règles d'affichage). Tout ce que montre le panneau d'un type figure
+  aussi dans celui d'un pion.
 - Panneau d'un pion adverse (seconde ligne adverse au survol) : non décrit ;
   *provisoire* : le même.
 
@@ -1072,7 +1322,6 @@ la ligne survolée (*provisoire*) :
 | Nom | Valeur | Sens |
 | --- | --- | --- |
 | `combatTurns` | 10 | tours entre deux rounds de combat (1 s) |
-| `formationTurns` | 100 | durée de formation d'une division (10 s) |
 | `transferRounds` | 10 | délai d'un déplacement, en rounds de combat |
 | `fleeStatePercent` | 25 | état sous lequel (ou auquel) une division fuit |
 | `fleeRounds` | 10 | rounds avant qu'une division en fuite puisse revenir en première ligne |
@@ -1081,11 +1330,11 @@ la ligne survolée (*provisoire*) :
 | `minEncirclementLengthPercent` | 25 | part de la route que le perdant doit tenir pour que la route soit encerclée |
 | `encirclementLossPercent` | 50 | pertes d'encerclement |
 | `advanceThresholdA` | 2 | rapport d'infanterie sous lequel l'assaut n'avance pas |
-| `advanceThresholdB` | 5 | rapport à partir duquel l'assaut avance à vitesse maximale |
-| `footSpeedPermille` | 5 | vitesse à pied, en millièmes de route par round |
-| `motorizedSpeedPermille` | 15 | vitesse motorisée |
+| `advanceThresholdB` | 10 | rapport d'infanterie à partir duquel l'assaut avance à vitesse maximale |
+| `footSpeedPermille` | 10 | vitesse maximale à pied, en millièmes de route par round (aussi pour le saut d'une percée) |
+| `motorizedSpeedPermille` | 20 | vitesse maximale entièrement motorisée (aussi pour le saut d'une percée) ; une armée mixte est entre les deux (§7.1) |
 
-| `breakthroughDelayTurns` | 50 | tours entre le lancement d'une percée et son combat (5 s) |
+| `breakthroughDelayTurns` | 50 | durée de **tous** les délais d'une percée (5 s) : avant le combat 1, avant le combat 2, avant la chute de la ville, et les deux délais d'échec |
 | `breakthroughJumpRounds` | 10 | `N` : le saut d'une première ligne percée vaut `N × vitesse × facteur de réaction` |
 | `slowReactionFactor` | 3 | `X` : facteur de réaction d'une défense motorisée à moins de 50 % |
 | `breakthroughExhaustionPercent` | 35 | une percée s'arrête quand l'état moyen de sa force tombe sous ce % de celui du début |
@@ -1095,8 +1344,10 @@ Valeurs de la percée reprises de la version 0.1. Supprimés :
 `transferTurns`.
 
 **`packages/engine/src/config/divisions.ts`** (remplace `config/units.ts`) :
-`DIVISIONS` (types, §3.4) et `NICHES` (types rangés du meilleur au moins bon,
-sorte principale ou appui-feu, §3.1). Multiplicateurs : deux décimales au plus.
+`DIVISIONS` (types, §3.4), `NICHES` (types rangés du meilleur au moins bon,
+sorte principale ou appui-feu, §3.1) et `ELITE_TROOPS_RATIO` (10, §3.5).
+Multiplicateurs : deux décimales au plus. La durée de formation est un champ de
+chaque type (`formationTurns`), plus un réglage de `fronts.ts`.
 
 ## 13. Moteur
 
@@ -1130,8 +1381,10 @@ interface Box { readonly id: number; readonly front: number; readonly owner: num
 interface Breakthrough {          // breakthroughs.ts
   readonly id: number; front: number; readonly owner: number; readonly box: number;
   readonly city1: number; readonly city2: number;  // axe
-  readonly launchTick: number;    // combat 1 à launchTick + breakthroughDelayTurns
-  phase: number;                  // 0 attente, 1 contre la tranche, 2 contre la contre-attaque
+  phaseTick: number;              // tour où la phase a commencé ; fin d'un délai : phaseTick + son délai
+  phase: number;                  // 0 délai, 1 combat contre la tranche, 2 délai, 3 combat contre la contre-attaque, 4 délai (réussite), 5 et 6 délais (échecs 1 et 2)
+  advance: number;                // avancée gagnée par le saut, en millièmes de route (advanceOf y ajoute le reste en phase 4)
+  readonly motorized: boolean;    // fixé au lancement : toutes les divisions disponibles de la boîte sont motorisées
   startState: number;             // état moyen de la force au début du combat 1
 }
 // GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId,
@@ -1164,7 +1417,8 @@ combat de chaque front actif (§6, §7) ; prises de villes et encerclement (§10
 
 Tout ce qui est dans `GameState` entre dans le hash : chaque division (tous ses
 champs), `nextDivisionId`, chaque front (id, joueurs, groupes, connexions avec
-positions, attaques), la mobilisation forcée de chaque joueur.
+positions, attaques), la mobilisation forcée de chaque joueur, son état
+d'élimination (`defeated`).
 
 ### 13.4 Client
 
@@ -1204,8 +1458,8 @@ les divisions de chaque front.
   division change le hash.
 - Création refusée faute de stock ou d'inactifs ; suppression ; déplacement
   et délai.
-- Un round : partage 2/3 – 1/3, pertes par composant, pertes de l'appui-feu
-  (moyenne pondérée), échange, fuite. Pertes tirées (§1) : partie entière
+- Un round : partage 2/3 – 1/3, pertes par composant, dégâts de l'appui-feu
+  (§6.3 : largeur du front, chars, part engagée), échange, fuite. Pertes tirées (§1) : partie entière
   et tirage du reste.
 - Avancée : formule, cas `d = 0` et `a = 0`. Une prise, un encerclement.
 
@@ -1230,8 +1484,6 @@ les divisions de chaque front.
 
 Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 
-- front qui disparaît : retour à la réserve avec le délai de déplacement
-  (§2.5) ;
 - coupure : plus grand reste, divisions et morceaux par identifiant, sans
   délai ; identifiant d'un front fusionné ou coupé (§2.5) ;
 - nouvelle connexion créée en guerre par une fondation : 500 (§2.4) ; route
@@ -1244,7 +1496,8 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - excédent rendu sans délai, à chaque tour (§3.2) ;
 - division à 0 % : le reste est perdu (§3.3) ;
 - création : inactifs seulement même en mobilisation forcée ; division en
-  formation non déplaçable et non supprimable (§3.5) ;
+  formation non déplaçable et non supprimable ; limite des élites comptée à la
+  création, divisions en formation comprises (§3.5) ;
 - rangement des lignes à chaque tour (§4.2) ;
 - renfort : ni en déplacement, ni en fuite ; calcul par parts égales et reste
   par identifiant (§4.3) ;
@@ -1256,10 +1509,12 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - échange seulement dans la même niche (§5.3) ;
 - dégâts calculés sur les états du début du round ; ordre de fin de round
   (§6, §6.4) ;
-- avancée : seuils `A` = 2 et `B` = 5 repris ; motorisée seulement si toute
-  l'infanterie engagée l'est (§7) ;
+- avancée : seuil `A` = 2 repris (`B` = 10, vitesses 10 et 20, rapport en
+  infanterie et vitesse progressive sur toutes les niches : auteur) (§7) ;
 - encerclement appliqué composant par composant (§10.2) ;
-- prise : usine détruite, nouvelle capitale, joueur sans ville (§10.2) ;
+- prise : usine détruite, nouvelle capitale (§10.2) ;
+- élimination : population gardée pour le mode résistance, pas de réponse aux
+  propositions en attente, ordres ignorés (§10.3) ;
 - V2 : sans délai entre la première ligne et la réaction rapide ou une boîte ;
   division qui change de front sortie de sa boîte (§4.4, §4.6) ; tranche de
   première ligne dans l'ordre de choix, qui garde part à l'attaque sur tout le
@@ -1267,6 +1522,7 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
   principales ; appui-feu sans infanterie non engagé dans une percée ;
   annulation d'une percée ; mode choix d'axe sur la connexion la plus proche
   (§7.2, §11.1) ;
+- boîte de percée : symboles « Motorisée » / « Au pas » (icônes camion et pieds) (§11.4) ;
 - double ligne rouge sur les fronts actifs seulement (§11.1) ;
 - ordre des étapes dans un tour (§13.2).
 

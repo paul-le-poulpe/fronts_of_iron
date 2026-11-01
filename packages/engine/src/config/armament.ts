@@ -23,7 +23,7 @@ export const ARMAMENT = {
       description: "Indispensable pour vous défendre contre l'infanterie. Moins utile en attaque.",
     },
     artillery: {
-      productionPerLine: 2, workersPerLine: 200, ironPerLine: 10,
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 10,
       icon: "armament/armament-artillery.png",
       description: "Indispensable pour causer du tort à l'échelle industrielle.",
     },
@@ -43,6 +43,41 @@ export const ARMAMENT = {
       productionPerLine: 1, workersPerLine: 200, ironPerLine: 5,
       icon: "armament/armament-tankette.png",
       description: "Aucune chance face à un char d'assaut. Mais redoutable contre l'infanterie s'il n'y a pas de réponse appropriée.",
+    },
+    // Chars de l'usine mécanique, après la tankette (factories.ts). Les divisions
+    // de chars reprennent ces descriptions et ces icônes (32 × 32 seulement).
+    infantryTank: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 20,
+      icon: "armament/icon-armament-infantry-tank-32.png",
+      description: "Fortement blindé, avec un obusier monté dans le châssis. Ce char est conçu pour avancer avec l'infanterie, lui procurant protection et puissance de feu. En contrepartie, il n'avance pas plus vite qu'un fantassin à pied.",
+    },
+    cruiserTank: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 10,
+      icon: "armament/icon-armament-cruiser-tank-32.png",
+      description: "Conçu pour la vitesse, ce char permet des percées en profondeur. Cependant, des compromis ont été faits sur son armure, qui ne tiendra pas face à une force antichar bien équipée.",
+    },
+    mediumTank: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 20,
+      icon: "armament/icon-armament-medium-tank-32.png",
+      description: "Les évolutions en matière de motorisation ont permis de créer un char équilibré, avec une bonne vitesse de pointe et un puissant canon capable de s'opposer aux autres blindés.",
+    },
+    // Appui-feu sur châssis blindé et chenillé (usine d'équipement d'infanterie, débloqué par l'appui-feu à pied
+    // associé, factories.ts). Valeurs de l'auteur
+    // (1er novembre 2026), sauf les descriptions (provisoires).
+    selfPropelledArtilleryGun: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 20,
+      icon: "armament/icon-armament-armored-SPART-32.png",
+      description: "Une pièce d'artillerie montée sur un châssis chenillé. Elle suit les blindés dans leur avancée au lieu de les attendre en position.",
+    },
+    armoredAntiTankGun: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 15,
+      icon: "armament/icon-armament-armored-AT-32.png",
+      description: "Un canon antichar monté sur un châssis blindé. Il accompagne l'infanterie et ses chars, et répond aux blindés adverses sans avoir à se mettre en position.",
+    },
+    selfPropelledAntiAirGun: {
+      productionPerLine: 1, workersPerLine: 200, ironPerLine: 10,
+      icon: "armament/icon-armament-SPAA-32.png",
+      description: "Un canon anti-aérien sur chenilles, qui protège une colonne de blindés en marche. Peut occasionnellement être pointé vers le sol.",
     },
   },
 } as const satisfies { maxStockTurns: number; decayRate: number; types: Record<string, ProductConfig> };

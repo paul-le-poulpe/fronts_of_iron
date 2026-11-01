@@ -52,6 +52,10 @@ export const FACTORY_TYPES = {
       { good: "antiAirGun", parent: "machineGun" },
       { good: "artillery", parent: "rifle" },
       { good: "antiTankGun", parent: "artillery" },
+      // Appui-feu blindé : débloqué par l'appui-feu à pied associé (décision de l'auteur du 1er novembre 2026).
+      { good: "selfPropelledArtilleryGun", parent: "artillery" },
+      { good: "armoredAntiTankGun", parent: "antiTankGun" },
+      { good: "selfPropelledAntiAirGun", parent: "antiAirGun" },
     ],
   },
   fishingBoats: { tree: [{ good: "fishingBoat", parent: null }] },
@@ -60,6 +64,9 @@ export const FACTORY_TYPES = {
       { good: "miningMachine", parent: null },
       { good: "tractor", parent: "miningMachine" },
       { good: "tankette", parent: "tractor" },
+      { good: "infantryTank", parent: "tankette" },
+      { good: "cruiserTank", parent: "tankette" },
+      { good: "mediumTank", parent: "cruiserTank" },
     ],
   },
 } as const satisfies Record<string, FactoryTypeConfig>;

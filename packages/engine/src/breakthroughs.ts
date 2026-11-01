@@ -26,7 +26,7 @@ import {
   stateOf,
   type Division,
 } from "./divisions.ts";
-import { ROUTE, endOf, frontById, isActive, sideIndex, type Front } from "./fronts.ts";
+import { ROUTE, endOf, frontById, isActive, isBreakthroughCombat, sideIndex, type Front } from "./fronts.ts";
 import type { GameState } from "./state.ts";
 
 /** Une boîte de percée d'un camp d'un front (05-Fronts §4.6). Ses divisions ont `line = LINE_BOX` et `box = id`. */
@@ -48,10 +48,18 @@ export interface Breakthrough {
   /** Axe : la connexion du front. */
   readonly city1: number;
   readonly city2: number;
-  /** Tour du lancement ; le combat 1 commence `breakthroughDelayTurns` tours plus tard. */
-  readonly launchTick: number;
-  /** 0 attente, 1 contre la première ligne, 2 contre la réaction rapide. */
+  /** Tour où la phase en cours a commencé (le lancement en phase 0) ; un délai se termine `breakthroughDelayTurns` tours plus tard. */
+  phaseTick: number;
+  /**
+   * 0 délai avant le combat 1, 1 combat contre la première ligne, 2 délai après le saut, 3 combat contre la réaction
+   * rapide, 4 délai avant la chute de la ville (réussite), 5 délai de repli (échec du combat 1), 6 délai après un
+   * échec du combat 2 (gains minimes).
+   */
   phase: number;
+  /** Avancée gagnée par le saut de la percée, en millièmes de route (`advanceOf`). */
+  advance: number;
+  /** Vitesse du saut : toutes les divisions disponibles de la boîte au lancement sont motorisées (fixé au lancement). */
+  readonly motorized: boolean;
   /** État moyen de la force au début du combat 1, pondéré par la largeur engagée (échelle `STATE_SCALE`). */
   startState: number;
 }
@@ -108,7 +116,7 @@ function boxAvailable(state: GameState, box: Box): Division[] {
 
 /**
  * `start_breakthrough` : la boîte est au joueur sur un front actif, l'axe est une connexion de ce front, et la boîte a
- * au moins une division disponible. La force est prise au lancement : une liaison par niche, en `breakthroughWidth`,
+ * au moins une division d'infanterie disponible. La force est prise au lancement : une liaison par niche, en `breakthroughWidth`,
  * dans l'ordre de choix ; le reste reste dans la boîte. Provisoire : une percée par axe et par camp à la fois.
  */
 export function startBreakthrough(state: GameState, player: number, boxId: unknown, city1: unknown, city2: unknown): boolean {
@@ -120,7 +128,8 @@ export function startBreakthrough(state: GameState, player: number, boxId: unkno
   if (!front.connections.some((c) => c.city1 === city1 && c.city2 === city2)) return false;
   if (state.breakthroughs.some((b) => b.owner === player && b.city1 === city1 && b.city2 === city2)) return false;
   const available = boxAvailable(state, box);
-  if (available.length === 0) return false;
+  // Il faut de l'infanterie dans la boîte : une percée de chars seuls est refusée.
+  if (!available.some((d) => dataOf(d).niche === INFANTRY_NICHE)) return false;
   const bt: Breakthrough = {
     id: state.nextBreakthroughId,
     front: front.id,
@@ -128,8 +137,11 @@ export function startBreakthrough(state: GameState, player: number, boxId: unkno
     box: box.id,
     city1: city1 as number,
     city2: city2 as number,
-    launchTick: currentTurn(state),
+    phaseTick: currentTurn(state),
     phase: 0,
+    advance: 0,
+    // Tout le groupe avance à la vitesse de sa division la plus lente, même celles que la percée ne prend pas.
+    motorized: available.every((d) => dataOf(d).motorized),
     startState: 0,
   };
   fill(bt.id, byNiche(available), (d) => dataOf(d).breakthroughWidth);
@@ -186,6 +198,7 @@ export function beginCombat1(state: GameState, front: Front, bt: Breakthrough): 
   const force = forceOf(state, bt, true);
   if (force.length === 0) return false;
   bt.phase = 1;
+  bt.phaseTick = currentTurn(state);
   bt.startState = forceState(force);
   const defender = front.players[1 - attackerSide(front, bt)]!;
   const firstLine = state.divisions.filter(
@@ -195,6 +208,61 @@ export function beginCombat1(state: GameState, front: Front, bt: Breakthrough): 
   return true;
 }
 
+/** Libère les divisions du défenseur engagées dans une percée (tranche de première ligne, force de contre-attaque). */
+function releaseDefenders(state: GameState, bt: Breakthrough): void {
+  for (const d of forceOf(state, bt, false)) {
+    d.breakthrough = 0;
+    d.btEngaged = 0;
+  }
+}
+
+/**
+ * Avancée d'une percée (05-Fronts §7.2), en millièmes de route : le saut déjà fait ; en phase 4 (réussite), plus la
+ * distance qui reste jusqu'à la ville, qui sera parcourue à la fin du délai.
+ */
+export function advanceOf(front: Front, bt: Breakthrough): number {
+  if (bt.phase !== 4) return bt.advance;
+  const axis = front.connections.find((c) => c.city1 === bt.city1 && c.city2 === bt.city2);
+  return axis === undefined ? bt.advance : bt.advance + Math.abs(endOf(attackerSide(front, bt)) - axis.position);
+}
+
+/**
+ * Fin des délais d'un front (05-Fronts §7.2, points 4, 6, 9 et 12), au début d'un round, tous de
+ * `FRONTS.breakthroughDelayTurns` tours : phase 0 → phase 1, combat 1 (la force qui perce n'a plus de division :
+ * échec, phase 5), phase 2 → phase 3, combat 2, phase 4 → la ville au bout de l'axe tombe (ajoutée à `arrivals`),
+ * phases 5 et 6 (échecs) → la percée s'arrête et sa force retourne dans sa boîte.
+ */
+export function endDelays(state: GameState, front: Front, arrivals: Arrival[]): void {
+  const turn = currentTurn(state);
+  for (const bt of state.breakthroughs.filter((b) => b.front === front.id).sort((a, b) => a.id - b.id)) {
+    if (isBreakthroughCombat(bt.phase) || turn < bt.phaseTick + FRONTS.breakthroughDelayTurns) continue;
+    const x = attackerSide(front, bt);
+    const axis = front.connections.find((c) => c.city1 === bt.city1 && c.city2 === bt.city2);
+    if (bt.phase === 0) {
+      if (!beginCombat1(state, front, bt)) {
+        // Plus aucune division dans la force (en fuite pendant le délai) : échec, avec le délai de repli.
+        bt.phase = 5;
+        bt.phaseTick = turn;
+        state.events.push({ type: "breakthrough_failed", from: bt.owner, to: front.players.find((p) => p !== bt.owner)!, turn });
+      }
+    } else if (bt.phase === 2) {
+      bt.phase = 3;
+      bt.phaseTick = turn;
+    } else if (bt.phase === 4) {
+      if (axis !== undefined) {
+        bt.advance = advanceOf(front, bt);
+        axis.position = endOf(x);
+        arrivals.push({ x, city1: bt.city1, city2: bt.city2 });
+      }
+      endBreakthrough(state, bt);
+    } else {
+      // Échec (phases 5 et 6) : la percée s'arrête. Si le saut a déjà mené le front au bout de la route, la ville tombe quand même.
+      if (axis !== undefined && axis.position === endOf(x)) arrivals.push({ x, city1: bt.city1, city2: bt.city2 });
+      endBreakthrough(state, bt);
+    }
+  }
+}
+
 /**
  * Forces de contre-attaque des percées en combat 2 d'un front (05-Fronts §7.2, point 8), recalculées à chaque round :
  * pour chaque défenseur, sa réaction rapide puis sa seconde ligne (ni en fuite, ni en déplacement, ni dans une autre
@@ -202,14 +270,8 @@ export function beginCombat1(state: GameState, front: Front, bt: Breakthrough): 
  * jusqu'à une liaison chacune, en `breakthroughWidth`. Partage équitable entre plusieurs percées.
  */
 export function assignCounterForces(state: GameState, front: Front): void {
-  const active = state.breakthroughs.filter((b) => b.front === front.id && b.phase === 2).sort((a, b) => a.id - b.id);
-  for (const bt of active) {
-    for (const d of state.divisions) {
-      if (!isBreakthroughDefender(bt, d)) continue;
-      d.breakthrough = 0;
-      d.btEngaged = 0;
-    }
-  }
+  const active = state.breakthroughs.filter((b) => b.front === front.id && b.phase === 3).sort((a, b) => a.id - b.id);
+  for (const bt of active) releaseDefenders(state, bt);
   for (const defender of front.players) {
     const mine = active.filter((b) => b.owner !== defender);
     if (mine.length === 0) continue;
@@ -263,11 +325,8 @@ function motorization(divs: readonly Division[]): { motor: number; total: number
   return { motor, total };
 }
 
-/** Vitesse de la force qui perce : motorisée seulement si toute son infanterie l'est (05-Fronts §7.1). */
-function speedOf(divs: readonly Division[]): number {
-  const infantry = divs.filter((d) => dataOf(d).niche === INFANTRY_NICHE);
-  return infantry.length > 0 && infantry.every((d) => dataOf(d).motorized) ? FRONTS.motorizedSpeedPermille : FRONTS.footSpeedPermille;
-}
+/** Vitesse de la force qui perce : celle fixée au lancement (`Breakthrough.motorized`). */
+const speedOf = (bt: Breakthrough): number => (bt.motorized ? FRONTS.motorizedSpeedPermille : FRONTS.footSpeedPermille);
 
 /** Une connexion arrivée au bout de sa route : le camp `x` tient la ville de l'autre bout. */
 export interface Arrival {
@@ -277,44 +336,57 @@ export interface Arrival {
 }
 
 /**
- * Fin de round d'une percée en combat (05-Fronts §7.2, points 6, 9, 12) : force vide ou essoufflée, première ligne
- * percée (saut, combat 2), seconde ligne percée (la ville tombe). Ajoute à `arrivals` les connexions arrivées au bout.
+ * Fin de round d'une percée (05-Fronts §7.2, points 6, 9, 12) : force détruite ou essoufflée en combat (échec,
+ * phase 5 ou 6), première ligne percée (saut, phase 2), réaction rapide battue (phase 4). Les phases de délai n'ont rien
+ * à vérifier ici : `endDelays` les termine, et c'est elle qui fait tomber les villes.
  */
-export function checkBreakthrough(state: GameState, front: Front, bt: Breakthrough, arrivals: Arrival[]): void {
+export function checkBreakthrough(state: GameState, front: Front, bt: Breakthrough): void {
   const x = attackerSide(front, bt);
   const axis = front.connections.find((c) => c.city1 === bt.city1 && c.city2 === bt.city2);
   const force = forceOf(state, bt, true);
-  if (axis === undefined || force.length === 0 || forceState(force) * 100 < FRONTS.breakthroughExhaustionPercent * bt.startState) {
+  if (axis === undefined) {
     endBreakthrough(state, bt);
     return;
   }
+  if (isBreakthroughCombat(bt.phase) && (force.length === 0 || forceState(force) * 100 < FRONTS.breakthroughExhaustionPercent * bt.startState)) {
+    // Force détruite ou essoufflée : la percée échoue. Délai (repli après le combat 1, gains minimes après le combat 2),
+    // puis elle s'arrête (`endDelays`). L'avancée déjà gagnée reste.
+    releaseDefenders(state, bt);
+    bt.phase = bt.phase === 1 ? 5 : 6;
+    bt.phaseTick = currentTurn(state);
+    assignCounterForces(state, front);
+    return;
+  }
   const push = (by: number): void => {
+    const before = axis.position;
     axis.position = Math.min(ROUTE, Math.max(0, axis.position + (x === 0 ? by : -by)));
+    bt.advance += Math.abs(axis.position - before);
   };
   if (bt.phase === 1) {
     const slice = forceOf(state, bt, false).filter((d) => d.line === LINE_FIRST);
     if (infantryOf(slice) > 0) return;
-    // Première ligne percée : la tranche est libérée, le front saute, le combat 2 commence contre la réaction rapide.
-    for (const d of forceOf(state, bt, false)) {
-      d.breakthrough = 0;
-      d.btEngaged = 0;
-    }
-    bt.phase = 2;
+    // Première ligne percée : la tranche est libérée, le front saute. Le saut dépend de la motorisation de la force de
+    // contre-attaque : elle est choisie ici (la percée passe un instant en phase 3) puis libérée, car elle ne
+    // s'engage qu'au combat 2, après le délai de la phase 2.
+    releaseDefenders(state, bt);
+    bt.phase = 3;
     assignCounterForces(state, front);
     const counter = forceOf(state, bt, false);
     const { motor, total } = motorization(counter);
-    push(Math.floor((2 * FRONTS.breakthroughJumpRounds * speedOf(force) * reactionFactor100(motor, total) + 100) / 200));
-    if (axis.position === endOf(x) || infantryOf(counter) === 0) {
-      axis.position = endOf(x);
-      arrivals.push({ x, city1: bt.city1, city2: bt.city2 });
-      endBreakthrough(state, bt);
-    }
+    push(Math.floor((2 * FRONTS.breakthroughJumpRounds * speedOf(bt) * reactionFactor100(motor, total) + 100) / 200));
+    releaseDefenders(state, bt);
+    // Le délai a lieu même sans infanterie en défense : il laisse au joueur le temps de voir ce qui se passe.
+    bt.phase = 2;
+    bt.phaseTick = currentTurn(state);
+    assignCounterForces(state, front);
     return;
   }
-  if (bt.phase === 2 && infantryOf(forceOf(state, bt, false)) === 0) {
-    axis.position = endOf(x);
-    arrivals.push({ x, city1: bt.city1, city2: bt.city2 });
-    endBreakthrough(state, bt);
+  if (bt.phase === 3 && infantryOf(forceOf(state, bt, false)) === 0) {
+    // Réaction rapide battue (ou sans infanterie) : délai, puis la ville au bout de l'axe tombe (`endDelays`).
+    releaseDefenders(state, bt);
+    bt.phase = 4;
+    bt.phaseTick = currentTurn(state);
+    assignCounterForces(state, front);
   }
 }
 

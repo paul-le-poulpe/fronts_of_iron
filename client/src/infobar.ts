@@ -313,12 +313,30 @@ export class InfoBar {
     const section = this.sections[index]!;
     section.pane.hidden = false;
     section.button.setAttribute("aria-expanded", "true");
-    // Le détail s'aligne sur le bord gauche de sa section, sans dépasser de la barre.
-    const pane = this.sections[this.open]!.pane;
-    const button = this.sections[this.open]!.button;
-    const left = Math.max(0, Math.min(button.offsetLeft, this.root.clientWidth - pane.offsetWidth));
-    pane.style.left = `${left}px`;
+    this.place();
     if (this.last) this.sections[this.open]!.body(this.last.detail, this.last.stats);
+  }
+
+  /**
+   * Aligne le détail ouvert sur le bord gauche de sa section, sans le laisser sortir de la carte : sa butée à droite
+   * est le bord gauche du panneau latéral et, s'il est ouvert, du panneau de production. À rappeler quand le
+   * panneau de production s'ouvre ou se ferme.
+   */
+  place(): void {
+    if (this.open < 0) return;
+    const { pane, button } = this.sections[this.open]!;
+    const rootBox = this.root.getBoundingClientRect();
+    let right = rootBox.right;
+    for (const id of ["panel", "prod"]) {
+      const e = document.getElementById(id);
+      if (!e || e.hidden) continue;
+      const left = e.getBoundingClientRect().left;
+      // Un panneau passé sous la carte (écran étroit) n'est pas à droite de la barre.
+      if (left > rootBox.left + 1) right = Math.min(right, left);
+    }
+    const available = Math.max(200, right - rootBox.left);
+    pane.style.maxWidth = `${available}px`;
+    pane.style.left = `${Math.max(0, Math.min(button.offsetLeft, available - pane.offsetWidth))}px`;
   }
 
   // ---- construction d'une section : bouton + détail ----
@@ -694,8 +712,9 @@ export class InfoBar {
       t.mark.hidden = false;
       const value = el("span", "ib-value");
       value.title = "Stock / cible · par tour · sur les fronts";
-      const label = el("span");
-      label.append(productIcon(id), ` ${capitalize(productName(id))}`);
+      // 32 px : les chars n'ont pas d'icône 16 px (icons.ts, `ICONS_32`).
+      const label = el("span", "ib-iconlabel");
+      label.append(productIcon(id, 32), ` ${capitalize(productName(id))}`);
       return { id, index, t, value, r: row(label, t.root, value) };
     });
     const empty = el("p", "muted", "Aucune ligne d'armement.");

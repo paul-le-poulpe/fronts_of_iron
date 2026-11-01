@@ -19,12 +19,14 @@ import {
   countSoldiers,
   currentTurn,
   dataOf,
+  eliteAllowed,
   emptyDivision,
   inFormation,
   isDivisionId,
   isEmpty,
   isFleeing,
   isMoving,
+  nicheCounts,
   stateOf,
   trimExcess,
   type Division,
@@ -48,6 +50,8 @@ export function createDivision(state: GameState, player: number, type: unknown):
   if (!isDivisionId(type)) return false;
   const p = state.players[player - 1]!;
   const data = DIVISION_DATA[DIVISION_IDS.indexOf(type)]!;
+  const { elites, total } = nicheCounts(state, player, data);
+  if (!eliteAllowed(data, elites, total)) return false;
   const required = data.components.filter((c) => c.required);
   for (const c of required) {
     const has = c.resource === MEN ? p.idle : p.armamentReserve[c.resource]!;
@@ -70,7 +74,7 @@ export function createDivision(state: GameState, player: number, type: unknown):
     btEngaged: 0,
     engaged: 0,
     arrivalTick: 0,
-    formedTick: turn + FRONTS.formationTurns,
+    formedTick: turn + data.formationTurns,
     fleeUntilTick: 0,
   });
   p.soldiers += data.menComponent < 0 ? 0 : data.components[data.menComponent]!.count;

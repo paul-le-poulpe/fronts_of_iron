@@ -158,8 +158,10 @@ Page → Worker (`ToWorker`) :
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
 - `pause { paused }` (solo : le relais local ; en ligne : demande à l'hôte, que le relais refuse à un autre joueur).
 - `order` accepte aussi les ordres des fronts (05-Fronts §5.2, 02-Engine §4) : `create_division { division }` (clé d'un type de `DIVISIONS`),
-  `delete_division { id }`, `move_division { ids, front, line? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne),
-  `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`.
+  `delete_division { id }`, `move_division { ids, front, line?, box? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne ;
+  `line` : `first`, `second`, `rapid` ou `box` ; `box` : boîte de percée, 0 pour en créer une),
+  `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
+  `start_breakthrough { box, city1, city2 }`, `cancel_breakthrough { id }`.
 - `debug { action: "addPopulation" | "addArmament" | "armBots", amount }` (voir §3).
 
 Worker → page (`FromWorker`) :
@@ -176,8 +178,8 @@ Worker → page (`FromWorker`) :
   (consommation par tête, nourriture minimale, `maxMachinesPer1000` de chaque
   machine, déclin de l'armement en pourcent) ; `military` (`MilitaryCatalog`) : les types de division
   (clé, indice, niche, rang dans la niche, composants avec leur quantité, leur poids et leurs attaques, icône,
-  description, largeur de front, PV, multiplicateurs, blindage, motorisation), les niches et leurs types, et
-  les délais (tours entre deux rounds, formation, déplacement) et l'échelle de l'état, lus dans
+  description, largeur de front, durée de formation, type d'élite, PV, multiplicateurs, blindage, motorisation), les niches et leurs types,
+  `eliteTroopsRatio`, et les délais (tours entre deux rounds, déplacement) et l'échelle de l'état, lus dans
   `config/divisions.ts` et `config/fronts.ts` par `militaryCatalog()` (`solo.ts`).
 - `tick`, à chaque tour :
   - `tick` : numéro du tour ;
@@ -222,6 +224,9 @@ Worker → page (`FromWorker`) :
     change de joueur sans que `tileCity` change : `cities` est alors renvoyé, avec les paires
     `[case, ville]` de toute sa zone dans `tiles`, pour que la copie de la page la repeigne et
     refasse ses histogrammes ;
+  - `eliminated` : les joueurs éliminés pendant le tour (`{ player, by }`, événement `player_eliminated` du moteur) ;
+    vide après un rejeu. `players[i].defeated` dit, à chaque tour, si un joueur est éliminé (la page en tire l'état de
+    spectateur, même après un rejeu) ;
   - `players` porte aussi `soldiers`, `forcedMobilization` et `divisionEquipment` (armement
     des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
@@ -424,8 +429,12 @@ front » du menu Carte, cochée au départ), en bleu pour un front en paix **au 
 toujours, même case décochée. **Soldats** : pour chaque connexion d'un front actif, le point d'avancement et un rond de la couleur du joueur de chaque côté, de la
 taille d'une ville (`render.ts`, `FrontLayer.marks`) ; la courbe de Catmull-Rom est abandonnée (05-Fronts §11.1).
 **Survol d'une zone de front** : contour de 5 px, fixe. **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour le bouton d'attaque
-actif de la fenêtre d'un front (variable CSS `--blink-period` posée au démarrage). La percée est de la V2 : ni mode choix d'axe ni flèche
-sur la carte.
+actif de la fenêtre d'un front (variable CSS `--blink-period` posée au démarrage). **Percées en cours** (`MapView.drawBreakthroughs`, 05-Fronts §11.1) : pour chaque percée des deux camps (`FrontView.breakthroughs`), un trait
+rouge de 3 px le long du segment droit entre les deux villes de l'axe et une flèche de 14 px (`ARROW_PX`) au milieu, de la ville de celui
+qui perce (`owner`) vers celle de son adversaire. **Mode choix d'axe** (`main.ts`, `startAxisMode`, `nearestConnection`) : repris de la
+v0.1 ; le bouton « Lancer » d'une boîte ferme la fenêtre du front, la connexion du front la plus proche de la souris est surlignée
+(`MapView.axisHover`), un clic envoie `start_breakthrough { box, city1, city2 }` et termine le mode, Échap ou le bouton `#axis-cancel` (« Annuler la percée », en haut à droite de la carte, affiché pendant le mode) l'annule ; dans les deux cas la fenêtre se rouvre
+dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `failedBreakthroughs > 0` : message « Percée arrêtée ».
 
 ## 7. Interface provisoire
 
@@ -536,7 +545,11 @@ sur la carte.
   (vert). Un clic sur un
   bouton déplie son détail juste sous la barre, par-dessus le haut de la carte,
   aligné sur le bord gauche du bouton ; un second clic le replie ; un seul détail
-  est ouvert à la fois. Le DOM est construit une fois par partie ; chaque tour,
+  est ouvert à la fois. Le détail ne sort pas de la carte : sa butée à droite est
+  le bord gauche du panneau latéral (`#panel`) et, quand il est ouvert, du panneau
+  de production (`#prod`) ; le détail se décale vers la gauche (et se rétrécit si
+  besoin) à l'ouverture ou à la fermeture du panneau de production
+  (`InfoBar.place`, appelé par le bouton « Production »). Le DOM est construit une fois par partie ; chaque tour,
   `InfoBar.update` écrit seulement des textes et des largeurs (la barre, et le
   détail ouvert ; un détail replié est mis à jour à l'ouverture). Les barres
   **vertes** sont des flux (production du tour), les barres **bleues** des stocks.
@@ -549,9 +562,11 @@ sur la carte.
   **Icônes en 32 px (essai)** : dans l'interface des usines (onglet Production,
   menu « Inaugurer une usine » et son arbre de progression au survol) et dans l'onglet militaire (tableau des unités et
   combats), les icônes de biens, d'armement et d'unités sont affichées à 32 px
-  (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; la barre du haut et
-  les autres infobulles restent à 16 px. `icons.ts` (`ICONS_32`) associe à trois icônes
-  d'armement (AA, AT, artillerie) leur fichier dessiné en 32 × 32 ; les autres sont
+  (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; les lignes de l'armement
+  (stock) de la barre d'informations aussi ; la barre du haut et
+  les autres infobulles restent à 16 px. `icons.ts` (`ICONS_32`) associe aux icônes
+  d'armement AA, AT, artillerie et chenillette leur fichier dessiné en 32 × 32 (les trois
+  chars n'existent qu'en 32 × 32) ; les autres sont
   les fichiers 16 × 16 agrandis sans lissage. Provisoire : à terme, un bien aura
   ses deux versions dessinées.
   **Menu « Carte »** : dernier élément de la barre (bouton `Carte ▾`, texte plus
@@ -744,33 +759,61 @@ sur la carte.
   deux moitiés autour de la barre verticale : titre, interrupteur « Sélection avancée » (éteint à chaque ouverture) et boutons
   « Attaque sur tout le front » (interrupteur, `start_front_attack` / `stop_front_attack`, grisé en paix, contour rouge qui clignote quand
   l'attaque est en cours) et « Barrage d'artillerie » (grisé, sans effet) à gauche ; « ← Retour » et ✕ à droite. Corps : côté du joueur,
-  les colonnes de la V2, vides : forces de percée (170 px : liste vide, boîte « + » sans effet, puis la zone « Retour à la réserve
-  nationale », visible pendant un glisser seulement) et réaction rapide (170 px, rangées par niche), puis la capsule seconde ligne /
-  première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à chaque dessin) / seconde ligne
-  comprimée (76 px), puis la réaction rapide et la percée comprimées (76 px, vides). Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
+  les forces de percée (170 px : liste défilante des boîtes dont le dernier élément est la boîte « + » `data-drop="box:front:0"` (`drawBoxes`
+  fait `replaceChildren(...boîtes, plus)`), puis la zone « Retour à la réserve
+  nationale », visible pendant un glisser seulement) et la réaction rapide (170 px, rangées par niche, `data-drop="line:front:rapid"`),
+  puis la capsule seconde ligne / première ligne ; côté adverse, la capsule première ligne (même largeur que celle du joueur, fixée en px à
+  chaque dessin) / seconde ligne comprimée (76 px), puis la réaction rapide comprimée (76 px, comme la seconde ligne) et les boîtes de percée comprimées (76 px).
+  **Boîtes de percée du joueur** (`BoxUi`, créées une fois par boîte de `FrontView.boxes`, dans l'ordre de création de leur
+  camp) : bouton « Lancer » et « Motorisée » / « Au pas » (`MotorUi`, `setMotor` : toutes les divisions de la boîte motorisées, hors divisions en
+  déplacement ou en fuite ; « Lancer » grisé sans infanterie, avec un `title` « Vous avez besoin d'infanterie pour la percée. ») avec l'icône de 16 × 16 px `icon-motorized.png` (camion) ou `icon-on-foot.png` (pieds), et un panneau (dont le titre porte la même icône) de survol (`textPanel`, `attachTextPanel` de
+  `infopanels.ts` ; textes dans `MOTOR_TIPS`) ; bouton « Lancer » (actif si le front est actif et que la boîte a des divisions ; `onLaunch` → mode choix d'axe), pions au repos
+  (`renderZone` avec `multiline`, sans sélection : `.pz-open` masqué ; en mode « trop de pions », les types passent à la ligne suivante et
+  `.fw-bzone` grandit, `min-height: 50px`) ; **au survol**, la vue étendue de 700 px (`.fw-bpop`, posée dans la colonne et pas dans la liste
+  qui défile, qui la couperait) : les premières lignes face à face sans les secondes — à gauche la boîte (cinq rangées par niche, couverture
+  d'une liaison = somme des `breakthroughWidth`, pions sélectionnables, zone `bx<id>`), à droite la première ligne adverse (couverture du front,
+  pions avec leur panneau de survol) ; elle reste mesurable (`visibility`, pas `display`) et disparaît pendant un glisser. Une boîte contient les
+  divisions de `line` « box » et `box` égale, sans `breakthrough` : la force qui perce est dans la percée en cours. Dépose sur une boîte :
+  `move_division { ids, front, line: "box", box }`. **Boîtes** : le bouton « Lancer » est à gauche et la motorisation à droite (la vue étendue a un en-tête de 156 px calé sur celui de la boîte : le bouton ne bouge pas à l'ouverture) ; une boîte neuve est insérée dans la liste **avant** le dessin de ses pions (`renderCompact` lit `clientWidth`, nul pour un élément détaché : elle resterait vide jusqu'au tour suivant). **Flèches de l'attaque sur tout le front** : deux colonnes `.fw-gut` (`gutter()`), contre la barre, avec une flèche `.fw-arrow` par rangée de première ligne, allumée (`on`) selon `FrontSideView.frontAttack` de chaque camp. Interrupteur « Sélection avancée » : `.fw-switch` (piste et pastille, CSS seul). **Percées en cours** (`.fw-bts`, sous le bandeau, masqué sans percée) : un petit tableau par percée de `FrontView.breakthroughs`, des deux camps :
+  « Percée n » (ou « Percée de X »), croix sur les nôtres (`cancel_breakthrough`), une rangée par niche engagée avec le nombre de divisions et
+  l'état moyen de ce qui perce (`DivisionView.breakthrough` = id, `owner` de la percée) et de la défense, un texte par phase (`PHASE_TEXT`, sept phases : cinq délais décomptés en secondes à
+  chaque tour depuis `BreakthroughView.until`, deux combats), « Avancée de x% sur ce front » (`BreakthroughView.advance` en millièmes de route, divisé
+  par 10), et une flèche rouge clignotante à droite du titre pendant les combats ; les cartes sont créées une fois par percée, seul le tableau est refait. **Boîtes adverses** : une boîte comprimée par boîte (`countTag`), les boîtes qui ne tiennent pas en
+  hauteur remplacées par la boîte « ··· » ; au survol de la colonne, le cadre de 330 px vers la gauche (`.fw-cpop`) avec toutes les boîtes. Cinq rangées par niche (`MilitaryCatalog.niches`), fond et lettres
   de niche par thème (variables CSS `--n-bg`, `--n-ink`, `--n-ink2` posées par la classe `n-<niche>`) ; en première ligne, le pourcentage de
   couverture (somme des `engaged` de la niche / (connexions × 1 000)) ; la zone des pions d'une première ligne a une marge droite de 96 px
   (`--fw-text-w`, `.fw-row.cov .fw-zone`) : `renderZone` reçoit sa `clientWidth`, donc les piles se forment plus tôt et ne passent pas sous le texte. Seconde ligne adverse : par niche `countTag` (icône du premier type,
   nombre total) ; au survol, un rectangle de 240 px qui s'élargit vers la gauche et vers le bas, une ligne par type, cinq pions par ligne.
   Le DOM est construit une fois ; `draw` ne remplace que le contenu des rangées (`renderZone`) et des textes, donc un bouton survit entre
   `pointerdown` et `click` ; il n'est refait que si `fronts` ou `divisions` (objets du `Mirror`) ont changé ou si la fenêtre change de taille
-  (`ResizeObserver`). Dépose : sur une ligne du joueur, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
+  (`ResizeObserver`). Dépose : sur une ligne du joueur ou la réaction rapide, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
   réserve ; les divisions déjà à leur destination sont filtrées.
 - **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la sixième section de la barre d'informations. Barre du haut : le « + »
   (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Réserve nationale : de vrais
-  pions, un groupe par type (`renderZone`, redessinée si ses divisions ou sa largeur changent). Sections de front : fronts en guerre active puis
+  pions, un groupe par type (`renderZone` avec `wrap`, via `Dnd.zone("res", true, true)`, redessinée si ses divisions ou sa largeur changent) :
+  toujours déployée, jamais en mode « trop de pions » ; sans place sur une ligne, les piles passent sur plusieurs lignes (blocs par niche, une
+  niche sur une ligne si possible ; un type trop long est tronqué avec un « + » en `.pz-num`, `layout.groups` garde tous ses ids) et la hauteur de la
+  section (`ZoneLayout.height`) suit, ce qui repousse les fronts vers le bas. Sections de front : fronts en guerre active puis
   en paix, du plus long au plus court (`sortedFronts`), fond de la couleur de l'adversaire (`playerColor`), carré de 32 × 32 px de statut
-  diplomatique (rouge guerre, bleu paix ; provisoire), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
-  ouvre la fenêtre du front ; `data-drop="front:id"` : une dépose envoie `move_division { ids, front }` (seconde ligne). Les sections sont
+  diplomatique (rouge guerre, bleu paix ; provisoire), à droite la largeur du front (`connections.length`, `.fx-width` : carré gris de
+  16 px provisoire à la place de la double flèche, puis le nombre), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
+  ouvre la fenêtre du front ; `title` : « Front en guerre|paix contre *nom de l'adversaire* : cliquez pour l'ouvrir. » ; **surbrillance liée à la carte** :
+  `pointerenter` / `pointerleave` d'une section appellent `MapView.highlightFront(id)` (zone dessinée comme au survol de la carte, `listFront`
+  prime sur `hoverFront`), et `MapViewHooks.onHoverFront` (changement de front sous la souris) appelle `ForcesTab.setHighlight(id)`, qui met la
+  classe `hl` sur la section ; le repli du volet retire la surbrillance de la carte ; `data-drop="front:id"` : une dépose envoie `move_division { ids, front }` (seconde ligne). Les sections sont
   reconstruites seulement si leur contenu change. La sélection y est simple (l'interrupteur « Sélection avancée » est dans la fenêtre d'un front).
-  **Menu « + »** : sous le bouton, une ligne par niche (fond de la niche, lettres à droite), les types côte à côte (icône de 32 px et
+  **Menu « + »** : sous le bouton, une ligne par niche (fond de la niche, lettres à droite), les types côte à côte, du moins prioritaire au plus prioritaire
+  (`NICHES[].types` parcouru à l'envers ; icône de 32 px et
   « actuel / supportable », `supportable` de `divisions.ts` : pour chaque composant requis, (divisions + stock) / quantité, le plus petit ;
   hommes : soldats + inactifs ; « actuel » en rouge s'il dépasse) ; type que l'on ne peut pas créer (`creatable`, copie de la condition du
-  moteur : inactifs et stock remplissent tous les composants) à 50 % de transparence, clic sans effet ; un clic crée une division
+  moteur : inactifs et stock remplissent tous les composants ; et `eliteAllowed` de `divisions.ts`, copie de la limite des élites) à 50 % de transparence, clic sans effet ; un clic crée une division
   (`create_division`) et le menu reste ouvert ; clic en dehors, Échap ou repli du volet le ferme ; survol d'un type : panneau de type.
 - **Sélection et glisser-déposer** (`dnd.ts`, 05-Fronts §11.4) : une `ZoneView` regroupe les rangées d'une zone (une ligne d'un front, la
   réserve nationale) ; chaque rangée est un conteneur passé à `renderZone`, qui renvoie `groups` (ids par type, dans l'ordre de la pile) ; le pion
-  sous la souris est lu dans l'événement (`.pz-pawn[data-id]`, le navigateur connaît l'ordre d'empilement des piles). Mode simple : le survol
+  sous la souris est lu dans l'événement (`.pz-pawn[data-id]`, le navigateur connaît l'ordre d'empilement des piles). Un redessin
+  (`renderAll`, à chaque changement d'aperçu et à chaque tour) remplace le DOM de la rangée : le rectangle élargi du mode « trop de pions »
+  (`.pz-open`, ouvert par `:hover`) serait refermé si la souris était hors du rectangle de base ; `renderZone` donne donc la classe `pz-keep` au
+  nouveau `.pz-root` quand l'ancien était survolé ou `pz-keep`, et `pointerleave` du conteneur la retire. Mode simple : le survol
   donne l'aperçu (du début du groupe jusqu'au pion), le clic prend la sélection et lance le glisser. Mode avancé : premier clic = `anchor`
   (rectangle sur la division), la souris dessine l'aperçu jusqu'au pion survolé dans la même zone (`range` : ordre de lecture des rangées de
   la zone), second clic = sélection figée ; un clic sur un pion sélectionné lance le glisser. Seules les divisions `ready` ou `fleeing` sont
@@ -778,10 +821,12 @@ sur la carte.
   `data-drop` sous le pointeur (`dnd-over` : contour clair, choix de la page), `DndHost.drop` envoie les ordres ; Échap abandonne. Un glisser
   sans mouvement (moins de 4 px) ne dépose rien.
 - **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
-  nom en gras et niche en gris, description, composants (icône 32 × 32 : `icon32Path`, nom, quantité), statistiques non nulles (attaques, PV hors appui-feu,
-  blindage, largeur de front, déplacement), carrés provisoires. Panneau d'un pion : rang (icône 8 × 10 agrandie ×2), nom, niche, description,
+  nom en gras et niche en gris, description, composants (icône 32 × 32 : `icon32Path`, nom, quantité), statistiques non nulles (attaques, PV,
+  blindage, largeur de front, largeur de front en percée, multiplicateurs d'attaque et de PV en défense s'ils diffèrent de × 1, déplacement),
+  carrés provisoires ; le déplacement a l'icône camion / pieds (`motorIcon`). Ces statistiques sont écrites par `typeStats`, commune aux deux panneaux.
+  Panneau d'un pion : icône du type (32 × 32), rang (icône 8 × 10 agrandie ×2), nom, niche, description,
   composants « présents / requis », état (« 92 % »), attaques actuelles / maximales (`currentAttacks`, `maxAttacks` : stat × taux, sans
-  multiplicateur). Il apparaît 120 ms après le survol, 14 px au-dessus du pion (au-dessous s'il n'y a pas la place), disparaît dès qu'un
+  multiplicateur), puis `typeStats`. Il apparaît 120 ms après le survol, 14 px au-dessus du pion (au-dessous s'il n'y a pas la place), disparaît dès qu'un
   glisser ou le premier clic de la sélection avancée commence. Pions de l'adversaire : même panneau (`attachPawnPanels`).
 - **Thèmes** (`theme.ts`, `forces.css`, 05-Fronts §11.8) : `html[data-theme="dark" | "light"]`, clair au départ ; le
   bouton « + » est le même dans les deux thèmes (`--t-plus-filter: none`) ; les variables `--t-*` sont
@@ -789,6 +834,12 @@ sur la carte.
 - **Notifications des prises de villes** : « Vous avez pris la ville n° k à Bot j. » / « Bot j vous a pris la ville n° k. »
   (`captured`). **Encerclements** (`encircled`, événement `encirclement` du moteur) : une carte du même module
   (`notifications.ts`) pour le joueur qui encercle ou qui est encerclé, avec le nombre d'unités perdues.
+- **Élimination** (`eliminated`, 05-Fronts §10.3 et §11.6) : une carte pour chaque joueur autre que l'éliminé (60 s),
+  qui annonce le mode résistance « pas encore implémenté » ; pour l'éliminé, la fenêtre `#defeat` au centre de la carte
+  (« Continuer en spectateur » ou « Quitter la partie »). `setSpectator` (`main.ts`), appelée à chaque tour d'après
+  `players[you].defeated`, affiche le bandeau `#spectator-badge`, désactive « Créer une ville » et « Inaugurer une usine »,
+  désarme les outils et supprime le menu de diplomatie au clic ; le tableau des joueurs ajoute « (éliminé) ». Les bots
+  éliminés ne jouent plus (`bots.ts`).
 - **Menu de diplomatie** (`diplomacy.ts`, 00-Game §1). Quand aucun outil n'est armé
   (ni « Créer une ville » ni « Inaugurer une usine »), un clic sans glisser sur une
   case dont `Mirror.ownerOf` est un autre joueur ouvre un petit menu à côté de la

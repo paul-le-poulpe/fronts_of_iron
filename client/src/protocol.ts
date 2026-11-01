@@ -117,7 +117,11 @@ export interface DivisionTypeInfo {
   readonly frontWidth: number;
   /** Largeur dans une percée, en liaisons (05-Fronts §7.2). */
   readonly breakthroughWidth: number;
-  /** PV d'une division complète ; 0 pour l'appui-feu (jamais lus). */
+  /** Durée de formation, en tours ; 0 : aucune. */
+  readonly formationTurns: number;
+  /** Limité par `MilitaryCatalog.eliteTroopsRatio` à la création (05-Fronts §3.5). */
+  readonly elite: boolean;
+  /** PV d'une division complète. */
   readonly hitPoints: number;
   /** Multiplicateurs à l'échelle 100. */
   readonly defenseHitPointsMultiplier: number;
@@ -136,8 +140,8 @@ export interface MilitaryCatalog {
   readonly niches: readonly { readonly id: string; readonly support: boolean; readonly types: readonly string[] }[];
   /** Tours entre deux rounds de combat. */
   readonly combatTurns: number;
-  /** Durée de formation d'une division, en tours. */
-  readonly formationTurns: number;
+  /** `ELITE_TROOPS_RATIO` : divisions d'infanterie par division d'élite au plus (05-Fronts §3.5). */
+  readonly eliteTroopsRatio: number;
   /** Délai d'un déplacement, en tours. */
   readonly transferTurns: number;
   /** Échelle de `DivisionView.state` (10 000 = 100 %). */
@@ -242,15 +246,17 @@ export interface FrontSideView {
   readonly frontAttack: boolean;
 }
 
-/** Une boîte de percée (05-Fronts §4.6), dans l'ordre de création : « Percée 1 », « Percée 2 »… de son camp. */
+/** Une boîte de percée (05-Fronts §4.6), dans l'ordre de création de son camp. */
 export interface BoxView {
   readonly id: number;
   readonly owner: number;
 }
 
 /**
- * Une percée lancée (05-Fronts §7.2). `phase` : 0 pendant le délai (le combat 1 commence au tour `startTick`), 1 contre la
- * tranche de première ligne, 2 contre la force de contre-attaque. Les divisions engagées ont `DivisionView.breakthrough = id`.
+ * Une percée lancée (05-Fronts §7.2). `phase` : 0 délai avant le combat 1, 1 combat contre la tranche de première ligne,
+ * 2 délai avant le combat 2, 3 combat contre la force de contre-attaque, 4 délai avant la chute de la ville (réussite),
+ * 5 délai de repli (le combat 1 a échoué), 6 délai après l'échec du combat 2. Les divisions engagées ont
+ * `DivisionView.breakthrough = id`.
  */
 export interface BreakthroughView {
   readonly id: number;
@@ -259,7 +265,10 @@ export interface BreakthroughView {
   readonly city1: number;
   readonly city2: number;
   readonly phase: number;
-  readonly startTick: number;
+  /** Tour où prend fin le délai en cours (toutes les phases sauf 1 et 3) ; 0 pendant un combat. */
+  readonly until: number;
+  /** Avancée de la percée sur le front, en millièmes de route (en phase 4, avec la distance qui reste jusqu'à la ville). */
+  readonly advance: number;
 }
 
 export interface FrontView {
@@ -342,6 +351,8 @@ export interface PlayerStats {
   /** Identifiant de la capitale, 0 = aucune. */
   readonly capital: number;
   readonly cities: number;
+  /** Éliminé (05-Fronts §10.3) : sa dernière ville a été prise. */
+  readonly defeated: boolean;
   /** Coût en population de la prochaine ville (00-Game §3.3). */
   readonly foundingCost: number;
   /** Ouvriers des lignes remplies, mineurs, cases de fer exploitées, fer extrait (dernier tour). */
@@ -445,6 +456,8 @@ export interface TickMessage {
   readonly captured: readonly { readonly city: number; readonly from: number; readonly to: number }[];
   /** Encerclements causés par ces prises (05-Fronts §10.2) : `from` encercle des divisions de `to` ; `divisions` : divisions touchées. */
   readonly encircled: readonly { readonly city: number; readonly from: number; readonly to: number; readonly divisions: number }[];
+  /** Joueurs éliminés pendant ce tour (05-Fronts §10.3) : `by` a pris leur dernière ville. Vide après un rejeu. */
+  readonly eliminated: readonly { readonly player: number; readonly by: number }[];
   readonly paused: boolean;
   /** Durées mesurées dans le Worker, en ms. */
   readonly perf: { readonly bots: number; readonly apply: number; readonly pack: number };

@@ -76,6 +76,13 @@ export type DiplomacyEvent =
       readonly city: number;
       readonly divisions: number;
       readonly turn: number;
+    }
+  | {
+      /** La prise de la dernière ville de `to` par `from` l'élimine (05-Fronts §10.3). */
+      readonly type: "player_eliminated";
+      readonly from: number;
+      readonly to: number;
+      readonly turn: number;
     };
 
 /** Case de `GameState.diplomacy` pour la paire (a, b). a et b valides. */
@@ -103,8 +110,9 @@ export function pendingProposal(state: GameState, a: number, b: number): Proposa
 /** Un seul numéro de tour pour tous les événements du tour : `state.tick` n'est avancé qu'à la fin d'`applyTurn`. */
 const currentTurn = (state: GameState): number => state.tick + 1;
 
-/** `target` est un autre joueur que `player`. */
-const isOther = (state: GameState, player: number, target: unknown): target is number => isPlayerId(state, target) && target !== player;
+/** `target` est un autre joueur que `player`, et il n'est pas éliminé (05-Fronts §10.3). */
+const isOther = (state: GameState, player: number, target: unknown): target is number =>
+  isPlayerId(state, target) && target !== player && !state.players[target - 1]!.defeated;
 
 /** Déclarer la guerre : valide depuis neutre seulement. Supprime la proposition en attente de la paire. */
 export function declareWar(state: GameState, player: number, target: unknown): boolean {

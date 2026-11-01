@@ -156,6 +156,10 @@ input[type="number"] {
   pointer-events: none;
 }
 #map-legend[hidden] { display: none; }
+
+/* Choix de l'axe d'une percée (main.ts, 05-Fronts §11.1) : revient à la fenêtre du front sans lancer la percée. */
+#axis-cancel { position: absolute; top: 12px; right: 12px; z-index: 5; padding: 6px 14px; font-weight: 600; box-shadow: 0 2px 8px #0003; }
+#axis-cancel[hidden] { display: none; }
 .legend-item { display: flex; align-items: center; gap: 6px; }
 .legend-swatch {
   width: 22px;
@@ -177,6 +181,37 @@ input[type="number"] {
   pointer-events: none;
 }
 
+/* Fenêtre de défaite (main.ts) : voile sur la carte, boîte au centre. */
+#defeat {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 35, 43, 0.55);
+}
+#defeat-box {
+  width: 420px;
+  max-width: calc(100% - 32px);
+  padding: 18px 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--bad);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #0005;
+}
+#defeat-title { margin: 0 0 8px; color: var(--bad); font-size: 20px; }
+#defeat-box p { margin: 0 0 8px; }
+#defeat-box .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.spectator-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--bad);
+  border-radius: 10px;
+  color: var(--bad);
+  font-weight: 600;
+}
+
 #bar {
   grid-area: bar;
   display: flex;
@@ -186,8 +221,20 @@ input[type="number"] {
   border-top: 1px solid var(--line);
   background: var(--card);
 }
-#bar button { padding: 8px 20px; font-weight: 600; }
-.btn-cost { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+#bar button { padding: 8px 20px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+/* Le texte d'aide change au clic : limité à deux lignes, qui tiennent dans la hauteur des boutons, pour que
+   la barre ne grandisse jamais (elle redimensionnerait la carte). */
+#bar-hint {
+  flex: 1 1 0;
+  min-width: 0;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.btn-cost { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; min-width: 4ch; font-variant-numeric: tabular-nums; }
 .btn-cost[hidden] { display: none; }
 #bar { position: relative; z-index: 5; }
 /* Barre de debug : à droite de la barre de boutons, bordure pointillée orange pour

@@ -22,6 +22,7 @@ const ICONS_32: Readonly<Record<string, string>> = {
   "armament/armament-AA-gun.png": "armament/armament-AA-32.png",
   "armament/armament-AT-gun.png": "armament/armament-AT-32.png",
   "armament/armament-artillery.png": "armament/armament-artillery-32.png",
+  "armament/armament-tankette.png": "armament/icon-armament-tankette-32.png",
 };
 
 /** Chemin de l'icône à afficher en 32 px : la version 32 × 32 si elle existe, sinon la 16 × 16. */

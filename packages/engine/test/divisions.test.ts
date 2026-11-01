@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   applyIntent,
   ARMAMENT_IDS,
+  DIVISION_DATA,
   FRONTS,
   inFormation,
   isMoving,
@@ -32,7 +33,7 @@ const order = (s: GameState, intent: Intent): boolean => applyIntent(s, intent, 
 
 describe("état d'une division (05-Fronts §3.3)", () => {
   it("somme des taux pondérés par les poids : infantrie poids 2, 2, 1 ; chenillette poids 1, 1", () => {
-    const d = put(duel(), 1, "infantry");
+    const d = put(duel(), 1, "regulars");
     const cases: [number[], number][] = [
       [[1000, 1000, 100], 10000],
       [[900, 900, 90], 9000],
@@ -53,8 +54,8 @@ describe("état d'une division (05-Fronts §3.3)", () => {
 
   it("une division à 0 % est détruite : elle disparaît de l'état", () => {
     const s = duel();
-    const dead = put(s, 1, "infantry");
-    const alive = put(s, 1, "infantry");
+    const dead = put(s, 1, "regulars");
+    const alive = put(s, 1, "regulars");
     dead.counts.fill(0);
     turn(s);
     assert.deepEqual(s.divisions.map((d) => d.id), [alive.id]);
@@ -67,44 +68,44 @@ describe("création d'une division (05-Fronts §3.5)", () => {
     const p = s.players[0]!;
     p.idle = 5000;
     p.armamentReserve[RIFLE] = 999;
-    assert.ok(!order(s, create(1, "infantry")), "999 fusils sur 1 000");
+    assert.ok(!order(s, create(1, "regulars")), "999 fusils sur 1 000");
     p.armamentReserve[RIFLE] = 1000;
     p.idle = 999;
-    assert.ok(!order(s, create(1, "infantry")), "999 inactifs sur 1 000");
+    assert.ok(!order(s, create(1, "regulars")), "999 inactifs sur 1 000");
     assert.equal(s.divisions.length, 0);
     assert.equal(s.nextDivisionId, 1);
     // Les hommes ne sont pris que parmi les inactifs, même en mobilisation forcée (provisoire).
     p.idle = 999;
     p.population = 5_000_000;
     p.forcedMobilization = true;
-    assert.ok(!order(s, create(1, "infantry")));
+    assert.ok(!order(s, create(1, "regulars")));
     // Composants requis seulement : sans aucune mitrailleuse, la création est valide.
     p.idle = 1000;
     p.forcedMobilization = false;
     p.armamentReserve[MACHINE_GUN] = 0;
-    assert.ok(order(s, create(1, "infantry")));
+    assert.ok(order(s, create(1, "regulars")));
   });
 
   it("une division naît dans la réserve nationale, en formation, avec ses composants requis ; les optionnels partent de 0", () => {
     const s = duel();
-    stock(s, 1, { infantry: 1 });
+    stock(s, 1, { regulars: 1 });
     const p = s.players[0]!;
     const [idle, rifles, guns, soldiers] = [p.idle, p.armamentReserve[RIFLE]!, p.armamentReserve[MACHINE_GUN]!, p.soldiers];
-    assert.ok(order(s, create(1, "infantry")));
+    assert.ok(order(s, create(1, "regulars")));
     const d = s.divisions[0]!;
     assert.deepEqual([d.id, d.owner, d.type, d.front, d.line, d.engaged, d.arrivalTick], [1, 1, 0, 0, LINE_SECOND, 0, 0]);
     assert.deepEqual(d.counts, [1000, 1000, 0]);
-    assert.equal(d.formedTick, s.tick + 1 + FRONTS.formationTurns);
+    assert.equal(d.formedTick, s.tick + 1 + DIVISION_DATA[0]!.formationTurns);
     assert.ok(inFormation(s, d));
     assert.deepEqual([p.idle, p.armamentReserve[RIFLE], p.armamentReserve[MACHINE_GUN], p.soldiers], [idle - 1000, rifles - 1000, guns, soldiers + 1000]);
   });
 
   it("en formation pendant formationTurns tours : ni déplacement ni suppression, puis les deux", () => {
     const s = duel();
-    stock(s, 1, { infantry: 1 });
-    turn(s, create(1, "infantry"));
+    stock(s, 1, { regulars: 1 });
+    turn(s, create(1, "regulars"));
     const d = s.divisions[0]!;
-    play(s, FRONTS.formationTurns - 2);
+    play(s, DIVISION_DATA[0]!.formationTurns - 2);
     assert.ok(inFormation(s, d));
     assert.ok(!order(s, move(1, [d.id], front(s).id)), "déplacement refusé en formation");
     assert.ok(!order(s, remove(1, d.id)), "suppression refusée en formation");
@@ -117,10 +118,10 @@ describe("création d'une division (05-Fronts §3.5)", () => {
 describe("suppression d'une division (05-Fronts §3.5)", () => {
   it("dans la réserve : les hommes ne sont plus soldats, l'armement revient au stock, sans délai", () => {
     const s = duel();
-    stock(s, 1, { infantry: 1 });
-    turn(s, create(1, "infantry"));
+    stock(s, 1, { regulars: 1 });
+    turn(s, create(1, "regulars"));
     const p = s.players[0]!;
-    play(s, FRONTS.formationTurns);
+    play(s, DIVISION_DATA[0]!.formationTurns);
     // Les mitrailleuses sont arrivées par le renfort (le stock a décliné d'une au premier tour, avant le renfort).
     const guns = s.divisions[0]!.counts[2]!;
     assert.ok(guns > 0);
@@ -132,9 +133,9 @@ describe("suppression d'une division (05-Fronts §3.5)", () => {
 
   it("refusée sur un front, ou en déplacement, ou pour la division d'un autre joueur", () => {
     const s = duel();
-    const onFront = put(s, 1, "infantry", front(s).id);
-    const travelling = put(s, 1, "infantry");
-    const theirs = put(s, 2, "infantry");
+    const onFront = put(s, 1, "regulars", front(s).id);
+    const travelling = put(s, 1, "regulars");
+    const theirs = put(s, 2, "regulars");
     turn(s, move(1, [travelling.id], front(s).id));
     turn(s, move(1, [travelling.id], 0));
     assert.ok(isMoving(travelling) && travelling.front === 0);
@@ -148,7 +149,7 @@ describe("suppression d'une division (05-Fronts §3.5)", () => {
 describe("déplacement (05-Fronts §4.4, §5.2)", () => {
   it("réserve → front : transferRounds × combatTurns tours de trajet, sans combattre, puis en première ligne", () => {
     const s = duel();
-    const d = put(s, 1, "infantry");
+    const d = put(s, 1, "regulars");
     turn(s, move(1, [d.id], front(s).id, "first"));
     const sent = s.tick;
     const travel = FRONTS.transferRounds * FRONTS.combatTurns;
@@ -164,15 +165,15 @@ describe("déplacement (05-Fronts §4.4, §5.2)", () => {
 
   it("front → réserve : le même délai", () => {
     const s = duel();
-    const d = put(s, 1, "infantry", front(s).id);
+    const d = put(s, 1, "regulars", front(s).id);
     turn(s, move(1, [d.id], 0));
     assert.deepEqual([d.front, d.line, d.engaged, d.arrivalTick], [0, LINE_SECOND, 0, s.tick + 100]);
   });
 
   it("entre les deux lignes d'un même front : sans délai, la ligne demandée est prise tout de suite", () => {
     const s = duel();
-    const a = put(s, 1, "infantry", front(s).id);
-    const b = put(s, 1, "infantry", front(s).id);
+    const a = put(s, 1, "regulars", front(s).id);
+    const b = put(s, 1, "regulars", front(s).id);
     turn(s);
     assert.deepEqual([a.line, b.line], [LINE_FIRST, LINE_SECOND], "ex æquo : le plus petit identifiant tient la largeur");
     assert.ok(order(s, move(1, [a.id], front(s).id, "second")));
@@ -185,8 +186,8 @@ describe("déplacement (05-Fronts §4.4, §5.2)", () => {
 
   it("les divisions invalides de la liste sont ignorées, les autres déplacées", () => {
     const s = duel();
-    const mine = put(s, 1, "infantry");
-    const theirs = put(s, 2, "infantry");
+    const mine = put(s, 1, "regulars");
+    const theirs = put(s, 2, "regulars");
     assert.ok(order(s, move(1, [theirs.id, mine.id, mine.id, 99], front(s).id)));
     assert.equal(mine.front, front(s).id);
     assert.equal(theirs.front, 0);
@@ -207,8 +208,8 @@ describe("renfort (05-Fronts §4.3)", () => {
 
   it("deux divisions de la réserve manquent de 500 fusils chacune, 301 en stock : 151 et 150, et les hommes en trop sont rendus", () => {
     const s = duel();
-    const a = put(s, 1, "infantry");
-    const b = put(s, 1, "infantry");
+    const a = put(s, 1, "regulars");
+    const b = put(s, 1, "regulars");
     for (const d of [a, b]) d.counts.splice(0, 3, 500, 500, 50);
     const p = s.players[0]!;
     p.idle = 100_000;
@@ -223,8 +224,8 @@ describe("renfort (05-Fronts §4.3)", () => {
 
   it("l'armement d'une division presque pleine est plafonné à son besoin, le reste va aux autres", () => {
     const s = duel();
-    const a = put(s, 1, "infantry");
-    const b = put(s, 1, "infantry");
+    const a = put(s, 1, "regulars");
+    const b = put(s, 1, "regulars");
     a.counts.splice(0, 3, 500, 500, 50); // manque 500 fusils
     b.counts.splice(0, 3, 900, 900, 90); // manque 100 fusils
     const p = s.players[0]!;
@@ -238,8 +239,8 @@ describe("renfort (05-Fronts §4.3)", () => {
   it("pas de renfort en première ligne pendant un combat, mais la seconde ligne en reçoit", () => {
     const s = duel();
     war(s, 1);
-    const first = put(s, 1, "infantry", front(s).id);
-    const second = put(s, 1, "infantry", front(s).id);
+    const first = put(s, 1, "regulars", front(s).id);
+    const second = put(s, 1, "regulars", front(s).id);
     for (const d of [first, second]) d.counts.splice(0, 3, 900, 900, 90);
     first.line = LINE_FIRST;
     first.engaged = 1000;
@@ -255,8 +256,8 @@ describe("renfort (05-Fronts §4.3)", () => {
   it("sans combat (aucune attaque), la première ligne se renforce aussi", () => {
     const s = duel();
     war(s);
-    const first = put(s, 1, "infantry", front(s).id);
-    const second = put(s, 1, "infantry", front(s).id);
+    const first = put(s, 1, "regulars", front(s).id);
+    const second = put(s, 1, "regulars", front(s).id);
     for (const d of [first, second]) d.counts.splice(0, 3, 900, 900, 90);
     first.line = LINE_FIRST;
     first.engaged = 1000;
@@ -271,8 +272,8 @@ describe("renfort (05-Fronts §4.3)", () => {
 
   it("pas de renfort pour une division en déplacement ni en fuite", () => {
     const s = duel();
-    const travelling = put(s, 1, "infantry");
-    const fleeing = put(s, 1, "infantry");
+    const travelling = put(s, 1, "regulars");
+    const fleeing = put(s, 1, "regulars");
     for (const d of [travelling, fleeing]) d.counts.splice(0, 3, 900, 900, 90);
     travelling.arrivalTick = s.tick + 50;
     fleeing.fleeUntilTick = s.tick + 50;
@@ -289,7 +290,7 @@ describe("renfort (05-Fronts §4.3)", () => {
 describe("pas d'excédent (05-Fronts §3.2)", () => {
   it("ce qui dépasse le taux de soldats retourne au stock (équipement) ou à la population (hommes), à chaque tour", () => {
     const s = duel();
-    const d = put(s, 1, "infantry");
+    const d = put(s, 1, "regulars");
     d.counts.splice(0, 3, 1000, 500, 100); // fusils à 50 % : 500 soldats
     const p = s.players[0]!;
     p.armamentReserve[MACHINE_GUN] = 0;
@@ -303,8 +304,8 @@ describe("pas d'excédent (05-Fronts §3.2)", () => {
 describe("rangement des lignes (05-Fronts §4.2)", () => {
   it("chaque niche a sa première ligne ; une division plus large que la place n'est engagée qu'en partie ; le reste attend", () => {
     const s = duel(); // front d'une liaison : 1 000
-    const infantry = put(s, 1, "infantry", front(s).id);
-    const spareInfantry = put(s, 1, "infantry", front(s).id);
+    const infantry = put(s, 1, "regulars", front(s).id);
+    const spareInfantry = put(s, 1, "regulars", front(s).id);
     const artillery = put(s, 1, "artillery", front(s).id); // largeur 5 : engagée à 1 000 / 5 000 = 20 %
     const spareArtillery = put(s, 1, "artillery", front(s).id);
     const tankette = put(s, 1, "tankette", front(s).id); // largeur 2 : 1 000 / 2 000
@@ -323,7 +324,7 @@ describe("rangement des lignes (05-Fronts §4.2)", () => {
     const s = duel();
     widen(s, 2); // un front de deux liaisons
     const f = front(s);
-    const divs = [1, 2, 3].map(() => put(s, 1, "infantry", f.id));
+    const divs = [1, 2, 3].map(() => put(s, 1, "regulars", f.id));
     const tank = put(s, 1, "tankette", f.id);
     turn(s);
     assert.deepEqual(divs.map((d) => d.engaged), [1000, 1000, 0]);
@@ -336,7 +337,7 @@ describe("rangement des lignes (05-Fronts §4.2)", () => {
     const artillery = put(s, 1, "artillery", front(s).id);
     turn(s);
     assert.deepEqual([artillery.line, artillery.engaged], [LINE_SECOND, 0]);
-    const infantry = put(s, 1, "infantry", front(s).id);
+    const infantry = put(s, 1, "regulars", front(s).id);
     turn(s);
     assert.deepEqual([infantry.line, artillery.line, artillery.engaged], [LINE_FIRST, LINE_FIRST, 1000]);
     // l'infanterie repart : l'artillerie repasse en seconde ligne
@@ -347,9 +348,9 @@ describe("rangement des lignes (05-Fronts §4.2)", () => {
 
   it("ordre de choix : meilleur état d'abord ; une division abîmée tient toute sa largeur", () => {
     const s = duel();
-    const worn = put(s, 1, "infantry", front(s).id);
+    const worn = put(s, 1, "regulars", front(s).id);
     worn.counts.splice(0, 3, 900, 900, 90);
-    const fresh = put(s, 1, "infantry", front(s).id);
+    const fresh = put(s, 1, "regulars", front(s).id);
     turn(s);
     assert.deepEqual([worn.line, fresh.line], [LINE_SECOND, LINE_FIRST]);
     s.divisions = [worn];
@@ -360,7 +361,7 @@ describe("rangement des lignes (05-Fronts §4.2)", () => {
 
   it("une division en fuite ne revient pas en première ligne avant la fin de sa fuite", () => {
     const s = duel();
-    const d = put(s, 1, "infantry", front(s).id);
+    const d = put(s, 1, "regulars", front(s).id);
     const until = s.tick + 4;
     d.fleeUntilTick = until; // en fuite aux tours `until - 3`, `until - 2` et `until - 1`
     turn(s);

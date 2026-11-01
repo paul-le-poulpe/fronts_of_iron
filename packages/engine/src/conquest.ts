@@ -2,8 +2,9 @@
 // changement de propriétaire de la ville et de sa zone, recalcul des fronts.
 
 import { CITY, FRONTS } from "./config.ts";
+import { endBreakthrough } from "./breakthroughs.ts";
 import { computeGroups } from "./cities.ts";
-import { LINE_FIRST, LOSS_SCALE, applyLoss, dataOf } from "./divisions.ts";
+import { LINE_FIRST, LOSS_SCALE, applyLoss, countSoldiers, dataOf } from "./divisions.ts";
 import { ROUTE, updateFronts } from "./fronts.ts";
 import { removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import { setOwner, type GameState } from "./state.ts";
@@ -14,6 +15,7 @@ import { setOwner, type GameState } from "./state.ts";
  * 1. encerclement, calculé avec les connexions et les positions d'avant la prise ;
  * 2. la ville et sa zone passent à l'attaquant ; groupes recalculés ;
  * 3. fronts recalculés, avec la position `capturePercent` sur les nouvelles connexions.
+ * 4. si c'était sa dernière ville, le défenseur est éliminé (05-Fronts §10.3).
  * Choix provisoires (05-Fronts §15) : l'usine de la ville est détruite ; si c'était la
  * capitale du défenseur, sa ville de plus petit identifiant devient sa capitale.
  */
@@ -84,4 +86,22 @@ export function captureCity(
 
   // 3. Fronts recalculés.
   updateFronts(state, { city: cityId, attacker, defender });
+
+  // 4. Dernière ville prise : le défenseur est éliminé (05-Fronts §10.3).
+  if (lost.cityIds.length === 0) eliminatePlayer(state, defender, attacker);
+}
+
+/**
+ * Élimine `player`, dont `by` vient de prendre la dernière ville (05-Fronts §10.3) : `defeated` passe à vrai, ses divisions,
+ * boîtes de percée et percées disparaissent, ses propositions diplomatiques en attente sont supprimées. Sa population est
+ * gardée (le mode résistance, pas encore écrit, en aura besoin). Les ordres d'un joueur éliminé sont ignorés (`applyIntent`).
+ */
+function eliminatePlayer(state: GameState, player: number, by: number): void {
+  state.players[player - 1]!.defeated = true;
+  for (const bt of state.breakthroughs.filter((b) => b.owner === player)) endBreakthrough(state, bt);
+  state.boxes = state.boxes.filter((b) => b.owner !== player);
+  state.divisions = state.divisions.filter((d) => d.owner !== player);
+  state.proposals = state.proposals.filter((p) => p.from !== player && p.to !== player);
+  countSoldiers(state);
+  state.events.push({ type: "player_eliminated", from: by, to: player, turn: state.tick + 1 });
 }

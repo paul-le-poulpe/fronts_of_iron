@@ -136,7 +136,7 @@ function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent
 }
 
 /** Rifles et inactifs d'une division d'infanterie complète (05-Fronts §3.4). */
-const INFANTRY = DIVISION_DATA[DIVISION_IDS.indexOf("infantry")]!;
+const INFANTRY = DIVISION_DATA[DIVISION_IDS.indexOf("regulars")]!;
 
 /** Le joueur peut-il créer une division de ce type avec son stock et ses inactifs ? */
 function affordable(p: Player, type: DivisionId): boolean {
@@ -161,7 +161,7 @@ function armyOrders(bot: Rng, state: GameState, player: number): Intent[] {
   switch (nextInt(bot, 8)) {
     case 0:
     case 1: {
-      if (affordable(me, "infantry")) return [{ type: "create_division", player, division: "infantry" }];
+      if (affordable(me, "regulars")) return [{ type: "create_division", player, division: "regulars" }];
       const others = DIVISION_IDS.filter((id) => affordable(me, id));
       if (others.length > 0 && nextInt(bot, 4) === 0) return [{ type: "create_division", player, division: others[nextInt(bot, others.length)]! }];
       // Ni hommes ni armement : couper les lignes libère des ouvriers, donc des inactifs.

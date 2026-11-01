@@ -221,6 +221,7 @@
       <header id="top">
         <strong>Fronts of Iron</strong>
         <span id="mode-label" class="muted">mode solo contre des bots</span>
+        <span id="spectator-badge" class="spectator-badge" hidden>Éliminé — spectateur</span>
         <span class="badge" title="Cette interface n'est pas celle du jeu : elle sert à essayer le moteur.">interface provisoire</span>
       </header>
 
@@ -249,11 +250,25 @@
 
         <section id="stage">
           <canvas id="map"></canvas>
+          <button id="axis-cancel" type="button" hidden>Annuler la percée</button>
           <div id="map-legend" hidden aria-label="Légende des ressources naturelles"></div>
           <div id="notifs" aria-live="polite"></div>
           <aside id="prod" hidden aria-label="Production"></aside>
           <aside id="front-panel" hidden aria-label="Front"></aside>
           <div id="toast" hidden></div>
+          <!-- Fenêtre de défaite (main.ts, 05-Fronts §11.6) : au tour où le joueur local est éliminé. -->
+          <div id="defeat" hidden>
+            <div id="defeat-box" role="alertdialog" aria-modal="true" aria-labelledby="defeat-title" aria-describedby="defeat-text">
+              <h2 id="defeat-title">Vous êtes éliminé</h2>
+              <p id="defeat-text"></p>
+              <p>Un mode résistance arrivera bientôt dans le jeu ; il n'est pas encore implémenté.</p>
+              <p>En attendant, vous pouvez rester et suivre la partie en spectateur.</p>
+              <div class="row">
+                <button id="defeat-watch" type="button">Continuer en spectateur</button>
+                <button id="defeat-quit" type="button">Quitter la partie</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <aside id="panel">

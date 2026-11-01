@@ -54,10 +54,13 @@ export class ZoneView {
   private rows: RowState[] = [];
   private readonly wired = new WeakSet<HTMLElement>();
 
-  constructor(key: string, dnd: Dnd, interactive: boolean) {
+  private readonly wrap: boolean;
+
+  constructor(key: string, dnd: Dnd, interactive: boolean, wrap: boolean) {
     this.key = key;
     this.dnd = dnd;
     this.interactive = interactive;
+    this.wrap = wrap;
   }
 
   /** Remplace les rangées (les mêmes éléments gardent leurs écouteurs) et les dessine. */
@@ -78,7 +81,7 @@ export class ZoneView {
       }
       const width = row.el.clientWidth;
       if (width === 0) continue;
-      row.layout = renderZone(row.el, row.divisions, this.dnd.military, { width, selected, preview });
+      row.layout = renderZone(row.el, row.divisions, this.dnd.military, { width, selected, preview, wrap: this.wrap });
     }
   }
 
@@ -143,11 +146,14 @@ export class Dnd {
     return this.drag !== null;
   }
 
-  /** Zone de sélection de clé `key` (créée au premier appel). `interactive` : les pions y réagissent (les siens). */
-  zone(key: string, interactive = true): ZoneView {
+  /**
+   * Zone de sélection de clé `key` (créée au premier appel). `interactive` : les pions y réagissent (les siens).
+   * `wrap` : sans place sur une ligne, les piles passent sur plusieurs lignes (voir `ZoneOptions.wrap`).
+   */
+  zone(key: string, interactive = true, wrap = false): ZoneView {
     let z = this.zones.get(key);
     if (z === undefined) {
-      z = new ZoneView(key, this, interactive);
+      z = new ZoneView(key, this, interactive, wrap);
       this.zones.set(key, z);
     }
     return z;

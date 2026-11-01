@@ -9,6 +9,12 @@ const PRODUCT_NAMES: Readonly<Record<string, string>> = {
   antiAirGun: "canon anti-aérien",
   antiTankGun: "canon anti-char",
   tankette: "chenillette",
+  infantryTank: "char d'infanterie",
+  cruiserTank: "char de cavalerie",
+  mediumTank: "char moyen",
+  selfPropelledArtilleryGun: "artillerie autopropulsée",
+  armoredAntiTankGun: "canon anti-char blindé",
+  selfPropelledAntiAirGun: "canon anti-aérien autopropulsé",
   tractor: "tracteur",
   fishingBoat: "bateau de pêche",
   miningMachine: "pompe à vapeur",
@@ -22,11 +28,19 @@ const FACTORY_NAMES: Readonly<Record<string, string>> = {
 
 /** Noms des types de division (clés de `DIVISIONS`) et des niches des fronts (clés de `NICHES`, 05-Fronts §3). */
 const UNIT_NAMES: Readonly<Record<string, string>> = {
-  infantry: "Infanterie",
+  regulars: "Réguliers",
+  militia: "Milice",
+  elite: "Forces spéciales",
   tankette: "Chenillette",
+  infantryTank: "Char d'infanterie",
+  cruiserTank: "Char de cavalerie",
+  mediumTank: "Char moyen",
   antiTank: "Canon anti-char",
   antiAir: "Canon anti-aérien",
   artillery: "Artillerie",
+  armoredAntiTank: "Canon anti-char blindé",
+  selfPropelledAntiAir: "Canon anti-aérien autopropulsé",
+  selfPropelledArtillery: "Artillerie autopropulsée",
 };
 
 const NICHE_NAMES: Readonly<Record<string, string>> = {
@@ -55,6 +69,12 @@ const EQUIPMENT_NAMES: Readonly<Record<string, string>> = {
   antiAirGun: "Canons anti-aériens",
   antiTankGun: "Canons anti-char",
   tankette: "Chenillettes",
+  infantryTank: "Chars d'infanterie",
+  cruiserTank: "Chars de cavalerie",
+  mediumTank: "Chars moyens",
+  selfPropelledArtilleryGun: "Artillerie autopropulsée",
+  armoredAntiTankGun: "Canons anti-char blindés",
+  selfPropelledAntiAirGun: "Canons anti-aériens autopropulsés",
 };
 
 export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;

@@ -143,7 +143,7 @@ describe("divisions d'un front qui change (05-Fronts §2.5)", () => {
     const s = twoConnections();
     const f = front(s);
     assert.equal(f.connections.length, 2);
-    for (let k = 0; k < 3; k++) put(s, 1, "infantry", f.id);
+    for (let k = 0; k < 3; k++) put(s, 1, "regulars", f.id);
     // Les deux villes du joueur 2 passent dans deux groupes différents : le front se coupe en deux.
     s.cities[2]!.group = 3;
     updateFronts(s);
@@ -154,14 +154,14 @@ describe("divisions d'un front qui change (05-Fronts §2.5)", () => {
     assert.deepEqual(on(s.fronts[1]!.id), [3]);
   });
 
-  it("front disparu : ses divisions retournent à la réserve avec le délai de déplacement", () => {
+  it("front disparu : ses divisions retournent à la réserve, sans délai (05-Fronts §2.5)", () => {
     const s = duel();
-    const d = put(s, 1, "infantry", front(s).id);
+    const d = put(s, 1, "regulars", front(s).id);
     s.roads.length = 0;
     updateFronts(s);
     assert.equal(s.fronts.length, 0);
     assert.equal(d.front, 0);
-    assert.equal(d.arrivalTick, s.tick + 1 + FRONTS.transferRounds * FRONTS.combatTurns);
+    assert.equal(d.arrivalTick, 0);
   });
 });
 
@@ -173,7 +173,7 @@ describe("guerre et paix (05-Fronts §2.3)", () => {
     turn(s, { type: "declare_war", player: 1, target: 2 });
     assert.deepEqual(front(s).connections.map((c) => c.position), [500]);
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
-    const d = put(s, 1, "infantry", id);
+    const d = put(s, 1, "regulars", id);
     turn(s, { type: "propose_peace", player: 1, target: 2 });
     turn(s, { type: "answer_proposal", player: 2, from: 1, accept: true });
     const f = front(s);
@@ -187,12 +187,12 @@ describe("ordres des fronts (05-Fronts §5)", () => {
   it("un ordre invalide ne change rien", () => {
     const s = duel();
     const id = front(s).id;
-    const mine = put(s, 1, "infantry");
-    const theirs = put(s, 2, "infantry");
+    const mine = put(s, 1, "regulars");
+    const theirs = put(s, 2, "regulars");
     const before = hashState(s);
     const bad: Record<string, unknown>[] = [
       { type: "create_division", player: 1, division: "char" },
-      { type: "create_division", player: 1, division: "infantry" }, // ni armement ni inactifs
+      { type: "create_division", player: 1, division: "regulars" }, // ni armement ni inactifs
       { type: "delete_division", player: 1, id: theirs.id },
       { type: "delete_division", player: 1, id: 99 },
       { type: "move_division", player: 1, ids: [theirs.id], front: id },
@@ -208,7 +208,7 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     // Un joueur étranger au front n'y envoie pas de division (il y a trois joueurs ici).
     const t = createGame({ seed: 1, map: MAP, playerCount: 3 });
     turn(t, found(1, at(8, 10)), found(2, at(11, 10)));
-    const third = put(t, 3, "infantry");
+    const third = put(t, 3, "regulars");
     assert.ok(!applyIntent(t, { type: "move_division", player: 3, ids: [third.id], front: 1 }, []));
   });
 
@@ -253,7 +253,7 @@ describe("hash des fronts et des divisions (05-Fronts §13.3)", () => {
       s.players.forEach((p) => (p.population = 1_000_000));
       turn(s, { type: "declare_war", player: 1, target: 2 });
       turn(s, { type: "start_front_attack", player: 1, front: 1 });
-      put(s, 1, "infantry", 1);
+      put(s, 1, "regulars", 1);
       return s;
     };
     const reference = hashState(base());

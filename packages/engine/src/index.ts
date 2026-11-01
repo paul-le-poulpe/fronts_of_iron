@@ -55,6 +55,7 @@ export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
 export { foundCity, foundingCost } from "./cities.ts";
 export {
   DIVISIONS,
+  ELITE_TROOPS_RATIO,
   NICHES,
   type DivisionComponentConfig,
   type DivisionConfig,
@@ -96,11 +97,13 @@ export {
   attackOf,
   countSoldiers,
   divisionEquipment,
+  eliteAllowed,
   inFormation,
   isDivisionId,
   isFleeing,
   isMoving,
   menOf,
+  nicheCounts,
   stateOf,
   toScale100,
   type ComponentData,
@@ -109,7 +112,7 @@ export {
 } from "./divisions.ts";
 export { arrangeAll, arrangeSide, createDivision, deleteDivision, moveDivisions, shareEqually } from "./placement.ts";
 export { combatRound, endOf, frontAdvance } from "./combat.ts";
-export { reactionFactor100, type Box, type Breakthrough } from "./breakthroughs.ts";
+export { advanceOf, reactionFactor100, type Box, type Breakthrough } from "./breakthroughs.ts";
 export { captureCity } from "./conquest.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";
 export {

@@ -2264,3 +2264,24 @@ document ne tranchait pas ; à valider avec l'auteur :
 - Plus de niveaux de priorité (25 %).
 - Hachures remplacées par de petits personnages qui se tirent dessus.
 - Bots : affectation des troupes et attaques, en dernier.
+
+### 17. Pertes de l'appui-feu : règles remplacées
+
+- **30 octobre 2026** (spécification, jamais implémentée) : l'appui-feu ne reçoit
+  pas de dégâts directs. `f_comp = f_inf × part engagée × lossMultiplier ×
+  facteur de blindage`, avec un facteur de 1 pour un composant non blindé et
+  `min(2, antiblindé reçu / anti-infanterie reçu)` pour un composant blindé,
+  mesuré sur la ligne d'infanterie (`FRONTS.armorLossFactorMax` = 2).
+- **31 octobre 2026** : composant « blindé » et facteur de blindage retirés
+  (aucune division ne mêle équipements blindés et non blindés). Version 1 du
+  moteur : `f_comp = f_inf × part engagée × lossMultiplier`, `f_inf` la moyenne
+  des pertes de l'infanterie engagée pondérée par la largeur engagée. `hitPoints`,
+  `defenseHitPointsMultiplier` et `armorPercent` de l'appui-feu n'étaient pas lus.
+- **1er novembre 2026** : remplacé par des dégâts directs selon la largeur
+  occupée (05-Fronts §6.3). Les variantes blindées de l'appui-feu ont donné
+  l'occasion de rétablir un effet du blindage ; la formule à facteur
+  `min(2, antiblindé / anti-infanterie)` (avec ou sans plancher) a été écartée
+  comme trop compliquée, et le type de dégât reçu vient maintenant de
+  `armorPercent`. Un essai où la part de l'infanterie était sa largeur présente
+  `W_inf / (W_inf + W_chars)` a aussi été écarté : avec peu d'infanterie,
+  l'appui-feu devenait presque invulnérable.

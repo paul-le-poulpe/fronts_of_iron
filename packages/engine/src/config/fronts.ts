@@ -12,8 +12,6 @@
 export const FRONTS = {
   /** Tours entre deux rounds de combat (10 = 1 s). */
   combatTurns: 10,
-  /** Durée de formation d'une division créée, en tours (100 = 10 s). */
-  formationTurns: 100,
   /** Délai d'un déplacement de division entre la réserve et un front, ou entre deux fronts, en rounds de combat (10 = 10 s). */
   transferRounds: 10,
   /** État (en %) auquel ou sous lequel une division de première ligne fuit en seconde ligne. */
@@ -38,13 +36,16 @@ export const FRONTS = {
   encirclementLossPercent: 50,
   /** `A` : rapport d'infanterie attaquant / défenseur sous lequel l'assaut n'avance pas (provisoire : repris de la version 0.1). */
   advanceThresholdA: 2,
-  /** `B` : rapport d'infanterie à partir duquel l'assaut avance à vitesse maximale (provisoire : repris de la version 0.1). */
-  advanceThresholdB: 5,
-  /** Vitesse d'une armée à pied, en millièmes de route par round (5 = 0,5 % de la route). */
-  footSpeedPermille: 5,
-  /** Vitesse d'une armée motorisée, en millièmes de route par round (15 = 1,5 %). */
-  motorizedSpeedPermille: 15,
-  /** Tours entre le lancement d'une percée et son premier combat (50 = 5 s). Valeur de la version 0.1, confirmée par l'auteur. */
+  /** `B` : rapport d'infanterie à partir duquel l'assaut avance à vitesse maximale (10 contre 1 ; décision de l'auteur, 1er novembre 2026). */
+  advanceThresholdB: 10,
+  /** Vitesse maximale d'une armée à pied, en millièmes de route par round (10 = 1 % de la route). Sert aussi au saut d'une percée. */
+  footSpeedPermille: 10,
+  /** Vitesse maximale d'une armée entièrement motorisée, en millièmes de route par round (20 = 2 %) ; une armée mixte est entre les deux (`frontSpeed`). Sert aussi au saut d'une percée. */
+  motorizedSpeedPermille: 20,
+  /**
+   * Durée de tous les délais d'une percée (50 = 5 s) : avant le combat 1, avant le combat 2, avant la chute de la ville,
+   * et les deux délais d'échec (05-Fronts §7.2). Valeur de la version 0.1, confirmée par l'auteur ; la même partout.
+   */
   breakthroughDelayTurns: 50,
   /** `N` : le saut d'une première ligne percée vaut `N × vitesse × facteur de réaction`. Valeur de la version 0.1. */
   breakthroughJumpRounds: 10,

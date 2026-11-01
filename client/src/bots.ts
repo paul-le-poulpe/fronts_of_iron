@@ -52,6 +52,7 @@ export function createBot(player: number, botSeed: number): Bot {
     step(state, out) {
       const turn = state.tick + 1;
       const me = state.players[player - 1]!;
+      if (me.defeated) return;
 
       if (me.capital === 0) {
         if (turn < nextFirstCityTurn) return;

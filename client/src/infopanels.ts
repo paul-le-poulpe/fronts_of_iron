@@ -35,17 +35,42 @@ function line(symbol: HTMLElement, label: string, value: string): HTMLElement {
   return r;
 }
 
+/** Icône de 16 × 16 px de la motorisation : camion (motorisé) ou pieds (à pied). */
+export function motorIcon(motorized: boolean): HTMLImageElement {
+  const img = el("img", "ip-misc");
+  img.src = `icons/miscellaneous/${motorized ? "icon-motorized" : "icon-on-foot"}.png`;
+  img.alt = motorized ? "Motorisé" : "À pied";
+  img.draggable = false;
+  return img;
+}
+
 /** Une statistique : petite icône (provisoire : un carré de 16 × 16 px), libellé, valeur. */
 const stat = (label: string, value: string): HTMLElement => line(el("span", "ip-sq"), label, value);
 
 /** En-tête : le nom du type en gras à gauche (précédé de `before`), la niche en gris à droite. */
-function head(type: DivisionTypeInfo, before?: HTMLElement): HTMLElement {
+function head(type: DivisionTypeInfo, ...before: HTMLElement[]): HTMLElement {
   const h = el("h4", "ip-head");
   const left = el("span", "ip-name");
-  if (before) left.append(before);
+  left.append(...before);
   left.append(el("b", undefined, unitName(type.id)));
   h.append(left, el("span", "ip-niche", nicheName(type.niche)));
   return h;
+}
+
+const ratio = (scale100: number): string => `× ${fmt.format(scale100 / 100)}`;
+
+/**
+ * Statistiques du type communes au panneau d'un type et à celui d'un pion : PV, blindage, largeurs, multiplicateurs
+ * (seulement ceux qui diffèrent de × 1) et déplacement.
+ */
+function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
+  if (type.hitPoints > 0) p.append(stat("PV", num(type.hitPoints)));
+  if (type.armorPercent > 0) p.append(stat("Blindage", `${type.armorPercent} %`));
+  p.append(stat("Largeur de front", `${type.frontWidth} liaison${type.frontWidth > 1 ? "s" : ""}`));
+  if (type.breakthroughWidth > 0) p.append(stat("Largeur de front en percée", `${type.breakthroughWidth} liaison${type.breakthroughWidth > 1 ? "s" : ""}`));
+  if (type.attackMultiplier !== 100) p.append(stat("Multiplicateur en attaque", ratio(type.attackMultiplier)));
+  if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) p.append(stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier)));
+  p.append(line(motorIcon(type.motorized), "Déplacement", type.motorized ? "Motorisé" : "À pied"));
 }
 
 /** Panneau d'un type (menu « + ») : description, équipement requis, statistiques non nulles. */
@@ -60,23 +85,22 @@ export function typePanel(type: DivisionTypeInfo): HTMLElement {
   if (a.soft > 0) p.append(stat("Attaque anti-infanterie", num(a.soft)));
   if (a.hard > 0) p.append(stat("Attaque antiblindée", num(a.hard)));
   if (a.air > 0) p.append(stat("Attaque antiaérienne", num(a.air)));
-  // PV : jamais lus pour l'appui-feu (05-Fronts §3.4), donc non affichés (provisoire).
-  if (type.hitPoints > 0) p.append(stat("PV", num(type.hitPoints)));
-  if (type.armorPercent > 0) p.append(stat("Blindage", `${type.armorPercent} %`));
-  p.append(stat("Largeur de front", `${type.frontWidth} liaison${type.frontWidth > 1 ? "s" : ""}`));
-  p.append(stat("Déplacement", type.motorized ? "Motorisé" : "À pied"));
+  typeStats(p, type);
   return p;
 }
 
-/** Panneau d'un pion : rang, nom et niche, description, équipement actuel / requis, état, attaques actuelles / maximales. */
+/** Panneau d'un pion : icône et rang, nom et niche, description, équipement actuel / requis, état, attaques actuelles / maximales, puis les statistiques du type. */
 export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLElement {
   const type = typeOf(military, d);
   const p = el("div", "ip");
-  // Rang : n'existe pas encore dans les règles (05-Fronts §16), donc 0 ; l'icône de 8 × 10 est agrandie ×2 (16 × 20).
+  // Icône du type, puis rang : le rang n'existe pas encore dans les règles (05-Fronts §16), donc 0 ; l'icône de 8 × 10 est agrandie ×2 (16 × 20).
+  const icon = el("img", "ip-icon");
+  icon.src = `icons/${icon32Path(type.icon)}`;
+  icon.alt = "";
   const rank = el("img", "ip-rank");
   rank.src = "icons/ranks/icon-rank-0.png";
   rank.alt = "";
-  p.append(head(type, rank));
+  p.append(head(type, icon, rank));
   if (type.description !== "") p.append(el("div", "ip-desc", type.description));
   p.append(el("div", "ip-sep"));
   type.components.forEach((c, i) => p.append(line(equipmentIcon(c.resource), equipmentName(c.resource), `${num(d.counts[i]!)} / ${num(c.count)}`)));
@@ -87,6 +111,7 @@ export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLEleme
   if (max.soft > 0) p.append(stat("Attaque anti-infanterie", `${num(now.soft)} / ${num(max.soft)}`));
   if (max.hard > 0) p.append(stat("Attaque antiblindée", `${num(now.hard)} / ${num(max.hard)}`));
   if (max.air > 0) p.append(stat("Attaque antiaérienne", `${num(now.air)} / ${num(max.air)}`));
+  typeStats(p, type);
   return p;
 }
 
@@ -130,6 +155,27 @@ export function showTypePanel(panel: HTMLElement, anchor: DOMRect, row: DOMRect)
   panel.style.left = `${Math.max(4, Math.min(anchor.right + 8, window.innerWidth - w - 4))}px`;
   panel.style.top = `${Math.max(4, Math.min(row.top, window.innerHeight - h - 4))}px`;
   panel.style.visibility = "";
+}
+
+/** Panneau explicatif : un titre en gras et un texte. */
+export function textPanel(title: string, text: string, icon?: HTMLElement): HTMLElement {
+  const p = el("div", "ip");
+  const h = el("h4", "ip-head");
+  const name = el("span", "ip-name");
+  if (icon) name.append(icon);
+  name.append(el("b", undefined, title));
+  h.append(name);
+  p.append(h, el("div", "ip-desc", text));
+  return p;
+}
+
+/** Affiche `make()` au-dessus de `target` tant que la souris est dessus ; `make` peut renvoyer `null` (rien à montrer). */
+export function attachTextPanel(target: HTMLElement, make: () => HTMLElement | null): void {
+  target.addEventListener("pointerenter", () => {
+    const panel = make();
+    if (panel !== null) showPawnPanel(panel, target.getBoundingClientRect());
+  });
+  target.addEventListener("pointerleave", hidePanel);
 }
 
 /**

@@ -4,7 +4,7 @@
 // fournit les calculs d'une division : taux, état, excédent, attaques, pertes.
 // Aucun calcul en virgule flottante après la conversion (règle 2 du CLAUDE.md).
 
-import { ARMAMENT, DIVISIONS, NICHES, type DivisionConfig, type DivisionId, type NicheId } from "./config.ts";
+import { ARMAMENT, DIVISIONS, ELITE_TROOPS_RATIO, NICHES, type DivisionConfig, type DivisionId, type NicheId } from "./config.ts";
 import { nextInt } from "./rng.ts";
 import type { GameState, Player } from "./state.ts";
 
@@ -88,6 +88,10 @@ export interface DivisionData {
   /** Largeur de première ligne, en millièmes de liaison. */
   readonly width: number;
   readonly breakthroughWidth: number;
+  /** Durée de formation, en tours ; 0 : aucune. */
+  readonly formationTurns: number;
+  /** Limité par `ELITE_TROOPS_RATIO` à la création. */
+  readonly elite: boolean;
   readonly hitPoints: number;
   /** Échelle 100. */
   readonly defenseHitPointsMultiplier: number;
@@ -136,6 +140,8 @@ export const DIVISION_DATA: readonly DivisionData[] = DIVISION_IDS.map((id, inde
     menComponent: components.findIndex((c) => c.resource === MEN),
     width: d.frontWidth * WIDTH_SCALE,
     breakthroughWidth: d.breakthroughWidth * WIDTH_SCALE,
+    formationTurns: d.formationTurns,
+    elite: d.elite === true,
     hitPoints: d.hitPoints,
     defenseHitPointsMultiplier: toScale100(d.defenseHitPointsMultiplier),
     attackMultiplier: toScale100(d.attackMultiplier),
@@ -151,6 +157,26 @@ export function isDivisionId(v: unknown): v is DivisionId {
 }
 
 export const dataOf = (d: Division): DivisionData => DIVISION_DATA[d.type]!;
+
+/**
+ * Peut-on créer une division du type, vu le nombre d'élites ? (05-Fronts §3.5) Un type qui n'est pas d'élite : oui.
+ * Sinon `ELITE_TROOPS_RATIO × (élites + 1) ≤ divisions de la niche + 1`, comptées chez ce joueur, en formation ou non.
+ * `elites` et `total` : élites et divisions de la niche du type, avant la création.
+ */
+export const eliteAllowed = (data: DivisionData, elites: number, total: number): boolean =>
+  !data.elite || ELITE_TROOPS_RATIO * (elites + 1) <= total + 1;
+
+/** Élites et divisions de la niche du type (celle des élites) que le joueur a déjà : de quoi appliquer `eliteAllowed`. */
+export function nicheCounts(state: GameState, player: number, data: DivisionData): { elites: number; total: number } {
+  let elites = 0;
+  let total = 0;
+  for (const d of state.divisions) {
+    if (d.owner !== player || dataOf(d).niche !== data.niche) continue;
+    total++;
+    if (dataOf(d).elite) elites++;
+  }
+  return { elites, total };
+}
 
 /** Numéro du tour en cours de calcul (`state.tick` n'avance qu'à la fin d'`applyTurn`). */
 export const currentTurn = (state: GameState): number => state.tick + 1;

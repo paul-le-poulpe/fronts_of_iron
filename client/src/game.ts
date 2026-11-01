@@ -16,6 +16,7 @@ import {
   DIVISIONS,
   divisionEquipment,
   DIPLOMACY,
+  ELITE_TROOPS_RATIO,
   FACTORY,
   FACTORY_TYPE_IDS,
   FACTORY_TYPES,
@@ -48,6 +49,8 @@ import {
   waterYieldMilli,
   workersForLines,
   machineReference,
+  advanceOf,
+  type Breakthrough,
   type Division,
   type Front,
   type GameState,
@@ -177,6 +180,8 @@ export function militaryCatalog(): MilitaryCatalog {
         description: config.description ?? fallback ?? "",
         frontWidth: d.width / 1000,
         breakthroughWidth: d.breakthroughWidth / 1000,
+        formationTurns: d.formationTurns,
+        elite: d.elite,
         hitPoints: d.hitPoints,
         defenseHitPointsMultiplier: d.defenseHitPointsMultiplier,
         attackMultiplier: d.attackMultiplier,
@@ -188,11 +193,16 @@ export function militaryCatalog(): MilitaryCatalog {
     }),
     niches: Object.entries(NICHES).map(([id, n]) => ({ id, support: n.support, types: [...n.types] })),
     combatTurns: FRONTS.combatTurns,
-    formationTurns: FRONTS.formationTurns,
+    eliteTroopsRatio: ELITE_TROOPS_RATIO,
     transferTurns: FRONTS.transferRounds * FRONTS.combatTurns,
     stateScale: STATE_SCALE,
     breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
   };
+}
+
+/** Tour où prend fin le délai d'une percée (toutes les phases sauf les deux combats, 1 et 3) ; 0 pendant un combat (05-Fronts §7.2). */
+function delayEnd(b: Breakthrough): number {
+  return b.phase === 1 || b.phase === 3 ? 0 : b.phaseTick + FRONTS.breakthroughDelayTurns;
 }
 
 /** Un front tel que la page le lit (05-Fronts §13.4). */
@@ -207,7 +217,7 @@ export function frontView(state: GameState, f: Front): FrontView {
     boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
     breakthroughs: state.breakthroughs
       .filter((b) => b.front === f.id)
-      .map((b) => ({ id: b.id, owner: b.owner, box: b.box, city1: b.city1, city2: b.city2, phase: b.phase, startTick: b.launchTick + FRONTS.breakthroughDelayTurns })),
+      .map((b) => ({ id: b.id, owner: b.owner, box: b.box, city1: b.city1, city2: b.city2, phase: b.phase, until: delayEnd(b), advance: advanceOf(f, b) })),
   };
 }
 
@@ -439,6 +449,7 @@ export class Game {
       farmPercent: p.farmPercent,
       capital: p.capital,
       cities: p.cityIds.length,
+      defeated: p.defeated,
       foundingCost: foundingCost(p.cityIds.length),
       factoryWorkers: p.factoryWorkers,
       miners: p.miners,
@@ -471,6 +482,7 @@ export class Game {
       failedBreakthroughs: full ? 0 : state.events.filter((e) => e.type === "breakthrough_failed" && e.from === you).length,
       captured,
       encircled: full ? [] : state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, divisions: e.divisions }] : [])),
+      eliminated: full ? [] : state.events.flatMap((e) => (e.type === "player_eliminated" ? [{ player: e.to, by: e.from }] : [])),
       paused: false,
       perf: { bots: context.botsMs ?? 0, apply: t2 - t1, pack: t3 - t2 },
     };
@@ -520,7 +532,7 @@ export class Game {
       proposals: state.proposals
         .filter((p) => mine(p.from, p.to))
         .map((p) => ({ from: p.from, to: p.to, kind: p.kind, startTick: p.createdTick, endTick: p.createdTick + DIPLOMACY.proposalTurns })),
-      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "encirclement" && e.type !== "breakthrough_failed" && mine(e.from, e.to) ? [e] : [])),
+      events: withoutEvents ? [] : state.events.flatMap((e) => (e.type !== "city_captured" && e.type !== "encirclement" && e.type !== "player_eliminated" && e.type !== "breakthrough_failed" && mine(e.from, e.to) ? [e] : [])),
     };
   }
 
@@ -637,7 +649,7 @@ export class Game {
       case "set_forced_mobilization":
         return me.forcedMobilization === order.enabled;
       case "create_division":
-        return state.divisions.some((d) => d.owner === this.you && DIVISION_DATA[d.type]!.id === order.division && d.formedTick === state.tick + FRONTS.formationTurns);
+        return state.divisions.some((d) => d.owner === this.you && DIVISION_DATA[d.type]!.id === order.division && d.formedTick === state.tick + DIVISION_DATA[d.type]!.formationTurns);
       case "delete_division":
         return !state.divisions.some((d) => d.id === order.id);
       case "move_division":

@@ -89,6 +89,18 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-sw { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t-muted); cursor: pointer; user-select: none; white-space: nowrap; }
 .fw-sw input { position: absolute; opacity: 0; width: 0; height: 0; }
 .fw-sw:has(input:checked) { color: var(--t-fg); }
+/* Interrupteur : une piste et une pastille qui glisse ; bleue et à droite quand il est allumé. */
+.fw-switch { position: relative; flex: none; width: 32px; height: 18px; box-sizing: border-box; border: 1px solid var(--t-btn-line); border-radius: 9px; background: var(--t-line); transition: background 0.15s, border-color 0.15s; }
+.fw-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--t-muted); transition: transform 0.15s, background 0.15s; }
+.fw-sw input:checked + .fw-switch { background: #3b82f6; border-color: #3b82f6; }
+.fw-sw input:checked + .fw-switch::after { transform: translateX(14px); background: #fff; }
+.fw-sw input:focus-visible + .fw-switch { outline: 2px solid var(--t-fg); outline-offset: 2px; }
+
+/* Flèche rouge clignotante (attaque en cours) : cycle `--blink-period` (1 s), à moitié visible. Éteinte sans la classe `on`. */
+.fw-arrow { flex: none; width: 26px; height: 16px; background: var(--t-red); clip-path: polygon(0 28%, 58% 28%, 58% 0, 100% 50%, 58% 100%, 58% 72%, 0 72%); visibility: hidden; }
+.fw-arrow.l { transform: scaleX(-1); }
+.fw-arrow.on { visibility: visible; animation: fw-arrow-blink var(--blink-period, 1s) linear infinite; }
+@keyframes fw-arrow-blink { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0.1; } }
 .fw-btn {
   padding: 4px 10px;
   font-size: 13px;
@@ -108,15 +120,21 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 
 .fw-main { flex: 1; min-height: 0; display: flex; }
 .fw-side { display: flex; gap: 10px; padding: 8px; min-width: 0; min-height: 0; }
-.fw-side.ours { flex: 0 0 62%; }
-.fw-side.theirs { flex: 1; border-left: 3px solid var(--t-muted); }
+.fw-side.ours { flex: 0 0 62%; padding-right: 0; }
+.fw-side.theirs { flex: 1; border-left: 3px solid var(--t-muted); padding-left: 0; }
+/* Colonne de flèches contre la barre : même structure qu'une colonne (marge de titre, cinq rangées), calée sur la capsule
+   (bordure 1 px + marge 6 px). La pointe touche la barre. */
+.fw-gut { flex: none; width: 28px; margin-left: -4px; padding: 7px 0; box-sizing: border-box; display: flex; flex-direction: column; }
+.fw-gut.l { margin-left: 0; margin-right: -4px; }
+.fw-gcell { flex: 1 1 0; min-height: 54px; display: flex; align-items: center; justify-content: flex-end; }
+.fw-gut.l .fw-gcell { justify-content: flex-start; }
 /* Colonnes de la V2 (forces de percée, réaction rapide), vides en V1. Forces de percée : la liste des boîtes, la boîte « + »,
    puis, pendant un glisser, la zone de retour. */
 .fw-col.fw-pierce { flex: none; width: 170px; gap: 6px; }
 .fw-col.fw-rapid { flex: none; width: 170px; }
 .fw-col.fw-pierce-c { flex: none; width: 76px; }
 .fw-plist { flex: 1; min-height: 0; overflow-y: auto; border-radius: 6px; background: var(--t-capsule); }
-.fw-pplus { flex: none; height: 40px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--t-line); border-radius: 8px; color: var(--t-muted); font-size: 22px; opacity: 0.6; user-select: none; }
+.fw-pplus { flex: none; height: 40px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--t-line); border-radius: 8px; color: var(--t-muted); font-size: 22px; user-select: none; }
 .fw-retour {
   display: none;
   height: 90px;
@@ -179,6 +197,89 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-row.comp:hover > .fw-pop { display: flex; }
 .fw-popline { position: relative; flex: none; height: 50px; }
 
+/* Réaction rapide et boîtes de percée (05-Fronts §4.6, §11.4). Les vues étendues restent mesurables (`visibility`, pas `display`) :
+   leurs rangées sont dessinées à chaque tour. */
+.fw-col.fw-pierce, .fw-col.fw-pierce-c { position: relative; }
+.fw-row[hidden] { display: none; }
+.fw-box { margin: 0 0 4px; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 6px; }
+.fw-box-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 6px; font-size: 11px; color: var(--t-muted); }
+.fw-launch { padding: 1px 6px; font-size: 11px; }
+/* « Motorisée » / « Au pas » et son symbole (icône de 16 × 16 px : camion ou pieds). */
+.fw-motor { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
+.fw-motor-icon { flex: none; width: 16px; height: 16px; image-rendering: pixelated; display: block; }
+.fw-bzone { position: relative; min-height: 50px; margin: 0 4px 4px; }
+/* Le « + » est le dernier élément de la liste des boîtes. */
+.fw-plist .fw-pplus { margin: 0 0 4px; }
+.fw-box .pz-open { display: none !important; }
+.fw-bpop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  width: 330px;
+  box-sizing: border-box;
+  padding: 0 6px 6px;
+  visibility: hidden;
+  background: var(--t-panel);
+  border: 1px solid var(--t-ip-line);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px #0007;
+}
+/* L'en-tête de la vue étendue a la largeur et la place de celui de la boîte : « Lancer » ne bouge pas quand elle s'ouvre. */
+.fw-bpop > .fw-box-head { width: 156px; padding: 2px 0; box-sizing: border-box; }
+.fw-bpop.show { visibility: visible; }
+.fw.dragging .fw-bpop { visibility: hidden; }
+.fw-pierce-c .fw-plist { overflow: hidden; }
+.fw-cbox { display: flex; align-items: center; height: 46px; margin: 0 0 4px; padding: 0 4px; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 6px; }
+.fw-cdots { display: flex; align-items: center; justify-content: center; gap: 4px; height: 22px; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 6px; }
+.fw-cdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--t-muted); }
+.fw-cpop {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  z-index: 40;
+  width: 330px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  visibility: hidden;
+  background: var(--t-panel);
+  border: 1px solid var(--t-ip-line);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px #0007;
+}
+.fw-pierce-c:hover > .fw-cpop { visibility: visible; }
+.fw-pbox { border: 1px solid var(--t-line); border-radius: 6px; padding: 3px; }
+
+/* Vue étendue d'une boîte du joueur : la boîte face à la première ligne adverse, comme les premières lignes de la fenêtre. */
+.fw-bpop { width: 700px; }
+.fw-bface { display: flex; gap: 6px; }
+.fw-bface .fw-col + .fw-col { padding-left: 6px; border-left: 3px solid var(--t-muted); border-radius: 0; }
+
+/* Percées en cours : un petit tableau par percée, sous le bandeau (05-Fronts §11.4). */
+.fw-bts { flex: none; display: flex; gap: 8px; padding: 8px 12px; background: var(--t-head); border-bottom: 1px solid var(--t-line); overflow-x: auto; }
+.fw-bts[hidden] { display: none; }
+.fw-bt { flex: none; padding: 4px 8px 6px; background: var(--t-btn); border: 1px solid var(--t-btn-line); border-left-width: 4px; border-radius: 6px; }
+.fw-bt.mine { border-left-color: #3b82f6; }
+.fw-bt.theirs { border-left-color: #e0443a; }
+.fw-bt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; margin-bottom: 2px; }
+.fw-bt-name { display: inline-flex; align-items: center; gap: 8px; }
+.fw-bt-name .fw-arrow { width: 20px; height: 12px; }
+.fw-bt-title { font-weight: 600; }
+.fw-bt-cross { width: 20px; height: 20px; padding: 0; font-size: 12px; line-height: 16px; color: var(--t-fg); background: var(--t-btn); border: 1px solid var(--t-btn-line); border-radius: 0; }
+.fw-bt table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.fw-bt th { padding: 0 8px 2px; font-size: 10px; font-weight: 600; color: var(--t-muted); text-transform: uppercase; text-align: center; }
+.fw-bt td { padding: 0 8px; font-size: 13px; text-align: center; }
+.fw-bt td small { color: var(--t-muted); }
+.fw-bt-icon { display: block; width: 20px; height: 20px; margin: 0 auto; image-rendering: pixelated; }
+.fw-bt-phase { max-width: 200px; margin-top: 2px; font-size: 11px; color: #e8c36a; }
+.fw-bt-progress { max-width: 200px; margin-top: 2px; font-size: 11px; color: var(--t-muted); }
+html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
+
 .fw-air { flex: 0 0 20%; display: flex; align-items: center; justify-content: center; background: var(--t-air); border-top: 1px solid var(--t-line); color: var(--t-air-fg); font-size: 12px; letter-spacing: 0.08em; }
 
 /* Une icône et un nombre : sections de front de l'onglet des forces, zones comprimées de l'adversaire. */
@@ -205,12 +306,16 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fx-sec { --pz-open-bg: var(--t-res); display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 3px 8px; border-radius: 4px; box-sizing: border-box; }
 .fx-res { background: var(--t-res); }
 .fx-front { width: 100%; border: 0; text-align: left; color: #fff; cursor: pointer; }
-.fx-front:hover:not(:disabled) { border: 0; filter: brightness(1.08); }
+.fx-front:hover:not(:disabled), .fx-front.hl { border: 0; filter: brightness(1.08); }
+.fx-front.hl { outline: 2px solid #fff; outline-offset: -2px; }
 .fx-fronts { display: flex; flex-direction: column; gap: 6px; }
 .fx-dip { flex: none; width: 32px; height: 32px; box-sizing: border-box; border: 2px solid #000; }
 .fx-dip.war { background: #e53935; }
 .fx-dip.peace { background: #3b82f6; }
 .fx-dip.spacer { visibility: hidden; }
+.fx-width { flex: none; display: flex; align-items: center; gap: 4px; }
+.fx-width-icon { width: 16px; height: 16px; background: #888; }
+.fx-width-num { font: 700 20px/32px system-ui, sans-serif; color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; min-width: 14px; }
 .fx-zone { position: relative; flex: 1; min-width: 0; min-height: 50px; }
 .fx-tags { display: flex; align-items: center; gap: 16px; }
 
@@ -257,5 +362,6 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .ip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
 .ip-label { flex: 1; }
 .ip-icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; background: var(--t-icon-bg); border-radius: 3px; }
+.ip-misc { width: 16px; height: 16px; flex: none; image-rendering: pixelated; display: block; }
 .ip-sq { width: 16px; height: 16px; flex: none; box-sizing: border-box; background: var(--t-sq); border: 1px solid var(--t-ip-line); border-radius: 2px; }
 .ip-rank { width: 16px; height: 20px; image-rendering: pixelated; }

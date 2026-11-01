@@ -219,6 +219,8 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
   const fields = intent as Record<string, unknown>;
   const player = fields["player"];
   if (!isPlayerId(state, player)) return false;
+  // Un joueur éliminé ne donne plus d'ordre (05-Fronts §10.3) : sans cela, il refonderait une première ville gratuite.
+  if (state.players[player - 1]!.defeated) return false;
   switch (fields["type"]) {
     case "found_city":
       return applyFoundCity(state, player, fields["tile"], changed);

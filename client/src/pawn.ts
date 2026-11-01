@@ -14,6 +14,16 @@ export interface ZoneOptions {
   selected: ReadonlySet<number>;
   /** Ids du rectangle de survol (sélection pas encore faite). */
   preview?: ReadonlySet<number>;
+  /**
+   * Sans assez de place sur une ligne : piles posées sur plusieurs lignes (un type n'est jamais coupé) au lieu du mode
+   * « trop de pions ». La zone grandit alors vers le bas (`ZoneLayout.height`). Réserve nationale de l'onglet des forces.
+   */
+  wrap?: boolean;
+  /**
+   * Mode « trop de pions » : les types (icône et nombre) qui ne tiennent pas sur une ligne passent à la ligne suivante, au lieu de
+   * dépasser à droite ; la zone grandit alors vers le bas (`ZoneLayout.height`). Boîtes de percée de la fenêtre d'un front.
+   */
+  multiline?: boolean;
 }
 
 /** Un pion visible et cliquable, en px dans le conteneur. */
@@ -34,7 +44,7 @@ export interface ZoneLayout {
    * les pions sélectionnés). En mode « trop de pions » : seulement le pion du dessus de chaque type.
    */
   boxes: PawnBox[];
-  /** Hauteur de la zone au repos, px. */
+  /** Hauteur de la zone au repos, px (plusieurs lignes avec `ZoneOptions.wrap`). */
   height: number;
   /** Mode retenu. */
   mode: "spaced" | "stacked" | "collapsed";
@@ -57,6 +67,8 @@ const GAP_PAWN = 3;
 const GAP_TYPE = 16;
 const NUM_GAP = 4;
 const NUM_DIGIT = 12; // largeur réservée par chiffre du nombre (police de 20 px)
+/** Place du « + » qui suit une pile tronquée (même police que le nombre). */
+const PLUS_W = NUM_GAP + NUM_DIGIT;
 const OFFSETS = [20, 16, 12, 8];
 const SEL_MARGIN = 3;
 const SEL_HEIGHT = 48;
@@ -195,7 +207,14 @@ export function renderZone(
   options: ZoneOptions,
 ): ZoneLayout {
   const scale = military.stateScale;
+  const wrapOn = options.wrap === true;
+  const nicheOfType = (d: DivisionView): string => military.divisions[d.type]?.niche ?? "";
   const ordered = pawnOrder(divisions, military);
+  // Réserve : les types d'une même niche se suivent (tri stable : l'ordre des types est gardé dans une niche).
+  if (wrapOn) {
+    const nicheRank = (d: DivisionView): number => military.niches.findIndex((n) => n.id === nicheOfType(d));
+    ordered.sort((a, b) => nicheRank(a) - nicheRank(b));
+  }
   const groupsD: DivisionView[][] = [];
   for (const d of ordered) {
     const last = groupsD[groupsD.length - 1];
@@ -209,9 +228,24 @@ export function renderZone(
   if (options.preview !== undefined) for (const id of options.preview) hl.add(id);
 
   const spacedW = total(widths.map((ws) => sum(ws) + GAP_PAWN * (ws.length - 1)));
+  // Avec `wrap` : les groupes d'une même niche forment un bloc, posé sur une seule ligne si possible.
+  const units: number[][] = [];
+  if (wrapOn) {
+    groupsD.forEach((g, gi) => {
+      const last = units[units.length - 1];
+      if (last !== undefined && nicheOfType(groupsD[last[0]!]![0]!) === nicheOfType(g[0]!)) last.push(gi);
+      else units.push([gi]);
+    });
+  }
+  const unitExtent = (u: readonly number[], o: number): number => total(u.map((gi) => stackExtent(widths[gi]!, o)));
+  const wrapped = wrapOn && spacedW > usable;
   let mode: ZoneLayout["mode"] = "spaced";
   let offset = 0;
-  if (spacedW > usable) {
+  if (wrapped) {
+    mode = "stacked";
+    // Le plus grand décalage qui fait tenir chaque niche sur une ligne ; sinon le plus petit.
+    offset = OFFSETS.find((o) => units.every((u) => unitExtent(u, o) <= usable)) ?? OFFSETS[OFFSETS.length - 1]!;
+  } else if (spacedW > usable) {
     mode = "collapsed";
     for (const o of OFFSETS) {
       if (total(widths.map((ws) => stackExtent(ws, o))) <= usable) {
@@ -223,49 +257,90 @@ export function renderZone(
   }
 
   // Positions au repos.
+  let line = 0;
   const placed: Placed[] = [];
   const boxes: PawnBox[] = [];
   const restHtmlParts: string[] = [];
-  const tags: { x: number; n: number }[] = [];
+  const tags: { x: number; line: number; text: string }[] = [];
   let x = INSET;
-  groupsD.forEach((g, gi) => {
-    const ws = widths[gi]!;
-    if (mode === "spaced") {
-      g.forEach((d, k) => {
-        placed.push({ d, w: ws[k]!, x, line: 0, depth: g.length - k });
-        x += ws[k]! + GAP_PAWN;
-      });
-      x += GAP_TYPE - GAP_PAWN;
-    } else if (mode === "stacked") {
-      let covered = 0; // bord droit le plus à droite des pions au-dessus
-      g.forEach((d, k) => {
-        const px = x + k * offset;
-        const p: Placed = { d, w: ws[k]!, x: px, line: 0, depth: g.length - k };
-        placed.push(p);
-        const from = Math.max(px, covered);
-        if (px + p.w > from) boxes.push(boxOf(p, from, px + p.w - from));
-        covered = Math.max(covered, px + p.w);
-      });
-      x += stackExtent(ws, offset) + GAP_TYPE;
-    } else {
-      const p: Placed = { d: g[0]!, w: ws[0]!, x, line: 0, depth: 1 };
+  /** Pose les `n` premiers pions du groupe en pile à partir de `x`, sur la ligne courante ; rend l'étendue de la pile. */
+  const placeStack = (g: readonly DivisionView[], ws: readonly number[], n: number): number => {
+    let covered = 0; // bord droit le plus à droite des pions au-dessus
+    for (let k = 0; k < n; k++) {
+      const px = x + k * offset;
+      const p: Placed = { d: g[k]!, w: ws[k]!, x: px, line, depth: g.length - k };
       placed.push(p);
-      tags.push({ x: x + p.w + NUM_GAP, n: g.length });
-      x += p.w + NUM_GAP + numWidth(g.length) + GAP_TYPE;
+      const from = Math.max(px, covered);
+      if (px + p.w > from) boxes.push(boxOf(p, from, px + p.w - from));
+      covered = Math.max(covered, px + p.w);
     }
-  });
+    return stackExtent(ws.slice(0, n), offset);
+  };
+  if (wrapped) {
+    const right = options.width - INSET;
+    for (const u of units) {
+      if (x > INSET && x + unitExtent(u, offset) > right) {
+        line++;
+        x = INSET;
+      }
+      for (const gi of u) {
+        const g = groupsD[gi]!;
+        const ws = widths[gi]!;
+        // Niche trop large pour une ligne : ses types passent à la ligne, un type n'est jamais coupé...
+        if (x > INSET && x + stackExtent(ws, offset) > right) {
+          line++;
+          x = INSET;
+        }
+        // ... sauf s'il ne tient pas seul : les premiers pions, puis un « + ».
+        let n = g.length;
+        if (stackExtent(ws, offset) > right - x) {
+          n = 1;
+          while (n < g.length && stackExtent(ws.slice(0, n + 1), offset) + PLUS_W <= right - x) n++;
+        }
+        const extent = placeStack(g, ws, n);
+        x += extent;
+        if (n < g.length) {
+          tags.push({ x: x + NUM_GAP, line, text: "+" });
+          x += PLUS_W;
+        }
+        x += GAP_TYPE;
+      }
+    }
+  } else {
+    groupsD.forEach((g, gi) => {
+      const ws = widths[gi]!;
+      if (mode === "spaced") {
+        g.forEach((d, k) => {
+          placed.push({ d, w: ws[k]!, x, line: 0, depth: g.length - k });
+          x += ws[k]! + GAP_PAWN;
+        });
+        x += GAP_TYPE - GAP_PAWN;
+      } else if (mode === "stacked") {
+        x += placeStack(g, ws, g.length) + GAP_TYPE;
+      } else {
+        if (options.multiline === true && x > INSET && x + ws[0]! + NUM_GAP + numWidth(g.length) > options.width - INSET) {
+          line++;
+          x = INSET;
+        }
+        const p: Placed = { d: g[0]!, w: ws[0]!, x, line, depth: 1 };
+        placed.push(p);
+        tags.push({ x: x + p.w + NUM_GAP, line, text: String(g.length) });
+        x += p.w + NUM_GAP + numWidth(g.length) + GAP_TYPE;
+      }
+    });
+  }
   const restWidth = Math.max(0, x - GAP_TYPE) + INSET;
   if (mode !== "stacked") for (const p of placed) boxes.push(boxOf(p, p.x, p.w));
 
   const lifted = (p: Placed): boolean => hl.has(p.d.id);
   restHtmlParts.push(selHtml(runsOf(placed, hl, mode === "collapsed")));
   for (const p of placed) restHtmlParts.push(pawnHtml(p, scale, lifted(p), military));
-  tags.forEach((t) => restHtmlParts.push(`<div class="pz-num" style="left:${t.x}px;top:${PAWN_Y}px">${t.n}</div>`));
+  tags.forEach((t) => restHtmlParts.push(`<div class="pz-num" style="left:${t.x}px;top:${PAWN_Y + t.line * ROW_H}px">${t.text}</div>`));
 
   const layout: ZoneLayout = {
     groups: groupsD.map((g) => g.map((d) => d.id)),
     boxes,
-    height: ROW_H,
+    height: (line + 1) * ROW_H,
     mode,
     offset,
   };
@@ -305,7 +380,15 @@ export function renderZone(
     inner = rest;
   }
 
+  // Le rectangle élargi n'est ouvert que par `:hover`, et le redessin (survol d'un autre pion, tour suivant) remplace le DOM sous la
+  // souris : hors du rectangle de base, le nouveau DOM n'est plus survolé et le rectangle se refermait. `pz-keep` le garde ouvert
+  // jusqu'à ce que la souris quitte le conteneur (rectangle élargi compris).
+  const keep = mode === "collapsed" && container.querySelector(".pz-collapsed:hover, .pz-collapsed.pz-keep") !== null;
   container.innerHTML =
-    `<div class="pz-root pz-${mode}" style="width:${options.width}px;height:${ROW_H}px">${inner}</div>`;
+    `<div class="pz-root pz-${mode}${keep ? " pz-keep" : ""}" style="width:${options.width}px;height:${layout.height}px">${inner}</div>`;
+  if (container.dataset.pzLeave === undefined) {
+    container.dataset.pzLeave = "1";
+    container.addEventListener("pointerleave", () => container.querySelector(".pz-keep")?.classList.remove("pz-keep"));
+  }
   return layout;
 }

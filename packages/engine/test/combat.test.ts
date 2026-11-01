@@ -31,7 +31,7 @@ const lossState = (seed: number): GameState => ({ rng: createRng(seed) }) as unk
 const Q = 100_000_000;
 
 describe("pertes tirées (05-Fronts §1)", () => {
-  const fresh = (): ReturnType<typeof put> => put(duel(), 1, "infantry");
+  const fresh = (): ReturnType<typeof put> => put(duel(), 1, "regulars");
 
   it("sans reste, rien n'est tiré : 10 % d'une infanterie font 100, 100 et 10", () => {
     const d = fresh();
@@ -86,7 +86,7 @@ describe("pertes tirées (05-Fronts §1)", () => {
 describe("pertes par composant et lossMultiplier (05-Fronts §6.2)", () => {
   it("à 10 % : l'infanterie perd 10 % de chaque composant ; la chenillette 5 % de ses hommes (×0,5) et 10 % de ses chars", () => {
     const s = duel();
-    const infantry = put(s, 1, "infantry");
+    const infantry = put(s, 1, "regulars");
     const tankette = put(s, 1, "tankette");
     applyLoss(lossState(1), infantry, 100_000);
     applyLoss(lossState(1), tankette, 100_000);
@@ -95,11 +95,11 @@ describe("pertes par composant et lossMultiplier (05-Fronts §6.2)", () => {
     assert.deepEqual(tankette.counts, [475, 45]);
   });
 
-  it("l'artillerie a ×0,5 sur ses hommes et sur ses canons : 20 % de la division, 10 % de chaque composant", () => {
+  it("l'artillerie a ×1 sur ses hommes et sur ses canons : 20 % de la division, 20 % de chaque composant", () => {
     const s = duel();
     const artillery = put(s, 1, "artillery");
     applyLoss(lossState(1), artillery, 200_000);
-    assert.deepEqual(artillery.counts, [450, 45]);
+    assert.deepEqual(artillery.counts, [400, 40]);
   });
 });
 
@@ -107,8 +107,8 @@ describe("un round (05-Fronts §6)", () => {
   it("pas d'attaque en cours : aucun dégât, aucun mouvement", () => {
     const s = duel();
     war(s);
-    putMany(s, 1, "infantry", 1);
-    putMany(s, 2, "infantry", 1);
+    putMany(s, 1, "regulars", 1);
+    putMany(s, 2, "regulars", 1);
     const { before, rng } = playRound(s);
     expectModel(s, before, [], rng);
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE]);
@@ -121,8 +121,8 @@ describe("un round (05-Fronts §6)", () => {
     const s = duel();
     widen(s, 4);
     war(s, 1);
-    putMany(s, 1, "infantry", 4);
-    putMany(s, 2, "infantry", 4);
+    putMany(s, 1, "regulars", 4);
+    putMany(s, 2, "regulars", 4);
     put(s, 2, "tankette", 1);
     const { before, rng } = playRound(s);
 
@@ -154,24 +154,24 @@ describe("un round (05-Fronts §6)", () => {
     // joueur 1 reçoit 750 sur 100 000 : f = 7 500, le joueur 2 reçoit 1 500 sur 50 000 : f = 30 000. Total : 37 500 chacun.
     const s = duel();
     war(s, 1, 2);
-    putMany(s, 1, "infantry", 1);
-    putMany(s, 2, "infantry", 1);
+    putMany(s, 1, "regulars", 1);
+    putMany(s, 2, "regulars", 1);
     const { before, rng } = playRound(s);
     expectModel(s, before, [[{ id: 1, f: 37_500 }, { id: 2, f: 37_500 }]], rng);
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE], "rapport 1 : le front n'avance pas");
   });
 
-  it("l'appui-feu perd les pertes de l'infanterie × sa part engagée × son lossMultiplier", () => {
+  it("l'appui-feu pleinement engagé prend les dégâts d'une liaison : autant qu'une infanterie d'un front plein (05-Fronts §6.3)", () => {
     // Front de 5 liaisons : 5 infanteries du joueur 1 attaquent 5 infanteries (6 à 10) et une artillerie (11, engagée à
     // 5 000 / 5 000 = 100 %) du joueur 2. Dégâts sur les infanteries du joueur 2 : 5 × 750 = 3 750 points partagés à 5 :
-    // 750 chacune sur 100 000 PV : f = 7 500. L'artillerie ne reçoit rien en direct ; f_inf = 7 500 (moyenne de cinq valeurs
-    // égales, mêmes largeurs), f_comp = 7 500 × 100 % = 7 500, puis × 0,5 sur ses hommes et ses canons (lossMultiplier).
+    // 750 chacune sur 100 000 PV : f = 7 500. L'artillerie (blindage 0, 50 000 PV, ×2 en défense) prend 3 750 × part 100 %
+    // / (F = 5 liaisons + 0 de chars) = 750 points : f = 7 500.
     // Riposte : 5 × 1 500 + 2 500 = 10 000 anti-infanterie sur 5 infanteries : 2 000 chacune sur 50 000 PV : f = 40 000.
     const s = duel();
     widen(s, 5);
     war(s, 1);
-    putMany(s, 1, "infantry", 5);
-    putMany(s, 2, "infantry", 5);
+    putMany(s, 1, "regulars", 5);
+    putMany(s, 2, "regulars", 5);
     put(s, 2, "artillery", 1);
     const { before, rng } = playRound(s);
     const hits = [
@@ -183,14 +183,14 @@ describe("un round (05-Fronts §6)", () => {
     for (const id of [1, 2, 3, 4, 5]) assert.deepEqual(s.divisions[id - 1]!.counts, [960, 960, 96]);
   });
 
-  it("l'appui-feu engagé à 20 % ne subit que 20 % des pertes de l'infanterie (quarante graines)", () => {
-    // Front d'une liaison : l'artillerie du joueur 2 n'est engagée qu'à 1 000 / 5 000. f_inf = 7 500, f_comp = 7 500 × 20 % = 1 500.
+  it("l'appui-feu engagé à 20 % ne subit que 20 % de ces dégâts (quarante graines)", () => {
+    // Front d'une liaison : l'artillerie du joueur 2 n'est engagée qu'à 1 000 / 5 000 : 750 points × 20 % sur 100 000 PV, f = 1 500.
     // Riposte du joueur 2 : 1 500 + 500 (artillerie : 2 500 × 20 %) = 2 000 anti-infanterie : f = 40 000 sur l'infanterie du 1.
     for (let seed = 1; seed <= 40; seed++) {
       const s = duel();
       war(s, 1);
-      putMany(s, 1, "infantry", 1);
-      putMany(s, 2, "infantry", 1);
+      putMany(s, 1, "regulars", 1);
+      putMany(s, 2, "regulars", 1);
       put(s, 2, "artillery", 1);
       s.rng.set(createRng(seed));
       const { before, rng } = playRound(s);
@@ -200,18 +200,18 @@ describe("un round (05-Fronts §6)", () => {
 });
 
 describe("division engagée en partie et appui-feu engagé à 20 % (05-Fronts §4.2, §6.2, §6.3)", () => {
-  it("chenillette engagée à 50 % qui reçoit l'antiblindé, canon anti-char engagé à 20 % qui perd 20 % des pertes de l'infanterie (quarante graines)", () => {
+  it("chenillette engagée à 50 % qui reçoit l'antiblindé, canon anti-char engagé à 20 % qui prend 20 % des dégâts anti-infanterie (quarante graines)", () => {
     // Le joueur 1 attaque avec une infanterie (id 1) et un canon anti-char (id 2, engagé à 1 000 / 5 000) : antiblindé
     // 50 + 5 000 × 20 % × 0,2 = 250 points. La chenillette du joueur 2 (id 3, engagée à 1 000 / 2 000) est seule dans sa
     // ligne : elle reçoit tout, 250 points sur 50 000 PV (blindage 100, pas de bonus de défense) : f = 5 000. Riposte : la
     // chenillette engagée à 50 % fait 1 250 anti-infanterie sur l'infanterie du joueur 1 seule (le canon est de l'appui-feu) :
-    // f = 25 000 ; le canon perd f = 25 000 × 20 % = 5 000.
+    // f = 25 000 ; le canon (blindage 0) prend 1 250 anti-infanterie × 20 % = 250 points sur 50 000 PV, f = 5 000.
     // (Le taux de soldats ramène les hommes d'une chenillette à 10 par char : toute perte d'homme coûte un char, donc ce test
     // ne distingue pas f = 5 000 de f = 10 000 pour la chenillette.)
     for (let seed = 1; seed <= 40; seed++) {
       const s = duel();
       war(s, 1);
-      put(s, 1, "infantry", 1);
+      put(s, 1, "regulars", 1);
       put(s, 1, "antiTank", 1);
       put(s, 2, "tankette", 1);
       s.rng.set(createRng(seed));
@@ -223,7 +223,7 @@ describe("division engagée en partie et appui-feu engagé à 20 % (05-Fronts §
 
 describe("seuils exacts de fuite et d'échange (05-Fronts §5.3, §5.4)", () => {
   const firstLine = (s: GameState, counts: number[]): ReturnType<typeof put> => {
-    const d = put(s, 1, "infantry", front(s).id);
+    const d = put(s, 1, "regulars", front(s).id);
     d.counts.splice(0, 3, ...counts);
     d.line = LINE_FIRST;
     d.engaged = 1000;
@@ -243,7 +243,7 @@ describe("seuils exacts de fuite et d'échange (05-Fronts §5.3, §5.4)", () => 
   it("à exactement la moitié de l'état de la seconde ligne il n'y a pas d'échange ; en dessous, il y en a un", () => {
     const s = duel();
     const half = firstLine(s, [500, 500, 50]); // 50 %
-    const spare = put(s, 1, "infantry", front(s).id); // 100 %
+    const spare = put(s, 1, "regulars", front(s).id); // 100 %
     applySwaps(s, front(s));
     assert.deepEqual([half.line, spare.line], [LINE_FIRST, LINE_SECOND]);
     half.counts.splice(0, 3, 499, 499, 49); // 49,72 %
@@ -259,11 +259,11 @@ describe("échange et fuite (05-Fronts §5.3, §5.4)", () => {
     // Sa riposte (253 000 + 125 000 millièmes = 378 points sur 50 000 PV) donne f = 7 560 à l'attaquant.
     const s = duel();
     war(s, 2);
-    const weak = put(s, 1, "infantry", 1);
+    const weak = put(s, 1, "regulars", 1);
     weak.counts.splice(0, 3, 253, 253, 25);
     weak.line = LINE_FIRST;
     weak.engaged = 1000;
-    const strong = put(s, 2, "infantry", 1);
+    const strong = put(s, 2, "regulars", 1);
     const { before, rng } = playRound(s);
     expectModel(s, before, [[{ id: weak.id, f: 7500 }, { id: strong.id, f: 7560 }]], rng);
     const roundTurn = s.tick;
@@ -283,12 +283,12 @@ describe("échange et fuite (05-Fronts §5.3, §5.4)", () => {
     // Riposte de A (400 000 + 200 000 millièmes = 600 points sur 50 000 PV) : f = 12 000 pour la division 3.
     const s = duel();
     war(s, 2);
-    const a = put(s, 1, "infantry", 1);
+    const a = put(s, 1, "regulars", 1);
     a.counts.splice(0, 3, 400, 400, 40);
     a.line = LINE_FIRST;
     a.engaged = 1000;
-    const b = put(s, 1, "infantry", 1);
-    const attacker = put(s, 2, "infantry", 1);
+    const b = put(s, 1, "regulars", 1);
+    const attacker = put(s, 2, "regulars", 1);
     const { before, rng } = playRound(s);
     expectModel(s, before, [[{ id: a.id, f: 7500 }, { id: attacker.id, f: 12_000 }]], rng);
     assert.deepEqual([a.line, a.engaged, a.fleeUntilTick], [LINE_SECOND, 0, 0]);
@@ -299,12 +299,12 @@ describe("échange et fuite (05-Fronts §5.3, §5.4)", () => {
   it("pas d'échange à partir de la moitié : A à 60 % garde sa place face à B à 100 %", () => {
     const s = duel();
     war(s, 2);
-    const a = put(s, 1, "infantry", 1);
+    const a = put(s, 1, "regulars", 1);
     a.counts.splice(0, 3, 600, 600, 60);
     a.line = LINE_FIRST;
     a.engaged = 1000;
-    const b = put(s, 1, "infantry", 1);
-    put(s, 2, "infantry", 1);
+    const b = put(s, 1, "regulars", 1);
+    put(s, 2, "regulars", 1);
     playRound(s);
     assert.deepEqual([a.line, b.line], [LINE_FIRST, LINE_SECOND]);
   });
@@ -314,44 +314,44 @@ describe("avancée (05-Fronts §7)", () => {
   it("seuils et vitesses de la configuration", () => {
     assert.deepEqual(
       [FRONTS.advanceThresholdA, FRONTS.advanceThresholdB, FRONTS.footSpeedPermille, FRONTS.motorizedSpeedPermille],
-      [2, 5, 5, 15],
+      [2, 10, 10, 20],
     );
   });
 
   it("formule : rien sous A, vitesse maximale à partir de B, droite entre les deux, arrondi à 0,5 vers le haut", () => {
-    // a / d ≤ 2 : rien ; a / d ≥ 5 : v
-    assert.equal(frontAdvance(1000, 1000, 5), 0);
-    assert.equal(frontAdvance(2000, 1000, 5), 0);
-    assert.equal(frontAdvance(5000, 1000, 5), 5);
-    assert.equal(frontAdvance(9000, 1000, 5), 5);
-    // a = 3 500, d = 1 000 : (3,5 − 2) / 3 = 0,5 × 5 = 2,5 → 3 ;  a = 3 200 : 0,4 × 5 = 2 ;  a = 3 000 : 1/3 × 5 = 1,67 → 2
-    assert.equal(frontAdvance(3500, 1000, 5), 3);
-    assert.equal(frontAdvance(3200, 1000, 5), 2);
-    assert.equal(frontAdvance(3000, 1000, 5), 2);
-    // motorisée : 0,5 × 15 = 7,5 → 8 ; a = 2 000, d = 500 : rapport 4, 2/3 × 15 = 10
-    assert.equal(frontAdvance(3500, 1000, 15), 8);
-    assert.equal(frontAdvance(2000, 500, 15), 10);
+    // a / d ≤ 2 : rien ; a / d ≥ 10 : v
+    assert.equal(frontAdvance(1000, 1000, 10), 0);
+    assert.equal(frontAdvance(2000, 1000, 10), 0);
+    assert.equal(frontAdvance(10_000, 1000, 10), 10);
+    assert.equal(frontAdvance(18_000, 1000, 10), 10);
+    // a = 4 000, d = 1 000 : (4 − 2) / 8 = 0,25 × 10 = 2,5 → 3 ;  a = 3 600 : 0,2 × 10 = 2 ;  a = 3 000 : 1/8 × 10 = 1,25 → 1
+    assert.equal(frontAdvance(4000, 1000, 10), 3);
+    assert.equal(frontAdvance(3600, 1000, 10), 2);
+    assert.equal(frontAdvance(3000, 1000, 10), 1);
+    // motorisée : a = 6 000, d = 1 000 : 0,5 × 20 = 10 ; a = 4 000, d = 500 : rapport 8, 3/4 × 20 = 15
+    assert.equal(frontAdvance(6000, 1000, 20), 10);
+    assert.equal(frontAdvance(4000, 500, 20), 15);
   });
 
   it("d = 0 : vitesse maximale ; a = 0 : aucune avancée, même sans défenseur", () => {
-    assert.equal(frontAdvance(1000, 0, 5), 5);
-    assert.equal(frontAdvance(1, 0, 15), 15);
-    assert.equal(frontAdvance(0, 1000, 5), 0);
-    assert.equal(frontAdvance(0, 0, 5), 0);
+    assert.equal(frontAdvance(1000, 0, 10), 10);
+    assert.equal(frontAdvance(1, 0, 20), 20);
+    assert.equal(frontAdvance(0, 1000, 10), 0);
+    assert.equal(frontAdvance(0, 0, 10), 0);
   });
 
-  it("un round : le défenseur sans infanterie recule de 5 millièmes de route, dans le sens de l'attaquant", () => {
+  it("un round : le défenseur sans infanterie recule de 10 millièmes de route, dans le sens de l'attaquant", () => {
     const s = duel();
     war(s, 1);
-    putMany(s, 1, "infantry", 1);
+    putMany(s, 1, "regulars", 1);
     playRound(s);
-    assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE + 5]);
+    assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE + 10]);
     // Le joueur 2 attaque : la position diminue.
     const t = duel();
     war(t, 2);
-    putMany(t, 2, "infantry", 1);
+    putMany(t, 2, "regulars", 1);
     playRound(t);
-    assert.deepEqual(front(t).connections.map((c) => c.position), [MIDDLE - 5]);
+    assert.deepEqual(front(t).connections.map((c) => c.position), [MIDDLE - 10]);
   });
 
   it("un round : l'attaquant sans infanterie (a = 0) n'avance pas, même devant un défenseur absent", () => {
@@ -362,19 +362,19 @@ describe("avancée (05-Fronts §7)", () => {
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE]);
   });
 
-  it("un round : rapport 3 (3 000 contre 1 000) → 2 millièmes sur toutes les routes du front ; rapport 2 → rien", () => {
+  it("un round : rapport 3 (3 000 contre 1 000) → 1 millième sur toutes les routes du front ; rapport 2 → rien", () => {
     const s = duel();
     widen(s, 4);
     war(s, 1);
-    putMany(s, 1, "infantry", 3);
-    putMany(s, 2, "infantry", 1);
+    putMany(s, 1, "regulars", 3);
+    putMany(s, 2, "regulars", 1);
     playRound(s);
-    assert.deepEqual(front(s).connections.map((c) => c.position), [502, 502, 502, 502]);
+    assert.deepEqual(front(s).connections.map((c) => c.position), [501, 501, 501, 501]);
     const t = duel();
     widen(t, 4);
     war(t, 1);
-    putMany(t, 1, "infantry", 2);
-    putMany(t, 2, "infantry", 1);
+    putMany(t, 1, "regulars", 2);
+    putMany(t, 2, "regulars", 1);
     playRound(t);
     assert.deepEqual(front(t).connections.map((c) => c.position), [MIDDLE, MIDDLE, MIDDLE, MIDDLE]);
   });
@@ -384,7 +384,7 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
   /**
    * Quatre villes : 1 et 3 au joueur 1, 2 (la ville X) et 4 au joueur 2. Le front a deux connexions, (1, 2) et (3, 2) ;
    * la route (2, 4) est interne au joueur 2. Le joueur 1 attaque avec une infanterie (id 1), le joueur 2 tient avec une
-   * chenillette (id 2, première ligne de 2 000) : pas d'infanterie, donc d = 0 et le front avance de 5 par round.
+   * chenillette (id 2, première ligne de 2 000) : pas d'infanterie, donc d = 0 et le front avance de 10 par round.
    * La route d'attaque (1, 2) est à `via`, l'autre (3, 2) à `other`, en millièmes depuis la ville du joueur 1.
    */
   function siege(via: number, other: number): GameState {
@@ -400,7 +400,7 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     war(s, 1);
     front(s).connections[0]!.position = via;
     front(s).connections[1]!.position = other;
-    put(s, 1, "infantry", front(s).id);
+    put(s, 1, "regulars", front(s).id);
     put(s, 2, "tankette", front(s).id);
     return s;
   }
@@ -408,11 +408,10 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
   it("le front arrive au bout d'une route : la ville change de main avec ses cases ; l'autre route, tenue à plus de 25 %, est encerclée", () => {
     const s = siege(996, 500);
     const { before, rng } = playRound(s);
-    const roundTurn = s.tick;
 
     // Combat : f = 50 000 pour l'infanterie du joueur 1 (2 500 points de la chenillette sur 50 000 PV), f = 1 000 pour la
-    // chenillette (50 points antiblindés sur 50 000 PV). Avance de 5 : (1, 2) à 1 001 → 1 000, (3, 2) à 505.
-    // Encerclement : sur (3, 2), le joueur 2 tient 1 000 − 505 = 495 millièmes depuis X, plus de 250 ; f = 1 route × 50 %
+    // chenillette (50 points antiblindés sur 50 000 PV). Avance de 10 : (1, 2) à 1 006 → 1 000, (3, 2) à 510.
+    // Encerclement : sur (3, 2), le joueur 2 tient 1 000 − 510 = 490 millièmes depuis X, plus de 250 ; f = 1 route × 50 %
     // / 2 connexions = 25 % = 250 000, sur une chenillette engagée à 2 000 / 2 000.
     expectModel(s, before, [[{ id: 1, f: 50_000 }, { id: 2, f: 1000 }], [{ id: 2, f: 250_000 }]], rng);
     assert.deepEqual(s.divisions.find((d) => d.id === 1)!.counts, [950, 950, 95]);
@@ -431,12 +430,12 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     assert.equal(s.fronts.length, 1);
     assert.deepEqual(front(s).connections, [{ city1: 2, city2: 4, position: FRONTS.capturePercent * 10 }]);
     assert.deepEqual(front(s).sides.map((x) => x.frontAttack), [false, false]);
-    // L'ancien front a disparu : ses divisions retournent à la réserve, avec le délai de déplacement.
-    for (const d of s.divisions) assert.deepEqual([d.front, d.line, d.engaged, d.arrivalTick], [0, LINE_SECOND, 0, roundTurn + 100]);
+    // L'ancien front a disparu : ses divisions passent, sans délai, au front des mêmes joueurs le plus proche (05-Fronts §2.5).
+    for (const d of s.divisions) assert.deepEqual([d.front, d.arrivalTick], [front(s).id, 0]);
   });
 
   it("une route que le perdant tient à 25 % ou moins n'est pas encerclée : pas de perte, pas d'événement d'encerclement", () => {
-    // (3, 2) à 800 + 5 = 805 : le joueur 2 en tient 195 ≤ 250.
+    // (3, 2) à 800 + 10 = 810 : le joueur 2 en tient 190 ≤ 250.
     const s = siege(996, 800);
     const { before, rng } = playRound(s);
     expectModel(s, before, [[{ id: 1, f: 50_000 }, { id: 2, f: 1000 }]], rng);
@@ -450,13 +449,13 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     turn(s, found(1, at(8, 10)), found(2, at(11, 10)));
     war(s, 1);
     front(s).connections[0]!.position = 996;
-    put(s, 1, "infantry", front(s).id);
+    put(s, 1, "regulars", front(s).id);
     put(s, 2, "tankette", front(s).id);
     const { before, rng } = playRound(s);
     // Front d'une liaison : la chenillette n'est engagée qu'à 1 000 / 2 000, donc 1 250 points anti-infanterie : f = 25 000.
     expectModel(s, before, [[{ id: 1, f: 25_000 }, { id: 2, f: 1000 }]], rng);
     assert.equal(s.cities[1]!.player, 1);
-    assert.deepEqual(s.events.map((e) => e.type), ["city_captured"]);
+    assert.deepEqual(s.events.map((e) => e.type), ["city_captured", "player_eliminated"]);
     assert.equal(s.fronts.length, 0, "plus de connexion entre les joueurs");
     assert.equal(s.players[1]!.cityIds.length, 0);
     assert.equal(s.players[1]!.capital, 0);
@@ -475,7 +474,7 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     attacked!.connections[0]!.position = 996;
     other!.connections[0]!.position = 700;
     turn(s, { type: "start_front_attack", player: 1, front: attacked!.id });
-    put(s, 1, "infantry", attacked!.id);
+    put(s, 1, "regulars", attacked!.id);
     put(s, 2, "tankette", attacked!.id);
     playRound(s);
     assert.equal(s.cities[1]!.player, 1);

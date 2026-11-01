@@ -75,7 +75,7 @@ function hashDivision(h: number, d: Division): number {
  * (cases, population, capitale, villes, cases de ressources, reste de
  * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
  * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
- * déblocage, biens produits, réserves d'armement, mobilisation forcée, soldats), villes (joueur, case, port, groupe), routes,
+ * déblocage, biens produits, réserves d'armement, mobilisation forcée, soldats, élimination), villes (joueur, case, port, groupe), routes,
  * fronts (connexions, positions, attaques), divisions (tous leurs champs), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
  * Pas `state.events` (liste du dernier tour, jamais lue par les règles).
  */
@@ -118,6 +118,7 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.ironExtracted);
     h = mixWord(h, p.forcedMobilization ? 1 : 0);
     h = mixWord(h, p.soldiers);
+    h = mixWord(h, p.defeated ? 1 : 0);
     h = mixWord(h, p.goods.length);
     for (const n of p.goods) h = mixWord(h, n);
     for (const n of p.goodsDemand) h = mixWord(h, n);
@@ -180,8 +181,10 @@ export function hashState(state: GameState): number {
     h = mixWord(h, b.box);
     h = mixWord(h, b.city1);
     h = mixWord(h, b.city2);
-    h = mixWord(h, b.launchTick);
+    h = mixWord(h, b.phaseTick);
     h = mixWord(h, b.phase);
+    h = mixWord(h, b.advance);
+    h = mixWord(h, b.motorized ? 1 : 0);
     h = mixWord(h, b.startState);
   }
   // Diplomatie : les statuts (les deux cases de chaque paire), puis les propositions dans l'ordre de création.

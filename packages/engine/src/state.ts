@@ -118,6 +118,11 @@ export interface Player {
    * `countSoldiers` (divisions.ts).
    */
   soldiers: number;
+  /**
+   * Éliminé (05-Fronts §10.3) : sa dernière ville a été prise. Il n'a plus de division, et le moteur ignore ses ordres et
+   * les ordres diplomatiques qui le visent. Ne revient jamais à `false`.
+   */
+  defeated: boolean;
 }
 
 export interface City {
@@ -242,6 +247,7 @@ export function createGame(setup: GameSetup): GameState {
       ironExtracted: 0,
       forcedMobilization: false,
       soldiers: 0,
+      defeated: false,
     });
   }
   return {

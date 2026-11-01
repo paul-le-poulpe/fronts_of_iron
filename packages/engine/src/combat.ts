@@ -10,10 +10,9 @@
 
 import {
   assignCounterForces,
-  beginCombat1,
   breakthroughFlight,
   checkBreakthrough,
-  endBreakthrough,
+  endDelays,
   forceOf,
   removeEmptyBoxes,
   type Arrival,
@@ -25,22 +24,22 @@ import {
   LINE_FIRST,
   LOSS_SCALE,
   MULT_SCALE,
+  WIDTH_SCALE,
   applyLoss,
   attackOf,
   countSoldiers,
-  currentTurn,
   dataOf,
   type Division,
 } from "./divisions.ts";
-import { ROUTE, endOf, hasRound, isActive, type Front } from "./fronts.ts";
+import { ROUTE, endOf, frontWidth, hasRound, isActive, isBreakthroughCombat, type Front } from "./fronts.ts";
 import { applyFlight, applySwaps, arrangeSide, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 /**
  * Avancée d'une attaque sur tout le front en un round, en millièmes de route
  * (05-Fronts §7). `a`, `d` : largeur d'infanterie engagée de l'attaquant et du
- * défenseur (millièmes de liaison) ; `v` : vitesse. Défenseur sans infanterie :
- * vitesse maximale ; attaquant sans infanterie : aucune avancée.
+ * défenseur (millièmes de liaison) ; `v` : vitesse maximale (`frontSpeed`, toutes niches).
+ * Défenseur sans infanterie : vitesse maximale ; attaquant sans infanterie : aucune avancée.
  */
 export function frontAdvance(a: number, d: number, v: number): number {
   if (a === 0) return 0;
@@ -56,23 +55,38 @@ export { endOf };
 /** Divisions engagées en première ligne d'un camp. */
 const engagedOf = (divs: readonly Division[]): Division[] => divs.filter((d) => d.line === LINE_FIRST && d.engaged > 0);
 
-/** Largeur d'infanterie engagée (05-Fronts §7), en millièmes de liaison. */
+/** Largeur engagée en première ligne (05-Fronts §7), toutes niches, en millièmes de liaison. */
+function engagedWidth(divs: readonly Division[]): number {
+  let w = 0;
+  for (const d of divs) w += d.engaged;
+  return w;
+}
+
+/** Largeur d'infanterie engagée (05-Fronts §7), en millièmes de liaison : seule l'infanterie fait avancer le front. */
 function infantryWidth(divs: readonly Division[]): number {
   let w = 0;
   for (const d of divs) if (dataOf(d).niche === INFANTRY_NICHE) w += d.engaged;
   return w;
 }
 
-/** Vitesse de l'attaquant : motorisée seulement si toute l'infanterie engagée l'est (provisoire, 05-Fronts §7). */
-function speedOf(divs: readonly Division[]): number {
-  const infantry = divs.filter((d) => dataOf(d).niche === INFANTRY_NICHE);
-  return infantry.length > 0 && infantry.every((d) => dataOf(d).motorized) ? FRONTS.motorizedSpeedPermille : FRONTS.footSpeedPermille;
+/**
+ * Vitesse maximale de l'attaquant, progressive (05-Fronts §7) : de `footSpeedPermille` (aucune division motorisée) à
+ * `motorizedSpeedPermille` (toutes), au prorata de la largeur engagée des divisions motorisées, toutes niches.
+ */
+export function frontSpeed(divs: readonly Division[]): number {
+  const total = engagedWidth(divs);
+  if (total === 0) return FRONTS.footSpeedPermille;
+  let motor = 0;
+  for (const d of divs) if (dataOf(d).motorized) motor += d.engaged;
+  return FRONTS.footSpeedPermille + Math.floor(((FRONTS.motorizedSpeedPermille - FRONTS.footSpeedPermille) * motor) / total);
 }
 
 /** Un combat : deux forces, leurs largeurs engagées, multiplicateurs d'attaque et de PV (échelle 100). */
 interface Fight {
   readonly a: readonly Division[];
   readonly b: readonly Division[];
+  /** Largeur du front dans ce combat, en millièmes de liaison : celle du front, ou une liaison en percée (05-Fronts §6.3). */
+  readonly frontWidth: number;
   readonly width: (d: Division) => number;
   /** Largeur pleine de la division dans ce combat : la part engagée est `width / fullWidth` (05-Fronts §4.2, §7.2). */
   readonly fullWidth: (d: Division) => number;
@@ -81,9 +95,11 @@ interface Fight {
 }
 
 /**
- * Dégâts infligés par `from` à `to` (05-Fronts §6.1, §6.2), ajoutés à `losses` (fraction de chaque division de `to`,
- * échelle `LOSS_SCALE`). Les attaques de chaque division sont prises sur sa largeur engagée dans ce combat ; la part
- * de chaque cible est sa largeur engagée sur la largeur engagée totale des niches principales.
+ * Dégâts infligés par `from` à `to` (05-Fronts §6.1 à §6.3), ajoutés à `losses` (fraction de chaque division de `to`,
+ * échelle `LOSS_SCALE`). Les attaques de chaque division sont prises sur sa largeur engagée dans ce combat.
+ * - Niche principale : la part de la division est sa largeur engagée sur la largeur engagée totale des niches principales.
+ * - Appui-feu : `mixte × part engagée / (F + largeur engagée des chars)`, `F` la largeur du front ; l'infanterie compte
+ *   comme si elle occupait tout le front, donc en avoir moins ne protège pas l'appui-feu, en avoir plus de chars, si.
  */
 function strike(fight: Fight, from: readonly Division[], to: readonly Division[], losses: Map<Division, number>): void {
   let soft = 0;
@@ -94,15 +110,24 @@ function strike(fight: Fight, from: readonly Division[], to: readonly Division[]
     hard += a.hard;
   }
   if (soft === 0 && hard === 0) return;
-  const targets = to.filter((d) => !dataOf(d).support);
   let total = 0;
-  for (const d of targets) total += fight.width(d);
-  if (total === 0) return;
-  for (const d of targets) {
+  let tanks = 0;
+  for (const d of to) {
+    const data = dataOf(d);
+    if (data.support) continue;
+    total += fight.width(d);
+    if (data.niche !== INFANTRY_NICHE) tanks += fight.width(d);
+  }
+  for (const d of to) {
     const data = dataOf(d);
     const mixed = data.armorPercent * hard + (100 - data.armorPercent) * soft;
-    const received = Math.floor((mixed * fight.width(d)) / (100 * total));
-    // f = dégâts / PV ; dégâts en millièmes de point, PV × multiplicateur (de défense pour le défenseur).
+    // Dégâts en millièmes de point. Appui-feu : une division d'une liaison pleine sous une infanterie qui remplit le front.
+    const received = data.support
+      ? Math.floor((mixed * fight.width(d) * WIDTH_SCALE) / (100 * fight.fullWidth(d) * (fight.frontWidth + tanks)))
+      : total === 0
+        ? 0
+        : Math.floor((mixed * fight.width(d)) / (100 * total));
+    // f = dégâts / PV ; PV × multiplicateur (de défense pour le défenseur).
     const den = data.hitPoints * fight.hpMult(d);
     if (den === 0) continue;
     const f = Math.floor((received * (LOSS_SCALE / 1000) * MULT_SCALE) / den);
@@ -110,41 +135,17 @@ function strike(fight: Fight, from: readonly Division[], to: readonly Division[]
   }
 }
 
-/**
- * Pertes d'un combat (05-Fronts §6.2, §6.3) : les deux forces se frappent, puis l'appui-feu de chaque force perd la
- * moyenne des pertes de son infanterie, pondérée par la largeur engagée, × sa part engagée. Ajoutées à `total`.
- */
+/** Pertes d'un combat (05-Fronts §6.2, §6.3) : les deux forces se frappent. Ajoutées à `total`. */
 function fightLosses(fight: Fight, total: Map<Division, number>): void {
-  const losses = new Map<Division, number>();
-  strike(fight, fight.a, fight.b, losses);
-  strike(fight, fight.b, fight.a, losses);
-  for (const divs of [fight.a, fight.b]) {
-    let num = 0;
-    let den = 0;
-    for (const d of divs) {
-      if (dataOf(d).niche !== INFANTRY_NICHE) continue;
-      num += Math.min(LOSS_SCALE, losses.get(d) ?? 0) * fight.width(d);
-      den += fight.width(d);
-    }
-    if (den === 0 || num === 0) continue;
-    const fInf = Math.floor(num / den);
-    for (const d of divs) if (dataOf(d).support) losses.set(d, Math.floor((fInf * fight.width(d)) / fight.fullWidth(d)));
-  }
-  for (const [d, f] of losses) total.set(d, (total.get(d) ?? 0) + f);
+  strike(fight, fight.a, fight.b, total);
+  strike(fight, fight.b, fight.a, total);
 }
 
 /** Un round de combat sur un front (05-Fronts §6, §7). Renvoie les connexions arrivées au bout de leur route. */
 function fightFront(state: GameState, front: Front): Arrival[] {
-  const turn = currentTurn(state);
   const arrivals: Arrival[] = [];
-  // Percées : fin du délai (combat 1), puis forces de contre-attaque du combat 2, recalculées à chaque round.
-  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase === 0)) {
-    if (turn < bt.launchTick + FRONTS.breakthroughDelayTurns) continue;
-    if (!beginCombat1(state, front, bt)) {
-      endBreakthrough(state, bt);
-      state.events.push({ type: "breakthrough_failed", from: bt.owner, to: front.players.find((p) => p !== bt.owner)!, turn });
-    }
-  }
+  // Percées : fin des délais (combat 1, combat 2, chute de la ville), puis forces de contre-attaque du combat 2, recalculées à chaque round.
+  endDelays(state, front, arrivals);
   assignCounterForces(state, front);
 
   // Dégâts, calculés sur les divisions du début du round, puis appliqués ensemble.
@@ -158,6 +159,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
       {
         a: attacker,
         b: sides[1 - x]!,
+        frontWidth: frontWidth(front),
         width: (d) => d.engaged,
         fullWidth: (d) => dataOf(d).width,
         attackMult: (d) => (attacker.includes(d) ? dataOf(d).attackMultiplier : MULT_SCALE),
@@ -166,7 +168,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
       losses,
     );
   }
-  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase > 0)) {
+  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && isBreakthroughCombat(b.phase))) {
     // Percée : la force qui perce avec `breakthroughMultiplier` ; la tranche de première ligne sans multiplicateur, la
     // force de contre-attaque avec `counterAttackMultiplier` ; le défenseur avec ses PV de défense (05-Fronts §7.2).
     const force = forceOf(state, bt, true);
@@ -175,10 +177,12 @@ function fightFront(state: GameState, front: Front): Arrival[] {
       {
         a: force,
         b: defense,
+        // Une percée se bat sur une liaison, tranche de première ligne comprise.
+        frontWidth: WIDTH_SCALE,
         width: (d) => d.btEngaged,
         // Force qui perce et force de contre-attaque : `breakthroughWidth` ; tranche de première ligne : `frontWidth`.
         fullWidth: (d) => (d.owner !== bt.owner && bt.phase === 1 ? dataOf(d).width : dataOf(d).breakthroughWidth),
-        attackMult: (d) => (d.owner === bt.owner ? dataOf(d).breakthroughMultiplier : bt.phase === 2 ? dataOf(d).counterAttackMultiplier : MULT_SCALE),
+        attackMult: (d) => (d.owner === bt.owner ? dataOf(d).breakthroughMultiplier : bt.phase === 3 ? dataOf(d).counterAttackMultiplier : MULT_SCALE),
         hpMult: (d) => (d.owner === bt.owner ? MULT_SCALE : dataOf(d).defenseHitPointsMultiplier),
       },
       losses,
@@ -193,7 +197,8 @@ function fightFront(state: GameState, front: Front): Arrival[] {
   applyFlight(state, front);
   breakthroughFlight(state, front);
   for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase > 0).sort((a, b) => a.id - b.id)) {
-    checkBreakthrough(state, front, bt, arrivals);
+    // Vérifications de fin de round, aussi pendant un délai (axe disparu, force détruite ou épuisée).
+    checkBreakthrough(state, front, bt);
   }
   applySwaps(state, front);
   for (const p of front.players) arrangeSide(state, front, p);
@@ -204,7 +209,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
   let net = 0;
   for (let x = 0; x < 2; x++) {
     if (!front.sides[x]!.frontAttack) continue;
-    const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), speedOf(after[x]!));
+    const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), frontSpeed(after[x]!));
     net += x === 0 ? by : -by;
   }
   if (net === 0) return arrivals;
