@@ -372,8 +372,9 @@ export function workersNeeded(p: Player): number {
  */
 function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): void {
   // Les hommes des divisions comptent dans la population mais ne travaillent pas (00-Game §4, point 5) : la répartition
-  // se fait sur le reste. En mobilisation forcée, le renfort des divisions est déjà passé avant (05-Fronts §4.3).
-  const people = Math.max(0, p.population - p.soldiers);
+  // se fait sur le reste, blessés exclus (00-Game §4.2). En mobilisation forcée, le renfort des divisions est déjà passé
+  // avant (05-Fronts §4.3).
+  const people = Math.max(0, p.population - p.soldiers - p.hurt);
   const { lines, remaining, availableFarmers, availableFishers, spareFarmers, spareFishers, farm, sea } = allocate(p, people);
 
   p.farmers = farm.workers;
@@ -413,12 +414,39 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
   const surplus = p.food - p.population * POPULATION.foodPerHead;
   p.growthRemainder += surplus * POPULATION.growthPerMillion;
   const delta = Math.trunc(p.growthRemainder / GROWTH_SCALE);
+  const before = p.population;
   p.population += delta;
   p.growthRemainder -= delta * GROWTH_SCALE;
   if (p.population < 0) {
     p.population = 0;
     p.growthRemainder = 0;
   }
+  // Famine (00-Game §4.2) : les blessés baissent avec la population perdue, les soldats ne sont jamais retirés.
+  if (p.population < before) cutHurtOnLoss(p, before - p.population);
+  p.hurt = Math.min(p.hurt, Math.max(0, p.population - p.soldiers));
+  healHurt(p);
+}
+
+/**
+ * Perte de population `lost` par la famine (00-Game §4.2) : les blessés perdent `ceil(blessés × perte / (population −
+ * soldats))`, au plus tous. La base est la population non soldat, seule touchée par la famine. `lost` ≥ 0 ; la population
+ * a déjà baissé de `lost`.
+ */
+function cutHurtOnLoss(p: Player, lost: number): void {
+  const base = p.population + lost - p.soldiers;
+  if (p.hurt === 0 || base <= 0) return;
+  p.hurt -= Math.min(p.hurt, Math.floor((p.hurt * lost + base - 1) / base));
+}
+
+/**
+ * Guérison (00-Game §4.2) : chaque tour, `max(1, floor(population / hurtDivisor))` blessés disparaissent, au plus tous. Ils
+ * quittent aussi la population ; la croissance les remplace ensuite.
+ */
+function healHurt(p: Player): void {
+  if (p.hurt === 0) return;
+  const healed = Math.min(p.hurt, Math.max(1, Math.floor(p.population / POPULATION.hurtDivisor)));
+  p.hurt -= healed;
+  p.population -= healed;
 }
 
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */

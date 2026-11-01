@@ -124,6 +124,13 @@ export interface Player {
    */
   soldiers: number;
   /**
+   * Blessés (00-Game §4.2) : hommes perdus en combat. Comptés dans `population` (ils mangent et occupent des places de
+   * `population_max`), mais ni emploi, ni recrutement, mobilisation forcée comprise. Ils ne remontent que par les pertes
+   * au combat (`applyLoss`) ; chaque tour `healHurt` (economy.ts) en fait disparaître.
+   * Toujours ≤ max(0, population − soldiers).
+   */
+  hurt: number;
+  /**
    * Éliminé (05-Fronts §10.3) : sa dernière ville a été prise. Il n'a plus de division, et le moteur ignore ses ordres et
    * les ordres diplomatiques qui le visent. Ne revient jamais à `false`.
    */
@@ -253,6 +260,7 @@ export function createGame(setup: GameSetup): GameState {
       ironExtracted: 0,
       forcedMobilization: false,
       soldiers: 0,
+      hurt: 0,
       defeated: false,
     });
   }

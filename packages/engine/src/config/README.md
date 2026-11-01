@@ -48,6 +48,8 @@ résultat faux ou une division par zéro, pas un message.
 - **`workforce.ts`, `FARMING` / `FISHING` / `MINING`** : `mechanizationBase` ≥ 1,
   `mechanizationMax` ≥ `mechanizationBase`, `maxMachinesPer1000` ≥ 1,
   `curveExponent` entier ≥ 1. `FISHING.tileYieldMax` ≥ `FISHING.tileYield`.
+- **`workforce.ts`, `POPULATION.hurtDivisor`** : entier ≥ 1, dénominateur de la
+  guérison des blessés (00-Game §4.2). 2 400, valeur de l'auteur.
 - **`cities.ts`** : `EXPANSION_RADIUS` est la seule valeur à modifier ;
   `controlRadius` en est la moitié, calculée. Garder `EXPANSION_RADIUS` pair.
 - **`factories.ts`, `specialization`** : `decayPercent + floorPercent` < 100.

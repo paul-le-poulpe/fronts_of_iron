@@ -14,6 +14,7 @@
   --occ-fish: #3b8fc4;
   --occ-idle: #a8aaa6;
   --occ-soldier: #8a3b3b;
+  --occ-hurt: #000;
   --front-red: #c81e1e;
   --front-dark: #7a0c0c;
   /* Largeur du panneau latéral : le bouton « Carte » s'arrête à son bord gauche. */
@@ -523,6 +524,7 @@ tr.me td { font-weight: 600; }
 .ib-cap .cap-now { background: var(--ok); }
 .ib-cap .cap-food { background: repeating-linear-gradient(45deg, var(--ok) 0 2px, transparent 2px 5px); }
 .ib-cap .cap-land { background: #dcdcdc; }
+.ib-cap .cap-hurt { background: var(--occ-hurt); }
 .ib-track.stock .ib-fill { background: var(--stock); }
 /* Fer : orange clair = ce que les cases de fer pourraient donner (capacité), orange = extrait. */
 .ib-track.iron { background: #f7d9b0; }

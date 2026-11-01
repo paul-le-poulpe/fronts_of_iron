@@ -206,12 +206,13 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
   dans l'ordre du tableau, supprime les propositions de diplomatie arrivées à
   terme (`expireProposals`), puis, dans cet ordre (05-Fronts §13.2) :
   1. `countSoldiers` : recompte les hommes des divisions de chaque joueur (`Player.soldiers`) ;
-  2. `reinforceBeforeEconomy` : renfort des divisions des joueurs en mobilisation forcée, avec toute la population hors soldats ;
+  2. `reinforceBeforeEconomy` : renfort des divisions des joueurs en mobilisation forcée, avec toute la population hors soldats et hors blessés ;
   3. `stepEconomy` : l'étape de population et de nourriture de chaque joueur (« Étape de la population », plus bas) ;
   4. `reinforceAfterEconomy` : renfort des autres joueurs, avec leurs inactifs du tour ;
   5. `applyArrivals` : les divisions dont le tour d'arrivée est atteint cessent d'être en déplacement ;
   6. `trimAll` : l'excédent de chaque division retourne au stock (05-Fronts §3.2) ;
-  7. `removeDestroyed` : les divisions à 0 % sont retirées de l'état ;
+  7. (supprimée : `removeDestroyed` n'est plus appelée à chaque tour, seulement par le combat et l'encerclement avec les
+     divisions qui viennent de subir des pertes ; une division vidée par une fondation reste) ;
   8. `countSoldiers` ;
   9. `arrangeAll` : rangement des lignes de chaque camp de chaque front (05-Fronts §4.2) ;
   10. si le numéro du tour est un multiple de `FRONTS.combatTurns`, `combatRound` (un round par front qui a un round, puis les prises de villes, puis `removeEmptyBoxes`).
@@ -333,8 +334,9 @@ Dans `GameState` : `fronts : Front[]` (par identifiant croissant), `nextFrontId`
 le tableau est réassigné à chaque suppression), `nextDivisionId`, `boxes : Box[]` et `nextBoxId`
 (boîtes de percée), `breakthroughs : Breakthrough[]` et `nextBreakthroughId` (percées lancées), les deux
 tableaux par identifiant croissant. Par joueur :
-`forcedMobilization` et `soldiers` (somme des hommes de ses divisions : ils restent dans
-`population` mais ne travaillent pas ; l'étape d'économie se fait sur `population − soldiers`),
+`forcedMobilization`, `soldiers` (somme des hommes de ses divisions : ils restent dans
+`population` mais ne travaillent pas) et `hurt` (blessés, 00-Game §4.2 : ils restent dans `population`, ne travaillent pas et ne
+sont pas recrutés ; l'étape d'économie se fait sur `population − soldiers − hurt`),
 et `defeated` (éliminé, voir plus bas).
 Une `City.player` change à la prise de la ville.
 
@@ -373,8 +375,8 @@ Une `City.player` change à la prise de la ville.
 - **Renfort** (`reinforcePlayer`) : ressource par ressource (les hommes, puis chaque armement par indice),
   le stock est partagé à parts égales (`shareEqually`) entre les divisions qui en manquent, puis `trimExcess`
   rend l'excédent. Ni en déplacement, ni en fuite, ni engagée dans une percée, ni en première ligne d'un front
-  en combat (05-Fronts §4.3, §4.6). Les hommes viennent des inactifs, ou de toute la population hors soldats en
-  mobilisation forcée.
+  en combat (05-Fronts §4.3, §4.6). Les hommes viennent des inactifs, ou de toute la population hors soldats et hors
+  blessés en mobilisation forcée.
 - **Rangement des lignes** (`arrangeSide`, chaque tour) : par niche, les divisions de première ligne gardent
   leur place dans l'ordre de `byChoice` (état, rang du type dans la niche, identifiant), la largeur restante
   est remplie par la seconde ligne (sans les divisions engagées dans une force de contre-attaque) ;
@@ -441,7 +443,7 @@ par `intents.ts` (`tile` entier, 0 ≤ `tile` < nombre de cases), le reste par
    contrôle d'aucune ville » : si une ville est à une distance ≤ rayon, la plus
    proche l'est aussi et possède la case (voir Zones) ; inversement, une case
    possédée est à portée de sa ville ;
-3. si le joueur a déjà une capitale : `population ≥ foundingCost(n)`, `n`
+3. si le joueur a déjà une capitale : `population − hurt ≥ foundingCost(n)`, `n`
    étant le nombre de ses villes (`cityIds.length`), et une de ses villes est à une distance
    ≤ `CITY.expansionRadius` de `tile` (`dx² + dy² ≤ R²`). Les villes des autres
    joueurs ne comptent pas, ni celles qui ont une connexion dans un front actif (05-Fronts §8,
@@ -452,7 +454,8 @@ Effets, dans cet ordre, une fois toutes les conditions vérifiées (un ordre
 refusé ne modifie rien) :
 
 1. population : première ville, `+ POPULATION.initial` ; sinon
-   `− foundingCost(n)`, calculé avant l'ajout de la ville. `foundingCost`
+   `− foundingCost(n)`, calculé avant l'ajout de la ville (le manque sur les non-soldats non blessés est retiré aux
+   divisions, voir l'étape de la population ci-dessous). `foundingCost`
    (`cities.ts`, exporté pour le client et les bots) : `floor(
    CITY.foundingCostPopulation × (100 + n × CITY.foundingCostIncreasePercent) /
    100)`, en entiers (00-Game §3.3) ;
@@ -488,7 +491,7 @@ par le serveur, `city` entier, ville du joueur. Les chaînes (`factoryType`,
 tour, pour chaque joueur dans l'ordre des identifiants, y compris un joueur sans
 ville. Elle utilise la population de ce moment : le coût d'une fondation de ce tour
 est déjà retiré, et les hommes des divisions (`Player.soldiers`) ne travaillent pas : le remplissage des lignes, les fermiers et
-les pêcheurs se répartissent sur `max(0, population − soldiers)`, la croissance sur `population` entière. Unités : population en personnes, surfaces en cases, mécanisation
+les pêcheurs se répartissent sur `max(0, population − soldiers − hurt)`, la croissance sur `population` entière. Unités : population en personnes, surfaces en cases, mécanisation
 `M` en millièmes de case par travailleur, `m_max` en machines pour 1 000
 travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 
@@ -566,8 +569,20 @@ si population < 0 : population = 0 et reste = 0
 ```
 
 Résultats écrits dans le joueur : `farmers` = travail des fermiers, `fishers` =
+
+4. blessés (00-Game §4.2), avec avant = population avant la croissance, perdu = avant − population si > 0 :
+     famine : base = avant − soldiers ; si blessés > 0 et base > 0 :
+              blessés −= min(blessés, ceil(blessés × perdu / base))
+     plafond : blessés = min(blessés, max(0, population − soldiers))
+     guérison : si blessés > 0 : g = min(blessés, max(1, floor(population / POPULATION.hurtDivisor)))
+                blessés −= g ; population −= g
 travail des pêcheurs, `idle` = (disponibles − travail) fermiers + pêcheurs,
 `cultivated` et `fished` = les deux surfaces, `farmMechanization` et
+Les blessés entrent par `applyLoss` (`divisions.ts`) : les hommes perdus par une division s'ajoutent à
+`Player.hurt` du propriétaire. La fondation d'une ville (`payFoundingCost`, `cities.ts`) refuse si
+`population − hurt < foundingCost(n)` ; le manque `coût − (population − soldiers − hurt)` est retiré aux divisions par
+`removeSoldiers` (`divisions.ts`, 05-Fronts §3.5), sans passer par les blessés.
+
 `fishMechanization` = M de l'agriculture et de la pêche, `wheat`, `fish`, `food`,
 `factoryWorkers` = travailleurs, `miners` = mineurs, `mineMechanization` = M de
 l'extraction, `minedTiles` =
@@ -680,7 +695,7 @@ sa capitale : `cities[capital - 1].group`.
    `fertilitySum`, `seaTiles`, `farmers`, `fishers`, `idle`, `cultivated`,
    `farmMechanization`, `fished`, `fishMechanization`,
    `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
-   `mineMechanization`, `ironExtracted`, `forcedMobilization`, `soldiers`, `defeated`, puis `goods` (nombre, valeurs), puis `goodsEffective` (valeurs), puis pour chaque type
+   `mineMechanization`, `ironExtracted`, `forcedMobilization`, `soldiers`, `hurt`, `defeated`, puis `goods` (nombre, valeurs), puis `goodsEffective` (valeurs), puis pour chaque type
    d'armement : réserve, reste, puis le nombre d'usines et pour
    chacune, dans l'ordre de priorité : ville, indice du type d'usine, `progress`
    (nombre, valeurs), nombre de groupes et pour chacun, dans son ordre : indice du
@@ -1062,7 +1077,7 @@ points 31 et 32 sont des choix de plus.
     Ceux que le code rend visibles : l'excédent des divisions est rendu à chaque tour sans délai (`trimAll`) ; les lignes sont
     rangées à chaque tour (`arrangeAll`) ; le renfort part à parts égales avec le reste aux plus petits identifiants
     (`shareEqually`) ; les dégâts des deux camps sont calculés sur les divisions du début du round puis appliqués ensemble ;
-    une division à 0 % est retirée avec ce qui lui reste (`removeDestroyed`) ; les prises d'un même round sont revérifiées
+    une division à 0 % qui vient de subir des pertes est retirée avec ce qui lui reste (`removeDestroyed(state, hit)`) ; les prises d'un même round sont revérifiées
     une à une sur l'état d'alors. Aucune valeur de `config/fronts.ts` ni de `config/divisions.ts` n'est de moi (valeurs de
     l'auteur, 05-Fronts §3.4 et §12) ; `advanceThresholdA` est repris de la version 0.1 (provisoire) ; `advanceThresholdB` (20), `footSpeedPermille` (10) et `motorizedSpeedPermille` (20) sont de l'auteur (31 octobre 2026).
 

@@ -4,7 +4,7 @@
 import { CITY, FRONTS } from "./config.ts";
 import { endBreakthrough } from "./breakthroughs.ts";
 import { computeGroups } from "./cities.ts";
-import { LINE_FIRST, LOSS_SCALE, applyLoss, countSoldiers, dataOf } from "./divisions.ts";
+import { LINE_FIRST, LOSS_SCALE, applyLoss, countSoldiers, dataOf, type Division } from "./divisions.ts";
 import { ROUTE, updateFronts } from "./fronts.ts";
 import { removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import { setOwner, type GameState } from "./state.ts";
@@ -35,6 +35,7 @@ export function captureCity(
   // `minEncirclementLengthPercent` % depuis la ville prise.
   const minLength = FRONTS.minEncirclementLengthPercent * 10;
   let touched = 0;
+  const hit: Division[] = [];
   for (const front of state.fronts) {
     const i: number = front.players[0] === defender && front.players[1] === attacker ? 0 : front.players[1] === defender && front.players[0] === attacker ? 1 : -1;
     if (i < 0) continue;
@@ -52,11 +53,12 @@ export function captureCity(
     for (const d of sideDivisions(state, front, defender)) {
       if (d.line !== LINE_FIRST || d.engaged === 0) continue;
       applyLoss(state, d, Math.floor((f * d.engaged) / dataOf(d).width));
+      hit.push(d);
       touched++;
     }
   }
   trimAll(state);
-  removeDestroyed(state);
+  removeDestroyed(state, hit);
 
   if (touched > 0) state.events.push({ type: "encirclement", from: attacker, to: defender, city: cityId, divisions: touched, turn: state.tick + 1 });
 

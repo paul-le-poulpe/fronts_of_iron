@@ -227,7 +227,8 @@ Worker → page (`FromWorker`) :
   - `eliminated` : les joueurs éliminés pendant le tour (`{ player, by }`, événement `player_eliminated` du moteur) ;
     vide après un rejeu. `players[i].defeated` dit, à chaque tour, si un joueur est éliminé (la page en tire l'état de
     spectateur, même après un rejeu) ;
-  - `players` porte aussi `soldiers`, `forcedMobilization` et `divisionEquipment` (armement
+  - `players` porte aussi `soldiers`, `hurt` (blessés, 00-Game §4.2 : `population` les compte, le total affiché les retire),
+    `forcedMobilization` et `divisionEquipment` (armement
     des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
@@ -746,6 +747,14 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
   affichée tient compte des soldats.
 
+  **Blessés** (00-Game §4.2) : dernière ligne de l'onglet (icône `pop-hurt`, noir `--occ-hurt`), après les inactifs, avec
+  son segment noir à la fin de la barre ; son nombre n'a pas de part (les parts des autres lignes sont calculées sans lui).
+  Le total de population (bouton de la barre, panneau latéral `s-pop`, tableau des joueurs) est `population − hurt`, et la
+  croissance affichée est celle de ce total. Le panneau latéral a une ligne « Blessés » (`s-hurt`). La jauge « Population »
+  de l'onglet Nourriture (et sa mini-barre) a un segment noir tout à gauche, de 0 à `hurt`, puis le vert jusqu'à
+  `population` ; son texte est « population sans blessés + blessés / nourrie / potentielle ». Le maximum nourri compte
+  les places des blessés. Les bots (`bots.ts`) et `foundingProblem` (`main.ts`) testent `population − hurt`
+  contre le coût d'une ville.
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
   mécanisation totale, l'échelle et la zone hachurée de l'armement, la production

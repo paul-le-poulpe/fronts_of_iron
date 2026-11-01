@@ -2,10 +2,11 @@
 // routes sont dans roads.ts. Tout est en entiers : distances au carré, sans racine.
 
 import { CITY, MAX_CITIES, POPULATION } from "./config.ts";
+import { removeSoldiers } from "./divisions.ts";
 import { isLand } from "./map.ts";
 import { activeFrontCities, updateFronts } from "./fronts.ts";
 import { addCityToRoads } from "./roads.ts";
-import { setOwner, type City, type GameState } from "./state.ts";
+import { setOwner, type City, type GameState, type Player } from "./state.ts";
 
 /**
  * Ordre `found_city` (00-Game §3.3), après vérification des champs par
@@ -24,13 +25,14 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   const player = state.players[playerId - 1]!;
   const first = player.capital === 0;
   if (!first) {
-    if (player.population < foundingCost(player.cityIds.length)) return false;
+    // Les blessés ne peuvent pas payer (00-Game §4.2) ; les soldats, si, en dernier (§3.3).
+    if (player.population - player.hurt < foundingCost(player.cityIds.length)) return false;
     if (!inExpansionRadius(state, player.cityIds, tile)) return false;
   }
 
   // Tout est valide : les effets, dans l'ordre de 00-Game §3.3.
   if (first) player.population += POPULATION.initial;
-  else player.population -= foundingCost(player.cityIds.length);
+  else payFoundingCost(state, player, foundingCost(player.cityIds.length));
   const id = state.cities.length + 1;
   const city: City = { id, player: playerId, tile, port: false, group: id };
   state.cities.push(city);
@@ -57,6 +59,17 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
  */
 export function foundingCost(cityCount: number): number {
   return Math.floor((CITY.foundingCostPopulation * (100 + cityCount * CITY.foundingCostIncreasePercent)) / 100);
+}
+
+/**
+ * Retire `cost` de la population du joueur (00-Game §3.3). Il est pris d'abord sur les non-soldats non blessés ; le manque
+ * est pris sur les soldats, le même ratio à toutes les divisions (`removeSoldiers`). Les blessés ne sont pas touchés.
+ * Suppose `population − blessés ≥ cost`.
+ */
+function payFoundingCost(state: GameState, player: Player, cost: number): void {
+  const shortfall = Math.max(0, cost - (player.population - player.soldiers - player.hurt));
+  player.population -= cost;
+  if (shortfall > 0) removeSoldiers(state, player.id, shortfall);
 }
 
 /**

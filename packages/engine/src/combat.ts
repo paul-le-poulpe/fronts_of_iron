@@ -193,7 +193,7 @@ function fightFront(state: GameState, front: Front): Arrival[] {
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
   for (const d of hit) applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
   trimAll(state);
-  removeDestroyed(state);
+  removeDestroyed(state, hit);
   applyFlight(state, front);
   breakthroughFlight(state, front);
   for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase > 0).sort((a, b) => a.id - b.id)) {

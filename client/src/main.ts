@@ -360,10 +360,11 @@ const lerp = (avg: number, x: number): number => (avg === 0 ? x : avg * 0.9 + x 
 
 function updatePanel(players: readonly PlayerStats[]): void {
   const me = players[localPlayer() - 1]!;
-  $("s-pop").textContent = num(me.population);
+  $("s-pop").textContent = num(me.population - me.hurt);
   $("s-farmers").textContent = num(me.farmers);
   $("s-fishers").textContent = num(me.fishers);
   $("s-idle").textContent = num(me.idle);
+  $("s-hurt").textContent = num(me.hurt);
   $("s-food").textContent = num(me.food);
   $("s-cities").textContent = num(me.cities);
   $("s-cultivated").textContent = `${num(me.cultivated)} / ${num(me.farmTiles)}`;
@@ -373,7 +374,7 @@ function updatePanel(players: readonly PlayerStats[]): void {
   players.forEach((p, i) => {
     const cells = rows[i]!.children;
     cells[1]!.textContent = p.defeated ? `${playerName(p.id)} (éliminé)` : playerName(p.id);
-    cells[2]!.textContent = num(p.population);
+    cells[2]!.textContent = num(p.population - p.hurt);
     cells[3]!.textContent = num(p.cities);
   });
   // Coût de la prochaine ville, en habitants ; la première (sans capitale) est gratuite.
@@ -608,7 +609,7 @@ function foundingProblem(m: Mirror, tile: number): string | null {
   const me = m.stats[localPlayer() - 1];
   const mine = m.cityIds[localPlayer() - 1]!;
   if (mine.length === 0) return null;
-  if (me && me.population < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} habitants nécessaires).`;
+  if (me && me.population - me.hurt < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} habitants nécessaires).`;
   const w = m.width;
   const x = tile % w;
   const y = Math.floor(tile / w);

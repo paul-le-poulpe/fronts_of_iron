@@ -436,6 +436,7 @@ export class Game {
       farmers: p.farmers,
       fishers: p.fishers,
       idle: p.idle,
+      hurt: p.hurt,
       food: p.food,
       wheat: p.wheat,
       fish: p.fish,

@@ -302,8 +302,10 @@ première ville (§4), un joueur paie donc une seule ville de plus avant que sa
 population grandisse. L'auteur a choisi l'additif plutôt qu'un coût composé
 (`× (1 + x)ⁿ`), qui monte plus vite.
 
-Si sa population est inférieure au coût, l'ordre est invalide. Le coût est retiré du total avant la répartition du tour
-(§4) : il n'y a pas à choisir dans quelle part de la population le prendre.
+Si sa population **sans les blessés** (§4.2) est inférieure au coût, l'ordre est invalide. Le coût est retiré du total
+avant la répartition du tour (§4). Il est pris d'abord sur les non-soldats non blessés (travailleurs et inactifs) ; **le
+manque est pris sur les soldats** : le même ratio de leurs hommes à toutes les divisions du joueur (05-Fronts §3.5). Les
+blessés ne paient jamais.
 Provisoire : ce coût sera probablement remplacé par d'autres ressources quand
 elles existeront.
 
@@ -534,10 +536,11 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
   4. ceux qui n'ont toujours pas de surface à travailler forment la
      **population inactive** ;
   5. les **hommes des divisions** ne travaillent pas : la répartition se fait
-     sur la population moins ces hommes. La création d'une division et le
-     renfort prennent leurs hommes parmi les inactifs ; en mobilisation forcée,
-     le renfort passe avant les emplois (règles dans `05-Fronts.md` §3.5,
-     §4.3).
+     sur la population moins ces hommes, et moins les **blessés** (§4.2). La
+     création d'une division et le renfort prennent leurs hommes parmi les
+     inactifs ; en mobilisation forcée, le renfort passe avant les emplois
+     (règles dans `05-Fronts.md` §3.5, §4.3). Les blessés ne sont jamais pris,
+     mobilisation forcée comprise.
 
   ```
   F, P              = fermiers et pêcheurs disponibles, selon le réglage
@@ -586,6 +589,42 @@ le sens de l'arrondi des négatifs est fixé avec la session du moteur.
 
 Boucle qui en résulte : plus de population donne plus de fermiers disponibles,
 donc plus de surface cultivée et de nourriture, jusqu'à `surface_max` (§6.2).
+
+### 4.2 Les blessés
+
+La croissance (§4.1) et les pertes en combat n'ont pas la même échelle de temps :
+si les hommes perdus disparaissaient de la population, les naissances les
+remplaceraient aussitôt. Les pertes en combat deviennent donc une part de la
+population, les **blessés** (`Player.hurt`), qui coûte du temps sans ralentir
+l'économie.
+
+**Cycle de vie** : un habitant est d'abord inactif ; la création d'une division
+ou le renfort en fait un soldat (§4) ; s'il est tué au combat, il devient blessé.
+Un blessé ne revient jamais à un autre état.
+
+- Les blessés sont **comptés dans `population`** : ils mangent et occupent des
+  places de `population_max` (§4.1), donc aucune naissance ne les remplace tant
+  qu'ils sont là. Ils ne travaillent pas, ne sont pas recrutés (mobilisation
+  forcée comprise) et ne paient pas la fondation d'une ville (§3.3). La
+  répartition du §4 se fait sur `population − soldats − blessés`.
+- **Entrée** : les hommes perdus par une division au combat, en percée, en fuite
+  ou par encerclement (05-Fronts §6, §7, §10). Les hommes qui quittent une
+  division autrement (suppression, excédent rendu, §3.2 de 05-Fronts) restent des
+  inactifs. L'équipement perdu disparaît.
+- **Guérison** : à chaque tour, `max(1, floor(population / POPULATION.hurtDivisor))`
+  blessés disparaissent (au plus tous). `hurtDivisor` est un dénominateur entier de
+  la configuration, jamais une fraction. Ils quittent aussi la population ; la
+  croissance (§4.1) les remplace ensuite.
+- **Famine** : quand la population baisse de `L` (nourriture restante négative),
+  les blessés baissent avec elle. Les soldats ne sont jamais retirés : toute la
+  perte tombe sur les non-soldats, donc sur les non-soldats non blessés et les
+  blessés, en proportion. Les blessés retirés valent
+  `ceil(blessés × L / (population − soldats))`, au plus tous. L'arrondi vers le
+  haut est voulu : les blessés peuvent baisser plus vite que la population.
+- **Plafond** : `blessés ≤ max(0, population − soldats)`, vérifié à la fin de
+  chaque étape d'économie. Seules les pertes au combat font monter les blessés.
+- **Affichage** : le total de population affiché ne compte pas les blessés ;
+  `03-Client.md`.
 
 ## 5. Flux et ressources
 
@@ -1161,6 +1200,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
+| `POPULATION.hurtDivisor` | dénominateur de la guérison des blessés (§4.2) ; 2 400, valeur donnée par l'auteur |
 | `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) ; 1 500, valeur donnée par l'auteur |
 | `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
 | `TEST_MAP.mountainAltitude` | altitude à partir de laquelle une case est une montagne : fertilité 0, fer plus fréquent (§2) |

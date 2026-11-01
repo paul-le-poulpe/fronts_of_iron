@@ -65,7 +65,13 @@ pour le tracteur.
 - Ouvriers d'usine, mineurs, fermiers, pêcheurs, inactifs (détail Population) :
   ce que fait le métier, comment il est rempli (00-Game §4 : lignes d'abord,
   puis fermiers et pêcheurs, puis inactifs), nombre et part.
-- `pop-sailor`, `pop-soldier`, `pop-fisherman-beard` : fichiers présents, pas
+- Soldats et blessés (`pop-soldier`, `pop-hurt`, détail Population) : fait, un
+  `title` sur le nom de la ligne (`infobar.ts`), textes validés par l'auteur.
+  Soldats : hommes des divisions, ils mangent mais ne travaillent pas, une
+  famine ne les retire jamais. Blessés : hommes blessés au combat, ils mangent
+  et occupent des places de population maximale, ne travaillent pas et ne sont
+  pas recrutés, un petit nombre disparaît chaque tour, au moins un (00-Game §4.2).
+- `pop-sailor`, `pop-fisherman-beard` : fichiers présents, pas
   encore utilisés ; pas d'infobulle avant que le métier existe.
 
 ### Armement

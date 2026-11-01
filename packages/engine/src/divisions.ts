@@ -285,12 +285,13 @@ export function attackOf(d: Division, mult: number, engaged: number = d.engaged,
  * `LOSS_SCALE` (05-Fronts §6.2, point 5) : chaque composant perd
  * `f × lossMultiplier × count` exemplaires, en pertes tirées (05-Fronts §1) :
  * partie entière toujours perdue, un exemplaire de plus si `nextInt(rng, q) < reste`.
- * Composants dans l'ordre de `components`. Les hommes perdus ne sont plus soldats ;
- * l'équipement perdu disparaît.
+ * Composants dans l'ordre de `components`. Les hommes perdus ne sont plus soldats : ils
+ * deviennent des blessés du joueur (00-Game §4.2) ; l'équipement perdu disparaît.
  */
 export function applyLoss(state: GameState, d: Division, f: number): void {
   if (f <= 0) return;
   const q = LOSS_SCALE * MULT_SCALE;
+  const menComponent = dataOf(d).menComponent;
   dataOf(d).components.forEach((c, i) => {
     const has = d.counts[i]!;
     if (has === 0) return;
@@ -298,8 +299,41 @@ export function applyLoss(state: GameState, d: Division, f: number): void {
     let lost = Math.floor(p / q);
     const r = p % q;
     if (r > 0 && nextInt(state.rng, q) < r) lost++;
-    d.counts[i] = has - Math.min(has, lost);
+    const taken = Math.min(has, lost);
+    d.counts[i] = has - taken;
+    if (i === menComponent) state.players[d.owner - 1]!.hurt += taken;
   });
+}
+
+/**
+ * Retire `n` hommes aux divisions du joueur (00-Game §3.3, fondation d'une ville payée en partie par les soldats) : le
+ * même ratio `n / soldats` à toutes, en entiers. Chaque division perd d'abord `floor(n × hommes / soldats)` ; les hommes
+ * restants vont un par un aux plus grands restes, puis aux plus petits indices (divisions dans l'ordre de `state.divisions`).
+ * Les composants qui dépassent le nouveau taux de soldats retournent au stock (`trimExcess`). Ces hommes quittent la
+ * population avec le coût de la ville : ils ne deviennent pas blessés. Une division vidée n'est pas détruite (seul le
+ * combat détruit, `removeDestroyed`) : elle reste, vide, et se reconstitue par le renfort. `n` est borné aux soldats du joueur.
+ */
+export function removeSoldiers(state: GameState, playerId: number, n: number): void {
+  const divs = state.divisions.filter((d) => d.owner === playerId && menOf(d) > 0);
+  let total = 0;
+  for (const d of divs) total += menOf(d);
+  const amount = Math.min(n, total);
+  if (amount <= 0) return;
+  const take = divs.map((d) => Math.floor((amount * menOf(d)) / total));
+  const rest = divs.map((d) => (amount * menOf(d)) % total);
+  let left = amount - take.reduce((a, b) => a + b, 0);
+  const order = divs.map((_, k) => k).sort((a, b) => rest[b]! - rest[a]! || a - b);
+  for (const k of order) {
+    if (left === 0) break;
+    take[k] = take[k]! + 1;
+    left--;
+  }
+  const player = state.players[playerId - 1]!;
+  divs.forEach((d, k) => {
+    d.counts[dataOf(d).menComponent] = menOf(d) - take[k]!;
+    trimExcess(player, d);
+  });
+  countSoldiers(state);
 }
 
 /** Ordre de choix d'une ligne (05-Fronts §4.2) : meilleur état, puis meilleur type de la niche, puis plus petit identifiant. */

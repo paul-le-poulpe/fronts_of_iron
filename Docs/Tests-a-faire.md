@@ -156,6 +156,33 @@ Règles : 05-Fronts §10.3, §11.6. Code : `packages/engine/src/conquest.ts`
 - Une mutation n'est détectée par aucun test : dégâts reçus calculés avec la
   largeur de la division au lieu de sa largeur engagée.
 
+## Blessés (2 novembre 2026, 00-Game §4.2)
+
+Implémentés (`hurt`, `applyLoss`, `healHurt`, `cutHurtOnLoss`, `removeSoldiers`, `payFoundingCost`) ; aucun test écrit ni
+lancé (seul `npm run typecheck` a passé). À écrire :
+
+- **Entrée** : une perte d'hommes au combat, en percée, en fuite et par encerclement ajoute exactement les hommes perdus à
+  `hurt`, `population` ne change pas, `idle` ne gagne rien ; l'équipement perdu n'entre nulle part. Suppression d'une
+  division et excédent rendu (`trimExcess`) : hommes inactifs, `hurt` inchangé.
+- **Emplois et renfort** : la répartition se fait sur `population − soldiers − hurt` ; création de division et renfort ne
+  prennent que des inactifs ; mobilisation forcée : `population − soldiers − hurt`, jamais les blessés.
+- **Guérison** : `max(1, floor(population / hurtDivisor))` par tour, borné à `hurt`, avec `population < hurtDivisor` ; la
+  population baisse du même nombre.
+- **Famine** : population qui baisse de `L` avec des soldats ; blessés retirés `ceil(H × L / (P − S))` ; exemple
+  100 de population, 10 blessés, 10 % perdus, sans soldats : 1 blessé et 9 autres ; plafond `hurt ≤ max(0, population −
+  soldiers)` ; `population < soldiers` : jamais de soldat retiré.
+- **Fondation** : refusée si `population − hurt < coût` ; manque `coût − (population − soldiers − hurt)` retiré aux
+  divisions au plus fort reste, total exact, composants rognés rendus au stock, `hurt` inchangé, `soldiers` recompté ;
+  une division vidée n'est pas détruite et se reconstitue par le renfort (seul le combat, l'encerclement ou
+  `delete_division` détruisent : `removeDestroyed(state, hit)` n'est plus appelée à chaque tour, `turn.ts`) ; les tests
+  qui comptent sur la destruction par `applyTurn` d'une division vidée autrement sont périmés ; après la fondation `population − soldiers ≥ hurt`.
+- **Déterminisme** : le hash change (nouveau champ) ; 10 000 tours dans deux processus avec des guerres.
+- **Tests existants périmés à repérer** : ceux qui comptent sur le retour des hommes tués dans `idle`, sur le seuil de
+  fondation `population ≥ coût` avec des soldats, ou qui fixent un hash.
+- **Client, à vérifier à la main** : ligne « Blessés » noire en dernier de l'onglet Population, total sans blessés (bouton,
+  panneau latéral, tableau des joueurs), segment noir à gauche de la jauge de nourriture et de sa mini-barre.
+- **Réglage** : `POPULATION.hurtDivisor` = 2 400 (valeur de l'auteur) ; lire la valeur de la configuration dans les tests.
+
 ## Client
 
 - Fenêtre d'un front, onglet des forces, menu « + », sélection simple et

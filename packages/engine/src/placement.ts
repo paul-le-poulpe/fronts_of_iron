@@ -252,7 +252,7 @@ export function reinforceBeforeEconomy(state: GameState): void {
   const fighting = fightingFronts(state);
   for (const p of state.players) {
     if (!p.forcedMobilization) continue;
-    reinforcePlayer(state, p, Math.max(0, p.population - p.soldiers), fighting);
+    reinforcePlayer(state, p, Math.max(0, p.population - p.soldiers - p.hurt), fighting);
     countSoldiers(state);
   }
 }
@@ -281,9 +281,13 @@ export function trimAll(state: GameState): void {
   for (const d of state.divisions) trimExcess(state.players[d.owner - 1]!, d);
 }
 
-/** Divisions détruites (état 0 %, 05-Fronts §3.3) retirées de l'état. Provisoire : ce qui leur reste est perdu. */
-export function removeDestroyed(state: GameState): void {
-  if (state.divisions.some(isEmpty)) state.divisions = state.divisions.filter((d) => !isEmpty(d));
+/**
+ * Divisions détruites (état 0 %, 05-Fronts §3.3) retirées de l'état. Provisoire : ce qui leur reste est perdu. Seules les
+ * divisions de `hit`, celles qui viennent de subir des pertes au combat, peuvent l'être : une division vidée autrement
+ * (fondation d'une ville, `removeSoldiers`) reste et se reconstitue par le renfort.
+ */
+export function removeDestroyed(state: GameState, hit: readonly Division[]): void {
+  if (hit.some(isEmpty)) state.divisions = state.divisions.filter((d) => !(hit.includes(d) && isEmpty(d)));
 }
 
 /** Divisions d'un camp d'un front, sur place (pas en déplacement), par identifiant croissant. */

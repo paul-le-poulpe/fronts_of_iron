@@ -64,7 +64,7 @@ export function createBot(player: number, botSeed: number): Bot {
 
       // Expansion seulement quand la surface cultivée atteint la moitié de la surface cultivable (surface_max).
       const halfFarmed = 2 * me.cultivated >= me.farmTiles;
-      if (turn >= nextExpandTurn && halfFarmed && me.population >= Math.max(EXPAND_MIN_POPULATION, foundingCost(me.cityIds.length))) {
+      if (turn >= nextExpandTurn && halfFarmed && me.population - me.hurt >= Math.max(EXPAND_MIN_POPULATION, foundingCost(me.cityIds.length))) {
         nextExpandTurn = turn + EXPAND_EVERY_TURNS + nextInt(rng, EXPAND_JITTER);
         const tile = bestCandidate(state, rng, me.cityIds);
         if (tile >= 0) out.push({ type: "found_city", player, tile });

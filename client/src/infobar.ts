@@ -398,10 +398,25 @@ export class InfoBar {
         missingTip: "eaux",
       },
       // Par ordre de priorité (05-Fronts §11.5) : les soldats, même en mobilisation forcée, passent après les emplois et avant l'inactivité.
-      { label: "Soldats", icon: "pop-soldier", color: "var(--occ-soldier)", read: (s: PlayerStats) => s.soldiers },
+      {
+        label: "Soldats",
+        icon: "pop-soldier",
+        color: "var(--occ-soldier)",
+        read: (s: PlayerStats) => s.soldiers,
+        tip: "Hommes de vos divisions. Ils mangent mais ne travaillent pas. Une famine ne les retire jamais.",
+      },
       { label: "Inactifs", icon: "pop-inactive", color: "var(--occ-idle)", read: (s: PlayerStats) => s.idle },
     ];
+      // Dernier (00-Game §4.2) : non comptés dans le total affiché, ni dans les parts ; ni emploi ni recrutement.
+      {
+        label: "Blessés",
+        icon: "pop-hurt",
+        color: "var(--occ-hurt)",
+        read: (s: PlayerStats) => s.hurt,
+        tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque tour, un petit nombre disparaît (au moins un).",
+      },
     const stacked = el("div", "ib-stack");
+    const hurtRow = occupations.length - 1;
     const stackParts = (bar: HTMLElement): HTMLElement[] =>
       occupations.map((o) => {
         const part = el("i");
@@ -426,6 +441,7 @@ export class InfoBar {
       const label = el("span", "ib-label");
       label.append(icon(`population/${o.icon}.png`), o.label);
       // L'engrenage dit que ce métier se mécanise ; son infobulle est celle de la machine.
+      if (o.tip !== undefined) label.title = o.tip;
       if (o.machine !== undefined) label.append(gearIcon(o.machine));
       r.append(sw, label, t.root, value);
       return { r, fill: t.fill, need, track: t.root, value };
@@ -447,9 +463,9 @@ export class InfoBar {
       button,
       pane,
       head: (_d, s) => {
-        total.textContent = num(s.population);
-        // Croissance du tour : la population d'après moins celle du début du tour, somme des occupations.
-        setSigned(delta, s.population - (s.factoryWorkers + s.miners + s.farmers + s.fishers + s.idle + s.soldiers));
+        total.textContent = num(s.population - s.hurt);
+        // Croissance du tour : la population d'après (sans les blessés) moins celle du début du tour, somme des occupations.
+        setSigned(delta, s.population - s.hurt - (s.factoryWorkers + s.miners + s.farmers + s.fishers + s.idle + s.soldiers));
         max.textContent = `/ ${num(this.info.foodPerHead > 0 ? Math.floor(s.food / this.info.foodPerHead) : 0)}`;
         stackSpans(miniParts, occupations.map((o) => o.read(s)));
       },
@@ -468,7 +484,7 @@ export class InfoBar {
           const job = occupations[i]!.missingTip;
           rows[i]!.track.title =
             job === undefined ? "" : `Hachuré : ${num(missing[i]!)} personnes manquent pour travailler 100 % des ${job}, avec la mécanisation actuelle.`;
-          rows[i]!.value.textContent = `${num(n)} · ${share(n, sum)}`;
+          rows[i]!.value.textContent = i === hurtRow ? num(n) : `${num(n)} · ${share(n, sum - counts[hurtRow]!)}`;
         });
       },
     };
@@ -484,7 +500,8 @@ export class InfoBar {
     const miniNow = el("i", "cap-now");
     const miniFood = el("i", "cap-food");
     const miniLand = el("i", "cap-land");
-    miniCap.append(miniLand, miniFood, miniNow);
+    const miniHurt = el("i", "cap-hurt");
+    miniCap.append(miniLand, miniFood, miniNow, miniHurt);
     const button = this.button("food", [el("span", "ib-name", "Nourriture"), total, el("span", "muted", "/tour"), surplus], miniCap);
     button.title = "Production / tour · surplus";
 
@@ -494,10 +511,12 @@ export class InfoBar {
     const capNow = el("i", "cap-now");
     const capFood = el("i", "cap-food");
     const capLand = el("i", "cap-land");
-    capRoot.append(capLand, capFood, capNow);
+    // Les blessés (noir) à gauche, puis le reste de la population (vert) : ils occupent des places du maximum (00-Game §4.2).
+    const capHurt = el("i", "cap-hurt");
+    capRoot.append(capLand, capFood, capNow, capHurt);
     const capValue = el("span", "ib-value");
-    capValue.title = "Actuelle / nourrie / potentielle";
-    capRoot.title = "Vert : actuelle · hachuré : nourrie · gris : potentielle (toutes cases exploitées)";
+    capValue.title = "Actuelle (+ blessés) / nourrie / potentielle";
+    capRoot.title = "Noir : blessés · vert : actuelle · hachuré : nourrie · gris : potentielle (toutes cases exploitées)";
     // Production maximale (toute la surface travaillée) : hachures sous le remplissage.
     const wheat = track("flow");
     wheat.root.classList.add("wheat");
@@ -570,7 +589,8 @@ export class InfoBar {
         const maxNow = this.info.foodPerHead > 0 ? Math.floor(s.food / perHead) : 0;
         const maxLand = Math.max(maxNow, Math.floor(s.foodPotential / perHead));
         const scale = Math.max(maxLand, s.population, 1);
-        span(miniNow, 0, pct(s.population, scale));
+        span(miniHurt, 0, pct(s.hurt, scale));
+        span(miniNow, pct(s.hurt, scale), pct(s.population, scale));
         span(miniFood, 0, pct(maxNow, scale));
         span(miniLand, 0, pct(maxLand, scale));
       },
@@ -579,10 +599,11 @@ export class InfoBar {
         const maxNow = Math.floor(s.food / perHead);
         const maxLand = Math.max(maxNow, Math.floor(s.foodPotential / perHead));
         const scale = Math.max(maxLand, s.population, 1);
-        span(capNow, 0, pct(s.population, scale));
+        span(capHurt, 0, pct(s.hurt, scale));
+        span(capNow, pct(s.hurt, scale), pct(s.population, scale));
         span(capFood, 0, pct(maxNow, scale));
         span(capLand, 0, pct(maxLand, scale));
-        capValue.textContent = `${num(s.population)} / ${num(maxNow)} / ${num(maxLand)}`;
+        capValue.textContent = `${num(s.population - s.hurt)}${s.hurt > 0 ? ` + ${num(s.hurt)}` : ""} / ${num(maxNow)} / ${num(maxLand)}`;
         // Même échelle pour le blé et le poisson : la plus grande production, atteinte ou possible.
         const foodScale = Math.max(s.wheat, s.fish, s.wheatMax, s.fishMax, 1);
         span(wheat.fill, 0, pct(s.wheat, foodScale));

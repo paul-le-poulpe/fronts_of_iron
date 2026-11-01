@@ -6,7 +6,7 @@ import { FRONTS } from "./config.ts";
 import { countSoldiers } from "./divisions.ts";
 import { stepEconomy } from "./economy.ts";
 import { applyIntent, type Intent } from "./intents.ts";
-import { applyArrivals, arrangeAll, reinforceAfterEconomy, reinforceBeforeEconomy, removeDestroyed, trimAll } from "./placement.ts";
+import { applyArrivals, arrangeAll, reinforceAfterEconomy, reinforceBeforeEconomy, trimAll } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 export interface Turn {
@@ -45,7 +45,6 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   reinforceAfterEconomy(state);
   applyArrivals(state);
   trimAll(state);
-  removeDestroyed(state);
   countSoldiers(state);
   arrangeAll(state);
   if (turn.turn % FRONTS.combatTurns === 0) combatRound(state, changed);

@@ -327,10 +327,13 @@ export interface PlayerStats {
   /** Armement dans les divisions du joueur, par type d'armement dans l'ordre de `FactoryCatalog.armamentIds` (05-Fronts §4.5, §11.6). */
   readonly divisionEquipment: readonly number[];
   readonly population: number;
+  /** Population entière, blessés compris (ils mangent et occupent des places de maximum). Le total affiché est `population − hurt`. */
   readonly farmers: number;
   readonly fishers: number;
   readonly idle: number;
   readonly food: number;
+  /** Blessés (00-Game §4.2). */
+  readonly hurt: number;
   readonly wheat: number;
   readonly fish: number;
   readonly cultivated: number;

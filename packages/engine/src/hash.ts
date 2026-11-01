@@ -118,6 +118,7 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.ironExtracted);
     h = mixWord(h, p.forcedMobilization ? 1 : 0);
     h = mixWord(h, p.soldiers);
+    h = mixWord(h, p.hurt);
     h = mixWord(h, p.defeated ? 1 : 0);
     h = mixWord(h, p.goods.length);
     for (const n of p.goods) h = mixWord(h, n);

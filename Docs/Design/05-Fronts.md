@@ -57,7 +57,9 @@ la perte exacte est `p / q` en entiers. La partie entière `floor(p / q)` est
 toujours perdue ; pour le reste `r = p mod q`, un exemplaire de plus est perdu
 si `nextInt(state.rng, q) < r`. On ne tire que si `r > 0`, dans un ordre fixé :
 fronts par identifiant, divisions par identifiant, composants dans l'ordre de
-`components`. La perte est bornée à ce que le composant a.
+`components`. La perte est bornée à ce que le composant a. **Les hommes ainsi
+perdus s'ajoutent aux blessés du joueur** (00-Game §4.2, `applyLoss`) ; l'équipement
+perdu disparaît.
 
 ## 2. Détection des fronts
 
@@ -223,7 +225,10 @@ Exemple : fusils 80, mitrailleuses 20 → tous les fusils sans mitrailleuse :
 80 % ; la moitié de chaque : 50 %. L'état sert surtout à informer le joueur
 (barre du pion, §11.3), et aux règles d'échange et de fuite (§5.3, §5.4). Une
 division à **0 %** est **détruite** (*provisoire* : ce qui lui reste, sur des
-composants de poids 0, est perdu).
+composants de poids 0, est perdu), **mais seulement quand elle subit des pertes au
+combat ou à l'encerclement** : une division ne peut être détruite que par le combat ou
+manuellement par le joueur (§3.5). Une division à 0 % vidée autrement (§3.5, fondation
+d'une ville) reste et se reconstitue par le renfort (§4.3).
 
 ### 3.4 Attributs d'un type de division
 
@@ -368,7 +373,17 @@ bon : élites (nommées « forces spéciales » dans le client, décision de l'a
   la formation). Ses hommes retournent à la population et son équipement au
   stock, **sans délai**.
 - **Les hommes d'une division ne retournent jamais d'eux-mêmes à l'économie**
-  (sauf l'excédent, §3.2) : il faut supprimer la division.
+  (sauf l'excédent, §3.2) : il faut supprimer la division. Les hommes **tués** ne
+  retournent pas aux inactifs : ils deviennent des blessés (00-Game §4.2).
+- **Fondation d'une ville** (00-Game §3.3) : si les non-soldats non blessés ne
+  suffisent pas à payer le coût, le manque est retiré aux divisions du joueur, le
+  même ratio `manque / soldats` de leurs hommes à chacune (`removeSoldiers`) :
+  chaque division perd `floor(manque × hommes / soldats)`, puis les hommes restants
+  vont un par un aux plus grands restes, à égalité à la division qui vient la
+  première dans `state.divisions`. Les composants qui dépassent le nouveau taux de
+  soldats retournent au stock (§3.2) ; **une division vidée n'est pas détruite** : elle
+  reste à 0 % et se reconstitue par le renfort (§4.3). Ces hommes ne deviennent pas
+  blessés.
 
 ## 4. Affectation : réserve, fronts, lignes
 
@@ -418,7 +433,7 @@ place.
 - **Le matériel du stock national est partagé à parts égales entre toutes les
   divisions du pays qui en ont besoin, quel que soit leur état** (pas de
   priorité en V1). Les hommes viennent des inactifs, ou, en **mobilisation
-  forcée**, avant les emplois (00-Game §4).
+  forcée**, avant les emplois (00-Game §4). Jamais des blessés (00-Game §4.2).
 - **Pas de renfort pour une division de première ligne pendant un combat**
   (au moins une attaque en cours sur son front). **Sans combat**, toutes les
   divisions se renforcent, première ligne comprise. Une bonne seconde ligne
@@ -1245,7 +1260,7 @@ toutes les boîtes, rangées par niche non vides et pourcentages ; titre
 - **Liste des fronts** (barre d'informations, cinquième bouton) : fronts
   actifs, puis en paix ; un clic ouvre la fenêtre du front.
 - **Onglet Population** : les soldats (hommes des divisions) gardent leur
-  place, avant les inactifs. Interrupteur **« MOBILISATION FORCÉE »** : rouge,
+  place, avant les inactifs ; les blessés (00-Game §4.2) sont en dernier. Interrupteur **« MOBILISATION FORCÉE »** : rouge,
   éteint par défaut ; il sert à remplir les divisions (§4.3).
 - **Barre de stock de chaque armement** : la portion jaune foncé montre
   l'équipement des divisions.
@@ -1389,7 +1404,7 @@ interface Breakthrough {          // breakthroughs.ts
 }
 // GameState : divisions (par id croissant), nextDivisionId, fronts, nextFrontId,
 // boxes, nextBoxId, breakthroughs, nextBreakthroughId ;
-// Player : forcedMobilization, soldiers (hommes des divisions, recomptés par countSoldiers).
+// Player : forcedMobilization, soldiers (hommes des divisions, recomptés par countSoldiers), hurt (blessés, 00-Game §4.2).
 ```
 
 - **Échelles** : état d'une division sur 10 000 (`STATE_SCALE`), largeurs en
@@ -1409,7 +1424,7 @@ interface Breakthrough {          // breakthroughs.ts
 ### 13.2 Ordre dans un tour (*provisoire*)
 
 Ordres ; économie (00-Game §4 : répartition sur `population − hommes des
-divisions`) ; renfort (§4.3) ; fins de formation et arrivées ; excédents
+divisions − blessés`) ; renfort (§4.3) ; fins de formation et arrivées ; excédents
 (§3.2) ; rangement des lignes (§4.2) ; si `tick % combatTurns = 0`, le round de
 combat de chaque front actif (§6, §7) ; prises de villes et encerclement (§10).
 
