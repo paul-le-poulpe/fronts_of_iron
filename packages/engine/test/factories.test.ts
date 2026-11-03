@@ -74,7 +74,7 @@ describe("remplissage des lignes (00-Game §4, §7, §8)", () => {
     const miners = Math.ceil(1000 / MINING.mechanizationBase); // 1 fer = 1 case = 1 000 millièmes, sans pompe
     assert.equal(minersFor(1, 0), miners);
     assert.deepEqual([filled(s, 1, "rifle"), p.factoryWorkers, p.miners, p.ironExtracted, p.minedTiles], [1, W, miners, 1, ironTilesFor(1)]);
-    assert.equal(p.armamentReserve[0], ARMAMENT.types.rifle.productionPerLine);
+    assert.equal(p.armamentReserve[0], ARMAMENT.types.rifle.productionPerSecond);
     assert.equal(p.farmers + p.fishers + p.idle + p.factoryWorkers + p.miners + p.soldiers, pop, "toute la population est affectée");
     // Seul le reste de la population est réparti entre fermiers, pêcheurs et inactifs.
     assert.equal(p.farmers + p.fishers + p.idle, pop - W - miners);
@@ -162,9 +162,9 @@ describe("déblocage et réserve d'armement (00-Game §8.2, §8.3)", () => {
     const p = s.players[0]!;
     assert.ok(line(s, 1, "rifle"));
     // Une usine naît avec une ligne de fusils, plus celle créée ici : deux lignes.
-    const perTick = 2 * ARMAMENT.types.rifle.productionPerLine;
+    const perTick = 2 * ARMAMENT.types.rifle.productionPerSecond;
     const max = armamentReserveMax(p, "rifle");
-    assert.equal(max, perTick * ARMAMENT.maxStockTurns);
+    assert.equal(max, perTick * ARMAMENT.maxStockSeconds);
     // À la réserve maximale : les lignes produisent encore.
     p.armamentReserve[0] = max;
     stepEconomy(s);

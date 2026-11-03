@@ -612,10 +612,12 @@ Un blessé ne revient jamais à un autre état.
   ou par encerclement (05-Fronts §6, §7, §10). Les hommes qui quittent une
   division autrement (suppression, excédent rendu, §3.2 de 05-Fronts) restent des
   inactifs. L'équipement perdu disparaît.
-- **Guérison** : à chaque tour, `max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor))`
+- **Guérison** : une fois par seconde (`POPULATION.hurtEveryTurns` tours),
+  `max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor))`
   blessés disparaissent (au plus tous). `hurtDivisor` est un dénominateur entier de
   la configuration, jamais une fraction ; `hurtMinimum` est un nombre d'hommes par
-  tour. Le plancher `hurtMinimum` évite qu'une population presque entièrement
+  seconde. Avec `hurtDivisor` = 5 000, 10 % de la population guérit en 500 s
+  (auteur, 3 novembre 2026). Le plancher `hurtMinimum` évite qu'une population presque entièrement
   blessée, donc sans main-d'œuvre pour produire de la nourriture, ne puisse plus
   repartir : quand la population est petite, la deuxième règle l'emporte, et quand
   elle est grande, c'est la première. Ils quittent aussi la population ; la
@@ -1111,15 +1113,21 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   attribué à une armée sort de la réserve. Quand toutes les armées sont
   entièrement équipées, l'armement produit s'accumule dans la réserve.
 - **La production ne s'arrête jamais** (correction de l'auteur, 24 octobre
-  2026) : une ligne active et remplie produit à chaque tour, et ce qu'elle
-  produit entre dans la réserve. Il n'y a pas de ligne suspendue.
-- **Stock cible** : `ARMAMENT.maxStockTurns` tours de production (une seule
-  valeur pour tous les types). Exemple de l'auteur : avec 1 char par tour et
-  100 tours, le stock cible est de 100 chars, en plus de ceux des armées.
+  2026) : une ligne active et remplie produit, et ce qu'elle produit entre dans
+  la réserve. Il n'y a pas de ligne suspendue.
+- **Cadence** (auteur, 3 novembre 2026) : la production d'armement est comptée
+  par seconde (`ARMAMENT[a].productionPerSecond`) et ajoutée à la réserve une
+  fois par seconde (`ARMAMENT.everyTurns` tours). Le remplissage des lignes,
+  les ouvriers et le fer restent calculés à chaque tour. Une ligne équipe une
+  division complète en 25 à 40 s (fusil 33/s, mitrailleuse et canons 3/s,
+  artillerie et tankette 2/s, chars de 40 exemplaires 1/s). Les biens (§8)
+  restent un flux produit à chaque tour.
+- **Stock cible** : `ARMAMENT.maxStockSeconds` secondes de production (une seule
+  valeur pour tous les types, 10).
 
   ```
-  stock_cible[a] = nombre de lignes de a × ARMAMENT[a].productionPerLine
-                   × ARMAMENT.maxStockTurns
+  stock_cible[a] = nombre de lignes de a × ARMAMENT[a].productionPerSecond
+                   × ARMAMENT.maxStockSeconds
   ```
 
   Calculé sur toutes les lignes de ce type (la limite théorique décidée plus
@@ -1236,8 +1244,9 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
-| `POPULATION.hurtDivisor` | dénominateur de la guérison des blessés (§4.2) ; 2 400, valeur donnée par l'auteur |
-| `POPULATION.hurtMinimum` | plancher de la guérison des blessés, en hommes par tour (§4.2) ; 5 (50 par seconde à 100 ms par tour), valeur donnée par l'auteur |
+| `POPULATION.hurtEveryTurns` | intervalle de la guérison des blessés, en tours (§4.2) ; 10 (une seconde) |
+| `POPULATION.hurtDivisor` | dénominateur de la guérison des blessés, par seconde (§4.2) ; 5 000, valeur donnée par l'auteur |
+| `POPULATION.hurtMinimum` | plancher de la guérison des blessés, en hommes par seconde (§4.2) ; 5, valeur donnée par l'auteur |
 | `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) ; 1 500, valeur donnée par l'auteur |
 | `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
 | `TEST_MAP.mountainAltitude` | altitude à partir de laquelle une case est une montagne : fertilité 0, fer plus fréquent (§2) |
@@ -1250,8 +1259,9 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
-| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerLine`, `workersPerLine`, icône (§8.3) |
-| `ARMAMENT.maxStockTurns` | nombre de tours de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 100 évoqué par l'auteur, non fixé. Un tour dure 100 ms : 100 tours = 10 s de production |
+| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerSecond` (par seconde, pas par tour), `workersPerLine`, icône (§8.3) |
+| `ARMAMENT.everyTurns` | intervalle de la production d'armement, en tours (§8.3) ; 10 (une seconde) |
+| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 10 |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `DIPLOMACY.proposalTurns` | durée de vie d'une proposition de pacte ou de paix, en tours (§1) ; **à fixer** : 300 en attendant (valeur provisoire, pas donnée par l'auteur) |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |

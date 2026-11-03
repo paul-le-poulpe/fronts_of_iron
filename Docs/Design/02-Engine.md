@@ -556,13 +556,14 @@ poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux, seaTiles, floor(sea
 inactifs = reste − fermiers − pêcheurs
 nourriture = max(blé + poisson, FOOD.minimum)
 
-3. production : pour chaque groupe, quantité = filled × productionPerLine
-     un bien s'ajoute à goods[b] (remis à 0 avant : c'est la production de ce tour) ;
-     un armement s'ajoute à armamentReserve[a] ; la production ne s'arrête jamais
+3. production : pour chaque groupe,
+     un bien : goods[b] += filled × productionPerLine (remis à 0 avant : c'est la production de ce tour) ;
+     un armement, seulement aux tours multiples de ARMAMENT.everyTurns (une seconde) :
+       armamentReserve[a] += filled × productionPerSecond ; la production ne s'arrête jamais
    progression : pour chaque usine et chaque nœud de son arbre, n = somme des filled
      des groupes de ce bien : progress = min(unlockTurns, progress + n)
    déclin de l'excès, pour chaque type d'armement :
-     stock_cible = lignes de a (toutes les usines, tout état) × productionPerLine × maxStockTurns
+     stock_cible = lignes de a (toutes les usines, tout état) × productionPerSecond × maxStockSeconds
      excès = max(0, réserve + équipement des divisions − stock_cible)     (05-Fronts §4.5 : `divisionEquipment`, réserve nationale comprise)
      si excès == 0 : reste = 0
      sinon : total = reste + excès × decayRate ; perdu = floor(total / S)
@@ -579,7 +580,8 @@ si population < 0 : population = 0 et reste = 0
      famine : base = avant − soldiers ; si blessés > 0 et base > 0 :
               blessés −= min(blessés, ceil(blessés × perdu / base))
      plafond : blessés = min(blessés, max(0, population − soldiers))
-     guérison : si blessés > 0 : g = min(blessés, max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor)))
+     guérison, aux tours multiples de POPULATION.hurtEveryTurns (une seconde) :
+                si blessés > 0 : g = min(blessés, max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor)))
                 blessés −= g ; population −= g
 ```
 
@@ -1066,7 +1068,7 @@ points 31 et 32 sont des choix de plus.
     l'excès par tour) ; `ironPerLine` 1, sauf artillerie 10, tracteur 5, bateau de pêche 3
     (valeurs de l'auteur). `FACTORY.unlockTurns` 500,
     `FACTORY.maxTypesPerCity` 1 sont des valeurs
-    de l'auteur ; `ARMAMENT.maxStockTurns` 100 est celle qu'il a évoquée.
+    de l'auteur ; `ARMAMENT.maxStockSeconds` 10.
 
 33. **Diplomatie** (00-Game §1 donne le tableau des statuts et des actions ; le reste
     est provisoire, à valider avec l'auteur) :

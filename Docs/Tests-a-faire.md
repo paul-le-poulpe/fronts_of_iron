@@ -162,7 +162,7 @@ Règles : 05-Fronts §10.3, §11.6. Code : `packages/engine/src/conquest.ts`
   un tour (500 fusils manquants, 100 manquants, +50 chacune) ; avec `reinforcePercentPerRound` = 5, un composant de
   1 000 ne gagne que 50 par round, et rien aux tours qui ne sont pas multiples de `combatTurns` (les tests qui
   appellent `reinforceAfterEconomy` à `tick` 0 ne reçoivent rien : mettre `tick` à 9). À recalculer.
-- À ajouter : une division à 0 % pleine après 20 rounds ; plafond minimum de 1 exemplaire ; la part non prise reste au stock.
+- À ajouter : une division à 0 % pleine après 34 rounds (`reinforcePercentPerRound` 3 depuis le 3 novembre) ; plafond minimum de 1 exemplaire ; la part non prise reste au stock.
 
 ## Échange hors combat (1er novembre 2026)
 
@@ -262,3 +262,16 @@ Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste
 - `combat.test.ts` : le test « l'appui-feu perd les pertes de l'infanterie × sa part engagée × son lossMultiplier » (ancienne règle des pertes dérivées, §6.3) est à réécrire avec la nouvelle formule.
 - Mouvement motorisé (provisoire) : une boîte de percée contenant seulement des divisions motorisées, appui-feu blindé compris, perce à vitesse motorisée.
 - Artillerie à pied : `productionPerLine` passé de 2 à 1 ; plafond du stock d'armement recalculé en conséquence.
+
+## Cadences à la seconde : guérison, armement, renfort (3 novembre 2026)
+
+- **Guérison** : `healHurt` n'est appelée qu'aux tours multiples de `POPULATION.hurtEveryTurns` (10), économie gelée comprise ;
+  `hurtDivisor` 5 000, `hurtMinimum` 5 par seconde. Les tests de guérison qui jouent un seul tour à `tick` 0 ne guérissent
+  plus rien : mettre `tick` à 9.
+- **Armement** : ajouté à la réserve seulement aux tours multiples de `ARMAMENT.everyTurns` (10), `filled ×
+  productionPerSecond` ; fer et ouvriers employés à chaque tour. `factories.test.ts` l. 77 (réserve après un tour =
+  `productionPerSecond`) est faux tel quel. Stock cible = lignes × `productionPerSecond` × `maxStockSeconds` (10).
+- **Biens** : toujours produits à chaque tour (`GOODS.*.productionPerLine`), rien ne change.
+- **Renfort** : `reinforcePercentPerRound` 3 ; une division à 0 % pleine après 34 rounds (et non 20).
+- **Client, à vérifier à la main** : onglet Armement « +X par seconde », infobulle d'une ligne d'armement « produits par
+  seconde », « approprié pour » = ⌊ lignes × productionPerSecond × 10 ÷ exemplaires ⌋.

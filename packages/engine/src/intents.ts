@@ -232,6 +232,8 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
   if (state.players[player - 1]!.defeated) return false;
   switch (fields["type"]) {
     case "found_city":
+      // Économie gelée : pas de fondation de ville (01-Architecture §9 bis).
+      if (state.economyFrozen) return false;
       return applyFoundCity(state, player, fields["tile"], changed);
     case "set_farm_share":
       return applySetFarmShare(state, player, fields["percent"]);

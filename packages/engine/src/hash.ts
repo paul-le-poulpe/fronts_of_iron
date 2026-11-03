@@ -89,6 +89,8 @@ export function hashState(state: GameState): number {
   h = mixWord(h, r[1]!);
   h = mixWord(h, r[2]!);
   h = mixWord(h, r[3]!);
+  // Seulement pour une partie de test : le hash d'une partie normale ne change pas.
+  if (state.economyFrozen) h = mixWord(h, 1);
   h = mixWord(h, state.players.length);
   for (const p of state.players) {
     h = mixWord(h, p.id);

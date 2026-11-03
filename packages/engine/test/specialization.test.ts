@@ -11,6 +11,7 @@ import {
   createGame,
   FACTORY,
   GOOD_IDS,
+  GOODS,
   minersFor,
   PRODUCT_IDS,
   productConfig,
@@ -113,7 +114,7 @@ describe("croissance automatique proportionnelle à la production (00-Game §8.2
     p.population = 1_000_000;
     stepEconomy(s);
     // La carte donne une demande de quelques centaines de bateaux : la capacité des lignes reste dessous.
-    const capacity = (lines + 1) * productConfig("fishingBoat").productionPerLine;
+    const capacity = (lines + 1) * GOODS.fishingBoat.productionPerLine;
     assert.ok(p.goodsDemand[FISHING_BOAT]! > capacity, `demande ${p.goodsDemand[FISHING_BOAT]}`);
     g.growth = 0;
     return { s, p, g };

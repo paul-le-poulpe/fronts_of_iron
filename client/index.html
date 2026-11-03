@@ -237,6 +237,12 @@
             <input id="seed" type="number" min="0" max="4294967295" step="1" value="12345" required />
           </label>
           <button id="play" type="submit">Jouer</button>
+          <button id="play-test" type="button" hidden title="Deux joueurs, villes et divisions déjà en place, économie gelée (développement seulement).">Partie de test</button>
+          <div id="test-choices" hidden>
+            <button type="button" data-scenario="infantry">Infanterie seule</button>
+            <button type="button" data-scenario="support">Infanterie et support</button>
+            <button type="button" data-scenario="full">Complet</button>
+          </div>
           <button id="solo-back" type="button">Retour à l'accueil</button>
           <p id="start-note" class="muted">
             La partie tourne entièrement dans cette page : aucun serveur, aucun lobby. Les règles du jeu sont

@@ -57,7 +57,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
-| `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
+| `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
+| `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, statistiques de combat et totaux des premières lignes, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
 | `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable`. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
 | `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la cinquième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
@@ -137,6 +138,17 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | « Thème : clair / sombre » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
 
 Les quatre boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
+
+### Partie de test
+
+Bouton « Partie de test » de l'écran de départ du solo (`#play-test`), affiché seulement si `import.meta.env.DEV` est
+vrai (donc absent de `npm run build`). Il montre trois boutons de scénario (`#test-choices`) : « Infanterie seule »,
+« Infanterie et support », « Complet » (clés de `TEST_SCENARIOS`) ; la réserve nationale a 10 divisions de chaque type
+dans les trois. Le choix envoie `start` avec `testGame: <scénario>` et un seul bot (le bot de `bots.ts`,
+inchangé, qui ne déplace pas ses divisions) ; la graine de la carte est celle du formulaire. `SoloOptions.testGame` →
+`GameOptions.testGame` → `Game` : `createGame` avec `freezeEconomy`, puis `setupTestGame`. Le bot reste actif mais ses
+ordres `found_city` sont refusés (économie gelée). Les deux joueurs sont en paix : pour combattre, déclarer la guerre
+par le menu de diplomatie. Les villes existent avant le premier tour, alors que `Game.applyTurn` n'envoie villes, zones et routes que quand leur nombre change : le premier tour d'une partie de test les envoie (`initialSent`), sinon la carte reste vide. Le moteur est décrit dans `01-Architecture.md` §9 bis.
 
 ## 4. Messages
 
@@ -497,7 +509,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
     la section seulement), puis sur la première ligne, pour les lignes remplies
     au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),
-    icône du fer, →, production totale (lignes remplies × `productionPerLine`),
+    icône du fer, →, production totale (lignes remplies × `productionPerLine` du
+    catalogue : par tour pour un bien, par seconde pour un type d'armement),
     icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
     ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
     groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
@@ -506,7 +519,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     remplie, `workersPerLine`) ; pour un type
     d'armement, « approprié pour : » le nombre de divisions de référence que
     le stock cible de **cette ligne** équipe, en gras, et l'icône de la division :
-    `⌊ lignes × productionPerLine × stockTurns ÷ exemplaires par division ⌋`,
+    `⌊ lignes × productionPerLine × stockSeconds ÷ exemplaires par division ⌋`,
     la formule du stock cible de l'onglet « Armement » (00-Game §8.3) appliquée
     aux lignes construites du groupe. Division de référence
     (`FactoryCatalog.equipUnit`, calculée dans `game.ts`) : les réguliers s'ils
@@ -778,7 +791,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
   mécanisation totale, l'échelle et la zone hachurée de l'armement, la production
-  d'armement par tour (lignes remplies × `productionPerLine` du catalogue). Lu tel
+  d'armement par seconde (lignes remplies × `productionPerLine` du catalogue, qui
+  vaut `productionPerSecond` pour l'armement). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
 - **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste
@@ -803,7 +817,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   d'une liaison = somme des `breakthroughWidth`, pions sélectionnables, zone `bx<id>`), à droite la première ligne adverse (couverture du front,
   pions avec leur panneau de survol) ; elle reste mesurable (`visibility`, pas `display`) et disparaît pendant un glisser. Une boîte contient les
   divisions de `line` « box » et `box` égale, sans `breakthrough` : la force qui perce est dans la percée en cours. Dépose sur une boîte :
-  `move_division { ids, front, line: "box", box }`. **Boîtes** : le bouton « Lancer » est à gauche et la motorisation à droite (la vue étendue a un en-tête de 156 px calé sur celui de la boîte : le bouton ne bouge pas à l'ouverture) ; une boîte neuve est insérée dans la liste **avant** le dessin de ses pions (`renderCompact` lit `clientWidth`, nul pour un élément détaché : elle resterait vide jusqu'au tour suivant). **Flèches de l'attaque sur tout le front** : deux colonnes `.fw-gut` (`gutter()`), contre la barre, avec une flèche `.fw-arrow` par rangée de première ligne, allumée (`on`) selon `FrontSideView.frontAttack` de chaque camp. Interrupteur « Sélection avancée » : `.fw-switch` (piste et pastille, CSS seul). **Percées en cours** (`.fw-bts`, sous le bandeau, masqué sans percée) : un petit tableau par percée de `FrontView.breakthroughs`, des deux camps :
+  `move_division { ids, front, line: "box", box }`. **Boîtes** : le bouton « Lancer » est à gauche et la motorisation à droite (la vue étendue a un en-tête de 156 px calé sur celui de la boîte : le bouton ne bouge pas à l'ouverture) ; une boîte neuve est insérée dans la liste **avant** le dessin de ses pions (`renderCompact` lit `clientWidth`, nul pour un élément détaché : elle resterait vide jusqu'au tour suivant). **Statistiques de combat** : deux colonnes `.fw-gut` de 62 px (`gutter()`), contre la barre, avec par rangée de première ligne trois lignes `.fw-st` (attaque anti-infanterie, anti-armure, PV ; la ligne des PV est masquée, `off`, pour les niches d'appui-feu) ; trois totaux `.fw-tot` (icône, nombre, barre de 5 px) sous le titre de chaque première ligne (`totals()`), échelle commune aux deux camps ; calcul dans `frontstats.ts` à chaque `draw`. Les titres de colonnes font tous `--fw-lab-h` (74 px). `capFirstLine()` plafonne la première ligne du joueur à ce que le côté adverse peut porter (`--fw-first-max`, plancher 200 px : la seconde ligne rétrécit), et la zone `.fw-main` défile horizontalement (`.hscroll`) si le côté adverse déborde encore. Interrupteur « Sélection avancée » : `.fw-switch` (piste et pastille, CSS seul). **Percées en cours** (`.fw-bts`, sous le bandeau, masqué sans percée) : un petit tableau par percée de `FrontView.breakthroughs`, des deux camps :
   « Percée n » (ou « Percée de X »), croix sur les nôtres (`cancel_breakthrough`), une rangée par niche engagée avec le nombre de divisions et
   l'état moyen de ce qui perce (`DivisionView.breakthrough` = id, `owner` de la percée) et de la défense, un texte par phase (`PHASE_TEXT`, sept phases : cinq délais décomptés en secondes à
   chaque tour depuis `BreakthroughView.until`, deux combats), « Avancée de x% sur ce front » (`BreakthroughView.advance` en millièmes de route, divisé

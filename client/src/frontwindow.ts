@@ -2,6 +2,7 @@
 // boutons d'attaque, fermeture et retour), forces de percée et réaction rapide du joueur, capsule du joueur (seconde
 // ligne, première ligne), barre verticale, capsule de l'adversaire (première ligne de la même largeur, seconde ligne
 // comprimée), sa réaction rapide et ses boîtes de percée comprimées, zone des avions réservée.
+// Entre chaque première ligne et la barre : ses statistiques de combat par rangée, et ses totaux sous son titre (frontstats.ts).
 // Les deux camps sont visibles (pas de brouillard de guerre). La page n'applique aucune règle : elle affiche ce que
 // le moteur envoie (`FrontView`, `DivisionView`) et envoie des ordres (`move_division`, `start_front_attack`, ...).
 // Réaction rapide et boîtes de percée (05-Fronts §4.6, §11.4) : des divisions de `line` « rapid » et « box ».
@@ -14,6 +15,7 @@ import { countTag } from "./counttag.ts";
 import { coveragePercent, divisionsAt, opponentOf, statePercent, typeOf } from "./divisions.ts";
 import { Dnd, type DndHost, type ZoneView } from "./dnd.ts";
 import { attachPawnPanels, attachTextPanel, frontWidthIcon, hidePanel, motorIcon, textPanel } from "./infopanels.ts";
+import { STAT_KINDS, firstLineStats, formatStat, type FirstLineStats, type StatKind } from "./frontstats.ts";
 import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
@@ -40,6 +42,44 @@ interface Column {
   readonly rows: RowRefs[];
   /** Pertes du dernier round, à droite du titre (première ligne seulement). */
   readonly loss: HTMLElement | null;
+  /** Totaux de la première ligne sous le titre : un nombre et une barre par statistique (`STAT_KINDS`). */
+  readonly totals: Totals | null;
+}
+
+interface Totals {
+  readonly nums: HTMLElement[];
+  readonly fills: HTMLElement[];
+}
+
+/** Colonne de statistiques d'une première ligne : par niche, une ligne par statistique (`lines`) et son nombre (`values`). */
+interface Gutter {
+  readonly root: HTMLElement;
+  readonly lines: HTMLElement[][];
+  readonly values: HTMLElement[][];
+}
+
+/** Icône (16 × 16 px, sous `public/icons/miscellaneous/`) et texte de survol de chaque statistique de combat. */
+const STAT_ICON: Readonly<Record<StatKind, string>> = {
+  soft: "icons/miscellaneous/icon-soft-attack.png",
+  hard: "icons/miscellaneous/icon-hard-attack.png",
+  hp: "icons/miscellaneous/icon-health.png",
+};
+const STAT_TITLE: Readonly<Record<StatKind, string>> = {
+  soft: "Attaque anti-infanterie",
+  hard: "Attaque anti-armure",
+  hp: "Points de vie (niches principales)",
+};
+
+/** Largeur minimale de la première ligne du joueur (px) : en dessous, la fenêtre défile horizontalement. */
+const FIRST_MIN = 200;
+
+/** Une icône de statistique. */
+function statIcon(kind: StatKind): HTMLImageElement {
+  const img = el("img", "fw-st-icon");
+  img.src = STAT_ICON[kind];
+  img.alt = "";
+  img.draggable = false;
+  return img;
 }
 
 /** Une boîte de percée du joueur : sa carte dans la liste, et sa vue étendue (rangées par niche), construites une fois. */
@@ -127,8 +167,10 @@ export class FrontWindow implements DndHost {
     readonly t2: Column;
     readonly rapidT: Column;
   };
-  private readonly arrowsOurs: readonly HTMLElement[];
-  private readonly arrowsTheirs: readonly HTMLElement[];
+  private readonly gutOurs: Gutter;
+  private readonly gutTheirs: Gutter;
+  private readonly mainEl: HTMLElement;
+  private readonly theirsSide: HTMLElement;
   private readonly pierceCol: HTMLElement;
   private readonly pierceList: HTMLElement;
   private readonly plus: HTMLElement;
@@ -210,8 +252,11 @@ export class FrontWindow implements DndHost {
     const rapid = this.column("Réaction rapide", false, false);
     rapid.col.classList.add("fw-rapid");
     const o2 = this.column("Seconde ligne", false, false);
-    const o1 = this.column("Première ligne", true, false);
-    const t1 = this.column("Première ligne", true, false);
+    const o1 = this.column("Première ligne", true, false, "ours");
+    // La seconde ligne du joueur absorbe le manque de place : la première garde au moins `FIRST_MIN` et au plus ce que le côté adverse peut porter.
+    o2.col.classList.add("fw-second");
+    o1.col.classList.add("fw-first");
+    const t1 = this.column("Première ligne", true, false, "theirs");
     const t2 = this.column("Seconde ligne", false, true);
     const rapidT = this.column("Réaction rapide", false, true);
     this.columns = { o2, o1, rapid, t1, t2, rapidT };
@@ -219,19 +264,19 @@ export class FrontWindow implements DndHost {
     capsuleOurs.append(o2.col, o1.col);
     const capsuleTheirs = el("div", "fw-capsule");
     capsuleTheirs.append(t1.col, t2.col);
-    // Flèches de l'attaque sur tout le front : une par rangée de première ligne, entre la capsule et la barre, pointe contre la barre.
-    const gutOurs = this.gutter(false);
-    const gutTheirs = this.gutter(true);
-    this.arrowsOurs = gutOurs.arrows;
-    this.arrowsTheirs = gutTheirs.arrows;
-    ours.append(pierce, rapid.col, capsuleOurs, gutOurs.root);
+    // Statistiques de combat des rangées de première ligne, entre la capsule et la barre (frontstats.ts).
+    this.gutOurs = this.gutter(false);
+    this.gutTheirs = this.gutter(true);
+    this.theirsSide = theirs;
+    ours.append(pierce, rapid.col, capsuleOurs, this.gutOurs.root);
     // Boîtes de percée de l'adversaire : comprimées ; au survol de la colonne, un cadre vers la gauche avec toutes les boîtes.
     this.pierceT = el("div", "fw-col comp fw-pierce-c");
     this.pierceTList = el("div", "fw-plist");
     this.pierceTPop = el("div", "fw-cpop");
     this.pierceT.append(el("div", "fw-lab", "Percée"), this.pierceTList, this.pierceTPop);
-    theirs.append(gutTheirs.root, capsuleTheirs, rapidT.col, this.pierceT);
+    theirs.append(this.gutTheirs.root, capsuleTheirs, rapidT.col, this.pierceT);
     main.append(ours, theirs);
+    this.mainEl = main;
 
     const air = el("div", "fw-air", "ZONE DES AVIONS (RÉSERVÉE)");
     // Percées en cours (§11.4) : sous le bandeau, masqué quand il n'y en a pas.
@@ -452,37 +497,79 @@ export class FrontWindow implements DndHost {
   // ---- construction ----
 
   /**
-   * Colonne de flèches à côté d'une première ligne : même structure que `column` (une marge de la hauteur du titre, cinq
-   * rangées de même hauteur), donc une flèche par rangée, alignée sur elle. `left` : côté adverse, flèches vers la gauche.
+   * Colonne de statistiques à côté d'une première ligne : même structure que `column` (une marge de la hauteur du titre,
+   * cinq rangées de même hauteur), donc les trois statistiques d'une niche sont alignées sur sa rangée. Du côté du joueur
+   * (`left` faux) : icône puis nombre, alignés à gauche contre la capsule ; côté adverse, le miroir (nombre puis icône,
+   * alignés à droite contre la capsule).
    */
-  private gutter(left: boolean): { readonly root: HTMLElement; readonly arrows: HTMLElement[] } {
+  private gutter(left: boolean): Gutter {
     const root = el("div", `fw-gut${left ? " l" : ""}`);
     const rows = el("div", "fw-rows");
-    const arrows: HTMLElement[] = [];
+    const lines: HTMLElement[][] = [];
+    const values: HTMLElement[][] = [];
     for (let i = 0; i < this.military.niches.length; i++) {
       const cell = el("div", "fw-gcell");
-      const a = arrow(left);
-      arrows.push(a);
-      cell.append(a);
+      const stack = el("div", "fw-gstack");
+      const nicheLines: HTMLElement[] = [];
+      const nicheValues: HTMLElement[] = [];
+      for (const kind of STAT_KINDS) {
+        const line = el("div", `fw-st ${kind}`);
+        line.title = STAT_TITLE[kind];
+        const value = el("span", undefined, "0");
+        line.append(statIcon(kind), value);
+        stack.append(line);
+        nicheLines.push(line);
+        nicheValues.push(value);
+      }
+      lines.push(nicheLines);
+      values.push(nicheValues);
+      cell.append(stack);
       rows.append(cell);
     }
     root.append(el("div", "fw-lab"), rows);
-    return { root, arrows };
+    return { root, lines, values };
+  }
+
+  /** Les trois totaux d'une première ligne, sous son titre : icône, nombre, barre (`side` : du joueur ou de l'adversaire). */
+  private totals(side: "ours" | "theirs"): { readonly root: HTMLElement; readonly totals: Totals } {
+    const root = el("div", `fw-tots ${side}`);
+    const nums: HTMLElement[] = [];
+    const fills: HTMLElement[] = [];
+    for (const kind of STAT_KINDS) {
+      const line = el("div", `fw-tot ${kind}`);
+      line.title = STAT_TITLE[kind];
+      const num = el("span", "fw-tot-num", "0");
+      const track = el("span", "fw-tot-track");
+      const fill = el("span", "fw-tot-fill");
+      track.append(fill);
+      line.append(statIcon(kind), num, track);
+      root.append(line);
+      nums.push(num);
+      fills.push(fill);
+    }
+    return { root, totals: { nums, fills } };
   }
 
   /**
    * Une colonne de cinq rangées, une par niche. `coverage` : première ligne, avec le pourcentage de couverture (et, avec un
-   * titre, les pertes du dernier round à droite du titre) ; `compressed` : zone comprimée.
+   * titre, les pertes du dernier round à droite du titre) ; `compressed` : zone comprimée. `side` : première ligne d'un
+   * camp avec titre, qui porte les totaux de ses statistiques sous le titre.
    */
-  private column(label: string | null, coverage: boolean, compressed: boolean): Column {
+  private column(label: string | null, coverage: boolean, compressed: boolean, side?: "ours" | "theirs"): Column {
     const col = el("div", `fw-col${compressed ? " comp" : ""}`);
     let loss: HTMLElement | null = null;
+    let totals: Totals | null = null;
     if (label !== null) {
       const lab = el("div", "fw-lab");
       lab.append(el("span", undefined, label));
       if (coverage) {
         loss = el("span", "fw-loss");
         lab.append(loss);
+      }
+      if (side !== undefined) {
+        const t = this.totals(side);
+        totals = t.totals;
+        lab.append(t.root);
       }
       col.append(lab);
     }
@@ -508,7 +595,7 @@ export class FrontWindow implements DndHost {
       box.append(row);
     }
     col.append(box);
-    return { col, rows, loss };
+    return { col, rows, loss, totals };
   }
 
   // ---- dessin ----
@@ -547,22 +634,29 @@ export class FrontWindow implements DndHost {
     this.attackButton.disabled = !front.active;
     this.attackButton.setAttribute("aria-pressed", String(attacking));
     this.attackButton.title = front.active ? "Interrupteur : un clic lance l'attaque, un second l'arrête." : "Seulement sur un front actif.";
-    for (const a of this.arrowsOurs) a.classList.toggle("on", front.active && attacking);
-    for (const a of this.arrowsTheirs) a.classList.toggle("on", front.active && front.sides[1 - me]!.frontAttack);
     // Hommes perdus par chaque première ligne au dernier round de combat (une seconde).
     const loss = (n: number): string => `Pertes : ${n.toLocaleString("fr-FR")} hommes / tour`;
     this.columns.o1.loss!.textContent = loss(front.sides[me]!.lastLoss);
     this.columns.t1.loss!.textContent = loss(front.sides[1 - me]!.lastLoss);
 
     // La première ligne adverse a la largeur de celle du joueur (§11.4) ; le reste de son côté est comprimé.
+    this.capFirstLine();
     const lineWidth = this.columns.o1.col.getBoundingClientRect().width;
     if (lineWidth > 0) {
       this.columns.t1.col.style.flex = "none";
       this.columns.t1.col.style.width = `${lineWidth}px`;
     }
+    // Le côté adverse ne tient pas dans sa part de la fenêtre (fenêtre étroite) : la zone des deux côtés défile horizontalement.
+    this.mainEl.classList.toggle("hscroll", this.theirsSide.scrollWidth - this.theirsSide.clientWidth > 1);
 
     const mine = divisionsAt(this.divisions, front.id, player);
     const theirs = divisionsAt(this.divisions, front.id, other);
+
+    // Statistiques de combat des premières lignes (05-Fronts §11.4) : les attaques portent le multiplicateur d'attaque d'un camp qui attaque sur tout le front.
+    const mineStats = firstLineStats(m, mine, front.active && front.sides[me]!.frontAttack);
+    const theirStats = firstLineStats(m, theirs, front.active && front.sides[1 - me]!.frontAttack);
+    this.drawStats(this.gutOurs, this.columns.o1.totals!, mineStats, theirStats);
+    this.drawStats(this.gutTheirs, this.columns.t1.totals!, theirStats, mineStats);
 
     // Cibles de dépose : les deux lignes du joueur.
     this.columns.o2.col.dataset.drop = `line:${front.id}:second`;
@@ -589,6 +683,45 @@ export class FrontWindow implements DndHost {
     this.drawBoxes(front, mine, theirs, player, nicheOf);
     this.drawStrip(front);
     this.drawTheirBoxes(front, theirs, other, nicheOf);
+  }
+
+  /**
+   * Plafonne la première ligne du joueur à ce que le côté adverse peut porter : la première ligne adverse a sa largeur, et
+   * le reste de ce côté (statistiques, seconde ligne et colonnes comprimées, espaces) est fixe. Jamais en dessous de
+   * `FIRST_MIN` : c'est alors la seconde ligne du joueur qui rétrécit, puis la fenêtre qui défile.
+   */
+  private capFirstLine(): void {
+    const side = this.theirsSide;
+    const style = getComputedStyle(side);
+    const kids = [...side.children] as HTMLElement[];
+    let used = (parseFloat(style.columnGap) || 0) * (kids.length - 1);
+    for (const k of kids) {
+      const s = getComputedStyle(k);
+      used += k.offsetWidth + (parseFloat(s.marginLeft) || 0) + (parseFloat(s.marginRight) || 0);
+    }
+    const room = side.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+    const first = this.columns.t1.col.offsetWidth;
+    const max = Math.floor(room - (used - first));
+    this.win.style.setProperty("--fw-first-max", `${Math.max(FIRST_MIN, max)}px`);
+  }
+
+  /** Remplit la colonne de statistiques et les totaux d'une première ligne ; les barres ont une échelle commune aux deux camps. */
+  private drawStats(gut: Gutter, tots: Totals, own: FirstLineStats, other: FirstLineStats): void {
+    this.military.niches.forEach((niche, i) => {
+      STAT_KINDS.forEach((kind, k) => {
+        gut.values[i]![k]!.textContent = formatStat(own.rows[i]![kind]);
+      });
+      // Les niches d'appui-feu n'ont pas de PV affichés : la ligne garde sa place, les attaques restent à la même hauteur.
+      gut.lines[i]![2]!.classList.toggle("off", niche.support);
+    });
+    // Les deux attaques ont la même échelle : la plus grande des quatre valeurs (deux attaques, deux camps) remplit la barre. Les PV ont la leur.
+    const attackMax = Math.max(own.total.soft, own.total.hard, other.total.soft, other.total.hard);
+    STAT_KINDS.forEach((kind, k) => {
+      const v = own.total[kind];
+      const max = kind === "hp" ? Math.max(v, other.total.hp) : attackMax;
+      tots.nums[k]!.textContent = formatStat(v);
+      tots.fills[k]!.style.width = max > 0 ? `${(100 * v) / max}%` : "0";
+    });
   }
 
   /** Couverture d'une liaison par une niche d'une boîte : somme des `breakthroughWidth` (en liaisons), sans plafond : deux infanteries de largeur de percée 1 sur une liaison font 200 % (§11.4). */

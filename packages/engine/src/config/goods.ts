@@ -1,10 +1,11 @@
 // Biens (00-Game §5, §8, §12) : des machines, un flux consommé dans le tour
 // suivant. L'ordre des clés de GOODS est l'ordre des cases de `Player.goods`.
 
-/** Réglages communs à un bien ou à un type d'armement (00-Game §8, §8.3). */
+/**
+ * Réglages communs à un bien ou à un type d'armement (00-Game §8, §8.3). La production est propre à chacun : par tour
+ * pour un bien (`GoodConfig`), par seconde pour l'armement (`ArmamentConfig`, armament.ts).
+ */
 export interface ProductConfig {
-  /** Quantité produite par tour par une ligne remplie. */
-  readonly productionPerLine: number;
   /** Ouvriers employés par une ligne remplie : 200 pour commencer (4 × 50, décision de l'auteur, 24 octobre 2026), quel que soit le bien (00-Game §8, §13). */
   readonly workersPerLine: number;
   /** Fer consommé par tour par une ligne remplie : 1 par défaut ; tracteur 5, bateau de pêche 3, artillerie 10 (00-Game §8). */
@@ -13,6 +14,12 @@ export interface ProductConfig {
   readonly icon?: string;
   /** Description affichée au survol de l'icône (vue des usines ; page des fronts pour une unité sans description propre, `config/units.ts`). Sans effet sur la simulation. */
   readonly description?: string;
+}
+
+/** Un bien : un flux, produit à chaque tour. */
+export interface GoodConfig extends ProductConfig {
+  /** Quantité produite par tour par une ligne remplie. */
+  readonly productionPerLine: number;
 }
 
 /**
@@ -50,6 +57,6 @@ export const GOODS = {
     productionPerLine: 10, workersPerLine: 200, ironPerLine: 1,
     icon: "goods/goods-mining-pump.png",
   },
-} as const satisfies Record<string, ProductConfig>;
+} as const satisfies Record<string, GoodConfig>;
 
 export type GoodId = keyof typeof GOODS;

@@ -28,6 +28,10 @@
   --t-blue: #8cbdff;
   --t-recruit-bg: #2d4262;
   --t-res-ink: #181a1e;
+  /* Statistiques de combat d'une première ligne : attaque anti-infanterie, anti-armure, PV (couleur de l'icône). */
+  --t-soft: #f2a24a;
+  --t-hard: #6aa0ff;
+  --t-hp: #ff7a8c;
   color: var(--t-fg);
 }
 html[data-theme="light"] .themed,
@@ -56,6 +60,9 @@ html[data-theme="light"] .ip {
   --t-blue: #5c9ef8;
   --t-recruit-bg: #dbeaff;
   --t-res-ink: #b3b9c5;
+  --t-soft: #d9740f;
+  --t-hard: #2563c9;
+  --t-hp: #c42b43;
 }
 
 /* Couleur de fond d'une niche, et de ses lettres (plus sombres que le fond ; encore plus en première ligne). */
@@ -85,6 +92,8 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
   box-shadow: 0 8px 28px #0006;
   overflow: hidden;
   font-size: 13px;
+  /* Hauteur des titres de colonnes, la même partout (les rangées restent alignées) : titre (20 px) puis les trois totaux de la première ligne (3 × 16 px). */
+  --fw-lab-h: 74px;
 }
 .fw-head { flex: none; height: 44px; display: flex; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
 .fw-hl { flex: 0 0 62%; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
@@ -128,15 +137,36 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-close { width: 28px; padding: 4px 0; }
 
 .fw-main { flex: 1; min-height: 0; display: flex; }
+/* Côté adverse trop large pour sa part de la fenêtre (frontwindow.ts, `capFirstLine`) : défilement horizontal. */
+.fw-main.hscroll { overflow-x: auto; overflow-y: hidden; }
+/* Première ligne du joueur : au moins 200 px et au plus ce que le côté adverse porte (`--fw-first-max`) ; la seconde ligne prend le reste. */
+.fw-col.fw-first { min-width: 200px; max-width: var(--fw-first-max, none); }
+.fw-col.fw-second { min-width: 100px; }
 .fw-side { display: flex; gap: 10px; padding: 8px; min-width: 0; min-height: 0; }
 .fw-side.ours { flex: 0 0 62%; padding-right: 0; }
 .fw-side.theirs { flex: 1; border-left: 3px solid var(--t-muted); padding-left: 0; }
-/* Colonne de flèches contre la barre : même structure qu'une colonne (marge de titre, cinq rangées), calée sur la capsule
-   (bordure 1 px + marge 6 px). La pointe touche la barre. */
-.fw-gut { flex: none; width: 28px; margin-left: -4px; padding: 7px 0; box-sizing: border-box; display: flex; flex-direction: column; }
-.fw-gut.l { margin-left: 0; margin-right: -4px; }
-.fw-gcell { flex: 1 1 0; min-height: 54px; display: flex; align-items: center; justify-content: flex-end; }
-.fw-gut.l .fw-gcell { justify-content: flex-start; }
+/* Colonne de statistiques contre la barre : même structure qu'une colonne (marge de titre, cinq rangées), calée sur la capsule
+   (bordure 1 px + marge 6 px). Du côté du joueur, icône puis nombre alignés à gauche ; côté adverse, le miroir, alignés à droite. */
+.fw-gut { flex: none; width: 62px; padding: 7px 0; box-sizing: border-box; display: flex; flex-direction: column; }
+.fw-gcell { flex: 1 1 0; min-height: 54px; display: flex; align-items: center; justify-content: flex-start; }
+.fw-gut.l .fw-gcell { justify-content: flex-end; }
+.fw-gstack { display: flex; flex-direction: column; }
+.fw-gut.l .fw-gstack { align-items: flex-end; }
+.fw-st { --st-c: var(--t-soft); display: flex; align-items: center; gap: 4px; height: 16px; font-size: 13px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--st-c); cursor: help; }
+.fw-gut.l .fw-st { flex-direction: row-reverse; }
+.fw-st.hard, .fw-tot.hard { --st-c: var(--t-hard); }
+.fw-st.hp, .fw-tot.hp { --st-c: var(--t-hp); }
+.fw-st.off { visibility: hidden; }
+.fw-st-icon { flex: none; width: 16px; height: 16px; image-rendering: pixelated; display: block; }
+/* Totaux sous le titre d'une première ligne : trois lignes de 16 px, icônes collées, barre fine (5 px) centrée sur l'icône. */
+.fw-tots { position: absolute; top: 23px; left: 0; right: 0; display: flex; flex-direction: column; }
+.fw-tot { --st-c: var(--t-soft); display: flex; align-items: center; gap: 4px; height: 16px; cursor: help; }
+.fw-tots.theirs .fw-tot { flex-direction: row-reverse; }
+.fw-tot-num { flex: none; width: 34px; font-size: 12px; line-height: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--st-c); }
+.fw-tots.theirs .fw-tot-num { text-align: right; }
+.fw-tot-track { flex: 1; min-width: 0; height: 5px; display: flex; border-radius: 2px; background: color-mix(in srgb, var(--st-c) 18%, transparent); }
+.fw-tots.ours .fw-tot-track { justify-content: flex-end; }
+.fw-tot-fill { display: block; height: 100%; border-radius: 2px; background: var(--st-c); }
 /* Colonnes de la V2 (forces de percée, réaction rapide), vides en V1. Forces de percée : la liste des boîtes, la boîte « + »,
    puis, pendant un glisser, la zone de retour. */
 .fw-col.fw-pierce { flex: none; width: 170px; gap: 6px; }
@@ -164,7 +194,7 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-col.comp { flex: none; width: 76px; }
 /* Titre d'une colonne, en haut à gauche ; à droite, en première ligne, les pertes du dernier round (rouge). Même hauteur
    dans toutes les colonnes : les rangées restent alignées. Colonnes comprimées de l'adversaire : plus petit, pour tenir. */
-.fw-lab { flex: none; height: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 18px; color: var(--t-muted); white-space: nowrap; }
+.fw-lab { position: relative; flex: none; height: var(--fw-lab-h); display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 18px; color: var(--t-muted); white-space: nowrap; }
 .fw-col.comp > .fw-lab { font-size: 11px; }
 .fw-loss { color: var(--t-red); font-weight: 600; font-size: 12px; }
 .fw-rows { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -249,11 +279,11 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-cdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--t-muted); }
 .fw-cpop {
   position: absolute;
-  top: 20px;
+  top: var(--fw-lab-h);
   right: 0;
   z-index: 40;
   width: 330px;
-  max-height: calc(100% - 20px);
+  max-height: calc(100% - var(--fw-lab-h));
   overflow-y: auto;
   box-sizing: border-box;
   padding: 6px;

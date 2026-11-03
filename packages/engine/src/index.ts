@@ -16,6 +16,9 @@ export {
   POPULATION,
   RESOURCES,
   SEA_ZONES,
+  TEST_GAME,
+  TEST_SCENARIOS,
+  type TestScenarioId,
   TEST_MAP,
   type ArmamentId,
   type FactoryNode,
@@ -204,4 +207,5 @@ export {
   type SetLinePriorityIntent,
 } from "./intents.ts";
 export { applyTurn, type Turn } from "./turn.ts";
+export { setupTestGame, type TestGameSummary } from "./testgame.ts";
 export { hashMap, hashState } from "./hash.ts";

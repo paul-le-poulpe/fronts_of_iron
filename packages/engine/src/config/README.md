@@ -25,6 +25,7 @@ typecheck`, puis `npm test` (certains tests comparent des résultats chiffrés).
 | --- | --- | --- |
 | `map.ts` | taille, relief et niveau de la mer de la carte de test ; `mountainAltitude` (altitude d'une montagne) | `mapgen.ts` ; `mountainAltitude` aussi par `resources.ts` |
 | `sea-zones.ts` | découpage des mers en zones | `seazones.ts` |
+| `testgame.ts` | composition et taille de la partie de test (outil de développement) | `testgame.ts` |
 | `cities.ts` | rayons d'expansion et de contrôle, coût de fondation | `cities.ts`, `client/src/bots.ts`, `client/src/solo.ts` |
 | `workforce.ts` | population de départ, nourriture, fertilité, mécanisation de l'agriculture, de la pêche et de l'extraction | `economy.ts`, `cities.ts`, `mapgen.ts`, `client/src/bots.ts`, `client/src/solo.ts` |
 | `resources.ts` | présence du fer et de l'aluminium sur la carte (`threshold` : plus haut = plus rare ; `mountainBonus` : plus haut = plus en montagne), capacité d'extraction d'une case de fer. Régler avec `npm run viz:resources` | `map.ts`, `mapgen.ts`, `resources.ts`, `economy.ts` |
@@ -49,10 +50,10 @@ résultat faux ou une division par zéro, pas un message.
   `mechanizationMax` ≥ `mechanizationBase`, `maxMachinesPer1000` ≥ 1,
   `curveExponent` entier ≥ 1. `FISHING.tileYieldMax` ≥ `FISHING.tileYield`.
 - **`workforce.ts`, `POPULATION.hurtDivisor`** : entier ≥ 1, dénominateur de la
-  guérison des blessés (00-Game §4.2). 2 400, valeur de l'auteur.
+  guérison des blessés, appliquée une fois par seconde (`hurtEveryTurns`,
+  00-Game §4.2). 5 000, valeur de l'auteur.
 - **`workforce.ts`, `POPULATION.hurtMinimum`** : entier ≥ 1, plancher de la
-  guérison des blessés, en hommes par tour (00-Game §4.2). 5, soit 50 par
-  seconde à 100 ms par tour, valeur de l'auteur.
+  guérison des blessés, en hommes par seconde (00-Game §4.2). 5, valeur de l'auteur.
 - **`cities.ts`** : `EXPANSION_RADIUS` est la seule valeur à modifier ;
   `controlRadius` en est la moitié, calculée. Garder `EXPANSION_RADIUS` pair.
 - **`factories.ts`, `specialization`** : `decayPercent + floorPercent` < 100.
@@ -115,7 +116,7 @@ d'usine et les icônes de la population n'ont pas encore de champ `icon`.
 Aucune ligne de code à écrire.
 
 1. `armament.ts` : ajouter une entrée à `types`, à la fin, avec
-   `productionPerLine`, `workersPerLine`, `ironPerLine`.
+   `productionPerSecond` (par seconde), `workersPerLine`, `ironPerLine` (par tour).
 2. `factories.ts` : ajouter un nœud `{ good: "<nom>", parent: "<parent>" }` à
    l'arbre d'un type d'usine, après son parent. Sans nœud, aucune usine ne peut
    en produire.

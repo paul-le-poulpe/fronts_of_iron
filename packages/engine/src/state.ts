@@ -198,6 +198,11 @@ export interface GameState {
    * l'ignore calcule le même état (02-Engine §4, §6).
    */
   readonly events: DiplomacyEvent[];
+  /**
+   * Économie gelée (partie de test, 01-Architecture §9 bis) : `applyTurn` saute la croissance de la population, la nourriture,
+   * la production des usines et la fondation de villes. Fixé à la création par `GameSetup.freezeEconomy`, jamais changé.
+   */
+  readonly economyFrozen: boolean;
   /** Numéro du dernier tour appliqué ; 0 avant le premier. */
   tick: number;
   /** 1 sur les cases déjà listées comme modifiées pendant le tour en cours. */
@@ -210,6 +215,8 @@ export interface GameSetup {
   readonly map: GameMap;
   /** Les joueurs reçoivent les identifiants 1 à playerCount. */
   readonly playerCount: number;
+  /** Gèle l'économie pendant toute la partie (outil de développement : `GameState.economyFrozen`). Absent : non. */
+  readonly freezeEconomy?: boolean;
 }
 
 /** Lève une erreur si la configuration est invalide : elle vient du serveur, pas d'un joueur. */
@@ -285,6 +292,7 @@ export function createGame(setup: GameSetup): GameState {
     diplomacy: new Uint8Array(playerCount * playerCount),
     proposals: [],
     events: [],
+    economyFrozen: setup.freezeEconomy === true,
     tick: 0,
     changedMark: new Uint8Array(size),
   };

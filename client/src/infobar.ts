@@ -21,7 +21,7 @@
 // changent rien ici : elles appellent le rappel `onMapOption`.
 //
 // Chaque nombre a une infobulle (`title`) qui nomme ses valeurs dans l'ordre où
-// elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par tour ».
+// elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par seconde ».
 
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
@@ -408,7 +408,7 @@ export class InfoBar {
         icon: "pop-hurt",
         color: "var(--occ-hurt)",
         read: (s: PlayerStats) => s.hurt,
-        tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque tour, un petit nombre disparaît.",
+        tip: "Hommes blessés au combat. Ils mangent et occupent des places de population maximale, mais ne travaillent pas et ne peuvent pas être recrutés. Chaque seconde, un petit nombre disparaît.",
       },
     ];
     const hurtRow = occupations.length - 1;
@@ -728,7 +728,7 @@ export class InfoBar {
       const t = track("stock");
       t.mark.hidden = false;
       const value = el("span", "ib-value");
-      value.title = "Stock / cible · par tour · sur les fronts";
+      value.title = "Stock / cible · par seconde · sur les fronts";
       // 32 px : les chars n'ont pas d'icône 16 px (icons.ts, `ICONS_32`).
       const label = el("span", "ib-iconlabel");
       label.append(productIcon(id, 32), ` ${capitalize(productName(id))}`);
@@ -778,7 +778,7 @@ export class InfoBar {
           if (x.r.hidden) continue;
           shown++;
           stockSpans(x.t, stock, target, onFronts);
-          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par tour · ${num(onFronts)} sur les fronts`;
+          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par seconde · ${num(onFronts)} sur les fronts`;
         }
         empty.hidden = shown > 0;
         decay.textContent = `${num(this.info.armamentDecayPercent)} % de l'excès disparaît par tour`;
@@ -804,7 +804,7 @@ export class InfoBar {
     };
   }
 
-  /** Production d'un type d'armement au dernier tour : lignes remplies × production par ligne. */
+  /** Production d'un type d'armement par seconde : lignes remplies × production par ligne et par seconde. */
   private production(d: HumanDetail, id: string, catalog: FactoryCatalog): number {
     let filled = 0;
     for (const f of d.factories) for (const g of f.groups) if (g.good === id) filled += g.filled;

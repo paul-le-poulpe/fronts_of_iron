@@ -45,6 +45,9 @@ const startScreen = $("start");
 const gameScreen = $("game");
 const startForm = $<HTMLFormElement>("start-form");
 const playButton = $<HTMLButtonElement>("play");
+const testButton = $<HTMLButtonElement>("play-test");
+// Partie de test : outil de développement, absent d'une version compilée pour le déploiement (03-Client §3).
+testButton.hidden = !import.meta.env.DEV;
 
 /** Outil de développement : `?step=20` donne un tour toutes les 20 ms (le jeu réel : 100). */
 function stepFromUrl(): number | undefined {
@@ -65,6 +68,23 @@ startForm.addEventListener("submit", (e) => {
   playButton.textContent = "Génération de la carte…";
   startGame(seed, bots);
 });
+
+// Le bouton « Partie de test » montre ou cache le choix du scénario ; un clic sur un scénario lance la partie.
+const testChoices = $("test-choices");
+testButton.addEventListener("click", () => {
+  testChoices.hidden = !testChoices.hidden;
+});
+for (const choice of testChoices.querySelectorAll<HTMLButtonElement>("button[data-scenario]")) {
+  choice.addEventListener("click", () => {
+    const seedRaw = Math.trunc(Number($<HTMLInputElement>("seed").value));
+    const seed = Number.isFinite(seedRaw) ? Math.min(0xffffffff, Math.max(0, seedRaw)) : 12345;
+    playButton.disabled = true;
+    testButton.disabled = true;
+    testChoices.hidden = true;
+    testButton.textContent = "Génération de la carte…";
+    startGame(seed, 1, choice.dataset["scenario"]);
+  });
+}
 
 // ---- partie en cours ----
 
@@ -157,10 +177,10 @@ function failBeforeGame(s: Session, text: string): void {
   showHome(text, true);
 }
 
-function startGame(mapSeed: number, bots: number): void {
+function startGame(mapSeed: number, bots: number, testGame?: string): void {
   const s = openSession(false);
   const step = stepFromUrl();
-  s.worker.postMessage({ type: "start", mapSeed, bots, ...(step !== undefined ? { stepMs: step } : {}) } satisfies ToWorker);
+  s.worker.postMessage({ type: "start", mapSeed, bots, ...(step !== undefined ? { stepMs: step } : {}), ...(testGame !== undefined ? { testGame } : {}) } satisfies ToWorker);
 }
 
 /** Partie en ligne lancée par le relais : le Worker ouvre son propre WebSocket et rejoue la partie depuis le message de départ. */
@@ -205,6 +225,8 @@ function onInit(s: Session, init: InitMessage): void {
   gameScreen.hidden = false;
   playButton.disabled = false;
   playButton.textContent = "Jouer";
+  testButton.disabled = false;
+  testButton.textContent = "Partie de test";
   // Barre de debug : solo seulement (en ligne l'état ne change que par les tours, règle 3). Pause : l'hôte seulement en ligne.
   $("debug-bar").hidden = s.online;
   $("pause").hidden = !s.host;
@@ -519,6 +541,8 @@ function endSession(): void {
   startScreen.hidden = false;
   playButton.disabled = false;
   playButton.textContent = "Jouer";
+  testButton.disabled = false;
+  testButton.textContent = "Partie de test";
 }
 
 $("quit").addEventListener("click", () => {

@@ -9,6 +9,7 @@ import {
   applyTurn as applyEngineTurn,
   ARMAMENT,
   ARMAMENT_IDS,
+  armamentIndex,
   armamentReserveMax,
   CITY,
   createGame,
@@ -28,7 +29,11 @@ import {
   FRONTS,
   foundingCost,
   generateTestMap,
+  setupTestGame,
+  TEST_SCENARIOS,
+  type TestScenarioId,
   GOOD_IDS,
+  GOODS,
   inFormation,
   LINE_BOX,
   LINE_FIRST,
@@ -91,6 +96,8 @@ export interface GameOptions {
   readonly you: number;
   /** Durée d'un tour en ms, envoyée à la page pour son affichage seulement. */
   readonly stepMs: number;
+  /** Partie de test (solo, développement) : économie gelée et état de départ de `setupTestGame`, pour ce scénario de `TEST_SCENARIOS`. */
+  readonly testGame?: string;
 }
 
 /** Ce que `applyTurn` ajoute au message de la page, selon la source de tours. */
@@ -129,6 +136,12 @@ function equipUnits(): FactoryCatalog["equipUnit"] {
   return out;
 }
 
+/** Production d'une ligne remplie : par tour pour un bien, par seconde pour un type d'armement (00-Game §8, §8.3). */
+function productionOf(id: ProductId): number {
+  const a = armamentIndex(id);
+  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerSecond : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
+}
+
 /** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */
 export function factoryCatalog(): FactoryCatalog {
   return {
@@ -140,7 +153,7 @@ export function factoryCatalog(): FactoryCatalog {
     growthTurns: FACTORY.growthTurns,
     goodIds: GOOD_IDS,
     armamentIds: ARMAMENT_IDS,
-    productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).productionPerLine])),
+    productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productionOf(id)])),
     workersPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).workersPerLine])),
     workersFloor: Object.fromEntries(
       PRODUCT_IDS.map((id) => [id, Math.floor((productConfig(id).workersPerLine * FACTORY.specialization.floorPercent) / 100)]),
@@ -150,7 +163,7 @@ export function factoryCatalog(): FactoryCatalog {
       const icon = productConfig(id).icon;
       return icon === undefined ? [] : [[id, icon]];
     })),
-    stockTurns: ARMAMENT.maxStockTurns,
+    stockSeconds: ARMAMENT.maxStockSeconds,
     equipUnit: equipUnits(),
     economy: {
       foodPerHead: POPULATION.foodPerHead,
@@ -288,6 +301,8 @@ export class Game {
   private sentFronts = "";
   /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
   private sentDivisions = "";
+  /** Le premier tour a été envoyé (partie de test : il porte les villes de départ). */
+  private initialSent = false;
 
   private readonly options: GameOptions;
 
@@ -302,7 +317,12 @@ export class Game {
       seed: gameSeedFor(options.mapSeed),
       map,
       playerCount: options.players.length,
+      ...(options.testGame !== undefined ? { freezeEconomy: true } : {}),
     });
+    if (options.testGame !== undefined) {
+      if (!(options.testGame in TEST_SCENARIOS)) throw new Error(`scénario de test inconnu : ${options.testGame}`);
+      setupTestGame(this.state, options.testGame as TestScenarioId);
+    }
     this.sentTileCity = new Uint16Array(this.state.tileCity.length);
   }
 
@@ -351,6 +371,9 @@ export class Game {
     }
 
     const citiesBefore = state.cities.length;
+    // Partie de test : les villes existent avant le premier tour, qui doit donc les envoyer (villes, zones, routes, fronts).
+    const initial = this.options.testGame !== undefined && !this.initialSent;
+    this.initialSent = true;
     // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
     const linesBefore = human.length > 0 ? this.lineCounts() : null;
     // Les machines que l'étape va utiliser : les effectives (00-Game §12), remplacées par `applyTurn`.
@@ -374,7 +397,7 @@ export class Game {
     let tiles: Uint32Array;
     let cities: Uint32Array | null = null;
     let roads: Uint16Array | null = null;
-    if (full || state.cities.length !== citiesBefore || captured.length > 0) {
+    if (full || initial || state.cities.length !== citiesBefore || captured.length > 0) {
       const list: number[] = [];
       const now = state.tileCity;
       const sent = this.sentTileCity;
@@ -427,7 +450,7 @@ export class Game {
 
     // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
     let fronts: FrontView[] | null = null;
-    if (full || state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
+    if (full || initial || state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
       const views = state.fronts.map((f) => frontView(state, f));
       const key = JSON.stringify(views);
       if (full || key !== this.sentFronts) {
@@ -568,7 +591,7 @@ export class Game {
     const useful = (good: string, lines: number, active: number): number => {
       const b = GOOD_IDS.indexOf(good as (typeof GOOD_IDS)[number]);
       if (b < 0) return lines;
-      const per = productConfig(good as (typeof GOOD_IDS)[number]).productionPerLine;
+      const per = GOODS[good as (typeof GOOD_IDS)[number]].productionPerLine;
       const n = Math.min(lines, Math.ceil(Math.max(0, p.goodsDemand[b]! - before[b]!) / per));
       before[b] = before[b]! + Math.min(active, n) * per;
       return n;
@@ -582,7 +605,7 @@ export class Game {
           const usefulLines = useful(g.good, g.lines, g.active);
           // Capacité du joueur pour ce bien : toutes ses lignes, toutes usines (00-Game §8.2).
           let capacity = 0;
-          for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productConfig(h.good).productionPerLine;
+          for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productionOf(h.good);
           return {
             good: g.good,
             lines: g.lines,

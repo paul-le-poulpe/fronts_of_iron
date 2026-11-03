@@ -702,6 +702,45 @@ Ordre prévu :
    encore d'essai à deux navigateurs par l'auteur. Le test du point 4.5 (mêmes
    tours par les deux enveloppes) attend `server/`.
 
+## 9 bis. Partie de test (outil de développement)
+
+Pas une règle du jeu : un moyen d'essayer le combat sans jouer toute l'économie. Deux pièces du moteur, toutes deux
+réglées par `packages/engine/src/config/testgame.ts` (valeurs **provisoires**).
+
+**Gel de l'économie.** `GameSetup.freezeEconomy` (absent : non) est copié dans `GameState.economyFrozen`, lu à chaque
+tour, jamais changé ; il entre dans le hash seulement quand il est vrai (le hash d'une partie normale est inchangé).
+Quand il est vrai, `applyTurn` :
+- saute, dans `stepEconomy`, tout `stepPlayer` : croissance de la population, nourriture, production des usines,
+  goods et déclin des stocks ;
+- ignore l'ordre `found_city` (fondation de villes) ;
+- garde actifs : les ordres autres que `found_city`, le renfort des divisions depuis les stocks (`idle` et réserves
+  d'armement, qui ne se reconstituent donc pas), l'arrivée, le rangement et l'échange des lignes, le combat, l'avancée,
+  la prise de ville, l'encerclement, et la guérison des blessés (`healHurt`, seule partie de l'étape économique conservée).
+Les champs de résultat du dernier tour des joueurs (`food`, `farmers`…) restent à 0.
+
+**État de départ.** `setupTestGame(state)` (`testgame.ts`) est appelée une fois, juste après `createGame` avec
+`freezeEconomy` ; elle lève une erreur si l'économie n'est pas gelée, s'il n'y a pas exactement deux joueurs ou si la
+partie n'est pas neuve. Elle ne fait aucune déclaration de guerre (les fronts existent, en paix). Étapes :
+1. **Villes.** Deux cases de terre de départ à `startDistance` cases l'une de l'autre sur la ligne médiane (la case de
+   terre la plus proche de chaque ancre). Chaque joueur ajoute à tour de rôle la case valide la plus proche de ses villes
+   (terre, hors de toute zone, dans le rayon d'expansion d'une de ses villes) jusqu'à `minCities` villes chacun et
+   `minConnections` routes entre les deux joueurs ; au-delà de `maxCities`, erreur. Fondées par `foundCity` directement,
+   avec la population nécessaire écrite avant chaque fondation.
+2. **Stocks.** Écriture directe de `idle` et des réserves d'armement : de quoi remplir, composants facultatifs compris,
+   les divisions à créer (voir 3), plus `reservePercent` % de réserve de renfort.
+3. **Divisions.** `setupTestGame(state, scenario)` prend un scénario de `TEST_SCENARIOS` : `infantry` (infanterie seule
+   sur le front), `support` (infanterie, antichar, artillerie, antiaérien) et `full` (avec des chars) ; la composition est
+   celle de chaque front et la même pour les deux joueurs. Dans tous les scénarios, la réserve nationale reçoit aussi
+   `reservePerType` (10) divisions de chaque type de `DIVISIONS` (les élites seulement jusqu'à ce que `ELITE_TROOPS_RATIO`
+   permet : 3). `create_division` puis `move_division` (première ligne jusqu'à la largeur du front pour chaque type, le
+   reste en seconde ligne ; la réserve ne bouge pas) par `applyIntent`, le chemin normal. Un ordre refusé ou une division absente lève une erreur.
+   Deux écritures directes, parce que la formation (`formedTick`) ferait refuser le déplacement et que le délai de
+   transfert (`arrivalTick`) retarderait les premiers tours : elles sont mises à 0.
+4. **Population** : `population = idle + soldats`, blessés 0.
+
+Tout est déterministe (règle 2) : pas de hasard, cases parcourues dans un ordre fixé. Le client l'appelle dans le
+constructeur de `Game` (`GameOptions.testGame`), jamais en ligne.
+
 ## 10. Pièges
 
 - Tout appel non déterministe dans `packages/engine` (règle 2) ne produit

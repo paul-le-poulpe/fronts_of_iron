@@ -44,6 +44,8 @@ export type ToWorker =
       readonly bots: number;
       /** Durée d'un tour en ms ; 100 par défaut. Outil de développement (paramètre `?step=` de l'adresse). */
       readonly stepMs?: number;
+      /** Partie de test (développement seulement) : scénario de `TEST_SCENARIOS` ; un bot, économie gelée, divisions déjà placées. */
+      readonly testGame?: string;
     }
   /**
    * Partie en ligne : le Worker ouvre lui-même le WebSocket (`url`, calculée par la page d'après l'adresse du
@@ -162,6 +164,7 @@ export interface FactoryCatalog {
   readonly goodIds: readonly string[];
   /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
   readonly armamentIds: readonly string[];
+  /** Production d'une ligne remplie : par tour pour un bien, par seconde pour un type d'armement (00-Game §8, §8.3). */
   readonly productionPerLine: Readonly<Record<string, number>>;
   /** Ouvriers de la première ligne d'un groupe, par bien ou type d'armement. */
   readonly workersPerLine: Readonly<Record<string, number>>;
@@ -171,8 +174,8 @@ export interface FactoryCatalog {
   readonly ironPerLine: Readonly<Record<string, number>>;
   /** Icône d'un bien ou d'un type d'armement (chemin sous `public/icons/`) ; absent : symbole texte. */
   readonly icons: Readonly<Record<string, string>>;
-  /** `ARMAMENT.maxStockTurns` : tours de production d'une ligne qui forment son stock cible (00-Game §8.3). */
-  readonly stockTurns: number;
+  /** `ARMAMENT.maxStockSeconds` : secondes de production d'une ligne qui forment son stock cible (00-Game §8.3). */
+  readonly stockSeconds: number;
   /**
    * Par type d'armement, la division de référence de l'indication « approprié pour » : les réguliers
    * quand ils l'utilisent, sinon la première division qui l'utilise. `count` : exemplaires dans une division complète.

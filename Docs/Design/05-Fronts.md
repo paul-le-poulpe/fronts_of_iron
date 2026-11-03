@@ -446,10 +446,10 @@ place.
   en manquent encore ; parties entières, une unité de plus aux divisions de
   plus petit identifiant pour le reste. Le renfort respecte « pas
   d'excédent » (§3.2).
-- **Progressif** (`FRONTS.reinforcePercentPerRound`, **5**) : le renfort n'a
+- **Progressif** (`FRONTS.reinforcePercentPerRound`, **3**) : le renfort n'a
   lieu qu'une fois par round de combat (tours multiples de `combatTurns`) ; un
-  composant ne regagne alors que 5 % de son effectif complet (au moins 1
-  exemplaire), hommes compris. Une division vide est pleine en 20 rounds (20 s). L'état
+  composant ne regagne alors que 3 % de son effectif complet (au moins 1
+  exemplaire), hommes compris. Une division vide est pleine en 34 rounds (34 s). L'état
   d'une division se déduit de ses exemplaires (§3.3) : il remonte donc de la
   même façon, sans second compteur. Ce qui n'est pas pris reste au stock.
 
@@ -1122,17 +1122,58 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
   percée **n'ont pas de couleur de niche**.
 - **Zone des avions** : en bas, sur toute la largeur, un cinquième de la
   hauteur, réservée et vide.
-- **Flèches de l'attaque sur tout le front** : quand un camp attaque sur tout
-  le front (§5.1) sur un front actif, une **flèche rouge clignotante** (cycle
-  de 1 s, `blink.ts`) apparaît à côté de **chaque rangée de sa première
-  ligne**, du côté de la barre, **pointe contre la barre** : à droite des
-  rangées du joueur (vers la droite), à gauche de celles de l'adversaire (vers
-  la gauche). Les deux camps peuvent en avoir ; une colonne de 28 px les porte.
+- **Statistiques de combat de la première ligne** : entre la capsule et la barre,
+  une **colonne de 62 px** de chaque côté porte, **pour chaque rangée de
+  première ligne**, trois lignes de 16 px : l'**attaque anti-infanterie**
+  (`softAttack`), l'**attaque anti-armure** (`hardAttack`) et les **PV**, chacune
+  avec son icône de 16 × 16 px (`icon-soft-attack`, `icon-hard-attack`,
+  `icon-health`, dossier `miscellaneous`) et son nombre, de la couleur de
+  l'icône (orange, bleu, rouge ; teintes plus foncées en thème clair). Côté du
+  joueur : icône puis nombre, alignés à gauche contre la capsule ; côté
+  adverse, le miroir (nombre puis icône, alignés à droite contre la capsule).
+  Nombres courts : exacts sous 1 000, puis `4,5k`, `135k`, `2,5M`. Rangée
+  vide : 0. Les **niches d'appui-feu** n'affichent **pas de PV** (la ligne
+  garde sa place, les deux attaques restent à la même hauteur que dans les
+  niches principales). Les flèches clignotantes de l'attaque sur tout le front
+  n'existent plus dans la fenêtre : le bouton « Attaque sur tout le front »
+  clignote (§5.1) ; la flèche des cartes de percée (ci-dessous) reste.
+  **Calcul** (page, `frontstats.ts`, formules du moteur) sur les divisions
+  **engagées en première ligne** (`line = first`, `engaged > 0`, pas en
+  déplacement) :
+  - attaques : ce qui tombe réellement (comme `attackOf`, §6.1) : pour chaque
+    composant, part engagée de la division (`engaged` / largeur de première
+    ligne) × attaque × taux de présence, en points. `attackMultiplier` du type
+    s'applique **si ce camp a lancé l'attaque sur tout le front** (front actif),
+    sinon l'attaque est celle par défaut (×1) ;
+  - PV : `hitPoints` du type × état de la division (`state` / échelle), sans
+    multiplicateur de PV en défense, **niches principales seulement**
+    (infanterie et chars).
+  Aucun champ n'est ajouté au message du Worker : `DivisionView` et le
+  catalogue de `init` suffisent.
+- **Totaux** : sous le titre de chaque première ligne (au-dessus des rangées),
+  trois lignes de 16 px, **icônes collées** : icône, nombre, **barre fine** (5 px)
+  centrée sur l'icône. Nombre = somme des rangées de la colonne : attaques de
+  **toutes** les niches, PV des **niches principales** seulement. Barres
+  **face à face** de part et d'autre de la barre centrale, à l'échelle
+  commune aux deux camps. Les deux attaques ont **la même échelle** : la plus
+  grande des quatre valeurs (anti-infanterie et anti-armure, des deux camps)
+  remplit la barre. Les PV ont leur échelle : la plus grande des deux
+  valeurs remplit la barre. Barres ancrées du côté de la barre centrale ; le
+  nombre est du côté extérieur.
 - Chaque colonne a un titre gris **en haut à gauche** (14 px ; « Seconde
   ligne », « Première ligne », « Réaction rapide », « Forces de percée » ;
   « Percée » pour la colonne comprimée de l'adversaire). Les colonnes
   comprimées de l'adversaire gardent un titre de 11 px, qui tient dans leur
-  largeur.
+  largeur. **Les titres de toutes les colonnes ont la même hauteur** (74 px :
+  titre de 20 px, puis place des trois totaux de la première ligne), pour que
+  les rangées restent alignées.
+- **Largeur de la première ligne** : la première ligne adverse a la largeur de
+  celle du joueur, et le reste du côté adverse a des largeurs fixes. La première
+  ligne du joueur fait donc au plus ce que le côté adverse peut porter (au moins
+  200 px) ; la **seconde ligne du joueur absorbe** le manque de place (au moins
+  100 px). Si le côté adverse déborde encore (fenêtre étroite, environ moins de
+  1 460 px), la zone des deux côtés **défile horizontalement**
+  (*provisoire* : à refaire plus tard).
 - **Pertes du dernier round** : en haut de chaque **première ligne** (du
   joueur et de l'adversaire), alignées à droite sur la ligne du titre, en
   rouge : « Pertes : x hommes / tour », `x` = les hommes perdus par les
@@ -1396,7 +1437,7 @@ la ligne survolée (*provisoire*) :
 | `fleeStatePercent` | 25 | état sous lequel (ou auquel) une division fuit |
 | `fleeRounds` | 10 | rounds avant qu'une division en fuite puisse revenir en première ligne |
 | `swapStatePercent` | 50 | une division de première ligne échange quand son état est sous ce % de celui d'une division de seconde ligne |
-| `reinforcePercentPerRound` | 5 | part de son effectif complet qu'un composant regagne par round de combat (§4.3) |
+| `reinforcePercentPerRound` | 3 | part de son effectif complet qu'un composant regagne par round de combat (§4.3) |
 | `capturePercent` | 1 | position du front, en % de la route depuis la ville prise |
 | `minEncirclementLengthPercent` | 25 | part de la route que le perdant doit tenir pour que la route soit encerclée |
 | `encirclementLossPercent` | 50 | pertes d'encerclement |

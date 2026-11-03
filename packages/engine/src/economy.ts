@@ -14,10 +14,12 @@ import {
   FARMING,
   FISHING,
   FOOD,
+  GOODS,
   GOODS_DECAY,
   MINING,
   POPULATION,
   RESOURCES,
+  type GoodId,
   type MechanizationConfig,
   type ProductId,
 } from "./config.ts";
@@ -250,7 +252,7 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
         miners = needed;
         iron = demand;
         g.filled++;
-        if (b >= 0) produced[b] = produced[b]! + productConfig(g.good).productionPerLine;
+        if (b >= 0) produced[b] = produced[b]! + GOODS[g.good as GoodId].productionPerLine;
       }
     }
   }
@@ -259,22 +261,22 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
 
 /**
  * Production des lignes remplies (00-Game §8, §8.3) : les biens vont dans
- * `p.goods` (les machines du tour suivant), l'armement dans les réserves ; puis
+ * `p.goods` (les machines du tour suivant), à chaque tour ; l'armement dans les
+ * réserves, seulement quand `second` est vrai (une fois par seconde) ; puis
  * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
  * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
  * `deployed` : équipement des divisions, par type d'armement ; il compte dans le
  * stock, mais le déclin ne retire que l'équipement hors des divisions
  * (05-Fronts §4.5).
  */
-function produce(p: Player, deployed: readonly number[]): void {
+function produce(p: Player, deployed: readonly number[], second: boolean): void {
   p.goods.fill(0);
   for (const f of p.factories) {
     for (const g of f.groups) {
       if (g.filled === 0) continue;
-      const quantity = g.filled * productConfig(g.good).productionPerLine;
       const a = armamentIndex(g.good);
-      if (a >= 0) p.armamentReserve[a] = p.armamentReserve[a]! + quantity;
-      else p.goods[goodIndex(g.good)] = p.goods[goodIndex(g.good)]! + quantity;
+      if (a < 0) p.goods[goodIndex(g.good)] = p.goods[goodIndex(g.good)]! + g.filled * GOODS[g.good as GoodId].productionPerLine;
+      else if (second) p.armamentReserve[a] = p.armamentReserve[a]! + g.filled * ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerSecond;
     }
     // Déblocage : + 1 par ligne remplie du bien, donc proportionnel à sa production dans l'usine.
     const tree = FACTORY_TYPES[f.type].tree;
@@ -337,7 +339,7 @@ function growLines(p: Player): void {
   const capacity = new Array<number>(p.goods.length).fill(0);
   for (const f of p.factories) {
     for (const g of f.groups) {
-      if (armamentIndex(g.good) < 0) capacity[goodIndex(g.good)] += g.lines * productConfig(g.good).productionPerLine;
+      if (armamentIndex(g.good) < 0) capacity[goodIndex(g.good)] += g.lines * GOODS[g.good as GoodId].productionPerLine;
     }
   }
   for (const f of p.factories) {
@@ -350,7 +352,7 @@ function growLines(p: Player): void {
       g.growth -= FACTORY.growthTurns;
       g.lines++;
       g.active++;
-      capacity[b] = capacity[b]! + productConfig(g.good).productionPerLine;
+      capacity[b] = capacity[b]! + GOODS[g.good as GoodId].productionPerLine;
     }
   }
 }
@@ -405,7 +407,7 @@ export function workersNeeded(p: Player): number {
  * utilisées sont les effectives, qui suivent la production du tour précédent
  * (00-Game §12).
  */
-function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): void {
+function stepPlayer(p: Player, deployed: readonly number[], decay: boolean, second: boolean, heal: boolean): void {
   // Les hommes des divisions comptent dans la population mais ne travaillent pas (00-Game §4, point 5) : la répartition
   // se fait sur le reste, blessés exclus (00-Game §4.2). En mobilisation forcée, le renfort des divisions est déjà passé
   // avant (05-Fronts §4.3).
@@ -444,7 +446,7 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
     fullMechanizationWorkers(MINING, ironTilesFor(Math.min(requiredIron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile))),
     MINING.maxMachinesPer1000,
   );
-  produce(p, deployed);
+  produce(p, deployed, second);
   settleGoods(p, decay);
 
   // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
@@ -462,7 +464,7 @@ function stepPlayer(p: Player, deployed: readonly number[], decay: boolean): voi
   // Famine (00-Game §4.2) : les blessés baissent avec la population perdue, les soldats ne sont jamais retirés.
   if (p.population < before) cutHurtOnLoss(p, before - p.population);
   p.hurt = Math.min(p.hurt, Math.max(0, p.population - p.soldiers));
-  healHurt(p);
+  if (heal) healHurt(p);
 }
 
 /**
@@ -477,7 +479,7 @@ function cutHurtOnLoss(p: Player, lost: number): void {
 }
 
 /**
- * Guérison (00-Game §4.2) : chaque tour, `max(hurtMinimum, floor(population / hurtDivisor))` blessés disparaissent, au plus
+ * Guérison (00-Game §4.2) : chaque seconde, `max(hurtMinimum, floor(population / hurtDivisor))` blessés disparaissent, au plus
  * tous. Le plancher empêche une population presque entièrement blessée de rester sans main-d'œuvre. Ils quittent aussi la
  * population ; la croissance les remplace ensuite.
  */
@@ -490,8 +492,19 @@ function healHurt(p: Player): void {
 
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
-  // Les hommes des divisions ne retournent jamais d'eux-mêmes à l'économie (05-Fronts §3.5) : il faut supprimer la division.
   // Le tour que l'étape joue est `state.tick + 1` (`applyTurn` avance `tick` à la fin).
-  const decay = (state.tick + 1) % GOODS_DECAY.everyTurns === 0;
-  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id), decay);
+  const turn = state.tick + 1;
+  const heal = turn % POPULATION.hurtEveryTurns === 0;
+  if (state.economyFrozen) {
+    // Partie de test : ni croissance, ni nourriture, ni production ; seule la guérison des blessés continue.
+    for (const p of state.players) {
+      p.hurt = Math.min(p.hurt, Math.max(0, p.population - p.soldiers));
+      if (heal) healHurt(p);
+    }
+    return;
+  }
+  // Les hommes des divisions ne retournent jamais d'eux-mêmes à l'économie (05-Fronts §3.5) : il faut supprimer la division.
+  const decay = turn % GOODS_DECAY.everyTurns === 0;
+  const second = turn % ARMAMENT.everyTurns === 0;
+  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id), decay, second, heal);
 }

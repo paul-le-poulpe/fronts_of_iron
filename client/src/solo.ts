@@ -23,6 +23,8 @@ export interface SoloOptions {
   /** Nombre de bots, 1 à 7. */
   readonly bots: number;
   readonly stepMs?: number;
+  /** Partie de test (`setupTestGame`, scénario de `TEST_SCENARIOS`) : économie gelée, divisions placées d'emblée. */
+  readonly testGame?: string;
 }
 
 /** La seule connexion du relais du solo : celle de l'humain, qui est l'hôte. */
@@ -53,7 +55,7 @@ export class SoloGame {
       players.push({ id, name: `Bot ${id - 1}` });
       this.bots.push(createBot(id, options.mapSeed));
     }
-    this.game = new Game({ mapSeed: options.mapSeed, players, you: HUMAN, stepMs: this.stepMs });
+    this.game = new Game({ mapSeed: options.mapSeed, players, you: HUMAN, stepMs: this.stepMs, ...(options.testGame !== undefined ? { testGame: options.testGame } : {}) });
     // Comme en ligne : l'humain entre dans la salle avec le jeton d'hôte, puis lance la partie.
     this.room = new Room(soloEnv());
     this.room.handle(CONN, { type: "join", name: "Vous", token: this.room.hostToken });
