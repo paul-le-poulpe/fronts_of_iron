@@ -70,29 +70,37 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    la même case.**
 2. **L'icône d'une usine est celle de ce qu'elle produit** (type de division ou
    bien), affichée sur sa case.
-3. **Niveau** : une usine de niveau `n` entretient `n` divisions de son type
-   (ou, pour un bien, `n` fois sa quantité, §3.6). Le joueur peut **augmenter le
-   niveau** d'une usine par un ordre (*provisoire* : gratuit, sans limite).
-4. **Production** : tant que l'usine a moins de divisions vivantes que son
-   niveau, elle produit une nouvelle division de son type, qui apparaît dans la
-   réserve nationale une fois finie (*provisoire* : en
-   `COMBAT.divisionBuildSeconds` secondes, 60). Une division est **liée** à
-   l'usine qui l'a produite.
-5. **Réparation** : quand une division liée est abîmée (état < 100 %), l'usine
-   la répare (*provisoire* : `COMBAT.repairPercentPerSecond` %, 2, d'état par
-   seconde, une division à la fois, la plus abîmée d'abord, avant de produire
-   une nouvelle division). Détruite, elle est remplacée par une nouvelle
-   production.
-6. **Quand toutes ses divisions sont produites et à 100 %, l'usine ne travaille
-   plus** : elle n'emploie ni ouvriers ni fer.
-7. **Coût** : *provisoire* : une usine qui travaille emploie les ouvriers et le
-   fer d'une ligne du type d'armement principal de la division (valeurs
-   actuelles de `ARMAMENT`), sinon rien. Si le fer ou les ouvriers manquent, elle
-   travaille moins vite (même malus que `00-Game.md` §8).
-8. **Plus de réserve d'armement** ni de création de division par le joueur
-   (`create_division` disparaît) : les divisions viennent des usines et des
-   centres de recrutement. La suppression d'une division (`delete_division`) la
-   fait remplacer par son usine ; *provisoire* : gardée telle quelle.
+3. **Une division n'a plus d'équipement** : elle a une **barre de vie** (son
+   état, 0 à 100 %). On ne compte plus des exemplaires consommés par division ;
+   les dégâts du combat baissent directement la barre de vie.
+4. **Niveau et capacité** : un niveau d'usine **supporte une division** de son
+   type (pour un bien, une quantité, §3.6). La **capacité** d'un type de division
+   est la **somme des niveaux** des usines de ce type du joueur. Le joueur peut
+   **augmenter le niveau** d'une usine par un ordre (*provisoire* : gratuit,
+   sans limite). Une division n'est pas liée à une usine précise.
+5. **Formation** : tant que le joueur a moins de divisions d'un type que sa
+   capacité, les divisions manquantes sont **en formation** (fenêtre de
+   formation) et se forment en continu, puis arrivent dans la réserve nationale
+   (*provisoire* : en `COMBAT.divisionBuildSeconds` secondes, 60, toutes en même
+   temps).
+6. **Soin** : tant que le joueur a une capacité pour leur type, ses divisions
+   abîmées se soignent en continu (*provisoire* : `COMBAT.healPercentPerSecond`
+   %, 2, de barre de vie par seconde, toutes en même temps, hors combat).
+   **Une division complètement détruite retourne dans la fenêtre de formation**
+   et attend d'être produite de nouveau.
+7. **Capacité dépassée** (usine supprimée ou améliorée) : les divisions en trop
+   ne se soignent plus ; aucune n'est supprimée (*provisoire*).
+8. **Quand toutes les divisions d'un type sont formées et à 100 %, ses usines ne
+   travaillent plus** : elles n'emploient ni ouvriers ni fer.
+9. **Coût** : *provisoire* : un niveau d'usine qui travaille (division en
+   formation ou en soin) emploie les ouvriers et le fer d'une ligne du type
+   d'armement principal de la division (valeurs actuelles de `ARMAMENT`). Si le
+   fer ou les ouvriers manquent, formation et soin vont moins vite (même malus
+   que `00-Game.md` §8).
+10. **Plus de réserve d'armement** ni de création de division par le joueur
+    (`create_division` disparaît) : les divisions viennent des usines et des
+    centres de recrutement. *Provisoire* : `delete_division` gardé ; la division
+    supprimée retourne en formation.
 
 ### 3.5 Types d'usines et amélioration
 
@@ -101,9 +109,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 - **Amélioration** : une usine peut être **remplacée par une usine d'un type
   enfant** dans l'arbre de production existant (`00-Game.md` §8.4), par un ordre
   du joueur. L'usine améliorée prend la place de l'ancienne (même case, même
-  niveau) ; les divisions liées à l'ancienne restent, mais ne sont plus réparées
-  ni remplacées (*provisoire*). *Provisoire* : amélioration gratuite et possible
-  dès que l'usine a produit toutes ses divisions.
+  niveau) : la capacité passe de l'ancien type de division au nouveau
+  (§3.7 pour les divisions de l'ancien type en trop). *Provisoire* :
+  amélioration gratuite, possible à tout moment.
 - **L'usine d'armement d'infanterie disparaît** (fusils, mitrailleuses) : ses
   divisions viennent des centres de recrutement. *Provisoire* : la manufacture
   d'armes reste pour l'appui-feu, sa racine devient l'artillerie, avec les
@@ -140,10 +148,13 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 3. 20 combats gardés par joueur ; icône 30 s ; replay 0,6 s par round.
 4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.
 5. Niveau d'une usine augmenté gratuitement, sans limite.
-6. Production d'une division en 60 s ; réparation 2 %/s, la plus abîmée d'abord.
-7. Coût d'une usine qui travaille : une ligne de son armement principal.
-8. Amélioration gratuite, possible quand l'usine est au complet ; les divisions
-   de l'ancienne usine ne sont plus entretenues.
+6. Formation d'une division en 60 s ; soin 2 %/s, toutes en même temps, hors
+   combat.
+7. Coût d'un niveau qui travaille : une ligne de son armement principal.
+8. Amélioration gratuite, à tout moment ; divisions en trop ni soignées ni
+   supprimées.
+11. Dégâts du combat appliqués directement à la barre de vie : la perte
+    d'état calculée par `05-Fronts.md` §6, sans exemplaires par composant.
 9. Manufacture d'armes gardée pour l'appui-feu, racine = artillerie.
 10. Quantité de référence des tracteurs : surface agricole moyenne d'une zone de
     ville ; pompes : mineurs d'une ville.
