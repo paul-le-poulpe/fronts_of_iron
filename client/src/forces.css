@@ -472,6 +472,12 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 /* Drapeau blanc sur la pile, seulement en fuite. */
 .cr-flag { display: none; position: absolute; left: -4px; top: -4px; z-index: 1; width: 16px; height: 16px; image-rendering: pixelated; }
 .cr-unit.fled .cr-flag { display: block; }
+/* Renfort en retrait : un plus bleu de 16 × 16 sur la pile. */
+.cr-plus {
+  display: none; position: absolute; left: -4px; top: -4px; z-index: 1; width: 16px; height: 16px;
+  font: 700 14px/16px system-ui, sans-serif; text-align: center; color: #fff; background: #3d6fd1; border-radius: 2px;
+}
+.cr-unit.arriving .cr-plus { display: block; }
 .cr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cr-bar { height: 12px; background: var(--t-air); border: 1px solid var(--t-line); }
 .cr-fill { height: 100%; background: #3aa655; transition: width 0.25s ease-out; }
@@ -488,6 +494,9 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .cr-unit.fled { opacity: 0.6; filter: grayscale(1); }
 .cr-left .cr-unit.fled { transform: translateX(-24px); }
 .cr-right .cr-unit.fled { transform: translateX(24px); }
+/* Renfort en retrait : vers l'extérieur, comme une carte en fuite, mais pas en gris. */
+.cr-left .cr-unit.arriving { transform: translateX(-24px); }
+.cr-right .cr-unit.arriving { transform: translateX(24px); }
 .cr-unit.dead { opacity: 0.15; }
 
 .cr-result { padding: 10px 64px 16px; }

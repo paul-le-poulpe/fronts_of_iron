@@ -91,10 +91,18 @@ function markViewed(id: number): void {
 
 const noStats = (): Stats => ({ soft: 0, hard: 0, hp: 0 });
 
-/** Une carte du replay : les divisions d'un type d'un camp (`units`), en ligne, ou celles d'entre elles qui ont fui. */
+/**
+ * Les trois cartes possibles d'un type de division d'un camp : en ligne ; renforts en retrait, pas encore en ligne
+ * (attaque sur tout le front) ; en fuite. Leur rang dans la colonne, après le type.
+ */
+type Variant = "main" | "arriving" | "fled";
+const VARIANT_RANK: Readonly<Record<Variant, number>> = { main: 0, arriving: 1, fled: 2 };
+
+/** Une carte du replay : les divisions d'un type d'un camp qui sont dans cet état (`cardOf`). */
 interface Card {
-  readonly units: readonly number[];
-  readonly fled: boolean;
+  /** Toutes les divisions du type et du camp, vues jusqu'ici ; tableau partagé par les trois cartes du type. */
+  readonly units: number[];
+  readonly variant: Variant;
   readonly root: HTMLElement;
   /** Les icônes empilées, une par division présente. */
   readonly stack: HTMLElement;
@@ -175,11 +183,13 @@ export class CombatReplay {
     const hp = c.units.map((u) => u.start);
     const fled = c.units.map(() => false);
     const dead = c.units.map(() => false);
+    const arriving = c.units.map(() => false);
 
-    const makeCard = (units: readonly number[], isFled: boolean): Card => {
+    const makeCard = (units: number[], variant: Variant): Card => {
       const u = c.units[units[0]!]!;
       const info = m.divisions[u.type];
-      const root = el("div", isFled ? "cr-unit fled" : "cr-unit");
+      const root = el("div", variant === "main" ? "cr-unit" : `cr-unit ${variant}`);
+      root.dataset.rank = String(u.type * 3 + VARIANT_RANK[variant]);
       // Les icônes des divisions de la carte, empilées (remplies par `redraw`), et le drapeau blanc par-dessus.
       const stack = el("div", "cr-stack");
       const body = el("div", "cr-body");
@@ -200,44 +210,48 @@ export class CombatReplay {
       body.append(bar, stats);
       const dmg = el("div", "cr-dmg");
       root.append(dmg, stack, body);
-      return { units, fled: isFled, root, stack, icon: info === undefined ? "" : `icons/${icon32Path(info.icon)}`, name: info === undefined ? "" : unitName(info.id), fill, dmg, soft, hard };
+      return { units, variant, root, stack, icon: info === undefined ? "" : `icons/${icon32Path(info.icon)}`, name: info === undefined ? "" : unitName(info.id), fill, dmg, soft, hard };
     };
 
-    // Cartes, dans l'ordre des divisions du rapport (type par type) ; elles ne changent plus d'ordre.
+    // Cartes : une par type, par camp et par état (en ligne, renforts en retrait, en fuite), créées à la première
+    // division qui y entre, rangées par type puis par état ; elles ne changent plus d'ordre.
     const cards: Card[] = [];
-    const cardOf: Card[] = [];
-    /** Types groupés d'un camp : leur carte des divisions en fuite, créée à la première fuite, juste après la carte du type. */
-    const fledCards = new Map<string, Card>();
-    for (const side of [0, 1] as const) {
-      const idx = c.units.map((_, i) => i).filter((i) => sideOf(c.units[i]!.owner) === side);
-      const types = [...new Set(idx.map((i) => c.units[i]!.type))].sort((a, b) => a - b);
-      for (const t of types) {
-        // Une carte par type et par camp, les divisions empilées.
-        const ofType = idx.filter((i) => c.units[i]!.type === t);
-        const card = makeCard(ofType, false);
-        cards.push(card);
-        for (const i of ofType) cardOf[i] = card;
-        cols[side].append(card.root);
+    const cardOf: (Card | undefined)[] = [];
+    const typeUnits = new Map<string, number[]>();
+    const byKey = new Map<string, Card>();
+    /** Met la division `i` dans la carte de son type dans l'état `variant`. */
+    const put = (i: number, variant: Variant): void => {
+      const u = c.units[i]!;
+      const side = sideOf(u.owner);
+      const typeKey = `${side}:${u.type}`;
+      let units = typeUnits.get(typeKey);
+      if (units === undefined) {
+        units = [];
+        typeUnits.set(typeKey, units);
       }
-    }
-    /** Une division qui fuit passe dans la carte des fuyards de son type, posée juste après celle du type. */
+      if (!units.includes(i)) units.push(i);
+      const key = `${typeKey}:${variant}`;
+      let card = byKey.get(key);
+      if (card === undefined) {
+        card = makeCard(units, variant);
+        byKey.set(key, card);
+        cards.push(card);
+        const rank = Number(card.root.dataset.rank);
+        const before = [...cols[side].children].find((e) => Number((e as HTMLElement).dataset.rank) > rank);
+        if (before !== undefined) cols[side].insertBefore(card.root, before);
+        else cols[side].append(card.root);
+      }
+      cardOf[i] = card;
+    };
+    // Au départ, toutes les divisions sauf les renforts qui arriveront pendant le combat.
+    const late = new Set(c.rounds.flatMap((r) => r.arrived));
+    c.units.forEach((_, i) => {
+      if (!late.has(i)) put(i, "main");
+    });
+    /** Une division qui fuit passe dans la carte des fuyards de son type, juste après celle du type. */
     const flee = (i: number): void => {
       fled[i] = true;
-      const card = cardOf[i]!;
-      // Carte d'une seule division : elle recule sur place.
-      if (card.units.length === 1) {
-        card.root.classList.add("fled");
-        return;
-      }
-      const key = `${sideOf(c.units[i]!.owner)}:${c.units[i]!.type}`;
-      let f = fledCards.get(key);
-      if (f === undefined) {
-        f = makeCard(card.units, true);
-        fledCards.set(key, f);
-        cards.push(f);
-        card.root.after(f.root);
-      }
-      cardOf[i] = f;
+      put(i, "fled");
     };
 
     /** Attaques d'une division d'après son état, × `attackMultiplier` pour l'attaquant (05-Fronts §6.1) ; PV des niches principales. */
@@ -266,16 +280,17 @@ export class CombatReplay {
           const s = statsOf(i);
           for (const kind of ["soft", "hard", "hp"] as const) st[kind] += s[kind];
           state += hp[i]!;
-          // Les totaux du haut ne comptent que les divisions en ligne.
-          if (!fled[i]) for (const kind of ["soft", "hard", "hp"] as const) totals[sideOf(c.units[i]!.owner)][kind] += s[kind];
+          // Les totaux du haut ne comptent que les divisions en ligne : ni en fuite, ni renforts en retrait.
+          if (!fled[i] && !arriving[i]) for (const kind of ["soft", "hard", "hp"] as const) totals[sideOf(c.units[i]!.owner)][kind] += s[kind];
         }
         const n = here.length;
         card.root.classList.toggle("dead", n === 0);
-        // Carte d'un type dont toutes les divisions restantes ont fui : elles sont dans la carte des fuyards, celle-ci disparaît.
-        card.root.hidden = !card.fled && n === 0 && card.units.some((i) => cardOf[i] !== card);
+        // Une carte sans aucune division (toutes passées dans une autre carte du type) disparaît ; celle dont les
+        // divisions sont toutes détruites reste, effacée.
+        card.root.hidden = n === 0 && !card.units.some((i) => cardOf[i] === card);
         // Une icône par division, empilées, au plus `MAX_STACK` ; la carte vidée garde une icône, effacée.
         const shown = Math.max(1, Math.min(n, MAX_STACK));
-        if (card.stack.childElementCount !== shown + 1) {
+        if (card.stack.childElementCount !== shown + 2) {
           const icons = Array.from({ length: shown }, (_, k) => {
             const img = el("img", "cr-icon");
             img.src = card.icon;
@@ -283,10 +298,13 @@ export class CombatReplay {
             img.style.left = `${k * STACK_STEP_PX}px`;
             return img;
           });
+          // Drapeau blanc (en fuite) ou plus bleu (renfort), selon la carte (CSS).
           const flag = el("img", "cr-flag");
           flag.src = "icons/miscellaneous/icon-white-flag.png";
           flag.alt = "";
-          card.stack.replaceChildren(...icons, flag);
+          const plus = el("span", "cr-plus", "+");
+          plus.title = "Renfort : rejoint la première ligne dans quelques rounds";
+          card.stack.replaceChildren(...icons, flag, plus);
           card.stack.style.width = `${32 + (shown - 1) * STACK_STEP_PX}px`;
         }
         card.root.title = n > 1 ? `${card.name} : ${n} divisions` : card.name;
@@ -316,6 +334,11 @@ export class CombatReplay {
       // Un round sans division touchée : le défenseur n'a plus d'infanterie, l'attaquant avance (06-Combat-Simplifie §1).
       const total = Math.round(c.rounds.slice(0, r + 1).reduce((s, x) => s + x.advance, 0) / 10);
       round.textContent = rd.hits.length === 0 ? `Round ${r + 1} / ${c.rounds.length} — plus d'infanterie en face : avancée ${total} %` : `Round ${r + 1} / ${c.rounds.length}`;
+      // Renforts qui rejoignent la première ligne au début du round.
+      for (const i of rd.joined) {
+        arriving[i] = false;
+        put(i, "main");
+      }
       // La perte est rangée dans la carte où la division était pendant le round.
       const lossByCard = new Map<Card, number>();
       for (const [i, loss] of rd.hits) {
@@ -325,6 +348,11 @@ export class CombatReplay {
       }
       for (const i of rd.destroyed) dead[i] = true;
       for (const i of rd.fled) if (!fled[i]) flee(i);
+      // Renforts montés de la seconde ligne à la fin du round : carte du type en retrait, avec le plus bleu.
+      for (const i of rd.arrived) {
+        arriving[i] = true;
+        put(i, "arriving");
+      }
       redraw(lossByCard);
     };
     const finish = (): void => {

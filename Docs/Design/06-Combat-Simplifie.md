@@ -42,14 +42,16 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    engagée au lancement ne combat pas : le combat n'a aucun round et n'est pas
    enregistré. Les dégâts sont appliqués aux
    divisions dans ce tour.
-   **Ni renfort ni remplacement pendant un combat** (décision de l'auteur,
-   5 novembre 2026 ; vaut pour tous les combats, percée comprise) : les
-   divisions engagées au premier round sont les seules à combattre ; une
-   division détruite ou en fuite laisse sa place vide jusqu'à la fin du combat.
-   Pas d'échange avec la seconde ligne (`05-Fronts.md` §5.3) ni de remplissage
-   des lignes (§4.2) pendant les rounds ; le rangement des lignes reprend au
-   tour suivant, entre deux combats. Le combat est assez court pour s'en
-   passer.
+   **Renforts** (décisions de l'auteur, 5 novembre 2026) : dans une attaque sur
+   tout le front, la place laissée en première ligne par une division détruite
+   ou en fuite est reprise, à la fin du round, par la seconde ligne (rangement
+   des lignes, `05-Fronts.md` §4.2). La division montée reste **5 rounds en
+   retrait** (`FRONTS.reinforceRounds`) : elle occupe sa place mais ne combat
+   pas et ne compte pas pour l'avancée ; puis elle rejoint la première ligne et
+   combat. Pas d'échange avec la seconde ligne pendant le combat
+   (`05-Fronts.md` §5.3 : une division abîmée mais encore en ligne reste). Un
+   défenseur dont l'infanterie revient par un renfort combat de nouveau.
+   **Pas de renfort dans les combats d'une percée** (point 5).
 3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
    à chaque round, comme avant (50 rounds avancent comme 50 secondes
    d'attaque), prise de ville comprise.
@@ -129,10 +131,15 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
     la carte, une division détruite quitte la pile ;
   - une division **en fuite** passe dans la **carte des fuyards** de son type,
     posée juste après celle du type, un peu en retrait vers l'arrière de son
-    camp et en gris, avec le **drapeau blanc** sur la pile ; seule de son type,
-    sa carte recule sur place ; **l'ordre des cartes ne change pas** ; quand
-    toutes les divisions restantes d'un type ont fui, la carte du type
-    disparaît, il ne reste que celle des fuyards ;
+    camp et en gris, avec le **drapeau blanc** sur la pile ; **l'ordre des
+    cartes ne change pas** ; quand toutes les divisions restantes d'un type ont
+    fui, la carte du type disparaît, il ne reste que celle des fuyards ;
+  - un **renfort** (attaque sur tout le front) arrive de l'arrière dans une
+    carte de son type posée juste après celle du type, **vers l'extérieur** du
+    côté de son camp (à l'opposé de l'axe central), avec un **plus bleu** de
+    16 × 16 pixels sur la pile, sans gris ; il y reste les 5 rounds de retrait,
+    puis rejoint la carte de son type en première ligne (créée s'il n'y en
+    avait pas) ;
   - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
     camp** : hommes et matériel (exemplaires de chaque type d'armement), et
     l'issue au-dessus (avancée, ville prise ; pour une percée : première ligne

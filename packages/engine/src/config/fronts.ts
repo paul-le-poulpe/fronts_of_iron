@@ -20,6 +20,11 @@ export const FRONTS = {
    * (06-Combat-Simplifie §1 ; décision de l'auteur, 5 novembre 2026).
    */
   combatMaxRounds: 50,
+  /**
+   * Rounds pendant lesquels un renfort monté de la seconde ligne reste en retrait, sans combattre, avant de rejoindre la
+   * première ligne, dans une attaque sur tout le front (06-Combat-Simplifie §1 ; auteur, 5 novembre 2026).
+   */
+  reinforceRounds: 5,
   /** Rapports de combat gardés par joueur, les plus anciens supprimés (06-Combat-Simplifie §1 ; provisoire). */
   combatHistoryPerPlayer: 20,
   /** Tours entre deux rounds de combat (10 = 1 s). */

@@ -42,7 +42,7 @@ import {
   type Division,
 } from "./divisions.ts";
 import { ROUTE, endOf, frontWidth, hasRound, isActive, isBreakthroughCombat, type Front } from "./fronts.ts";
-import { applyFlight, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
+import { applyFlight, arrangeSide, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 /**
@@ -301,7 +301,7 @@ function roundHits(state: GameState, engaged: readonly Division[], before: reado
     if (isFleeing(state, d)) fled.push(index[k]!);
     return [index[k]!, Math.max(0, before[k]! - stateOf(d))];
   });
-  return { hits, destroyed, fled };
+  return { hits, destroyed, fled, arrived: [], joined: [] };
 }
 
 /** Une division d'un rapport de combat, telle qu'au début du combat. */
@@ -322,6 +322,13 @@ export interface CombatRound {
   readonly destroyed: readonly number[];
   /** Divisions en fuite à la fin du round (indices dans `units`, 05-Fronts §5.4). */
   readonly fled: readonly number[];
+  /**
+   * Renforts (attaque sur tout le front, 06-Combat-Simplifie §1) : divisions de seconde ligne montées à la fin du round
+   * dans une place libérée de la première ligne, en retrait pendant `FRONTS.reinforceRounds` rounds (indices dans `units`).
+   */
+  readonly arrived: readonly number[];
+  /** Renforts qui rejoignent la première ligne au début de ce round et combattent à partir de lui. */
+  readonly joined: readonly number[];
   /** Avancée de l'attaquant pendant ce round, en millièmes de route. */
   readonly advance: number;
 }
@@ -368,14 +375,25 @@ export interface CombatRecord {
  * Un round de l'attaque sur tout le front de `front.players[x]` (05-Fronts §6, §7.1), ajouté à `record`. Renvoie les
  * connexions arrivées au bout de leur route, ou `undefined` si l'attaquant n'a plus d'infanterie engagée (fin du combat,
  * 06-Combat-Simplifie §1). Un défenseur sans infanterie engagée ne combat plus : le round n'est qu'une avancée.
+ * `r` : numéro du round ; `pending` : renforts en retrait (division → round où elle rejoint la première ligne). Ils
+ * occupent leur place en première ligne mais ne combattent pas et ne comptent pas pour l'avancée avant ce round.
  */
-function frontAttackRound(state: GameState, front: Front, x: number, record: CombatRecord): Arrival[] | undefined {
-  const sides = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
+function frontAttackRound(state: GameState, front: Front, x: number, record: CombatRecord, r: number, pending: Map<number, number>): Arrival[] | undefined {
+  // Renforts qui rejoignent la première ligne à ce round.
+  const joined: number[] = [];
+  for (const [id, at] of [...pending]) {
+    if (at > r) continue;
+    pending.delete(id);
+    const i = record.units.findIndex((u) => u.division === id);
+    if (i >= 0 && state.divisions.some((d) => d.id === id && d.line === LINE_FIRST)) joined.push(i);
+  }
+  const fighting = (i: number): Division[] => engagedOf(sideDivisions(state, front, front.players[i]!)).filter((d) => !pending.has(d.id));
+  const sides = [0, 1].map(fighting);
   const attacker = sides[x]!;
   if (infantryWidth(attacker) === 0) return undefined;
-  // Le défenseur n'a plus d'infanterie engagée (détruite ou en fuite) : l'attaquant avance sans combat pendant les
-  // rounds qui restent, à sa vitesse maximale (06-Combat-Simplifie §1).
-  if (infantryWidth(sides[1 - x]!) === 0) return advanceRound(front, x, frontSpeed(attacker), record, { hits: [], destroyed: [], fled: [] });
+  // Le défenseur n'a plus d'infanterie engagée (détruite ou en fuite) : l'attaquant avance sans combat, à sa vitesse
+  // maximale (06-Combat-Simplifie §1), jusqu'à la fin des rounds ou au retour d'une infanterie du défenseur (renfort).
+  if (infantryWidth(sides[1 - x]!) === 0) return advanceRound(front, x, frontSpeed(attacker), record, { hits: [], destroyed: [], fled: [], arrived: [], joined });
   const losses = new Map<Division, number>();
   // L'attaquant avec `attackMultiplier`, le défenseur sans multiplicateur, avec ses PV de défense.
   fightLosses(
@@ -396,14 +414,23 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   trimAll(state);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
-  // Pas d'échange ni de renfort pendant un combat (06-Combat-Simplifie §1) : une division détruite ou en fuite laisse sa
-  // place vide ; le rangement des lignes (`arrangeAll`) ne reprend qu'au tour suivant.
   applyFlight(state, front);
+  // Renfort (06-Combat-Simplifie §1) : la place d'une division détruite ou en fuite est reprise par la seconde ligne
+  // (rangement des lignes, 05-Fronts §4.2) ; pas d'échange (§5.3). La division montée reste en retrait
+  // `FRONTS.reinforceRounds` rounds avant de combattre.
+  const inLine = new Set(state.divisions.filter((d) => d.front === front.id && d.line === LINE_FIRST && d.engaged > 0).map((d) => d.id));
+  for (const p of front.players) arrangeSide(state, front, p);
+  const arrived: number[] = [];
+  for (const d of state.divisions) {
+    if (d.front !== front.id || d.line !== LINE_FIRST || d.engaged === 0 || inLine.has(d.id)) continue;
+    pending.set(d.id, r + 1 + FRONTS.reinforceRounds);
+    arrived.push(snapshot(record, [d]).index[0]!);
+  }
 
-  // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant.
-  const after = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
+  // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant ; sans les renforts en retrait.
+  const after = [0, 1].map(fighting);
   const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), frontSpeed(after[x]!));
-  return advanceRound(front, x, by, record, roundHits(state, engaged, before, index, alive));
+  return advanceRound(front, x, by, record, { ...roundHits(state, engaged, before, index, alive), arrived, joined });
 }
 
 /** Écrit le round dans `record` et avance le front de `by` millièmes dans le sens de `front.players[x]`. Renvoie les connexions arrivées au bout. */
@@ -481,8 +508,9 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
     const first = front.connections[0]!;
     const record = newRecord(state, front, "front", front.players[x]!, front.players[1 - x]!, first.city1, first.city2);
     let arrivals: Arrival[] = [];
+    const pending = new Map<number, number>();
     for (let r = 0; r < FRONTS.combatMaxRounds; r++) {
-      const got = frontAttackRound(state, front, x, record);
+      const got = frontAttackRound(state, front, x, record, r, pending);
       if (got === undefined) break;
       if (got.length > 0) {
         arrivals = got;

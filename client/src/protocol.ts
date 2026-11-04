@@ -171,6 +171,10 @@ export interface CombatRoundView {
   readonly hits: readonly (readonly [number, number])[];
   readonly destroyed: readonly number[];
   readonly fled: readonly number[];
+  /** Renforts montés de la seconde ligne à la fin du round, en retrait pendant quelques rounds. */
+  readonly arrived: readonly number[];
+  /** Renforts qui rejoignent la première ligne au début du round. */
+  readonly joined: readonly number[];
   readonly advance: number;
 }
 
