@@ -305,7 +305,7 @@ devient `running` ; nouveaux champs du joueur `ironDemanded`, `ironConsumed`, le
   (nouveaux champs) ; `specialization.test.ts` « remplissage avec les coûts par rang » ; `client/test/solo.test.ts`
   « usine du joueur » (les fermiers passent avant : une petite population n'a plus ni mineurs ni ouvriers) ; le scénario
   (`filledLinePlayerTurns`) compte maintenant les joueurs qui ont des lignes qui tournent.
-- **À écrire** : ordre de répartition (fermiers et pêcheurs, puis mineurs, puis ouvriers, le reste inactif) ; fer extrait
+- **À écrire** : ordre de répartition (mineurs, puis fermiers et pêcheurs, puis ouvriers, le reste inactif) ; fer extrait
   proportionnel aux mineurs quand ils manquent ; `ratio_fer`, `ratio_ouvriers`, `r = min` ; production × r avec reste
   (biens, armement, déblocage) ; ligne de biens en trop écartée à 100 % de productivité (100 tracteurs demandés, une ligne
   de 100 : une seule tourne même à r = 50 %) ; demande de tracteurs et de bateaux des fermiers et pêcheurs répartis ;
@@ -325,3 +325,9 @@ devient `running` ; nouveaux champs du joueur `ironDemanded`, `ironConsumed`, le
   en 3 600es × `RATIO_SCALE`. Stock cible = ⌊ lignes × `productionPerHour` × 800 / 3 600 ⌋ (même valeur par ligne qu'avant).
 - Guérison aux tours multiples de 20 (`hurtEveryTurns`) : les tests qui jouent 10 tours n'en voient plus.
 - Les mentions plus haut de `productionPerMinute` et de 40 s sont périmées.
+
+## Mineurs avant les fermiers (4 novembre 2026)
+
+- Les mineurs du fer des lignes qui tournent sont pris en premier sur la population active ; fermiers et pêcheurs se
+  répartissent le reste. Le test client « usine du joueur » (petite population) devrait de nouveau avoir des mineurs ;
+  les tests qui comptent les fermiers avec des lignes actives sont à recalculer.

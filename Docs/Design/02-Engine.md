@@ -505,12 +505,8 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 0. machines du tour : tracteurs = goods[tractor], bateaux = goods[fishingBoat],
    pompes = goods[miningMachine]  (produits au tour précédent, §7)
 
-1. répartition (00-Game §4) : fermiers et pêcheurs d'abord, sur
-   population_active = max(0, population − soldiers − hurt), puis les lignes, les mineurs et les ouvriers :
-
-   fermiers_disponibles = floor(population_active × farmPercent / 100)
-   pêcheurs_disponibles = population_active − fermiers_disponibles
-   récolte, report, blé, poisson : voir plus bas (inchangés)
+1. répartition (00-Game §4) sur population_active = max(0, population − soldiers − hurt) :
+   les lignes, puis les mineurs, puis fermiers et pêcheurs, puis les ouvriers :
 
    demande de tracteurs, de bateaux = fieldMachineDemand(b, population_active)
      (machines d'une mécanisation totale pour les fermiers et pêcheurs répartis) ;
@@ -526,12 +522,16 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
        fer_demandé += running × ironPerLine
        ouvriers_demandés += workersForLines(bien, running)
 
-   reste = population_active − fermiers − pêcheurs
    demande_plafonnée = min(fer_demandé, cases de fer × RESOURCES.iron.capacityPerTile)
    requis    = mineurs(demande_plafonnée, pompes)
-   mineurs   = min(requis, reste)
+   mineurs   = min(requis, population_active)
    extrait   = requis == 0 ? 0 : floor(demande_plafonnée × mineurs / requis)
-   disponibles = reste − mineurs ; S_r = RATIO_SCALE = 10 000
+
+   fermiers_disponibles = floor((population_active − mineurs) × farmPercent / 100)
+   pêcheurs_disponibles = population_active − mineurs − fermiers_disponibles
+   récolte, report, blé, poisson : voir plus bas (inchangés)
+
+   disponibles = population_active − mineurs − fermiers − pêcheurs ; S_r = RATIO_SCALE = 10 000
    ratios(fer_d, ouv_d, fer_dispo, ouv_dispo) :
      ratio_fer = fer_d == 0 ? S_r : min(S_r, floor(fer_dispo × S_r / fer_d))
      ratio_ouvriers = ouv_d == 0 ? S_r : min(S_r, floor(ouv_dispo × S_r / ouv_d))
@@ -982,8 +982,8 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     l'ordre des identifiants. Un joueur sans ville fait aussi l'étape : sans
     terre ses fermiers sont inactifs et sa nourriture vaut `FOOD.minimum`
     (nomades, 00-Game §4).
-22. Répartition de la population (00-Game §4, depuis le 4 novembre 2026) : fermiers et pêcheurs d'abord, puis les
-    mineurs, puis les ouvriers d'usine, le reste est inactif. Sans ligne, toute la population va aux fermiers et
+22. Répartition de la population (00-Game §4, depuis le 4 novembre 2026) : mineurs d'abord (le fer des lignes qui
+    tournent), puis fermiers et pêcheurs, puis les ouvriers d'usine, le reste est inactif. Sans ligne, toute la population va aux fermiers et
     aux pêcheurs.
 23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `farmMechanization`, `fished`,
     `fishMechanization`, `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,

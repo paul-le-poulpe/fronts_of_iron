@@ -398,16 +398,30 @@ interface Allocation {
 }
 
 /**
- * Répartition de `people` personnes (00-Game §4) : fermiers et pêcheurs d'abord, selon le réglage du joueur, avec le report
- * de l'un à l'autre ; puis les mineurs du fer que demandent les lignes qui tournent ; puis les ouvriers des usines ; le
+ * Répartition de `people` personnes (00-Game §4) : les mineurs du fer que demandent les lignes qui tournent d'abord ; puis
+ * fermiers et pêcheurs, selon le réglage du joueur, avec le report de l'un à l'autre ; puis les ouvriers des usines ; le
  * reste est inactif. Les lignes de biens tournent à une productivité commune, puis celles d'armement à la leur, sur ce que les biens ont laissé (00-Game §8). Ne change que
  * `running` des groupes de lignes (recalculé à chaque appel).
  */
 function allocate(p: Player, people: number): Allocation {
+  // Demande des lignes utiles : tracteurs et bateaux, ceux de toute la population répartie entre champs et pêche (sans
+  // retirer les mineurs, qui dépendent eux-mêmes des lignes) ; pompes, celle du tour précédent.
+  const fieldDemand = new Array<number>(p.goods.length).fill(-1);
+  fieldDemand[TRACTOR] = fieldMachineDemand(p, TRACTOR, people);
+  fieldDemand[FISHING_BOAT] = fieldMachineDemand(p, FISHING_BOAT, people);
+  const demand = p.goodsDemand.map((d, b) => (fieldDemand[b]! >= 0 ? fieldDemand[b]! : d));
+  const lines = selectLines(p, demand);
+  // Mineurs d'abord (auteur, 4 novembre 2026) : ceux du fer que demandent les lignes qui tournent, plafonné par la capacité
+  // des cases ; faute de monde, le fer extrait baisse en proportion.
+  const capped = Math.min(lines.iron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile);
+  const needed = minersFor(capped, p.goodsEffective[MINING_MACHINE]!);
+  const miners = Math.min(needed, people);
+  const extracted = needed === 0 ? 0 : Math.floor((capped * miners) / needed);
+  const fieldPeople = people - miners;
   const tractors = p.goodsEffective[TRACTOR]!;
   const fishingBoats = p.goodsEffective[FISHING_BOAT]!;
-  const availableFarmers = Math.floor((people * p.farmPercent) / 100);
-  const availableFishers = people - availableFarmers;
+  const availableFarmers = Math.floor((fieldPeople * p.farmPercent) / 100);
+  const availableFishers = fieldPeople - availableFarmers;
   // Report (00-Game §4) : les disponibles en trop d'un côté vont à l'autre, jusqu'à ce qu'il soit plein. Le réglage ne
   // joue que si la population manque.
   const spareFarmers = Math.max(0, availableFarmers - requiredWorkers(FARMING, availableFarmers, tractors, p.farmTiles));
@@ -416,19 +430,7 @@ function allocate(p: Player, people: number): Allocation {
   // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
   const seaYield = Math.floor((p.seaTiles * waterYieldMilli(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), fishingBoats)) / MILLI);
   const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
-  // Demande des lignes utiles : tracteurs et bateaux, ceux des fermiers et pêcheurs répartis ; pompes, celle du tour précédent.
-  const fieldDemand = new Array<number>(p.goods.length).fill(-1);
-  fieldDemand[TRACTOR] = fieldMachineDemand(p, TRACTOR, people);
-  fieldDemand[FISHING_BOAT] = fieldMachineDemand(p, FISHING_BOAT, people);
-  const demand = p.goodsDemand.map((d, b) => (fieldDemand[b]! >= 0 ? fieldDemand[b]! : d));
-  const lines = selectLines(p, demand);
-  // Mineurs : le fer demandé est plafonné par la capacité des cases ; faute de monde, le fer extrait baisse en proportion.
-  const left = people - farm.workers - sea.workers;
-  const capped = Math.min(lines.iron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile);
-  const needed = minersFor(capped, p.goodsEffective[MINING_MACHINE]!);
-  const miners = Math.min(needed, left);
-  const extracted = needed === 0 ? 0 : Math.floor((capped * miners) / needed);
-  const available = left - miners;
+  const available = fieldPeople - farm.workers - sea.workers;
   // Deux passes (00-Game §8) : les biens prennent leur part du fer extrait et des ouvriers, puis l'armement le reste.
   const goods = ratiosFor(lines.goodsIron, lines.goodsWorkers, extracted, available);
   const goodsIronUsed = scaledByRatio(lines.goodsIron, goods.line);

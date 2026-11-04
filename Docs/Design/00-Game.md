@@ -516,21 +516,24 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
 - À chaque tour, la population totale est de nouveau répartie, dans cet
   ordre (décision de l'auteur, 4 novembre 2026 : plus de remplissage ligne par
   ligne, qui s'arrêtait à la première ligne manquant de fer ou d'ouvriers, et
-  que l'auteur trouvait illisible) :
-  1. les **fermiers** et les **pêcheurs** d'abord, dans la proportion choisie
-     par le joueur (un réglage ; l'interface sera définie par l'auteur). Ils
-     prennent ce que leurs terres et leurs cases d'eau peuvent employer
-     (§6.2, §6.4) ;
-  2. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
+  que l'auteur trouvait illisible ; mineurs avant les fermiers depuis le
+  4 novembre 2026, pour qu'une petite population extraie quand même le fer du
+  premier tracteur) :
+  1. les **mineurs** d'abord : ceux qu'il faut pour extraire le fer demandé
+     par toutes les lignes qui tournent (§8), plafonné par la capacité des
+     cases de fer (§7). Leur nombre suit donc toujours les lignes actives.
+     S'il n'y a pas assez de monde, autant de mineurs que possible, et le fer
+     extrait baisse en proportion ;
+  2. les **fermiers** et les **pêcheurs** sur ce qui reste, dans la proportion
+     choisie par le joueur (un réglage ; l'interface sera définie par
+     l'auteur). Ils prennent ce que leurs terres et leurs cases d'eau peuvent
+     employer (§6.2, §6.4) ;
+  3. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
      a plus de travailleurs que sa surface n'en demande, le surplus passe à
      l'autre côté, jusqu'à ce que celui-ci soit plein. Le réglage ne joue donc
      que quand la population ne suffit pas à travailler à la fois tous les
      champs et toute la mer ; sinon, les deux sont remplis à 100 % ;
-  3. les **mineurs** sur ce qui reste : ceux qu'il faut pour extraire le fer
-     demandé par toutes les lignes qui tournent (§8), plafonné par la capacité
-     des cases de fer (§7). S'il n'y a pas assez de monde, autant de mineurs que
-     possible, et le fer extrait baisse en proportion ;
-  4. les **ouvriers d'usine** sur ce qui reste après les mineurs : les lignes
+  4. les **ouvriers d'usine** sur ce qui reste après les fermiers : les lignes
      demandent leurs ouvriers (§8.1) et en obtiennent la part que la
      population permet (malus de production, §8) ;
   5. ceux qui n'ont toujours pas d'emploi forment la **population inactive** ;
@@ -541,20 +544,24 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
      (règles dans `05-Fronts.md` §3.5, §4.3). Les blessés ne sont jamais pris,
      mobilisation forcée comprise.
 
-  Les fermiers étant servis les premiers, une population juste suffisante pour
-  les champs laisse les usines sans ouvriers ni mineurs : leurs lignes tournent
-  alors à une productivité nulle (§8).
+  Les mineurs étant servis les premiers, les lignes ont leur fer même avec
+  une petite population ; ce sont alors les champs qui manquent de bras, puis
+  les ouvriers d'usine (productivité réduite, §8). La demande de tracteurs et
+  de bateaux (§8.2) est calculée sur toute la population répartie entre champs
+  et pêche, mineurs compris (provisoire : les retirer rendrait le calcul
+  circulaire, les mineurs dépendant des lignes).
 
   ```
-  F, P              = fermiers et pêcheurs disponibles, selon le réglage
+  actifs   = population − soldats − blessés
+  mineurs  = min(mineurs requis par le fer demandé, actifs)
+  F, P              = fermiers et pêcheurs disponibles, selon le réglage, sur actifs − mineurs
   F_requis, P_requis = travailleurs requis (§6.2, §6.4 ; mécanisation calculée
                        avec F et P, une fois)
   fermiers = min(F_requis, F + max(0, P − P_requis))
   pêcheurs = min(P_requis, P + max(0, F − F_requis))
-  reste    = population − soldats − blessés − fermiers − pêcheurs
-  mineurs  = min(mineurs requis par le fer demandé, reste)
-  ouvriers = ouvriers demandés × productivité (§8)    (au plus reste − mineurs)
-  inactifs = reste − mineurs − ouvriers
+  reste    = actifs − mineurs − fermiers − pêcheurs
+  ouvriers = ouvriers demandés × productivité (§8)    (au plus reste)
+  inactifs = reste − ouvriers
   ```
 
 ### 4.1 Population maximale et croissance
@@ -873,8 +880,8 @@ vaut 0 (§2).
   population. **Pas encore dans le moteur** : seul le fer est extrait, il
   reçoit donc toutes les pompes ; la répartition reste à écrire avec
   l'extraction de l'aluminium.
-- Les mineurs sont pris après les fermiers et les pêcheurs et avant les
-  ouvriers d'usine, pour le fer de toutes les lignes qui tournent à la fois (§4).
+- Les mineurs sont pris avant les fermiers, les pêcheurs et les ouvriers
+  d'usine, pour le fer de toutes les lignes qui tournent à la fois (§4).
 - Le groupe (§3.5) où se trouvent les cases n'intervient pas : l'extraction
   est nationale (§3.4).
 
@@ -953,8 +960,8 @@ vaut 0 (§2).
   si la population ou le fer manquent, elles tournent moins vite. **Deux passes**
   (décision de l'auteur, 4 novembre 2026) : les **lignes de biens** (tracteurs,
   bateaux, pompes) passent avant l'**armement** dans le partage du fer extrait et des
-  ouvriers disponibles. Les mineurs restent servis avant les deux passes, les
-  fermiers avant les mineurs. Sur une échelle entière `RATIO_SCALE` = 10 000 (100 %) :
+  ouvriers disponibles. Les mineurs sont servis avant les deux passes et
+  avant les fermiers. Sur une échelle entière `RATIO_SCALE` = 10 000 (100 %) :
 
   ```
   passe 1, biens (lignes utiles seulement, à 100 % de productivité, §8.2) :
