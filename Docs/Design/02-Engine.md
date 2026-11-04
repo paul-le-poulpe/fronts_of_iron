@@ -508,8 +508,10 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 1. répartition (00-Game §4) sur population_active = max(0, population − soldiers − hurt) :
    les lignes, puis les mineurs, les ouvriers des biens, fermiers et pêcheurs, les ouvriers de l'armement :
 
-   demande de tracteurs, de bateaux = fieldMachineDemand(b, population_active)
-     (machines d'une mécanisation totale pour les fermiers et pêcheurs répartis) ;
+   champs_estimés = max(0, population_active − mineurs(min(fer de toutes les lignes actives, capacité), pompes)
+                     − Σ workersForLines(bien, active) des groupes de biens)      fieldPeopleIfAllActive
+   demande de tracteurs, de bateaux = fieldMachineDemand(b, champs_estimés)
+     (machines d'une mécanisation totale pour ces personnes réparties selon farmPercent, avec report) ;
      demande de pompes = goodsDemand[pompe] du tour précédent
 
    lignes qui tournent (00-Game §8, §8.2), sans ordre de remplissage :
@@ -1062,8 +1064,9 @@ points 31 et 32 sont des choix de plus.
     d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
     la référence étant `machineReference(cfg, disponibles + report, surface)`
     pour les tracteurs et les bateaux (`fieldMachineDemand`). Tracteurs et
-    bateaux : la demande des fermiers et pêcheurs déjà répartis (`fieldMachineDemand(b,
-    population − soldats − blessés)`), la même qui limite les lignes utiles (00-Game §8.2). Pour les pompes, la référence est lesPour les pompes, la référence est les
+    bateaux : `fieldMachineDemand(b, fieldPeopleIfAllActive(p, population − soldats − blessés))`, la
+    population moins les mineurs et les ouvriers de biens qu'il faudrait si toutes les lignes actives tournaient ;
+    la même qui limite les lignes utiles (00-Game §8.2). Pour les pompes, la référence est lesPour les pompes, la référence est les
     mineurs à pleine mécanisation des cases qu'il faudrait pour le fer de **toutes les
     lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
     une usine de pompes seule, plafonnée à une demande nulle (§4, lignes qui tournent),

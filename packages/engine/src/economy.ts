@@ -193,6 +193,26 @@ function fieldMachineDemand(p: Player, b: number, people: number): number {
   return Math.ceil((ref * cfg.maxMachinesPer1000) / MILLI);
 }
 
+/**
+ * Personnes qui iraient aux champs et à la pêche si toutes les lignes actives tournaient à 100 % (00-Game §4, §8.2) :
+ * `people` moins les mineurs du fer de toutes les lignes actives (plafonné par les cases) et moins les ouvriers de
+ * toutes les lignes de biens actives. Ne dépend pas des lignes qui tournent, qui dépendent elles-mêmes de la demande
+ * de machines calculée sur ce nombre : pas de boucle, ni dans le tour ni d'un tour à l'autre. Sous-estime les fermiers
+ * quand des lignes de biens actives ne tournent pas (choix de l'auteur, 5 novembre 2026).
+ */
+function fieldPeopleIfAllActive(p: Player, people: number): number {
+  let iron = 0;
+  let goodsWorkers = 0;
+  for (const f of p.factories) {
+    for (const g of f.groups) {
+      iron += g.active * productConfig(g.good).ironPerLine;
+      if (armamentIndex(g.good) < 0) goodsWorkers += workersForLines(g.good, g.active);
+    }
+  }
+  const miners = minersFor(Math.min(iron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile), p.goodsEffective[MINING_MACHINE]!);
+  return Math.max(0, people - miners - goodsWorkers);
+}
+
 /** `n × ratio / RATIO_SCALE`, arrondi vers le bas : `n` entier, `ratio` sur l'échelle `RATIO_SCALE`. */
 export function scaledByRatio(n: number, ratio: number): number {
   return Math.floor((n * ratio) / RATIO_SCALE);
@@ -405,11 +425,12 @@ interface Allocation {
  * `running` des groupes de lignes (recalculé à chaque appel).
  */
 function allocate(p: Player, people: number): Allocation {
-  // Demande des lignes utiles : tracteurs et bateaux, ceux de toute la population répartie entre champs et pêche (sans
-  // retirer les mineurs, qui dépendent eux-mêmes des lignes) ; pompes, celle du tour précédent.
+  // Demande des lignes utiles : tracteurs et bateaux, ceux des personnes qui peuvent aller aux champs et à la pêche ;
+  // pompes, celle du tour précédent.
   const fieldDemand = new Array<number>(p.goods.length).fill(-1);
-  fieldDemand[TRACTOR] = fieldMachineDemand(p, TRACTOR, people);
-  fieldDemand[FISHING_BOAT] = fieldMachineDemand(p, FISHING_BOAT, people);
+  const fieldPeopleEstimate = fieldPeopleIfAllActive(p, people);
+  fieldDemand[TRACTOR] = fieldMachineDemand(p, TRACTOR, fieldPeopleEstimate);
+  fieldDemand[FISHING_BOAT] = fieldMachineDemand(p, FISHING_BOAT, fieldPeopleEstimate);
   const demand = p.goodsDemand.map((d, b) => (fieldDemand[b]! >= 0 ? fieldDemand[b]! : d));
   const lines = selectLines(p, demand);
   // Mineurs d'abord (auteur, 4 novembre 2026) : ceux du fer que demandent les lignes qui tournent, plafonné par la capacité

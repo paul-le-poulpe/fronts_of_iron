@@ -334,3 +334,15 @@ devient `running` ; nouveaux champs du joueur `ironDemanded`, `ironConsumed`, le
 - Puis (même jour) : ouvriers des lignes de biens servis juste après les mineurs, avant les champs ; ceux de l'armement
   après les champs. Tester : petite population avec une ligne de bateaux, les ouvriers de la ligne sont pris avant les
   pêcheurs.
+
+## Armement × 2, fer à l'échelle de la demande (5 novembre 2026)
+
+- `productionPerHour` × 2 pour les 12 types (fusil 4 752 … antichar blindé 108), `maxStockSeconds` 800 inchangé : le stock
+  cible d'une ligne double.
+- Client : « approprié pour » compte les lignes actives (`active`), plus toutes les lignes ; barres du fer (onglet
+  Ressources et mini-barre) à l'échelle du fer demandé, hachures rouges = demandé non obtenu, plus de fond de capacité.
+- Demande de tracteurs et de bateaux sur `fieldPeopleIfAllActive` : population active − mineurs du fer de toutes les lignes
+  actives − ouvriers de toutes les lignes de biens actives. Tester : petite population, la demande baisse quand on active
+  une ligne de tracteurs ; avec des inactifs, elle vaut la mécanisation totale.
+- Barre du fer : échelle max(capacité, demandé), orange clair jusqu'à la capacité.
+- Puis armement encore × 2 (fusil 9 504 … antichar blindé 216) et `maxStockSeconds` 200 : stock cible d'une ligne ÷ 2.

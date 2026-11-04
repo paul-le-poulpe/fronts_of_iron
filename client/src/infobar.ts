@@ -685,17 +685,16 @@ export class InfoBar {
       const t = track("flow");
       const value = el("span", "ib-value");
       value.title = "Possédés / utiles";
-      const label = el("span");
+      const label = el("span", "ib-iconlabel");
       const sym = productIcon(m.good);
       attachGoodTip(sym, m.good);
-      label.append(sym, ` ${m.label}`, gearIcon(m.good));
+      label.append(sym, m.label, gearIcon(m.good));
       return { ...m, index: catalog.goodIds.indexOf(m.good), t, value, r: row(label, t.root, value) };
     });
 
     const legend = el("p", "ib-legend");
     legend.append(
       legendItem("flow", "produit ce tour"),
-      legendItem("req", "production requise"),
       legendItem("gap", "demandé, non obtenu"),
     );
     const pane = this.pane(
@@ -706,16 +705,20 @@ export class InfoBar {
       ...machines.map((m) => m.r),
       legend,
     );
-    iron.root.title = "Barre pleine : capacité · trait noir : demandé";
-    /** Fer : orange = consommé, hachures rouges = demandé non obtenu, trait noir = demandé, orange clair (barre pleine) = capacité. */
+    iron.root.title = "Orange : consommé · hachures rouges : demandé non obtenu · orange clair : capacité des cases non utilisée";
+    /**
+     * Fer, à l'échelle du plus grand de la capacité des cases et du fer demandé : orange clair jusqu'à la capacité (le
+     * potentiel), orange = consommé, hachures rouges = demandé non obtenu, jusqu'au demandé même au-delà de la capacité.
+     */
     const ironSpans = (t: Track, d: HumanDetail, s: PlayerStats): void => {
       const cap = d.ironCapacity;
       const got = s.ironConsumed;
       const need = s.ironDemanded;
-      span(t.fill, 0, pct(got, cap));
-      span(t.gap, pct(got, cap), got < need ? pct(need, cap) : 0);
-      t.mark.style.left = `${pct(need, cap)}%`;
-      t.mark.hidden = need === 0;
+      const scale = Math.max(cap, need);
+      span(t.deployed, 0, pct(cap, scale));
+      span(t.fill, 0, pct(got, scale));
+      span(t.gap, pct(got, scale), got < need ? pct(need, scale) : 0);
+      t.mark.hidden = true;
     };
 
     return {

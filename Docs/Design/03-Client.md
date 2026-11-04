@@ -525,10 +525,10 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     la moyenne par ligne remplie (`workers / filled`, arrondie ; sans ligne
     remplie, `workersPerLine`) ; pour un type
     d'armement, « approprié pour : » le nombre de divisions de référence que
-    le stock cible de **cette ligne** équipe, en gras, et l'icône de la division :
-    `⌊ ⌊ lignes × productionPerLine × stockSeconds ÷ 60 ⌋ ÷ exemplaires par division ⌋`,
+    le stock cible des **lignes actives** du groupe équipe, en gras, et l'icône de la division :
+    `⌊ ⌊ active × productionPerLine × stockSeconds ÷ 3600 ⌋ ÷ exemplaires par division ⌋`,
     la formule du stock cible de l'onglet « Armement » (00-Game §8.3) appliquée
-    aux lignes construites du groupe. Division de référence
+    aux lignes actives (réglées par le joueur), pas à toutes les lignes construites. Division de référence
     (`FactoryCatalog.equipUnit`, calculée dans `game.ts`) : les réguliers s'ils
     utilisent l'armement (fusils, mitrailleuses), sinon la première division de
     `DIVISIONS` qui l'utilise. Les biens n'ont pas ce second bloc. Plus de
@@ -592,9 +592,10 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   leur texte le plus long avec la notation de `num` (« 99,9K », « +99,9K »,
   « / 99,9K ») : les boutons ne changent pas de largeur quand les chiffres changent.
   Ressources (flux) : la barre du fer, **orange** (`.ib-track.iron`, comme dans
-  le détail) : orange clair pour la barre pleine (capacité, ce que les cases de
-  fer pourraient donner), orange pour le fer consommé, **écart hachuré rouge** (fer demandé non obtenu, même motif que l'infobulle du
-  camembert), trait noir du demandé. Provisoire : elle deviendra une vue agrégée de toutes les ressources
+  le détail), à l'échelle du plus grand de la capacité et du fer demandé :
+  orange clair jusqu'à la capacité (le fer encore disponible), orange pour le
+  fer consommé, **hachures rouges** pour le fer demandé non obtenu, jusqu'au
+  demandé même au-delà de la capacité. Provisoire : elle deviendra une vue agrégée de toutes les ressources
   (hors biens produits), à définir, car elle doit couvrir plusieurs types autres
   que le fer. Armement : tous les types additionnés, mêmes couleurs et même
   échelle que les lignes du détail (fronts, stock, hachures au-delà de la cible,
@@ -769,11 +770,12 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      déplacement n'envoie pas `change`). Il est mis à jour à l'ouverture du
      détail et à chaque tour tant qu'il est ouvert.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
-     *Fer* : barre pleine (orange clair) = capacité (`ironCapacity`), orange = fer consommé au
-     dernier tour (`PlayerStats.ironConsumed`), trait noir épais = fer demandé (`ironDemanded`, des lignes qui
-     tournent : une ligne écartée parce que la demande de son bien est atteinte ne
-     demande pas de fer) ; l'écart entre consommé et demandé est **hachuré rouge**
-     (`.ib-gap`, même motif que l'infobulle). *Aluminium* :
+     *Fer* : échelle = le plus grand de la capacité (`ironCapacity`) et du fer demandé
+     (`ironDemanded`, des lignes qui tournent : une ligne écartée parce que la demande de son bien est atteinte ne
+     demande pas de fer). Orange clair (`.ib-front`) jusqu'à la capacité ; orange = fer consommé au
+     dernier tour (`PlayerStats.ironConsumed`) ; de là jusqu'au demandé, **hachuré rouge**
+     (`.ib-gap`, même motif que l'infobulle). Une échelle sur la seule capacité coupait les hachures quand la
+     demande la dépassait. *Aluminium* :
      ligne grisée « à venir » (aucune règle ne l'extrait). Les deux lignes
      ont leur icône (`goods/goods-iron-ingot.png`, `goods/goods-aluminium-ingot.png`), suivie dans la case du
      libellé de l'icône camembert (`miscellaneous/icon-pie-chart.png`, `pieIcon`), au même endroit que l'engrenage

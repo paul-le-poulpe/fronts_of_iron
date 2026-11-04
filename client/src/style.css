@@ -515,6 +515,9 @@ tr.me td { font-weight: 600; }
 .tip-ibar > .obt { background: #e8821c; }
 .tip-ibar > .mis { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
 .ib-row.occ .ib-gear { margin-left: auto; }
+/* Camembert et engrenage des autres onglets : collés à gauche de la barre, comme dans l'onglet Population. */
+.ib-label:has(.ib-gear) > .ib-iconlabel { display: flex; }
+.ib-iconlabel > .ib-gear { margin-left: auto; }
 .ib-row.soon { opacity: 0.45; }
 .ib-label { white-space: nowrap; }
 .ib-iconlabel { display: inline-flex; align-items: center; gap: 6px; }
@@ -552,8 +555,11 @@ tr.me td { font-weight: 600; }
 .ib-cap .cap-land { background: #dcdcdc; }
 .ib-cap .cap-hurt { background: var(--occ-hurt); }
 .ib-track.stock .ib-fill { background: var(--stock); }
-/* Fer : orange clair = ce que les cases de fer pourraient donner (capacité), orange = extrait. */
-.ib-track.iron { background: #f7d9b0; }
+/*
+ * Fer : échelle = max(capacité, demandé) ; orange clair (`.ib-front`) = capacité des cases, orange = consommé, hachures
+ * rouges (`.ib-gap`) = demandé non obtenu.
+ */
+.ib-track.iron .ib-front { background: #f7d9b0; }
 .ib-track.iron .ib-fill { background: #e8821c; }
 .ib-track .ib-gap { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
 .ib-track .ib-hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }

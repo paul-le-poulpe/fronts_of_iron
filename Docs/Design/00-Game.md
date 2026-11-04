@@ -553,9 +553,8 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
   leurs ouvriers ; ce sont alors les champs qui manquent de bras, puis
   l'armement (productivité réduite, §8). Le début de partie sert l'expansion
   (machines, nourriture) avant l'armement. La demande de tracteurs et
-  de bateaux (§8.2) est calculée sur toute la population répartie entre champs
-  et pêche, mineurs compris (provisoire : les retirer rendrait le calcul
-  circulaire, les mineurs dépendant des lignes).
+  de bateaux est calculée sur la population qui irait aux champs si toutes
+  les lignes actives tournaient (§8.2).
 
   ```
   actifs   = population − soldats − blessés
@@ -1119,13 +1118,20 @@ consommation[fer] = demande[fer] × r
   à cette limite ; quand la demande baisse, la production baisse d'elle-même.
   Exemple de l'auteur : ne pas produire des milliers de bateaux de pêche quand
   les pêcheurs sont partis dans les usines.
-- **Demande des tracteurs et des bateaux** : les fermiers et les pêcheurs sont
-  servis avant les lignes (§4), la demande est donc celle des fermiers et
-  pêcheurs déjà répartis : machines d'une mécanisation totale (§6.2) pour la
-  population qui travaille (population − soldats − blessés), avec le report
-  entre fermiers et pêcheurs (§4). Elle ne dépend plus des lignes ni de leur
-  ordre (l'alternance d'un tour à l'autre, qui avait motivé un calcul au
-  remplissage le 1er novembre 2026, n'existe plus). Les pompes gardent la
+- **Demande des tracteurs et des bateaux** (décision de l'auteur, 5 novembre
+  2026) : machines d'une mécanisation totale (§6.2), avec le report entre
+  fermiers et pêcheurs (§4), pour les personnes qui iraient aux champs et à la
+  pêche **si toutes les lignes actives tournaient à 100 %** : population −
+  soldats − blessés − mineurs du fer de toutes les lignes actives (plafonné par
+  les cases, §7) − ouvriers de toutes les lignes de biens actives (§8.1).
+  Mineurs et ouvriers des biens étant servis avant les champs (§4), compter
+  toute la population faisait produire des tracteurs pour des fermiers partis
+  à l'usine fabriquer ces tracteurs. Ce nombre ne dépend que du réglage des
+  lignes, pas des lignes qui tournent : pas de boucle dans le tour, pas
+  d'alternance d'un tour à l'autre (un calcul sur les fermiers du tour
+  précédent en aurait réintroduit une). Il sous-estime les fermiers quand des
+  lignes de biens actives ne tournent pas ; avec de la population inactive,
+  la demande atteint quand même la mécanisation totale. Les pompes gardent la
   demande du tour précédent : elle ne dépend pas de la population.
 - Sur le curseur des lignes actives (§8.1), un **trait noir** (rouge jusqu'au
   1er novembre 2026) marque le
@@ -1180,12 +1186,16 @@ consommation[fer] = demande[fer] × r
   `RATIO_SCALE`) ; les exemplaires entiers (`floor(reste / (3600 × RATIO_SCALE))`)
   passent dans la réserve, le reste attend la seconde suivante. La
   répartition des travailleurs et le fer sont calculés à chaque tour. Valeurs par
-  heure : fusil 2 376, mitrailleuse 432, artillerie 90, antichar et antiaérien
-  540, tankette, char rapide et artillerie automotrice 36, char d'infanterie
-  et char moyen 18, antichar blindé et antiaérien automoteur 54. Le 5 novembre
+  heure : fusil 9 504, mitrailleuse 1 728, artillerie 360, antichar et antiaérien
+  2 160, tankette, char rapide et artillerie automotrice 144, char d'infanterie
+  et char moyen 72, antichar blindé et antiaérien automoteur 216. Le 5 novembre
   2026, toute la production d'armement a été divisée par 20 (l'unité est passée
   de la minute à l'heure pour garder des entiers) et le stock cible multiplié
-  par 20 ; fer et ouvriers par ligne inchangés. Le 4 novembre
+  par 20 ; fer et ouvriers par ligne inchangés. Puis la production a été
+  multipliée par 2, `maxStockSeconds` inchangé : à l'équilibre, le même nombre
+  de lignes équipe deux fois plus de divisions. Puis encore × 2, avec
+  `maxStockSeconds` ÷ 4 (800 → 200) : le stock cible d'une ligne est divisé
+  par 2, et atteint quatre fois plus vite. Le 4 novembre
   2026, l'auteur a voulu quatre fois plus de lignes par unité pour l'artillerie
   tractée et deux fois plus pour les chars et l'appui-feu sur chenilles, au même
   fer par exemplaire : production et fer par ligne divisés d'autant ; puis tout
@@ -1193,7 +1203,7 @@ consommation[fer] = demande[fer] × r
   l'appui-feu à pied (artillerie, antichar, antiaérien) divisés par 2, ouvriers
   inchangés. Les biens (§8) restent un flux produit à chaque tour.
 - **Stock cible** : `ARMAMENT.maxStockSeconds` secondes de production (une seule
-  valeur pour tous les types, 800).
+  valeur pour tous les types, 200).
 
   ```
   stock_cible[a] = floor(nombre de lignes de a × ARMAMENT[a].productionPerHour
@@ -1331,7 +1341,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
 | `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerHour` (par minute, pas par tour), `workersPerLine`, icône (§8.3) |
 | `ARMAMENT.everyTurns` | intervalle du versement de la production d'armement, en tours (§8.3) ; 10 (une seconde) |
-| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 800 |
+| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 200 |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `DIPLOMACY.proposalTurns` | durée de vie d'une proposition de pacte ou de paix, en tours (§1) ; **à fixer** : 300 en attendant (valeur provisoire, pas donnée par l'auteur) |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
