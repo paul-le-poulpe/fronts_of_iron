@@ -906,9 +906,13 @@ vaut 0 (§2).
   pour chaque groupe de lignes, les ouvriers et le fer qu'il utilise.
 - Chaque ligne produit, par tour, une quantité propre au bien
   (`GOODS[b].productionPerLine`), et consomme la ressource indiquée pour ce
-  bien. **Fer par ligne remplie et par tour** (`ironPerLine`, décision de
-  l'auteur, 24 octobre 2026) : artillerie 10, tracteur 5, bateau de pêche 3,
-  1 pour les autres biens et types d'armement.
+  bien. **Fer par ligne remplie et par tour** (`ironPerLine`, décisions de
+  l'auteur du 24 octobre, du 3 et du 4 novembre 2026) : fusil et mitrailleuse 4,
+  antichar et antiaérien 20, artillerie 50, tankette 50, char rapide 100,
+  char d'infanterie et char moyen 200, artillerie automotrice 200, antichar
+  blindé 150, antiaérien automoteur 100 ; tracteur 100, bateau de pêche 60,
+  pompe à vapeur 20. Une case de fer en extrait 10 par tour
+  (`RESOURCES.iron.capacityPerTile`, §7).
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
   alternatives, selon l'arbre de son type d'usine (§8.4). Exemples donnés par
   l'auteur : une usine de pompes à vapeur qui débloque les tracteurs, puis les
@@ -1116,18 +1120,27 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   2026) : une ligne active et remplie produit, et ce qu'elle produit entre dans
   la réserve. Il n'y a pas de ligne suspendue.
 - **Cadence** (auteur, 3 novembre 2026) : la production d'armement est comptée
-  par seconde (`ARMAMENT[a].productionPerSecond`) et ajoutée à la réserve une
-  fois par seconde (`ARMAMENT.everyTurns` tours). Le remplissage des lignes,
-  les ouvriers et le fer restent calculés à chaque tour. Une ligne équipe une
-  division complète en 25 à 40 s (fusil 33/s, mitrailleuse et canons 3/s,
-  artillerie et tankette 2/s, chars de 40 exemplaires 1/s). Les biens (§8)
-  restent un flux produit à chaque tour.
+  par minute (`ARMAMENT[a].productionPerMinute`, entier) et versée une fois par
+  seconde (`ARMAMENT.everyTurns` tours). Chaque seconde, chaque type ajoute
+  `lignes remplies × productionPerMinute` à un reste en soixantièmes
+  (`Player.armamentProductionRemainder`) ; les exemplaires entiers
+  (`floor(reste / 60)`) passent dans la réserve, le reste (0 à 59) attend la
+  seconde suivante. Le remplissage des lignes, les ouvriers et le fer restent
+  calculés à chaque tour. Valeurs par minute : fusil 792, mitrailleuse 72,
+  artillerie 60, antichar et antiaérien 360, tankette, char rapide et
+  artillerie automotrice 12, char d'infanterie et char moyen 6, antichar
+  blindé et antiaérien automoteur 18. Le 4 novembre 2026, l'auteur a voulu
+  quatre fois plus de lignes par unité pour l'artillerie tractée et deux fois
+  plus pour les chars et l'appui-feu sur chenilles, au même fer par
+  exemplaire : production et fer par ligne divisés d'autant ; puis tout le fer
+  consommé multiplié par 2. Les biens (§8) restent un flux produit à
+  chaque tour.
 - **Stock cible** : `ARMAMENT.maxStockSeconds` secondes de production (une seule
-  valeur pour tous les types, 10).
+  valeur pour tous les types, 40).
 
   ```
-  stock_cible[a] = nombre de lignes de a × ARMAMENT[a].productionPerSecond
-                   × ARMAMENT.maxStockSeconds
+  stock_cible[a] = floor(nombre de lignes de a × ARMAMENT[a].productionPerMinute
+                         × ARMAMENT.maxStockSeconds / 60)
   ```
 
   Calculé sur toutes les lignes de ce type (la limite théorique décidée plus
@@ -1259,9 +1272,9 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
-| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerSecond` (par seconde, pas par tour), `workersPerLine`, icône (§8.3) |
-| `ARMAMENT.everyTurns` | intervalle de la production d'armement, en tours (§8.3) ; 10 (une seconde) |
-| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 10 |
+| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerMinute` (par minute, pas par tour), `workersPerLine`, icône (§8.3) |
+| `ARMAMENT.everyTurns` | intervalle du versement de la production d'armement, en tours (§8.3) ; 10 (une seconde) |
+| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 40 |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `DIPLOMACY.proposalTurns` | durée de vie d'une proposition de pacte ou de paix, en tours (§1) ; **à fixer** : 300 en attendant (valeur provisoire, pas donnée par l'auteur) |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |

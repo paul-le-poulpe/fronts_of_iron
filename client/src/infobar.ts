@@ -21,16 +21,15 @@
 // changent rien ici : elles appellent le rappel `onMapOption`.
 //
 // Chaque nombre a une infobulle (`title`) qui nomme ses valeurs dans l'ordre où
-// elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par seconde ».
+// elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par minute ».
 
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
 import { productName } from "./names.ts";
 import { type FactoryCatalog, type HumanDetail, type PlayerStats } from "./protocol.ts";
+import { num } from "./format.ts";
 
-const fmt = new Intl.NumberFormat("fr-FR");
-const num = (n: number): string => fmt.format(n);
 const signed = (n: number): string => (n > 0 ? "+" : "") + num(n);
 
 /** Part de `x` dans `total`, en pourcentage de largeur, bornée à 0…100. */
@@ -728,7 +727,7 @@ export class InfoBar {
       const t = track("stock");
       t.mark.hidden = false;
       const value = el("span", "ib-value");
-      value.title = "Stock / cible · par seconde · sur les fronts";
+      value.title = "Stock / cible · par minute · sur les fronts";
       // 32 px : les chars n'ont pas d'icône 16 px (icons.ts, `ICONS_32`).
       const label = el("span", "ib-iconlabel");
       label.append(productIcon(id, 32), ` ${capitalize(productName(id))}`);
@@ -778,7 +777,7 @@ export class InfoBar {
           if (x.r.hidden) continue;
           shown++;
           stockSpans(x.t, stock, target, onFronts);
-          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par seconde · ${num(onFronts)} sur les fronts`;
+          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par minute · ${num(onFronts)} sur les fronts`;
         }
         empty.hidden = shown > 0;
         decay.textContent = `${num(this.info.armamentDecayPercent)} % de l'excès disparaît par tour`;
@@ -804,7 +803,7 @@ export class InfoBar {
     };
   }
 
-  /** Production d'un type d'armement par seconde : lignes remplies × production par ligne et par seconde. */
+  /** Production d'un type d'armement par minute : lignes remplies × production par ligne et par minute. */
   private production(d: HumanDetail, id: string, catalog: FactoryCatalog): number {
     let filled = 0;
     for (const f of d.factories) for (const g of f.groups) if (g.good === id) filled += g.filled;

@@ -94,12 +94,12 @@ export function factoryLevel(factory: Factory): number {
 
 /**
  * Réserve maximale d'un type d'armement (00-Game §8.3) : toutes ses lignes, quel
- * que soit leur statut, × production par seconde × `maxStockSeconds`.
+ * que soit leur statut, × production par minute × `maxStockSeconds` ÷ 60, arrondi vers le bas.
  */
 export function armamentReserveMax(player: Player, id: ArmamentId): number {
   let lines = 0;
   for (const f of player.factories) for (const g of f.groups) if (g.good === id) lines += g.lines;
-  return lines * ARMAMENT.types[id].productionPerSecond * ARMAMENT.maxStockSeconds;
+  return Math.floor((lines * ARMAMENT.types[id].productionPerMinute * ARMAMENT.maxStockSeconds) / 60);
 }
 
 /** Ville du joueur `playerId` ou null (ordre venu du réseau : `city` a déjà été vérifié entier). */

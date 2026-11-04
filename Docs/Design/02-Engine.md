@@ -173,7 +173,7 @@ case qui porte une ressource, quelle qu'elle soit, a une fertilité de 0.
 règle de conflit, et recalcule la répartition à chaque mouvement de curseur ; la
 page affiche les valeurs à recopier dans `config/resources.ts`. `npm run
 viz:iron` ne montre que le fer, sans conflit. La capacité d'extraction d'une case de fer
-(`RESOURCES.iron.capacityPerTile`, 1 fer par tour) n'intervient pas dans la
+(`RESOURCES.iron.capacityPerTile`, 10 fer par tour) n'intervient pas dans la
 génération : elle sert à l'étape du joueur (§4, étape de la population).
 
 `generateTestMap` écrit le résultat dans `GameMap.resources`. `hashMap` couvre
@@ -559,11 +559,13 @@ nourriture = max(blé + poisson, FOOD.minimum)
 3. production : pour chaque groupe,
      un bien : goods[b] += filled × productionPerLine (remis à 0 avant : c'est la production de ce tour) ;
      un armement, seulement aux tours multiples de ARMAMENT.everyTurns (une seconde) :
-       armamentReserve[a] += filled × productionPerSecond ; la production ne s'arrête jamais
+       reste_prod[a] += filled × productionPerMinute ; la production ne s'arrête jamais
+     puis, à ces mêmes tours, pour chaque type : n = floor(reste_prod[a] / 60) ;
+       armamentReserve[a] += n ; reste_prod[a] −= 60 × n   (armamentProductionRemainder)
    progression : pour chaque usine et chaque nœud de son arbre, n = somme des filled
      des groupes de ce bien : progress = min(unlockTurns, progress + n)
    déclin de l'excès, pour chaque type d'armement :
-     stock_cible = lignes de a (toutes les usines, tout état) × productionPerSecond × maxStockSeconds
+     stock_cible = floor(lignes de a (toutes les usines, tout état) × productionPerMinute × maxStockSeconds / 60)
      excès = max(0, réserve + équipement des divisions − stock_cible)     (05-Fronts §4.5 : `divisionEquipment`, réserve nationale comprise)
      si excès == 0 : reste = 0
      sinon : total = reste + excès × decayRate ; perdu = floor(total / S)
@@ -1054,7 +1056,7 @@ points 31 et 32 sont des choix de plus.
     de perte ».
 32. Valeurs d'essai (aucune n'est fixée, 00-Game §10), choisies pour qu'une partie
     sur la carte de test soit jouable : `workersPerLine` 200 pour chaque produit (4 × 50) ;
-    `RESOURCES.iron.capacityPerTile` 1 (une case de fer fait tourner une ligne à 1 fer) ;
+    `RESOURCES.iron.capacityPerTile` 10 (une case de fer fait tourner cinq lignes de fusils à 2 fer) ;
     `MINING` : `mechanizationBase` 100, `mechanizationMax` 500,
     `maxMachinesPer1000` 100, `curveExponent` 2 (10 mineurs par case sans pompe,
     2 avec le maximum) ; `GOODS.*.productionPerLine` 30 machines par tour et par
@@ -1063,12 +1065,11 @@ points 31 et 32 sont des choix de plus.
     passer la surface par fermier de 0,3 à 0,912 case) ;
     `ARMAMENT.types` : fusil 10, mitrailleuse 4, artillerie 1, canon anti-aérien 1,
     canon anti-char 1, chenillette 1 par ligne et par tour (chenillette : fer 5,
-    comme le tracteur ; char d'infanterie 20, char de cavalerie 10, char moyen 20, 1 par ligne ; artillerie autopropulsée
-    fer 20, canon anti-char blindé 15, canon anti-aérien autopropulsé 10, 1 par ligne ; valeurs de l'auteur) ; `ARMAMENT.decayRate` 100 (1 % de
-    l'excès par tour) ; `ironPerLine` 1, sauf artillerie 10, tracteur 5, bateau de pêche 3
-    (valeurs de l'auteur). `FACTORY.unlockTurns` 500,
+    comme le tracteur ; char d'infanterie, char de cavalerie, char moyen, artillerie autopropulsée, canon anti-char
+    blindé, canon anti-aérien autopropulsé : 1 par ligne ; valeurs de l'auteur) ; `ARMAMENT.decayRate` 100 (1 % de
+    l'excès par tour) ; `ironPerLine` : valeurs de l'auteur, listées en 00-Game §8. `FACTORY.unlockTurns` 500,
     `FACTORY.maxTypesPerCity` 1 sont des valeurs
-    de l'auteur ; `ARMAMENT.maxStockSeconds` 10.
+    de l'auteur ; `ARMAMENT.maxStockSeconds` 40.
 
 33. **Diplomatie** (00-Game §1 donne le tableau des statuts et des actions ; le reste
     est provisoire, à valider avec l'auteur) :

@@ -57,6 +57,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
+| `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
 | `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, statistiques de combat et totaux des premières lignes, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
 | `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable`. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
@@ -453,6 +454,12 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
 
 ## 7. Interface provisoire
 
+- **Nombres** (auteur, 4 novembre 2026) : tout nombre affiché passe par `num`
+  (`src/format.ts`). Sous 10 000 : entier avec séparateur de milliers
+  (« 9 999 ») ; au-delà, en milliers puis en millions, une décimale sous 100,
+  aucune au-dessus : « 10K », « 12,3K », « 123K », « 1,2M », « 123M ». La
+  colonne de statistiques de la fenêtre d'un front (`formatStat`) passe en
+  notation courte dès 1 000, faute de place.
 - **Écran de départ** : nombre de bots (1 à 7, 3 par défaut), graine de la carte
   (12345 par défaut), « Jouer ».
 - **Barre de boutons**, en bas (00-Game §1) : « Créer une ville », suivi du
@@ -510,7 +517,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     la section seulement), puis sur la première ligne, pour les lignes remplies
     au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),
     icône du fer, →, production totale (lignes remplies × `productionPerLine` du
-    catalogue : par tour pour un bien, par seconde pour un type d'armement),
+    catalogue : par tour pour un bien, par minute pour un type d'armement),
     icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
     ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
     groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
@@ -519,7 +526,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     remplie, `workersPerLine`) ; pour un type
     d'armement, « approprié pour : » le nombre de divisions de référence que
     le stock cible de **cette ligne** équipe, en gras, et l'icône de la division :
-    `⌊ lignes × productionPerLine × stockSeconds ÷ exemplaires par division ⌋`,
+    `⌊ ⌊ lignes × productionPerLine × stockSeconds ÷ 60 ⌋ ÷ exemplaires par division ⌋`,
     la formule du stock cible de l'onglet « Armement » (00-Game §8.3) appliquée
     aux lignes construites du groupe. Division de référence
     (`FactoryCatalog.equipUnit`, calculée dans `game.ts`) : les réguliers s'ils
@@ -791,8 +798,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
   mécanisation totale, l'échelle et la zone hachurée de l'armement, la production
-  d'armement par seconde (lignes remplies × `productionPerLine` du catalogue, qui
-  vaut `productionPerSecond` pour l'armement). Lu tel
+  d'armement par minute (lignes remplies × `productionPerLine` du catalogue, qui
+  vaut `productionPerMinute` pour l'armement). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
 - **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste
@@ -832,7 +839,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (`ResizeObserver`). Dépose : sur une ligne du joueur ou la réaction rapide, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
   réserve ; les divisions déjà à leur destination sont filtrées.
 - **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la cinquième section de la barre d'informations. Barre du haut : le « + »
-  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue` ; fond du bouton `--t-recruit-bg`, bleu clair). Réserve nationale en deux sections (`resSection`) :
+  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement ; fond rouge clair `#f4b6b6`, corbeille noire). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue` ; fond du bouton `--t-recruit-bg`, bleu clair). Réserve nationale en deux sections (`resSection`) :
   « FORMATION » (divisions `status === "formation"`, zone `"form"`) au-dessus de « RÉSERVE » (toutes les autres divisions de la réserve, zone `"res"`, seule
   section avec `data-drop="reserve"`) ; le libellé est un `.fx-mlab` (même style que les lettres du menu « + »), premier enfant de la section donc
   sous la zone des pions, couleur `--t-res-ink`. Dans chaque section, de vrais

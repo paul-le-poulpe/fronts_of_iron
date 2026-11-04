@@ -104,6 +104,8 @@ export interface Player {
   readonly armamentReserve: number[];
   /** Reste de la baisse de l'excès de chaque réserve, sur l'échelle `CURVE_SCALE` (0 si pas d'excès). */
   readonly armamentRemainder: number[];
+  /** Reste de la production de chaque type d'armement, en soixantièmes d'exemplaire (0 à 59, 00-Game §8.3). */
+  readonly armamentProductionRemainder: number[];
   /** Ouvriers des lignes remplies au dernier tour. */
   factoryWorkers: number;
   /** Mineurs de fer au dernier tour. */
@@ -259,6 +261,7 @@ export function createGame(setup: GameSetup): GameState {
       goodsEffective: new Array<number>(Object.keys(GOODS).length).fill(0),
       goodsDemand: new Array<number>(Object.keys(GOODS).length).fill(0),
       armamentReserve: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
+      armamentProductionRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       armamentRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       factoryWorkers: 0,
       miners: 0,

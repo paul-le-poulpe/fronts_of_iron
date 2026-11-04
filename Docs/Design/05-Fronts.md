@@ -937,8 +937,8 @@ l'implémentation). De haut en bas :
 1. **Barre du haut** : le **bouton « + »** (icône `misc-plus-lighter.png`,
    suivie du mot « RECRUTEMENT » en gras, majuscules, 22 px, bleu clair, sur un fond bleu très clair : `#dbeaff` en
    thème clair, `#2d4262` en thème sombre) occupe la
-   **moitié gauche** ; la **corbeille** occupe la **moitié droite**
-   et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
+   **moitié gauche** ; la **corbeille** (fond rouge clair, icône noire ; auteur,
+   3 novembre 2026) occupe la **moitié droite** et **n'apparaît que pendant un glisser**. Y déposer des divisions de la
    réserve nationale les supprime (§3.5). Icône de corbeille : *provisoire*.
 2. **Réserve nationale**, en **deux sections séparées** comme les fronts
    (même écart, même fond), **formation en haut, réserve en bas**

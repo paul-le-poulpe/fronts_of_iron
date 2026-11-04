@@ -8,7 +8,7 @@
 export interface ProductConfig {
   /** Ouvriers employés par une ligne remplie : 200 pour commencer (4 × 50, décision de l'auteur, 24 octobre 2026), quel que soit le bien (00-Game §8, §13). */
   readonly workersPerLine: number;
-  /** Fer consommé par tour par une ligne remplie : 1 par défaut ; tracteur 5, bateau de pêche 3, artillerie 10 (00-Game §8). */
+  /** Fer consommé par tour par une ligne remplie (00-Game §8) ; une case de fer en extrait `RESOURCES.iron.capacityPerTile` (10). */
   readonly ironPerLine: number;
   /** Icône : chemin sous `client/public/icons/`, par exemple `goods/goods-tractor-outline.png`. Absent : la page affiche un symbole texte. Sans effet sur la simulation. */
   readonly icon?: string;
@@ -46,15 +46,15 @@ export const GOODS_DECAY = {
  */
 export const GOODS = {
   tractor: {
-    productionPerLine: 10, workersPerLine: 200, ironPerLine: 5,
+    productionPerLine: 10, workersPerLine: 200, ironPerLine: 100,
     icon: "goods/goods-tractor-outline.png",
   },
   fishingBoat: {
-    productionPerLine: 30, workersPerLine: 200, ironPerLine: 3,
+    productionPerLine: 30, workersPerLine: 200, ironPerLine: 60,
     icon: "goods/goods-fishing-boat.png",
   },
   miningMachine: {
-    productionPerLine: 10, workersPerLine: 200, ironPerLine: 1,
+    productionPerLine: 10, workersPerLine: 200, ironPerLine: 20,
     icon: "goods/goods-mining-pump.png",
   },
 } as const satisfies Record<string, GoodConfig>;

@@ -42,6 +42,7 @@ import {
   type KeyValueStore,
 } from "./online.ts";
 import { playerColor, rgbCss } from "./painter.ts";
+import { num } from "./format.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -75,7 +76,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   return node;
 }
 
-const num = (n: number): string => new Intl.NumberFormat("fr-FR").format(n);
 
 // ---- accueil : liste des parties ----
 

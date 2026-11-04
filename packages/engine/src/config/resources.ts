@@ -25,10 +25,11 @@ export const RESOURCES = {
       mountainBonus: 5500,
     },
     /**
-     * Capacité d'extraction d'une case de fer, en fer par tour (00-Game §7). Une
-     * case nourrit une ligne à 1 fer par tour (fusil, par exemple).
+     * Capacité d'extraction d'une case de fer, en fer par tour (00-Game §7). 10
+     * (auteur, 3 novembre 2026 ; 1 avant, tous les `ironPerLine` multipliés par 10
+     * en même temps, sauf fusil et mitrailleuse : 2).
      */
-    capacityPerTile: 1,
+    capacityPerTile: 10,
   },
   /**
    * Même calcul de présence que le fer, avec un seuil plus haut (plus rare) et

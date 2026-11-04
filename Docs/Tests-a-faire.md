@@ -268,10 +268,26 @@ Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste
 - **Guérison** : `healHurt` n'est appelée qu'aux tours multiples de `POPULATION.hurtEveryTurns` (10), économie gelée comprise ;
   `hurtDivisor` 5 000, `hurtMinimum` 5 par seconde. Les tests de guérison qui jouent un seul tour à `tick` 0 ne guérissent
   plus rien : mettre `tick` à 9.
-- **Armement** : ajouté à la réserve seulement aux tours multiples de `ARMAMENT.everyTurns` (10), `filled ×
-  productionPerSecond` ; fer et ouvriers employés à chaque tour. `factories.test.ts` l. 77 (réserve après un tour =
-  `productionPerSecond`) est faux tel quel. Stock cible = lignes × `productionPerSecond` × `maxStockSeconds` (10).
+- **Armement** : aux tours multiples de `ARMAMENT.everyTurns` (10), `filled × productionPerMinute` s'ajoute à
+  `armamentProductionRemainder` ; `floor(reste / 60)` passe dans la réserve, le reste (0 à 59) est gardé et entre dans
+  le hash. Cas : 1 ligne de chars d'infanterie (12/min) → 1 char toutes les 5 s ; deux groupes du même type dans deux
+  usines partagent le même reste. Fer et ouvriers employés à chaque tour. `factories.test.ts` l. 77 (réserve après un
+  tour) est faux tel quel. Stock cible = ⌊ lignes × `productionPerMinute` × `maxStockSeconds` (40) / 60 ⌋.
 - **Biens** : toujours produits à chaque tour (`GOODS.*.productionPerLine`), rien ne change.
 - **Renfort** : `reinforcePercentPerRound` 3 ; une division à 0 % pleine après 34 rounds (et non 20).
-- **Client, à vérifier à la main** : onglet Armement « +X par seconde », infobulle d'une ligne d'armement « produits par
-  seconde », « approprié pour » = ⌊ lignes × productionPerSecond × 10 ÷ exemplaires ⌋.
+- **Client, à vérifier à la main** : onglet Armement « +X par minute », infobulle d'une ligne d'armement « produits par
+  minute », « approprié pour » = ⌊ ⌊ lignes × productionPerMinute × 40 / 60 ⌋ ÷ exemplaires ⌋ ; corbeille de l'onglet
+  des forces sur fond rouge clair, icône noire.
+
+## Fer ×10 (3 novembre 2026)
+
+- `RESOURCES.iron.capacityPerTile` 1 → 10 ; tous les `ironPerLine` ×10, sauf fusil et mitrailleuse : 1 → 2. Les tests
+  qui supposent une case par fer (`ironTilesFor`, `minersFor`, `minedTiles`, capacité de fer = nombre de cases) sont à
+  recalculer : une case nourrit 5 lignes de fusils, 1 ligne d'antichar, 1/10 de ligne d'artillerie.
+
+## Lignes d'artillerie et de chars, fer ×2 (4 novembre 2026)
+
+- Production par minute : artillerie 60 ; tankette, char rapide, artillerie automotrice 12 ; char d'infanterie, char moyen 6 ;
+  antichar blindé, antiaérien automoteur 18. Fer par ligne et par tour : fusil et mitrailleuse 4, antichar et antiaérien
+  20, artillerie 50, biens ×2 (tracteur 100, bateau 60, pompe 20) ; chars et appui-feu sur chenilles inchangés. Les tests
+  qui comptent les lignes remplies avec un fer donné, ou les mineurs d'une ligne, sont à recalculer.

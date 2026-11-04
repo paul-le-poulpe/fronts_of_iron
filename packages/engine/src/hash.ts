@@ -133,6 +133,7 @@ export function hashState(state: GameState): number {
     for (let a = 0; a < p.armamentReserve.length; a++) {
       h = mixWord(h, p.armamentReserve[a]!);
       h = mixWord(h, p.armamentRemainder[a]!);
+      h = mixWord(h, p.armamentProductionRemainder[a]!);
     }
     // Usines dans l'ordre de priorité, groupes dans l'ordre de leur usine.
     h = mixWord(h, p.factories.length);

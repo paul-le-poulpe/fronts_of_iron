@@ -23,6 +23,7 @@ import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./good
 import { applyBlinkPeriod } from "./blink.ts";
 import { currentTheme, toggleTheme } from "./theme.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
+import { num } from "./format.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -30,8 +31,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
-const fmt = new Intl.NumberFormat("fr-FR");
-const num = (n: number): string => fmt.format(n);
 
 installTooltips();
 applyBlinkPeriod();

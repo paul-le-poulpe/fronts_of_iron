@@ -12,9 +12,8 @@ import type { EconomyInfo, PlayerStats } from "./protocol.ts";
 import { productIcon, productIconPath } from "./icons.ts";
 import { factoryName, productName } from "./names.ts";
 import { setTip } from "./tooltip.ts";
+import { num } from "./format.ts";
 
-const fmt = new Intl.NumberFormat("fr-FR");
-const num = (n: number): string => fmt.format(n);
 /** Millièmes de case → cases, deux décimales au plus. */
 const tiles = (milli: number): string => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(milli / 1000);
 

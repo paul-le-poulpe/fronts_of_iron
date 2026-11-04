@@ -116,7 +116,7 @@ d'usine et les icônes de la population n'ont pas encore de champ `icon`.
 Aucune ligne de code à écrire.
 
 1. `armament.ts` : ajouter une entrée à `types`, à la fin, avec
-   `productionPerSecond` (par seconde), `workersPerLine`, `ironPerLine` (par tour).
+   `productionPerMinute` (par minute), `workersPerLine`, `ironPerLine` (par tour).
 2. `factories.ts` : ajouter un nœud `{ good: "<nom>", parent: "<parent>" }` à
    l'arbre d'un type d'usine, après son parent. Sans nœud, aucune usine ne peut
    en produire.

@@ -15,9 +15,8 @@ import { onPress } from "./burst.ts";
 import { icon32Path, productIcon } from "./icons.ts";
 import { dominantGood, factoryName, productName, productSymbol, unitName } from "./names.ts";
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
+import { num } from "./format.ts";
 
-const fmt = new Intl.NumberFormat("fr-FR");
-const num = (n: number): string => fmt.format(n);
 
 /** Délai pendant lequel une reconstruction est retenue après un réglage, le temps que le moteur applique l'ordre (ms). */
 const HOLD_MS = 500;
@@ -228,7 +227,7 @@ export class ProductionPanel {
     count.title = "En service · réglé / lignes";
     const filled = el("span", "muted small");
     filled.dataset["filled"] = `${f.city}:${g.good}`;
-    filled.title = `Par ligne remplie : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${num(this.catalog.productionPerLine[g.good] ?? 0)} produits par ${this.catalog.armamentIds.includes(g.good) ? "seconde" : "tour"}. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
+    filled.title = `Par ligne remplie : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${num(this.catalog.productionPerLine[g.good] ?? 0)} produits par ${this.catalog.armamentIds.includes(g.good) ? "minute" : "tour"}. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
     slider.addEventListener("pointerdown", () => (this.sliderActive = true));
     // Un clic sans déplacement ne déclenche pas `change` : sans ceci, `sliderActive`
     // resterait vrai et le panneau ne serait plus jamais reconstruit (nouvelle usine
@@ -395,7 +394,7 @@ export class ProductionPanel {
           // (même formule que le trait du stock cible, 00-Game §8.3 ; arrondi vers le bas).
           const unit = this.catalog.equipUnit[g.good];
           if (unit !== undefined) {
-            const fit = Math.floor((g.lines * perLine * this.catalog.stockSeconds) / unit.count);
+            const fit = Math.floor(Math.floor((g.lines * perLine * this.catalog.stockSeconds) / 60) / unit.count);
             const n = el("b");
             n.textContent = num(fit);
             const img = el("img", "unit-ic") as HTMLImageElement;

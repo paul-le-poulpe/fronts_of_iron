@@ -20,6 +20,7 @@ import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
 import { type BreakthroughView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
+import { num } from "./format.ts";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -635,7 +636,7 @@ export class FrontWindow implements DndHost {
     this.attackButton.setAttribute("aria-pressed", String(attacking));
     this.attackButton.title = front.active ? "Interrupteur : un clic lance l'attaque, un second l'arrête." : "Seulement sur un front actif.";
     // Hommes perdus par chaque première ligne au dernier round de combat (une seconde).
-    const loss = (n: number): string => `Pertes : ${n.toLocaleString("fr-FR")} hommes / tour`;
+    const loss = (n: number): string => `Pertes : ${num(n)} hommes / tour`;
     this.columns.o1.loss!.textContent = loss(front.sides[me]!.lastLoss);
     this.columns.t1.loss!.textContent = loss(front.sides[1 - me]!.lastLoss);
 

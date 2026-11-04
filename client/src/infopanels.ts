@@ -7,9 +7,9 @@ import { currentAttacks, maxAttacks, statePercent, statusLabel, typeOf } from ".
 import { icon32Path, productIconPath } from "./icons.ts";
 import { equipmentName, nicheName, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
+import { num } from "./format.ts";
 
 const fmt = new Intl.NumberFormat("fr-FR");
-const num = (n: number): string => fmt.format(n);
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);

@@ -262,7 +262,9 @@ function fillLines(p: Player, machines: number, people: number): LineFill {
 /**
  * Production des lignes remplies (00-Game §8, §8.3) : les biens vont dans
  * `p.goods` (les machines du tour suivant), à chaque tour ; l'armement dans les
- * réserves, seulement quand `second` est vrai (une fois par seconde) ; puis
+ * réserves, seulement quand `second` est vrai (une fois par seconde) : la
+ * production par minute s'ajoute au reste, en soixantièmes, et les exemplaires
+ * entiers passent dans la réserve ; puis
  * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
  * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
  * `deployed` : équipement des divisions, par type d'armement ; il compte dans le
@@ -276,7 +278,7 @@ function produce(p: Player, deployed: readonly number[], second: boolean): void 
       if (g.filled === 0) continue;
       const a = armamentIndex(g.good);
       if (a < 0) p.goods[goodIndex(g.good)] = p.goods[goodIndex(g.good)]! + g.filled * GOODS[g.good as GoodId].productionPerLine;
-      else if (second) p.armamentReserve[a] = p.armamentReserve[a]! + g.filled * ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerSecond;
+      else if (second) p.armamentProductionRemainder[a] = p.armamentProductionRemainder[a]! + g.filled * ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerMinute;
     }
     // Déblocage : + 1 par ligne remplie du bien, donc proportionnel à sa production dans l'usine.
     const tree = FACTORY_TYPES[f.type].tree;
@@ -284,6 +286,13 @@ function produce(p: Player, deployed: readonly number[], second: boolean): void 
       let filled = 0;
       for (const g of f.groups) if (g.good === tree[i]!.good) filled += g.filled;
       if (filled > 0) f.progress[i] = Math.min(FACTORY.unlockTurns, f.progress[i]! + filled);
+    }
+  }
+  if (second) {
+    for (let a = 0; a < ARMAMENT_IDS.length; a++) {
+      const units = Math.floor(p.armamentProductionRemainder[a]! / 60);
+      p.armamentReserve[a] = p.armamentReserve[a]! + units;
+      p.armamentProductionRemainder[a] = p.armamentProductionRemainder[a]! - units * 60;
     }
   }
   growLines(p);

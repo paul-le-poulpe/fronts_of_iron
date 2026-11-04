@@ -3,6 +3,7 @@
 // formules du moteur (`attackOf` dans `packages/engine/src/divisions.ts`) à partir du catalogue et de `DivisionView`.
 
 import { type DivisionView, type MilitaryCatalog } from "./protocol.ts";
+import { compact } from "./format.ts";
 
 /** Millièmes de liaison dans une liaison (`WIDTH_SCALE` du moteur) : `DivisionView.engaged` est en millièmes, `frontWidth` en liaisons. */
 const WIDTH_SCALE = 1000;
@@ -57,10 +58,7 @@ export function firstLineStats(military: MilitaryCatalog, divisions: readonly Di
   return { rows, total };
 }
 
-/** Nombre court : exact sous 1 000, puis « 4,5k », « 135k », « 2,5M » (la colonne de statistiques est étroite). */
+/** Nombre court : exact sous 1 000, puis « 4,5K », « 135K », « 2,5M » (la colonne de statistiques est étroite). */
 export function formatStat(n: number): string {
-  const short = (x: number, unit: string): string => `${x >= 100 ? Math.round(x) : Math.round(x * 10) / 10}${unit}`.replace(".", ",");
-  if (n < 1000) return String(n);
-  if (n < 999_500) return short(n / 1000, "k");
-  return short(n / 1_000_000, "M");
+  return compact(n, 1000);
 }

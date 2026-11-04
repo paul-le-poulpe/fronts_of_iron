@@ -136,10 +136,10 @@ function equipUnits(): FactoryCatalog["equipUnit"] {
   return out;
 }
 
-/** Production d'une ligne remplie : par tour pour un bien, par seconde pour un type d'armement (00-Game §8, §8.3). */
+/** Production d'une ligne remplie : par tour pour un bien, par minute pour un type d'armement (00-Game §8, §8.3). */
 function productionOf(id: ProductId): number {
   const a = armamentIndex(id);
-  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerSecond : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
+  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerMinute : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
 }
 
 /** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */

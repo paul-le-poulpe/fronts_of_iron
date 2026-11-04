@@ -164,7 +164,7 @@ export interface FactoryCatalog {
   readonly goodIds: readonly string[];
   /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
   readonly armamentIds: readonly string[];
-  /** Production d'une ligne remplie : par tour pour un bien, par seconde pour un type d'armement (00-Game §8, §8.3). */
+  /** Production d'une ligne remplie : par tour pour un bien, par minute pour un type d'armement (00-Game §8, §8.3). */
   readonly productionPerLine: Readonly<Record<string, number>>;
   /** Ouvriers de la première ligne d'un groupe, par bien ou type d'armement. */
   readonly workersPerLine: Readonly<Record<string, number>>;
