@@ -201,6 +201,14 @@ export class MapView {
     this.requestDraw();
   }
 
+  /** Appelé après chaque dessin de la carte : les icônes posées par-dessus (combats) se replacent. */
+  onDrawn: (() => void) | null = null;
+
+  /** Centre de la case (x, y), en pixels CSS du canvas (donc de `#stage`). */
+  tileToCss(x: number, y: number): { x: number; y: number } {
+    return { x: this.tx + (x + 0.5) * this.zoom, y: this.ty + (y + 0.5) * this.zoom };
+  }
+
   requestDraw(): void {
     if (this.frame !== 0) return;
     this.frame = requestAnimationFrame(() => {
@@ -744,6 +752,7 @@ export class MapView {
       ctx.lineWidth = 1.5 * px;
       ctx.strokeRect(x + 0.5 - side / 2, y + 0.5 - side / 2, side, side);
     }
+    this.onDrawn?.();
   }
 }
 

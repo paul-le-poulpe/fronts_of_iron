@@ -416,3 +416,44 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .ip-misc { width: 16px; height: 16px; flex: none; image-rendering: pixelated; display: block; }
 .ip-sq { width: 16px; height: 16px; flex: none; box-sizing: border-box; background: var(--t-sq); border: 1px solid var(--t-ip-line); border-radius: 2px; }
 .ip-rank { width: 16px; height: 20px; image-rendering: pixelated; }
+
+/* ---- Combats (06-Combat-Simplifie §2) : historique dans la fenêtre d'un front, icônes sur la carte, replay ---- */
+
+.fw-history { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--t-line); font-size: 12px; }
+.fw-history-title { color: var(--t-muted); }
+.fw-history-row { font: inherit; color: var(--t-fg); background: var(--t-btn); border: 1px solid var(--t-btn-line); padding: 2px 6px; cursor: pointer; }
+.fw-history-row:hover { border-color: var(--t-fg); }
+
+.cr-icons { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.cr-mapicon {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
+  width: 26px; height: 26px; padding: 0; border-radius: 50%;
+  font-size: 15px; line-height: 24px; color: #fff; background: #b3261e; border: 2px solid #000; cursor: pointer;
+  animation: cr-pulse 1.2s ease-in-out infinite;
+}
+@keyframes cr-pulse { 50% { transform: translate(-50%, -50%) scale(1.15); } }
+
+.cr {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 8;
+  width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
+  background: var(--t-panel); color: var(--t-fg); border: 1px solid var(--t-line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.cr-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
+.cr-round { padding: 4px 8px; color: var(--t-muted); min-height: 1.2em; }
+.cr-field { display: flex; justify-content: center; gap: 24px; padding: 8px 12px 12px; }
+.cr-col { display: flex; flex-direction: column; gap: 6px; transition: transform 0.6s ease-out; }
+.cr-field.apart .cr-left { transform: translateX(-60px); }
+.cr-field.apart .cr-right { transform: translateX(60px); }
+.cr-unit { position: relative; display: flex; align-items: center; gap: 6px; width: 180px; padding: 3px 4px; background: var(--t-capsule); border: 1px solid var(--t-line); transition: opacity 0.4s, transform 0.4s; }
+.cr-right .cr-unit { flex-direction: row-reverse; }
+.cr-icon { width: 32px; height: 32px; }
+.cr-bar { flex: 1; height: 8px; background: var(--t-air); border: 1px solid var(--t-line); }
+.cr-fill { height: 100%; background: #3aa655; transition: width 0.35s ease-out; }
+.cr-dmg { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); color: var(--t-red); font-weight: 700; pointer-events: none; }
+.cr-unit.hit { animation: cr-hit 0.35s; }
+@keyframes cr-hit { 30% { background: rgba(255, 70, 60, 0.35); } }
+.cr-left .cr-unit.fled { transform: translateX(-24px); opacity: 0.6; }
+.cr-right .cr-unit.fled { transform: translateX(24px); opacity: 0.6; }
+.cr-unit.dead { opacity: 0.15; }
+.cr-result { padding: 6px 10px 10px; min-height: 1.2em; }

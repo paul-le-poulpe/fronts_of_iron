@@ -24,33 +24,37 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 ## 1. Combat instantané
 
 1. **Lancement** : le joueur clique sur l'attaque (attaque sur tout le front, ou
-   percée sur un axe). Un **délai de `COMBAT.delaySeconds` secondes (5)**
-   s'écoule, affiché par un compte à rebours (le même que celui de la percée).
+   percée sur un axe). Un **délai de 5 secondes** (`FRONTS.attackDelayTurns`,
+   50 tours, la même durée que les délais de la percée) s'écoule, affiché par un
+   compte à rebours sur le bouton d'attaque, qui sert aussi à annuler.
 2. **Résolution** : au tour où le délai finit, le moteur calcule **tout le
    combat dans ce tour**. *Provisoire* : il enchaîne les rounds du §6 de
    `05-Fronts.md` (mêmes dégâts, mêmes pertes, fuites, échanges) jusqu'à ce
-   qu'un camp n'ait plus de division engagée ou que `COMBAT.maxRounds` (10)
-   rounds soient joués. Les dégâts sont appliqués aux divisions dans ce tour.
-3. **Issue** : *provisoire* : l'avancée du §7 de `05-Fronts.md` est appliquée
-   une fois, avec le rapport de force de la fin du combat (le vainqueur avance,
-   prise de ville comprise).
+   qu'un camp n'ait plus de division engagée, que `FRONTS.combatMaxRounds` (10)
+   rounds soient joués, ou qu'une ville soit prise. Les dégâts sont appliqués aux
+   divisions dans ce tour.
+3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
+   à chaque round, comme avant (dix rounds avancent comme dix secondes
+   d'attaque), prise de ville comprise.
 4. **Plus d'état d'attaque durable** : une attaque est un ordre ponctuel. Un
    nouveau clic lance un nouveau combat (après un nouveau délai). Pas de combat
    en dehors de ces événements : un front sans combat lancé ne fait aucun dégât.
 5. **Enregistrement** : chaque combat produit un **rapport** gardé dans l'état
    (`Combat`) : front, axe ou front entier, tour, attaquant, défenseur, liste
    des divisions des deux camps (type, état au début), et pour chaque round la
-   perte d'état de chaque division (en entiers). Le rapport ne sert qu'à
-   l'affichage ; le moteur ne le relit pas. *Provisoire* : les
-   `COMBAT.historySize` (20) derniers combats par joueur sont gardés, les plus
-   anciens sont supprimés.
+   perte d'état de chaque division (en entiers), les divisions détruites et en
+   fuite, l'avancée. Le rapport ne sert qu'à l'affichage ; le moteur ne le relit
+   pas, et il est hors du hash (`GameState.combats`, comme `events`).
+   *Provisoire* : les `FRONTS.combatHistoryPerPlayer` (20) derniers combats par
+   joueur sont gardés, les plus anciens sont supprimés.
 
 ## 2. Affichage d'un combat
 
 - **Icône sur la carte** : à la fin d'un combat, une icône de combat apparaît
-  au milieu de la connexion de l'axe (ou au milieu du front pour une attaque sur
-  tout le front), chez les deux joueurs concernés. *Provisoire* : elle reste
-  `COMBAT.iconSeconds` secondes (30) ou jusqu'au clic.
+  au milieu de la connexion de l'axe (pour une attaque sur tout le front : de la
+  première connexion du front, *provisoire*), chez les deux joueurs concernés.
+  *Provisoire* : elle reste 30 secondes ou jusqu'au clic ; symbole ⚔ en
+  attendant une icône de l'auteur.
 - **Replay** : un clic sur l'icône ouvre un petit panneau. Les pions des
   divisions des deux camps sont en deux colonnes face à face ; ils avancent les
   uns vers les autres, puis chaque round est joué en une courte étape : la barre
@@ -143,8 +147,8 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 
 ## 5. Choix provisoires (non tranchés par l'auteur)
 
-1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés, `maxRounds` 10.
-2. Avancée appliquée une fois après le combat.
+1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés, `combatMaxRounds` 10.
+2. Avancée du §7.1 appliquée à chaque round du combat.
 3. 20 combats gardés par joueur ; icône 30 s ; replay 0,6 s par round.
 4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.
 5. Niveau d'une usine augmenté gratuitement, sans limite.
@@ -158,3 +162,17 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 9. Manufacture d'armes gardée pour l'appui-feu, racine = artillerie.
 10. Quantité de référence des tracteurs : surface agricole moyenne d'une zone de
     ville ; pompes : mineurs d'une ville.
+
+## 6. État de l'implémentation
+
+- **Fait** : attaque sur tout le front instantanée (§1) — `attacks.ts`
+  (`FrontSide.attackAt`), `combat.ts` (`resolveFrontAttacks`, `CombatRecord`),
+  appelée par `applyTurn` après l'échange hors combat ; client : compte à
+  rebours et historique dans la fenêtre d'un front (`frontwindow.ts`), icône
+  sur la carte et replay (`combatreplay.ts`), rapports envoyés à la page dans
+  `TickMessage.combats` (ceux du joueur local, quand la liste change).
+- **Pas encore** : la percée garde ses rounds continus (`05-Fronts.md` §7.2) ;
+  usines d'unités, barre de vie sans équipement, centres de recrutement (§3,
+  §4) ; les tests de `05-Fronts` qui supposent une attaque durable
+  (`packages/engine/test/combat.test.ts`, `fronts.test.ts`, `scenario.ts`) ne
+  sont pas encore adaptés.

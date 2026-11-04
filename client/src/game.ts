@@ -76,6 +76,7 @@ import { dominantGood } from "./names.ts";
 import {
   type DiplomacyView,
   type FactoryCatalog,
+  type CombatView,
   type DivisionView,
   type FrontView,
   type HumanDetail,
@@ -232,6 +233,7 @@ export function militaryCatalog(): MilitaryCatalog {
     transferTurns: FRONTS.transferRounds * FRONTS.combatTurns,
     stateScale: STATE_SCALE,
     breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
+    attackDelayTurns: FRONTS.attackDelayTurns,
   };
 }
 
@@ -249,8 +251,8 @@ export function frontView(state: GameState, f: Front): FrontView {
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
     sides: [
-      { frontAttack: f.sides[0].frontAttack, lastLossByNiche: f.sides[0].lastLossByNiche.slice() },
-      { frontAttack: f.sides[1].frontAttack, lastLossByNiche: f.sides[1].lastLossByNiche.slice() },
+      { frontAttack: f.sides[0].attackAt !== 0, attackAt: f.sides[0].attackAt, lastLossByNiche: f.sides[0].lastLossByNiche.slice() },
+      { frontAttack: f.sides[1].attackAt !== 0, attackAt: f.sides[1].attackAt, lastLossByNiche: f.sides[1].lastLossByNiche.slice() },
     ],
     boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
     breakthroughs: state.breakthroughs
@@ -304,6 +306,7 @@ export class Game {
   private sentFronts = "";
   /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
   private sentDivisions = "";
+  private sentCombats = "";
   /** Le premier tour a été envoyé (partie de test : il porte les villes de départ). */
   private initialSent = false;
 
@@ -470,6 +473,12 @@ export class Game {
       divisions = divisionViews;
     }
 
+    // Combats du joueur local (06-Combat-Simplifie §1) : la liste ne change qu'à un nouveau combat ou à une suppression.
+    const myCombats = state.combats.filter((c) => c.attacker === you || c.defender === you);
+    const combatsKey = myCombats.map((c) => c.id).join(",");
+    const combats: CombatView[] | null = full || combatsKey !== this.sentCombats ? myCombats.map((c) => structuredClone(c)) : null;
+    this.sentCombats = combatsKey;
+
     const players: PlayerStats[] = state.players.map((p) => {
       // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
       // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
@@ -536,6 +545,7 @@ export class Game {
       diplomacy: this.diplomacyView(full),
       fronts,
       divisions,
+      combats,
       failedBreakthroughs: full ? 0 : state.events.filter((e) => e.type === "breakthrough_failed" && e.from === you).length,
       captured,
       encircled: full ? [] : state.events.flatMap((e) => (e.type === "encirclement" ? [{ city: e.city, from: e.from, to: e.to, divisions: e.divisions }] : [])),
@@ -723,9 +733,9 @@ export class Game {
       case "cancel_breakthrough":
         return !state.breakthroughs.some((b) => b.id === order.id);
       case "start_front_attack":
-        return this.mySide(order.front)?.frontAttack === true;
+        return this.mySide(order.front)?.attackAt !== 0;
       case "stop_front_attack":
-        return this.mySide(order.front)?.frontAttack === false;
+        return this.mySide(order.front)?.attackAt === 0;
     }
   }
 }

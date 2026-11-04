@@ -30,8 +30,11 @@ export interface FrontConnection {
 
 /** Un camp d'un front. Ses divisions sont dans `state.divisions` (`Division.front`). */
 export interface FrontSide {
-  /** Attaque sur tout le front en cours (05-Fronts §5.1). */
-  frontAttack: boolean;
+  /**
+   * Attaque sur tout le front lancée (06-Combat-Simplifie §1) : tour où le combat est résolu, en un seul tour ; 0 si
+   * aucune attaque n'attend.
+   */
+  attackAt: number;
   /**
    * Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `NICHE_IDS`, 05-Fronts §11.4) ;
    * remis à 0 à chaque round.
@@ -71,9 +74,12 @@ export const isActive = (state: GameState, front: Front): boolean => statusOf(st
  */
 export const isBreakthroughCombat = (phase: number): boolean => phase === 1 || phase === 3;
 
-/** Un front est en combat quand il est actif et qu'un camp attaque sur tout le front, ou qu'une percée y combat (05-Fronts §4.3, §6, §7.2). */
+/**
+ * Un front est en combat quand il est actif et qu'une percée y combat (05-Fronts §4.3, §7.2). L'attaque sur tout le
+ * front est résolue en un tour (06-Combat-Simplifie §1) : elle ne met pas le front en combat.
+ */
 export const inCombat = (state: GameState, front: Front): boolean =>
-  isActive(state, front) && (front.sides.some((s) => s.frontAttack) || state.breakthroughs.some((b) => b.front === front.id && isBreakthroughCombat(b.phase)));
+  isActive(state, front) && state.breakthroughs.some((b) => b.front === front.id && isBreakthroughCombat(b.phase));
 
 /** Un round est joué sur ce front : il est en combat, ou une percée y attend la fin d'un de ses délais. */
 export const hasRound = (state: GameState, front: Front): boolean => inCombat(state, front) || (isActive(state, front) && state.breakthroughs.some((b) => b.front === front.id));
@@ -224,8 +230,8 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
     });
     const before = matched.get(b.id);
     const sides: [FrontSide, FrontSide] = [
-      { frontAttack: before?.sides[0].frontAttack ?? false, lastLossByNiche: before?.sides[0].lastLossByNiche.slice() ?? noLosses() },
-      { frontAttack: before?.sides[1].frontAttack ?? false, lastLossByNiche: before?.sides[1].lastLossByNiche.slice() ?? noLosses() },
+      { attackAt: before?.sides[0].attackAt ?? 0, lastLossByNiche: before?.sides[0].lastLossByNiche.slice() ?? noLosses() },
+      { attackAt: before?.sides[1].attackAt ?? 0, lastLossByNiche: before?.sides[1].lastLossByNiche.slice() ?? noLosses() },
     ];
     return { id: b.id, players: [b.p1, b.p2], groups: [b.g1, b.g2], connections, sides };
   });
@@ -326,7 +332,7 @@ export function endWar(state: GameState, a: number, b: number): void {
   for (const f of state.fronts) {
     if (!isPair(f, a, b)) continue;
     for (const c of f.connections) c.position = 0;
-    for (const s of f.sides) s.frontAttack = false;
+    for (const s of f.sides) s.attackAt = 0;
   }
 }
 

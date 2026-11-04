@@ -96,7 +96,7 @@ describe("détection des fronts (05-Fronts §2)", () => {
   it("en paix : pas de position ; le front reste ; il n'y a rien d'actif", () => {
     const s = duel();
     assert.equal(front(s).connections[0]!.position, 0);
-    assert.ok(!front(s).sides[0]!.frontAttack);
+    assert.equal(front(s).sides[0]!.attackAt, 0);
   });
 
   it("une connexion retrouvée garde sa position, une nouvelle reçoit 500 (fondation en guerre)", () => {
@@ -123,8 +123,8 @@ describe("détection des fronts (05-Fronts §2)", () => {
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     turn(s, found(1, at(9.5, 12.6)));
     assert.equal(front(s).id, id, "l'identifiant du front est gardé");
-    assert.equal(front(s).sides[0]!.frontAttack, true);
-    assert.equal(front(s).sides[1]!.frontAttack, false);
+    assert.equal(front(s).sides[0]!.attackAt !== 0, true);
+    assert.equal(front(s).sides[1]!.attackAt !== 0, false);
   });
 });
 
@@ -178,7 +178,7 @@ describe("guerre et paix (05-Fronts §2.3)", () => {
     turn(s, { type: "answer_proposal", player: 2, from: 1, accept: true });
     const f = front(s);
     assert.deepEqual(f.connections.map((c) => c.position), [0]);
-    assert.equal(f.sides[0]!.frontAttack, false);
+    assert.equal(f.sides[0]!.attackAt !== 0, false);
     assert.equal(d.front, id, "les divisions restent sur le front");
   });
 });
@@ -220,8 +220,8 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     assert.ok(!applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 2, front: id }, []));
     assert.ok(applyIntent(s, { type: "stop_front_attack", player: 1, front: id }, []));
-    assert.equal(front(s).sides[0]!.frontAttack, false);
-    assert.equal(front(s).sides[1]!.frontAttack, true);
+    assert.equal(front(s).sides[0]!.attackAt !== 0, false);
+    assert.equal(front(s).sides[1]!.attackAt !== 0, true);
   });
 });
 
@@ -261,7 +261,7 @@ describe("hash des fronts et des divisions (05-Fronts §13.3)", () => {
     const div = (s: GameState) => s.divisions[0]!;
     const mutations: [string, (s: GameState) => void][] = [
       ["position", (s) => void front(s).connections[0]!.position++],
-      ["attaque", (s) => void (front(s).sides[0]!.frontAttack = false)],
+      ["attaque", (s) => void (front(s).sides[0]!.attackAt = 0)],
       ["nextFrontId", (s) => void s.nextFrontId++],
       ["nextDivisionId", (s) => void s.nextDivisionId++],
       ["exemplaires d'un composant", (s) => void div(s).counts[1]!--],

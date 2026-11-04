@@ -1,11 +1,12 @@
 // L'état complet d'une partie. Tout ce qui est ici entre dans le hash (hash.ts),
 // sauf `changedMark`, remis à zéro à la fin de chaque tour, `roadNetwork`,
-// entièrement déduit des villes, et `events`, que rien ne lit dans le moteur.
+// entièrement déduit des villes, et `events` et `combats`, que rien ne lit dans le moteur.
 
 import { isUint32 } from "./bits.ts";
 import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
 import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
 import type { Box, Breakthrough } from "./breakthroughs.ts";
+import type { CombatRecord } from "./combat.ts";
 import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import { hashMap } from "./hash.ts";
@@ -210,6 +211,12 @@ export interface GameState {
   /** Percées lancées (05-Fronts §7.2), par identifiant croissant. */
   breakthroughs: Breakthrough[];
   nextBreakthroughId: number;
+  /**
+   * Rapports des derniers combats (06-Combat-Simplifie §1), par identifiant croissant, pour l'affichage du replay.
+   * Hors du hash, comme `events` : aucune règle ne les lit. Réassigné à chaque suppression.
+   */
+  combats: CombatRecord[];
+  nextCombatId: number;
   readonly rng: Rng;
   /**
    * Statut diplomatique de chaque paire de joueurs (diplomacy.ts) : `players.length`²
@@ -325,6 +332,8 @@ export function createGame(setup: GameSetup): GameState {
     nextBoxId: 1,
     breakthroughs: [],
     nextBreakthroughId: 1,
+    combats: [],
+    nextCombatId: 1,
     rng: createRng(setup.seed),
     diplomacy: new Uint8Array(playerCount * playerCount),
     proposals: [],

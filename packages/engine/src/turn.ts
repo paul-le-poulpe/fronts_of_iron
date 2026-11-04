@@ -1,7 +1,7 @@
 // Application d'un tour envoyé par le serveur.
 
 import { expireProposals } from "./diplomacy.ts";
-import { combatRound } from "./combat.ts";
+import { combatRound, resolveFrontAttacks } from "./combat.ts";
 import { FRONTS } from "./config.ts";
 import { countSoldiers } from "./divisions.ts";
 import { stepEconomy } from "./economy.ts";
@@ -38,7 +38,8 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   expireProposals(state);
   // Ordre du tour (05-Fronts §13.2, provisoire) : ordres ; renfort en mobilisation forcée ; économie (population,
   // nourriture, croissance, pour chaque joueur dans l'ordre des identifiants) ; renfort parmi les inactifs ;
-  // arrivées ; excédents ; rangement des lignes ; échange hors combat ; round de combat et prises de villes.
+  // arrivées ; excédents ; rangement des lignes ; échange hors combat ; attaques sur tout le front arrivées à leur
+  // tour, résolues en entier (06-Combat-Simplifie §1) ; round des percées et prises de villes.
   countSoldiers(state);
   reinforceBeforeEconomy(state);
   stepEconomy(state);
@@ -48,6 +49,7 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   countSoldiers(state);
   arrangeAll(state);
   swapAtRest(state);
+  resolveFrontAttacks(state, changed);
   if (turn.turn % FRONTS.combatTurns === 0) combatRound(state, changed);
   for (const t of changed) state.changedMark[t] = 0;
   state.tick = turn.turn;

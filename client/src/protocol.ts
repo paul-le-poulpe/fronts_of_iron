@@ -151,6 +151,43 @@ export interface MilitaryCatalog {
   readonly stateScale: number;
   /** Délai entre le lancement d'une percée et son combat 1, en tours (05-Fronts §7.2). */
   readonly breakthroughDelayTurns: number;
+  /** Délai entre l'ordre d'attaque sur tout le front et son combat, en tours (06-Combat-Simplifie §1). */
+  readonly attackDelayTurns: number;
+}
+
+/** Une division d'un combat, telle qu'au début du combat (06-Combat-Simplifie §1). */
+export interface CombatUnitView {
+  readonly division: number;
+  readonly owner: number;
+  /** Indice dans `MilitaryCatalog.divisions`. */
+  readonly type: number;
+  /** État au début du combat, échelle `MilitaryCatalog.stateScale`. */
+  readonly start: number;
+}
+
+/** Un round d'un combat : pertes d'état des divisions engagées, détruites, en fuite, avancée de l'attaquant (millièmes de route). */
+export interface CombatRoundView {
+  /** [indice dans `units`, perte d'état]. */
+  readonly hits: readonly (readonly [number, number])[];
+  readonly destroyed: readonly number[];
+  readonly fled: readonly number[];
+  readonly advance: number;
+}
+
+/** Rapport d'un combat résolu en un tour par le moteur, que la page rejoue (06-Combat-Simplifie §1, §2). */
+export interface CombatView {
+  readonly id: number;
+  readonly front: number;
+  readonly tick: number;
+  readonly attacker: number;
+  readonly defender: number;
+  /** Connexion du front où l'icône du combat est placée (au milieu des deux villes). */
+  readonly city1: number;
+  readonly city2: number;
+  readonly units: readonly CombatUnitView[];
+  readonly rounds: readonly CombatRoundView[];
+  /** Ville prise à la fin du combat, 0 sinon. */
+  readonly captured: number;
 }
 
 /** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */
@@ -262,8 +299,10 @@ export interface FrontConnectionView {
 
 /** Un camp d'un front, tout visible (pas de brouillard de guerre). Ses divisions sont dans `TickMessage.divisions`. */
 export interface FrontSideView {
-  /** Attaque sur tout le front en cours (05-Fronts §5.1). */
+  /** Attaque sur tout le front lancée, qui attend son combat (06-Combat-Simplifie §1). */
   readonly frontAttack: boolean;
+  /** Tour où cette attaque sera résolue, 0 sans attaque (compte à rebours). */
+  readonly attackAt: number;
   /** Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `military.niches`, 05-Fronts §11.4). */
   readonly lastLossByNiche: readonly number[];
 }
@@ -487,6 +526,8 @@ export interface TickMessage {
   readonly fronts: readonly FrontView[] | null;
   /** Toutes les divisions de tous les joueurs, par identifiant ; `null` si rien n'a changé depuis le tour précédent. */
   readonly divisions: readonly DivisionView[] | null;
+  /** Les derniers combats du joueur local, par identifiant ; `null` si la liste n'a pas changé depuis le tour précédent. */
+  readonly combats: readonly CombatView[] | null;
   /** Percées du joueur local arrêtées au début de leur combat 1 pendant ce tour, faute de division (05-Fronts §7.2, point 14). */
   readonly failedBreakthroughs: number;
   /** Villes prises pendant ce tour. La page reçoit alors `cities` et les cases de leur zone. */

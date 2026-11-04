@@ -19,7 +19,8 @@ import { STAT_KINDS, firstLineStats, formatStat, type FirstLineStats, type StatK
 import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
-import { type BreakthroughView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
+import { combatSummary } from "./combatreplay.ts";
+import { type BreakthroughView, type CombatView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -190,6 +191,10 @@ export class FrontWindow implements DndHost {
   private fronts: readonly FrontView[] = [];
   private divisions: readonly DivisionView[] = [];
   private byId = new Map<number, DivisionView>();
+  /** Historique des combats du front ouvert (06-Combat-Simplifie §2) ; un clic sur une ligne ouvre le replay. */
+  private readonly history: HTMLElement;
+  private combats: readonly CombatView[] = [];
+  onReplay: ((c: CombatView) => void) | null = null;
 
   constructor(
     root: HTMLElement,
@@ -285,7 +290,8 @@ export class FrontWindow implements DndHost {
     // Percées en cours (§11.4) : sous le bandeau, masqué quand il n'y en a pas.
     this.strip = el("div", "fw-bts");
     this.strip.hidden = true;
-    this.win.append(head, this.strip, main, air);
+    this.history = el("div", "fw-history");
+    this.win.append(head, this.strip, this.history, main, air);
     root.replaceChildren(this.win);
 
     // Les rangées gardent leur largeur : elles sont redessinées si la fenêtre change de taille.
@@ -376,6 +382,44 @@ export class FrontWindow implements DndHost {
   }
 
   /** À appeler à chaque tour. */
+  /** Nouvelle liste des combats du joueur local. */
+  setCombats(combats: readonly CombatView[]): void {
+    this.combats = combats;
+    if (this.isOpen) this.drawHistory();
+  }
+
+  private drawHistory(): void {
+    const mine = this.combats.filter((c) => c.front === this.frontId).slice(-5).reverse();
+    this.history.hidden = mine.length === 0;
+    this.history.replaceChildren(
+      el("span", "fw-history-title", "Derniers combats :"),
+      ...mine.map((c) => {
+        const b = el("button", "fw-history-row", combatSummary(c, localPlayer()));
+        b.type = "button";
+        b.title = "Revoir le combat";
+        b.addEventListener("click", () => this.onReplay?.(c));
+        return b;
+      }),
+    );
+  }
+
+  /** Bouton d'attaque sur tout le front : compte à rebours du délai avant le combat (06-Combat-Simplifie §1). */
+  private drawAttackButton(front: FrontView): void {
+    const me = front.players.indexOf(localPlayer());
+    const at = front.sides[me]!.attackAt;
+    const waiting = at !== 0;
+    const seconds = Math.max(0, Math.ceil((at - this.tick) / this.military.combatTurns));
+    this.attackButton.textContent = waiting ? `Combat dans ${seconds} s — annuler` : "Attaque sur tout le front";
+    this.attackButton.classList.toggle("on", waiting);
+    this.attackButton.disabled = !front.active;
+    this.attackButton.setAttribute("aria-pressed", String(waiting));
+    this.attackButton.title = front.active
+      ? waiting
+        ? "Un clic annule l'attaque avant le combat."
+        : `Le combat a lieu ${Math.round(this.military.attackDelayTurns / this.military.combatTurns)} s après le clic, en une fois ; une icône apparaît ensuite sur la carte pour le revoir.`
+      : "Seulement sur un front actif.";
+  }
+
   refresh(fronts: readonly FrontView[], divisions: readonly DivisionView[], tick: number): void {
     const changed = fronts !== this.fronts || divisions !== this.divisions;
     const tickChanged = tick !== this.tick;
@@ -394,9 +438,12 @@ export class FrontWindow implements DndHost {
       this.dnd.prune();
       this.draw();
     } else if (tickChanged) {
-      // Le délai d'une percée se décompte à chaque tour.
+      // Le délai d'une percée et celui de l'attaque sur tout le front se décomptent à chaque tour.
       const front = fronts.find((f) => f.id === this.frontId);
-      if (front !== undefined) this.drawStrip(front);
+      if (front !== undefined) {
+        this.drawStrip(front);
+        this.drawAttackButton(front);
+      }
     }
   }
 
@@ -638,13 +685,10 @@ export class FrontWindow implements DndHost {
       el("span", front.active ? "fw-war" : "fw-peace", front.active ? "guerre" : "paix"),
     );
     this.title.title = `Largeur du front : ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""}`;
-    const attacking = front.sides[me]!.frontAttack;
-    this.attackButton.classList.toggle("on", attacking);
-    this.attackButton.disabled = !front.active;
-    this.attackButton.setAttribute("aria-pressed", String(attacking));
-    this.attackButton.title = front.active ? "Interrupteur : un clic lance l'attaque, un second l'arrête." : "Seulement sur un front actif.";
-    // Hommes perdus par chaque première ligne au dernier round de combat (une seconde).
-    const loss = (n: number): string => `Pertes : ${num(n)} hommes / tour`;
+    this.drawAttackButton(front);
+    this.drawHistory();
+    // Hommes perdus par chaque première ligne au dernier combat (06-Combat-Simplifie §1).
+    const loss = (n: number): string => `Pertes au dernier combat : ${num(n)} hommes`;
     const sum = (byNiche: readonly number[]): number => byNiche.reduce((s, n) => s + n, 0);
     this.columns.o1.loss!.textContent = loss(sum(front.sides[me]!.lastLossByNiche));
     this.columns.t1.loss!.textContent = loss(sum(front.sides[1 - me]!.lastLossByNiche));

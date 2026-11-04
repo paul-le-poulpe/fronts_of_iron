@@ -321,7 +321,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
       if (p.factories.some((f) => f.groups.some((g) => g.running > 0))) filledLinePlayerTurns++;
       if (p.soldiers > 0) soldierPlayerTurns++;
     }
-    if (state.fronts.some((f) => f.sides.some((x) => x.frontAttack))) fightingTurns++;
+    if (state.fronts.some((f) => f.sides.some((x) => x.attackAt !== 0))) fightingTurns++;
     captures += state.events.filter((e) => e.type === "city_captured").length;
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));

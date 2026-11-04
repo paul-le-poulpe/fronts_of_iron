@@ -13,6 +13,7 @@ import { type EndedMessage, type FrontView, type FromWorker, type HumanOrder, ty
 import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
 import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
+import { CombatIcons, CombatReplay } from "./combatreplay.ts";
 import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
 import { ForcesTab } from "./forcestab.ts";
 import { FrontWindow } from "./frontwindow.ts";
@@ -100,6 +101,9 @@ interface Session {
   infobar: InfoBar | null;
   frontPanel: FrontWindow | null;
   forces: ForcesTab | null;
+  /** Icônes des combats sur la carte et panneau du replay (06-Combat-Simplifie §2). */
+  combatIcons: CombatIcons | null;
+  replay: CombatReplay | null;
   nextOrderId: number;
   paused: boolean;
   ticks: number;
@@ -126,6 +130,8 @@ function openSession(online: boolean): Session {
     production: null,
     infobar: null,
     frontPanel: null,
+    combatIcons: null,
+    replay: null,
     forces: null,
     nextOrderId: 1,
     paused: false,
@@ -255,6 +261,16 @@ function onInit(s: Session, init: InitMessage): void {
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
   s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces(), startAxisMode);
+  // Combats (06-Combat-Simplifie §2) : icônes par-dessus le canvas, replacées à chaque dessin ; replay dans `#stage`.
+  for (const old of document.querySelectorAll(".cr-icons, .cr")) old.remove();
+  s.replay = new CombatReplay($("stage"), init.military, localPlayer);
+  s.combatIcons = new CombatIcons(
+    $("stage"),
+    { cityTile: (id) => mirror.cities[id - 1]?.tile, tileToCss: (x, y) => s.view?.tileToCss(x, y) ?? null, width: mirror.width },
+    (c) => s.replay?.open(c),
+  );
+  s.view.onDrawn = () => s.combatIcons?.place();
+  s.frontPanel.onReplay = (c) => s.replay?.open(c);
   s.forces = new ForcesTab(init.military, init.catalog, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
   s.infobar = new InfoBar(
     $("infobar"),
@@ -287,6 +303,11 @@ function onTick(s: Session, msg: TickMessage): void {
   if (msg.cities !== null || msg.factoryMarks !== null) view.refresh();
   if (msg.fronts !== null) view.frontsChanged();
   s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
+  if (msg.combats !== null) {
+    s.combatIcons?.setCombats(msg.combats, msg.tick);
+    s.frontPanel?.setCombats(msg.combats);
+  }
+  s.combatIcons?.expire(msg.tick);
   s.forces?.setData(mirror.fronts, mirror.divisions);
   if (msg.failedBreakthroughs > 0) toast("Percée arrêtée : plus aucune division à engager dans la force qui perce.", 6000);
   for (const c of msg.captured) {
@@ -529,6 +550,8 @@ function endSession(): void {
   if (s === null) return;
   s.worker.terminate();
   s.frontPanel?.close();
+  s.replay?.close();
+  s.combatIcons?.clear();
   stopAxisMode(false);
   session = null;
   clearNotifications();

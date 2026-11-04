@@ -429,7 +429,7 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     // Fronts recalculés : seule la route (2, 4) sépare encore les deux joueurs, à 1 % depuis la ville prise (X est city1).
     assert.equal(s.fronts.length, 1);
     assert.deepEqual(front(s).connections, [{ city1: 2, city2: 4, position: FRONTS.capturePercent * 10 }]);
-    assert.deepEqual(front(s).sides.map((x) => x.frontAttack), [false, false]);
+    assert.deepEqual(front(s).sides.map((x) => x.attackAt !== 0), [false, false]);
     // L'ancien front a disparu : ses divisions passent, sans délai, au front des mêmes joueurs le plus proche (05-Fronts §2.5).
     for (const d of s.divisions) assert.deepEqual([d.front, d.arrivalTick], [front(s).id, 0]);
   });

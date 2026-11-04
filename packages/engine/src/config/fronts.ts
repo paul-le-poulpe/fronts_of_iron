@@ -10,6 +10,15 @@
 // la longueur d'une route (0 à 1 000), les pourcentages en entiers (50 = 50 %).
 
 export const FRONTS = {
+  /**
+   * Délai entre le clic sur l'attaque sur tout le front et le combat, en tours (50 = 5 s, comme les délais de la percée ;
+   * 06-Combat-Simplifie §1).
+   */
+  attackDelayTurns: 50,
+  /** Rounds au plus d'un combat résolu en un tour (06-Combat-Simplifie §1 ; provisoire). */
+  combatMaxRounds: 10,
+  /** Rapports de combat gardés par joueur, les plus anciens supprimés (06-Combat-Simplifie §1 ; provisoire). */
+  combatHistoryPerPlayer: 20,
   /** Tours entre deux rounds de combat (10 = 1 s). */
   combatTurns: 10,
   /** Délai d'un déplacement de division entre la réserve et un front, ou entre deux fronts, en rounds de combat (10 = 10 s). */

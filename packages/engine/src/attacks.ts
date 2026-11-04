@@ -1,7 +1,9 @@
-// Ordres d'attaque (Docs/Design/05-Fronts.md §5) : attaque sur tout le front,
-// interrupteur de chaque camp. Seulement sur un front actif. Le combat lui-même
-// est dans combat.ts ; la percée attend la version 2.
+// Ordres d'attaque (Docs/Design/06-Combat-Simplifie.md §1) : l'attaque sur tout le front
+// est un ordre ponctuel. Le combat est résolu `FRONTS.attackDelayTurns` tours après
+// l'ordre, en un seul tour (combat.ts). Seulement sur un front actif.
 
+import { FRONTS } from "./config.ts";
+import { currentTurn } from "./divisions.ts";
 import { frontById, isActive, sideIndex } from "./fronts.ts";
 import type { GameState } from "./state.ts";
 
@@ -13,17 +15,18 @@ function mine(state: GameState, player: number, frontId: unknown) {
   return i < 0 ? undefined : { front, i, side: front.sides[i]! };
 }
 
-/** `start_front_attack` : invalide (sans effet) si l'attaque est déjà en cours. */
+/** `start_front_attack` : invalide (sans effet) si une attaque attend déjà son combat. */
 export function startFrontAttack(state: GameState, player: number, frontId: unknown): boolean {
   const m = mine(state, player, frontId);
-  if (m === undefined || m.side.frontAttack) return false;
-  m.side.frontAttack = true;
+  if (m === undefined || m.side.attackAt !== 0) return false;
+  m.side.attackAt = currentTurn(state) + FRONTS.attackDelayTurns;
   return true;
 }
 
+/** `stop_front_attack` : annule une attaque qui attend son combat. */
 export function stopFrontAttack(state: GameState, player: number, frontId: unknown): boolean {
   const m = mine(state, player, frontId);
-  if (m === undefined || !m.side.frontAttack) return false;
-  m.side.frontAttack = false;
+  if (m === undefined || m.side.attackAt === 0) return false;
+  m.side.attackAt = 0;
   return true;
 }
