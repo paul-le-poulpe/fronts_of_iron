@@ -32,7 +32,10 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    `05-Fronts.md` (mêmes dégâts, mêmes pertes, fuites, échanges) jusqu'à ce
    qu'un camp n'ait plus de division engagée, que `FRONTS.combatMaxRounds` (10)
    rounds soient joués, ou qu'une ville soit prise. Les dégâts sont appliqués aux
-   divisions dans ce tour.
+   divisions dans ce tour. Pendant ces rounds, l'échange avec la seconde ligne
+   suit la règle **du combat** (`05-Fronts.md` §5.3 : sous la moitié de l'état
+   d'une division de seconde ligne), pas celle du repos : sinon chaque division
+   touchée serait remplacée aussitôt par une division intacte de seconde ligne.
 3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
    à chaque round, comme avant (dix rounds avancent comme dix secondes
    d'attaque), prise de ville comprise.

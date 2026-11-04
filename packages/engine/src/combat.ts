@@ -32,6 +32,7 @@ import {
   countSoldiers,
   currentTurn,
   dataOf,
+  isFleeing,
   stateOf,
   type Division,
 } from "./divisions.ts";
@@ -279,7 +280,8 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
   applyFlight(state, front);
-  applySwaps(state, front);
+  // Règle d'échange du combat (05-Fronts §5.3) : sans `false`, la règle hors combat remplacerait chaque division touchée.
+  applySwaps(state, front, false);
   for (const p of front.players) arrangeSide(state, front, p);
 
   const destroyed: number[] = [];
@@ -289,7 +291,7 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
       destroyed.push(index[k]!);
       return [index[k]!, before[k]!];
     }
-    if (d.line !== LINE_FIRST) fled.push(index[k]!);
+    if (isFleeing(state, d)) fled.push(index[k]!);
     return [index[k]!, Math.max(0, before[k]! - stateOf(d))];
   });
 

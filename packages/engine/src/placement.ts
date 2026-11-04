@@ -409,9 +409,10 @@ export function applyFlight(state: GameState, front: Front): void {
  * ligne est remplacée par la division de seconde ligne de plus grand état parmi
  * celles du même type ou d'un type prioritaire (rang de la niche, `byChoice`) dont
  * l'état est supérieur au sien ; sinon la règle des `swapStatePercent` s'applique.
+ * `rest` : règle hors combat ; par défaut, celle de l'état du front. Les rounds d'une attaque sur tout le front, résolus
+ * en un tour (06-Combat-Simplifie §1), passent `false` : le front n'est pas `inCombat`, mais ils sont un combat.
  */
-export function applySwaps(state: GameState, front: Front): void {
-  const rest = !inCombat(state, front);
+export function applySwaps(state: GameState, front: Front, rest: boolean = !inCombat(state, front)): void {
   for (const player of front.players) {
     const divs = sideDivisions(state, front, player);
     for (const types of NICHE_TYPES) {
