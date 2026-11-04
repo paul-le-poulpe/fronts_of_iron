@@ -20,6 +20,7 @@ import {
   failBreakthroughCombat,
   forceOf,
   removeEmptyBoxes,
+  topUpCounterForce,
   type Arrival,
   type Breakthrough,
 } from "./breakthroughs.ts";
@@ -170,12 +171,16 @@ function fightFront(state: GameState, front: Front): Arrival[] {
 /**
  * Un round d'un combat de percée (05-Fronts §7.2), ajouté à `record` : la force qui perce avec
  * `breakthroughMultiplier` ; la tranche de première ligne sans multiplicateur, la force de contre-attaque avec
- * `counterAttackMultiplier` (recalculée à chaque round) ; le défenseur avec ses PV de défense. Puis fuites et
- * vérifications de fin de round (`checkBreakthrough`). Renvoie false quand le combat est fini.
+ * `counterAttackMultiplier` ; le défenseur avec ses PV de défense. Puis fuites et vérifications de fin de round
+ * (`checkBreakthrough`). La force de contre-attaque est choisie au premier round, puis seulement complétée
+ * (`topUpCounterForce`). Renvoie false quand le combat est fini.
  */
-function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, record: CombatRecord): boolean {
+function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, record: CombatRecord, first: boolean): boolean {
   const phase = bt.phase;
-  if (phase === 3) assignCounterForces(state, front);
+  if (phase === 3) {
+    if (first) assignCounterForces(state, front);
+    else topUpCounterForce(state, front, bt);
+  }
   const force = forceOf(state, bt, true);
   const defense = forceOf(state, bt, false);
   const losses = new Map<Division, number>();
@@ -221,7 +226,7 @@ function resolveBreakthroughCombat(state: GameState, front: Front, bt: Breakthro
   const record = newRecord(state, front, bt.phase === 1 ? "breakthrough" : "counter", bt.owner, defender, bt.city1, bt.city2);
   for (const s of front.sides) s.lastLossByNiche.fill(0);
   let going = true;
-  for (let r = 0; r < FRONTS.combatMaxRounds && going; r++) going = breakthroughRound(state, front, bt, record);
+  for (let r = 0; r < FRONTS.combatMaxRounds && going; r++) going = breakthroughRound(state, front, bt, record, r === 0);
   if (going) failBreakthroughCombat(state, front, bt);
   // Première ligne percée : délai avant le combat 2 ; réaction rapide battue : délai avant la chute de la ville.
   record.success = state.breakthroughs.includes(bt) && (bt.phase === 2 || bt.phase === 4);

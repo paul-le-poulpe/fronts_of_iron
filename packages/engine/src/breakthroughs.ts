@@ -301,6 +301,35 @@ export function assignCounterForces(state: GameState, front: Front): void {
 }
 
 /**
+ * Force de contre-attaque d'un combat 2 déjà commencé (06-Combat-Simplifie §1, point 5) : les divisions engagées
+ * restent ; seule la place laissée dans une niche par une division détruite ou en fuite est comblée, d'abord par la
+ * réaction rapide, puis par la seconde ligne, dans l'ordre de choix, en `breakthroughWidth`. Sans cela, l'ordre de choix
+ * (meilleur état d'abord) remplacerait à chaque round chaque division touchée par une intacte.
+ */
+export function topUpCounterForce(state: GameState, front: Front, bt: Breakthrough): void {
+  const defender = front.players.find((p) => p !== bt.owner)!;
+  const engaged = forceOf(state, bt, false);
+  const pool = (line: number): Division[] =>
+    state.divisions.filter((d) => d.front === front.id && d.owner === defender && d.line === line && d.breakthrough === 0 && !isMoving(d) && !isFleeing(state, d));
+  const rapid = byNiche(pool(LINE_RAPID));
+  const second = byNiche(pool(LINE_SECOND));
+  let infantry = infantryOf(engaged);
+  NICHE_TYPES.forEach((types, n) => {
+    if (DIVISION_DATA[types[0]!]!.support && infantry === 0) return;
+    let room = BREAKTHROUGH_WIDTH;
+    for (const d of engaged) if (types.includes(d.type)) room -= d.btEngaged;
+    for (const d of [...rapid[n]!, ...second[n]!]) {
+      if (room <= 0) break;
+      const take = Math.min(room, dataOf(d).breakthroughWidth);
+      d.breakthrough = bt.id;
+      d.btEngaged = take;
+      room -= take;
+      if (n === INFANTRY_NICHE) infantry += take;
+    }
+  });
+}
+
+/**
  * Facteur de réaction à l'échelle 100 (05-Fronts §7.2, point 7), selon la motorisation de la force de contre-attaque :
  * largeur motorisée / largeur de toutes ses divisions des niches principales. 100 % : 100 ; moins de 50 % :
  * `slowReactionFactor` × 100 ; entre les deux, linéaire.

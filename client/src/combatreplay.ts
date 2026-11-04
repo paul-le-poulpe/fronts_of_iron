@@ -48,7 +48,7 @@ export function combatSummary(c: CombatView, me: number): string {
 export const COMBAT_KIND: Readonly<Record<CombatView["kind"], string>> = {
   front: "Attaque sur tout le front",
   breakthrough: "Percée : première ligne",
-  counter: "Percée : contre-attaque de la réaction rapide",
+  counter: "Percée : contre-attaque du défenseur",
 };
 
 /**
@@ -358,8 +358,8 @@ export class CombatReplay {
             : "Percée arrêtée par la première ligne."
           : c.kind === "counter"
             ? c.success
-              ? "Réaction rapide battue : la ville au bout de l'axe tombe après le délai."
-              : "Percée arrêtée par la réaction rapide."
+              ? "Contre-attaque repoussée : la ville au bout de l'axe tombe après le délai."
+              : "Percée arrêtée par la contre-attaque."
             : c.captured !== 0
               ? `Ville n° ${c.captured} prise.`
               : advance > 0

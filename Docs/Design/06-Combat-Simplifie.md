@@ -54,10 +54,16 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 5. **Percée** (décision de l'auteur, 5 novembre 2026) : ses phases et ses délais
    restent ceux de `05-Fronts.md` §7.2, mais **chacun de ses deux combats est
    instantané** : le combat 1 (contre la tranche de première ligne) et le
-   combat 2 (la réaction rapide contre-attaque) sont chacun résolus en un tour,
-   au tour où le délai qui les précède finit, avec les règles de la percée
-   (forces, multiplicateurs, largeur d'une liaison, fuites, force de
-   contre-attaque recalculée à chaque round). Un combat s'arrête à son issue
+   combat 2 (contre-attaque du défenseur, avec sa réaction rapide puis sa
+   seconde ligne) sont chacun résolus en un tour, au tour où le délai qui les
+   précède finit, avec les règles de la percée (forces, multiplicateurs,
+   largeur d'une liaison, fuites). **La force de contre-attaque est choisie au
+   premier round du combat 2** (`05-Fronts.md` §7.2, point 8), puis elle n'est
+   que **complétée** : la place d'une division détruite ou en fuite est
+   reprise dans l'ordre de choix. Elle n'est plus recalculée à chaque round :
+   l'ordre de choix (meilleur état d'abord) remplaçait chaque division touchée
+   par une intacte, si bien que toute la réserve passait dans une seule
+   liaison. Un combat s'arrête à son issue
    (§7.2 : première ligne percée, réaction rapide battue, force détruite ou
    essoufflée) ou au bout de 50 rounds ; *provisoire* : sans issue au bout des
    50 rounds, la percée échoue comme une force essoufflée. Une percée donne
@@ -65,7 +71,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    division en face (pas de réaction rapide) n'est pas enregistré.
 6. **Enregistrement** : chaque combat produit un **rapport** gardé dans l'état
    (`Combat`) : son **type** (attaque sur tout le front, percée contre la
-   première ligne, contre-attaque de la réaction rapide), son issue pour
+   première ligne, contre-attaque du défenseur), son issue pour
    l'attaquant, front, axe ou front entier, tour, attaquant, défenseur, liste
    des divisions des deux camps (type, état au début), et pour chaque round la
    perte d'état de chaque division (en entiers), les divisions détruites et en
@@ -93,8 +99,8 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   joueur local est à gauche, l'adversaire à droite (décisions de l'auteur,
   5 novembre 2026, sauf mention *provisoire*) :
   - **en tête, le type du combat** : « Attaque sur tout le front »,
-    « Percée : première ligne » ou « Percée : contre-attaque de la réaction
-    rapide », puis qui attaque ; le type est aussi sur chaque ligne de
+    « Percée : première ligne » ou « Percée : contre-attaque du défenseur »,
+    puis qui attaque ; le type est aussi sur chaque ligne de
     l'historique ;
   - **en haut, les totaux des deux camps** (attaque anti-infanterie, attaque
     anti-armure, PV des niches principales) : **les mêmes barres que dans la
@@ -120,7 +126,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
     camp** : hommes et matériel (exemplaires de chaque type d'armement), et
     l'issue au-dessus (avancée, ville prise ; pour une percée : première ligne
-    percée et saut, ou percée arrêtée ; réaction rapide battue, ou percée
+    percée et saut, ou percée arrêtée ; contre-attaque repoussée, ou percée
     arrêtée).
   *Provisoire* : 0,45 seconde par round (22,5 secondes au plus pour 50 rounds) ;
   un bouton « Passer » va à la fin.
