@@ -421,8 +421,12 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 
 .fw-history { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--t-line); font-size: 12px; }
 .fw-history-title { color: var(--t-muted); }
-.fw-history-row { font: inherit; color: var(--t-fg); background: var(--t-btn); border: 1px solid var(--t-btn-line); padding: 2px 6px; cursor: pointer; }
+/* Une ligne : le combat (clic : replay), puis une petite croix à droite qui le retire. */
+.fw-history-row { display: inline-flex; align-items: center; color: var(--t-fg); background: var(--t-btn); border: 1px solid var(--t-btn-line); }
 .fw-history-row:hover { border-color: var(--t-fg); }
+.fw-history-open { font: inherit; color: inherit; background: none; border: 0; padding: 2px 4px 2px 6px; cursor: pointer; }
+.fw-history-x { font: inherit; font-size: 10px; line-height: 1; color: inherit; background: none; border: 0; border-left: 1px solid var(--t-btn-line); padding: 3px 5px; cursor: pointer; opacity: 0.7; }
+.fw-history-x:hover { opacity: 1; }
 /* Combat pas encore visionné : clignote dans la couleur du vainqueur (bleu : le joueur local, rouge : l'adversaire). */
 .fw-history-row.unseen { --cr-c: #c2443a; color: #fff; border-color: var(--cr-c); animation: cr-blink 1s ease-in-out infinite; }
 .fw-history-row.unseen.win { --cr-c: #3d6fd1; }

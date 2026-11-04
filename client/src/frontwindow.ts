@@ -20,7 +20,7 @@ import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals, type Totals } from "./stattotals.ts";
-import { combatSummary, isViewed, localWon } from "./combatreplay.ts";
+import { combatSummary, dismissCombat, isDismissed, isViewed, localWon } from "./combatreplay.ts";
 import { type BreakthroughView, type CombatView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
 
@@ -60,6 +60,8 @@ interface Gutter {
 
 /** Largeur minimale de la première ligne du joueur (px) : en dessous, la fenêtre défile horizontalement. */
 const FIRST_MIN = 200;
+/** Combats du front gardés dans son historique (06-Combat-Simplifie §2 ; auteur, 5 novembre 2026). */
+const HISTORY_SIZE = 4;
 
 /** Une boîte de percée du joueur : sa carte dans la liste, et sa vue étendue (rangées par niche), construites une fois. */
 interface BoxUi {
@@ -367,19 +369,29 @@ export class FrontWindow implements DndHost {
     if (this.isOpen) this.drawHistory();
   }
 
-  /** Historique du front : un combat pas encore visionné clignote, en bleu si le joueur local a gagné, en rouge sinon. */
+  /**
+   * Historique du front : ses `HISTORY_SIZE` derniers combats, sauf ceux retirés par leur croix. Un combat pas encore
+   * visionné clignote, en bleu si le joueur local a gagné, en rouge sinon.
+   */
   private drawHistory(): void {
-    const mine = this.combats.filter((c) => c.front === this.frontId).slice(-5).reverse();
+    const mine = this.combats.filter((c) => c.front === this.frontId && !isDismissed(c.id)).slice(-HISTORY_SIZE).reverse();
     this.history.hidden = mine.length === 0;
     this.history.replaceChildren(
       el("span", "fw-history-title", "Derniers combats :"),
       ...mine.map((c) => {
         const unseen = isViewed(c.id) ? "" : localWon(c, this.military, localPlayer()) ? " unseen win" : " unseen lose";
-        const b = el("button", `fw-history-row${unseen}`, combatSummary(c, localPlayer()));
+        const row = el("span", `fw-history-row${unseen}`);
+        const b = el("button", "fw-history-open", combatSummary(c));
         b.type = "button";
         b.title = "Revoir le combat";
         b.addEventListener("click", () => this.onReplay?.(c));
-        return b;
+        // La croix retire le combat de la liste et son icône de la carte.
+        const x = el("button", "fw-history-x", "✕");
+        x.type = "button";
+        x.title = "Retirer ce combat";
+        x.addEventListener("click", () => dismissCombat(c.id));
+        row.append(b, x);
+        return row;
       }),
     );
   }

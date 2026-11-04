@@ -147,10 +147,16 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
     arrêtée).
   *Provisoire* : 0,45 seconde par round (22,5 secondes au plus pour 50 rounds) ;
   un bouton « Passer » va à la fin.
-- **Historique** : la fenêtre d'un front liste les derniers combats de ce
-  front (tour, attaquant, résultat) ; un clic sur une ligne ouvre le replay.
-  Une ligne pas encore visionnée clignote, en bleu ou en rouge comme l'icône
-  de la carte ; visionnée, elle redevient ordinaire.
+- **Historique** : la fenêtre d'un front liste les **4 derniers combats** de
+  ce front (décision de l'auteur, 5 novembre 2026), du plus récent au plus
+  ancien : moment, type, résultat ; pas les noms des joueurs (le front est déjà
+  celui du joueur et de cet adversaire). Un clic sur une ligne ouvre le
+  replay. Une ligne pas encore visionnée clignote, en bleu ou en rouge comme
+  l'icône de la carte ; visionnée, elle redevient ordinaire. Une **petite
+  croix** à droite de chaque ligne retire le combat de la liste et son icône
+  de la carte (*provisoire* : retenu par la page pour la partie en cours,
+  comme « visionné »). Un combat sort aussi de la liste quand le moteur le
+  supprime (20 par joueur, §1).
 
 ## 3. Usines d'unités
 

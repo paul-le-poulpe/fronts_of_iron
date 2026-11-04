@@ -36,12 +36,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 }
 
 /** Une ligne d'historique : « tour, attaquant, résultat » (fenêtre d'un front, 06-Combat-Simplifie §2). */
-export function combatSummary(c: CombatView, me: number): string {
+export function combatSummary(c: CombatView): string {
   const seconds = Math.floor(c.tick / 10);
-  const who = c.attacker === me ? `vous contre ${playerName(c.defender)}` : `${playerName(c.attacker)} contre vous`;
   const advance = c.rounds.reduce((s, r) => s + r.advance, 0);
   const result = c.captured !== 0 ? `ville n° ${c.captured} prise` : advance > 0 ? `avancée ${Math.round(advance / 10)} %` : "pas d'avancée";
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${COMBAT_KIND[c.kind]} — ${who} — ${result}`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${COMBAT_KIND[c.kind]} — ${result}`;
 }
 
 /** Nom de chaque type de combat (06-Combat-Simplifie §2), affiché en tête du replay et dans l'historique. */
@@ -78,10 +77,20 @@ export const isViewed = (id: number): boolean => viewed.has(id);
 export function onCombatViewed(fn: (id: number) => void): void {
   viewedListeners.push(fn);
 }
-/** Nouvelle partie : plus aucun combat visionné, plus aucun abonné. */
+/** Nouvelle partie : plus aucun combat visionné ni retiré, plus aucun abonné. */
 export function resetViewed(): void {
   viewed.clear();
+  dismissed.clear();
   viewedListeners.length = 0;
+}
+
+/** Combats retirés de l'historique par leur croix (fenêtre d'un front) : retirés aussi de la carte, comme visionnés. */
+const dismissed = new Set<number>();
+export const isDismissed = (id: number): boolean => dismissed.has(id);
+export function dismissCombat(id: number): void {
+  dismissed.add(id);
+  if (viewed.has(id)) for (const fn of viewedListeners) fn(id);
+  else markViewed(id);
 }
 function markViewed(id: number): void {
   if (viewed.has(id)) return;
