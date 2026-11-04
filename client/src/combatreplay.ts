@@ -262,7 +262,9 @@ export class CombatReplay {
     const showRound = (): void => {
       const r = next++;
       const rd = c.rounds[r]!;
-      round.textContent = `Round ${r + 1} / ${c.rounds.length}`;
+      // Un round sans division touchée : le défenseur n'a plus d'infanterie, l'attaquant avance (06-Combat-Simplifie §1).
+      const total = Math.round(c.rounds.slice(0, r + 1).reduce((s, x) => s + x.advance, 0) / 10);
+      round.textContent = rd.hits.length === 0 ? `Round ${r + 1} / ${c.rounds.length} — plus d'infanterie en face : avancée ${total} %` : `Round ${r + 1} / ${c.rounds.length}`;
       // La perte est rangée dans la carte où la division était pendant le round.
       const lossByCard = new Map<Card, number>();
       for (const [i, loss] of rd.hits) {

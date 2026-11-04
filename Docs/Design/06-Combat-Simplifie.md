@@ -30,10 +30,15 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 2. **Résolution** : au tour où le délai finit, le moteur calcule **tout le
    combat dans ce tour**. Il enchaîne les rounds du §6 de `05-Fronts.md` (mêmes
    dégâts, mêmes pertes, fuites, échanges ; *provisoire*) pendant **50 rounds**
-   (`FRONTS.combatMaxRounds`), ou jusqu'à ce qu'**un camp n'ait plus
-   d'infanterie engagée** en première ligne (décision de l'auteur, 5 novembre
-   2026), ou jusqu'à une prise de ville. Un camp sans infanterie engagée au
-   moment du lancement ne combat pas : le combat n'a aucun round et n'est pas
+   (`FRONTS.combatMaxRounds`), ou jusqu'à ce que **l'attaquant n'ait plus
+   d'infanterie engagée** en première ligne, ou jusqu'à une prise de ville
+   (décisions de l'auteur, 5 novembre 2026). Quand c'est **le défenseur** qui
+   n'a plus d'infanterie engagée (détruite ou en fuite), **l'attaquant avance
+   pendant les rounds qui restent**, sans combat (*provisoire* : sans dégâts
+   de part et d'autre), à sa vitesse maximale (`05-Fronts.md` §7.1 : 1 % de la
+   route par round à pied, 2 % motorisé, entre les deux pour une armée mixte ;
+   50 rounds font donc 50 % à 100 % de la route). Un attaquant sans infanterie
+   engagée au lancement ne combat pas : le combat n'a aucun round et n'est pas
    enregistré. Les dégâts sont appliqués aux
    divisions dans ce tour. Pendant ces rounds, l'échange avec la seconde ligne
    suit la règle **du combat** (`05-Fronts.md` §5.3 : sous la moitié de l'état

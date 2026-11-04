@@ -249,13 +249,16 @@ export interface CombatRecord {
 
 /**
  * Un round de l'attaque sur tout le front de `front.players[x]` (05-Fronts §6, §7.1), ajouté à `record`. Renvoie les
- * connexions arrivées au bout de leur route, ou `undefined` si un camp n'a plus d'infanterie engagée (fin du combat,
- * 06-Combat-Simplifie §1).
+ * connexions arrivées au bout de leur route, ou `undefined` si l'attaquant n'a plus d'infanterie engagée (fin du combat,
+ * 06-Combat-Simplifie §1). Un défenseur sans infanterie engagée ne combat plus : le round n'est qu'une avancée.
  */
 function frontAttackRound(state: GameState, front: Front, x: number, record: CombatRecord): Arrival[] | undefined {
   const sides = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
   const attacker = sides[x]!;
-  if (infantryWidth(attacker) === 0 || infantryWidth(sides[1 - x]!) === 0) return undefined;
+  if (infantryWidth(attacker) === 0) return undefined;
+  // Le défenseur n'a plus d'infanterie engagée (détruite ou en fuite) : l'attaquant avance sans combat pendant les
+  // rounds qui restent, à sa vitesse maximale (06-Combat-Simplifie §1).
+  if (infantryWidth(sides[1 - x]!) === 0) return advanceRound(front, x, frontSpeed(attacker), record, { hits: [], destroyed: [], fled: [] });
   const losses = new Map<Division, number>();
   // L'attaquant avec `attackMultiplier`, le défenseur sans multiplicateur, avec ses PV de défense.
   fightLosses(
@@ -315,7 +318,12 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant.
   const after = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
   const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), frontSpeed(after[x]!));
-  record.rounds.push({ hits, destroyed, fled, advance: by });
+  return advanceRound(front, x, by, record, { hits, destroyed, fled });
+}
+
+/** Écrit le round dans `record` et avance le front de `by` millièmes dans le sens de `front.players[x]`. Renvoie les connexions arrivées au bout. */
+function advanceRound(front: Front, x: number, by: number, record: CombatRecord, round: Omit<CombatRound, "advance">): Arrival[] {
+  record.rounds.push({ ...round, advance: by });
   const arrivals: Arrival[] = [];
   if (by === 0) return arrivals;
   const net = x === 0 ? by : -by;
@@ -365,8 +373,9 @@ function captureArrivals(state: GameState, pending: readonly Arrival[], changed:
 
 /**
  * Attaques sur tout le front arrivées à leur tour (06-Combat-Simplifie §1), fronts par identifiant, camps 0 puis 1 :
- * chacune est résolue en entier dans ce tour, jusqu'à `FRONTS.combatMaxRounds` rounds, jusqu'à ce qu'un camp n'ait
- * plus d'infanterie engagée, ou jusqu'à une prise de ville. Appelée par `applyTurn` à chaque tour.
+ * chacune est résolue en entier dans ce tour, jusqu'à `FRONTS.combatMaxRounds` rounds, jusqu'à ce que l'attaquant
+ * n'ait plus d'infanterie engagée, ou jusqu'à une prise de ville. Quand le défenseur n'en a plus, les rounds restants
+ * ne sont que des avancées. Appelée par `applyTurn` à chaque tour.
  */
 export function resolveFrontAttacks(state: GameState, changed: number[]): void {
   const now = currentTurn(state);
