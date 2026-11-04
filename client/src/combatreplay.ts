@@ -3,11 +3,12 @@
 //   milieu de la connexion du combat, retirée après `ICON_TURNS` tours ou au clic ;
 // - `CombatReplay` : le panneau qui rejoue un rapport (`CombatView`) round par round.
 //   En haut, les totaux des deux camps, les mêmes que dans la fenêtre d'un front
-//   (`stattotals.ts`). Dessous, deux colonnes face à face : une carte par division, avec
-//   sa barre de vie et ses attaques ; au-delà de `MAX_SIDE_BY_SIDE` divisions d'un même
-//   type dans un camp, une seule carte pour le type, avec ×N. À chaque round, les barres
-//   baissent de la perte, la perte s'affiche, une division détruite s'efface, une division
-//   en fuite recule un peu et passe en gris. À la fin : les pertes en hommes et en matériel.
+//   (`stattotals.ts`). Dessous, deux colonnes face à face : une carte par type de division
+//   et par camp, une icône par division, empilées, avec la barre de vie (état moyen) et les
+//   attaques. À chaque round, les barres baissent de la perte, la perte s'affiche, une
+//   division détruite quitte la pile, une division en fuite passe dans une carte des
+//   fuyards de son type, un peu en retrait et en gris. À la fin : les pertes en hommes et
+//   en matériel.
 // Le rapport vient du moteur : rien ici ne recalcule un combat. Les statistiques sont
 // estimées sur l'état des divisions (le rapport ne garde pas les exemplaires).
 
@@ -20,12 +21,13 @@ import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
 /** Durée de vie d'une icône de combat sur la carte, en tours (300 = 30 s ; provisoire, 06-Combat-Simplifie §2). */
 const ICON_TURNS = 300;
-/** Durée d'un round dans le replay, en ms (provisoire, 06-Combat-Simplifie §2) : 50 rounds en 15 s au plus. */
-const ROUND_MS = 300;
+/** Durée d'un round dans le replay, en ms (provisoire, 06-Combat-Simplifie §2) : 50 rounds en 22,5 s au plus. */
+const ROUND_MS = 450;
 /** Durée de l'approche des deux colonnes avant le premier round, en ms. */
 const APPROACH_MS = 700;
-/** Au-delà de ce nombre de divisions d'un type dans un camp, une seule carte pour le type, avec ×N (provisoire, 06-Combat-Simplifie §2). */
-const MAX_SIDE_BY_SIDE = 4;
+/** Icônes empilées au plus sur une carte, et décalage de chacune sur la précédente, en px (provisoire, 06-Combat-Simplifie §2). */
+const MAX_STACK = 8;
+const STACK_STEP_PX = 6;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -45,12 +47,15 @@ export function combatSummary(c: CombatView, me: number): string {
 
 const noStats = (): Stats => ({ soft: 0, hard: 0, hp: 0 });
 
-/** Une carte du replay : une division, ou toutes les divisions d'un type d'un camp (`units`), en ligne ou en fuite. */
+/** Une carte du replay : les divisions d'un type d'un camp (`units`), en ligne, ou celles d'entre elles qui ont fui. */
 interface Card {
   readonly units: readonly number[];
   readonly fled: boolean;
   readonly root: HTMLElement;
-  readonly count: HTMLElement;
+  /** Les icônes empilées, une par division présente. */
+  readonly stack: HTMLElement;
+  readonly icon: string;
+  readonly name: string;
   readonly fill: HTMLElement;
   readonly dmg: HTMLElement;
   readonly soft: HTMLElement;
@@ -122,23 +127,12 @@ export class CombatReplay {
     const fled = c.units.map(() => false);
     const dead = c.units.map(() => false);
 
-    const makeCard = (units: readonly number[], isFled: boolean, grouped: boolean): Card => {
+    const makeCard = (units: readonly number[], isFled: boolean): Card => {
       const u = c.units[units[0]!]!;
       const info = m.divisions[u.type];
       const root = el("div", isFled ? "cr-unit fled" : "cr-unit");
-      const iconBox = el("div", "cr-iconbox");
-      const img = el("img", "cr-icon");
-      img.src = info === undefined ? "" : `icons/${icon32Path(info.icon)}`;
-      img.alt = "";
-      iconBox.append(img);
-      const flag = el("img", "cr-flag");
-      flag.src = "icons/miscellaneous/icon-white-flag.png";
-      flag.alt = "";
-      flag.title = "En fuite";
-      iconBox.append(flag);
-      // Le nombre est à côté de l'icône, hors de la barre de vie.
-      const count = el("span", "cr-count", "");
-      count.hidden = !grouped;
+      // Les icônes des divisions de la carte, empilées (remplies par `redraw`), et le drapeau blanc par-dessus.
+      const stack = el("div", "cr-stack");
       const body = el("div", "cr-body");
       const bar = el("div", "cr-bar");
       const fill = el("div", "cr-fill");
@@ -156,9 +150,8 @@ export class CombatReplay {
       const hard = stat("hard");
       body.append(bar, stats);
       const dmg = el("div", "cr-dmg");
-      root.append(dmg, iconBox, count, body);
-      root.title = info === undefined ? "" : unitName(info.id);
-      return { units, fled: isFled, root, count, fill, dmg, soft, hard };
+      root.append(dmg, stack, body);
+      return { units, fled: isFled, root, stack, icon: info === undefined ? "" : `icons/${icon32Path(info.icon)}`, name: info === undefined ? "" : unitName(info.id), fill, dmg, soft, hard };
     };
 
     // Cartes, dans l'ordre des divisions du rapport (type par type) ; elles ne changent plus d'ordre.
@@ -170,36 +163,27 @@ export class CombatReplay {
       const idx = c.units.map((_, i) => i).filter((i) => sideOf(c.units[i]!.owner) === side);
       const types = [...new Set(idx.map((i) => c.units[i]!.type))].sort((a, b) => a - b);
       for (const t of types) {
+        // Une carte par type et par camp, les divisions empilées.
         const ofType = idx.filter((i) => c.units[i]!.type === t);
-        if (ofType.length <= MAX_SIDE_BY_SIDE) {
-          for (const i of ofType) {
-            const card = makeCard([i], false, false);
-            cards.push(card);
-            cardOf[i] = card;
-            cols[side].append(card.root);
-          }
-        } else {
-          const card = makeCard(ofType, false, true);
-          cards.push(card);
-          for (const i of ofType) cardOf[i] = card;
-          cols[side].append(card.root);
-        }
+        const card = makeCard(ofType, false);
+        cards.push(card);
+        for (const i of ofType) cardOf[i] = card;
+        cols[side].append(card.root);
       }
     }
-    /** Une division d'un type groupé qui fuit passe dans la carte des fuyards du type, posée juste après celle du type. */
+    /** Une division qui fuit passe dans la carte des fuyards de son type, posée juste après celle du type. */
     const flee = (i: number): void => {
       fled[i] = true;
       const card = cardOf[i]!;
       // Carte d'une seule division : elle recule sur place.
-      if (card.count.hidden) {
+      if (card.units.length === 1) {
         card.root.classList.add("fled");
         return;
       }
       const key = `${sideOf(c.units[i]!.owner)}:${c.units[i]!.type}`;
       let f = fledCards.get(key);
       if (f === undefined) {
-        const same = card.units;
-        f = makeCard(same, true, true);
+        f = makeCard(card.units, true);
         fledCards.set(key, f);
         cards.push(f);
         card.root.after(f.root);
@@ -238,7 +222,23 @@ export class CombatReplay {
         }
         const n = here.length;
         card.root.classList.toggle("dead", n === 0);
-        if (!card.count.hidden) card.count.textContent = `×${n}`;
+        // Une icône par division, empilées, au plus `MAX_STACK` ; la carte vidée garde une icône, effacée.
+        const shown = Math.max(1, Math.min(n, MAX_STACK));
+        if (card.stack.childElementCount !== shown + 1) {
+          const icons = Array.from({ length: shown }, (_, k) => {
+            const img = el("img", "cr-icon");
+            img.src = card.icon;
+            img.alt = "";
+            img.style.left = `${k * STACK_STEP_PX}px`;
+            return img;
+          });
+          const flag = el("img", "cr-flag");
+          flag.src = "icons/miscellaneous/icon-white-flag.png";
+          flag.alt = "";
+          card.stack.replaceChildren(...icons, flag);
+          card.stack.style.width = `${32 + (shown - 1) * STACK_STEP_PX}px`;
+        }
+        card.root.title = n > 1 ? `${card.name} : ${n} divisions` : card.name;
         card.fill.style.width = n === 0 ? "0" : `${(100 * state) / (n * scale)}%`;
         card.soft.textContent = formatStat(Math.round(st.soft));
         card.hard.textContent = formatStat(Math.round(st.hard));

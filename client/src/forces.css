@@ -435,21 +435,22 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 
 .cr {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 8;
-  width: min(860px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
+  width: min(960px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
   background: var(--t-panel); color: var(--t-fg); border: 1px solid var(--t-line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   font-size: 13px;
 }
 .cr-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
 
 /* Totaux des deux camps : les barres de la fenêtre d'un front (`.fw-tots`), ici dans le flux, pas sous un titre de colonne. */
-.cr-top { display: flex; justify-content: space-between; gap: 48px; padding: 8px 16px; border-bottom: 1px solid var(--t-line); }
-.cr-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cr-top { display: flex; justify-content: center; gap: 96px; padding: 8px 64px; border-bottom: 1px solid var(--t-line); }
+.cr-side { flex: 0 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .cr-side.theirs { align-items: flex-end; }
 .cr-side-name { font-weight: 700; }
 .cr-side .fw-tots { position: static; align-self: stretch; }
 
 .cr-round { padding: 4px 16px; color: var(--t-muted); min-height: 1.2em; text-align: center; }
-.cr-field { display: flex; justify-content: space-between; gap: 32px; padding: 8px 16px 12px; }
+/* Marges de côté larges : une carte en fuite recule de 24 px sans sortir du panneau. */
+.cr-field { display: flex; justify-content: space-between; gap: 32px; padding: 8px 64px 12px; }
 .cr-col { flex: 1; display: flex; flex-direction: column; gap: 6px; transition: transform 0.6s ease-out; }
 .cr-right { align-items: flex-end; }
 .cr-field.apart .cr-left { transform: translateX(-60px); }
@@ -459,14 +460,12 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
   background: var(--t-capsule); border: 1px solid var(--t-line); transition: opacity 0.4s, transform 0.4s, filter 0.4s;
 }
 .cr-right .cr-unit { flex-direction: row-reverse; }
-.cr-iconbox { position: relative; flex: none; width: 32px; height: 32px; }
-.cr-icon { width: 32px; height: 32px; display: block; }
-/* Drapeau blanc sur l'icône, seulement en fuite. */
-.cr-flag { display: none; position: absolute; left: -4px; top: -4px; width: 16px; height: 16px; image-rendering: pixelated; }
+/* Icônes des divisions de la carte, empilées : chacune décalée de quelques pixels sur la précédente (largeur posée par le script). */
+.cr-stack { position: relative; flex: none; width: 32px; height: 32px; }
+.cr-icon { position: absolute; top: 0; width: 32px; height: 32px; display: block; }
+/* Drapeau blanc sur la pile, seulement en fuite. */
+.cr-flag { display: none; position: absolute; left: -4px; top: -4px; z-index: 1; width: 16px; height: 16px; image-rendering: pixelated; }
 .cr-unit.fled .cr-flag { display: block; }
-/* Nombre de divisions d'une carte groupée : à côté de l'icône, hors de la barre. */
-.cr-count { flex: none; min-width: 28px; font: 700 14px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
-.cr-right .cr-count { text-align: right; }
 .cr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cr-bar { height: 12px; background: var(--t-air); border: 1px solid var(--t-line); }
 .cr-fill { height: 100%; background: #3aa655; transition: width 0.25s ease-out; }
@@ -485,7 +484,7 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .cr-right .cr-unit.fled { transform: translateX(24px); }
 .cr-unit.dead { opacity: 0.15; }
 
-.cr-result { padding: 10px 16px 16px; }
+.cr-result { padding: 10px 64px 16px; }
 .cr-result:empty { display: none; }
 .cr-summary { text-align: center; font-weight: 700; margin-bottom: 10px; }
 .cr-losses { display: flex; justify-content: space-between; gap: 24px; }
