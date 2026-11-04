@@ -518,35 +518,41 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
   ligne, qui s'arrêtait à la première ligne manquant de fer ou d'ouvriers, et
   que l'auteur trouvait illisible ; mineurs avant les fermiers depuis le
   4 novembre 2026, pour qu'une petite population extraie quand même le fer du
-  premier tracteur) :
+  premier tracteur ; ouvriers des biens avant les fermiers le même jour, pour
+  qu'ils travaillent dans l'usine de bateaux) :
   1. les **mineurs** d'abord : ceux qu'il faut pour extraire le fer demandé
      par toutes les lignes qui tournent (§8), plafonné par la capacité des
      cases de fer (§7). Leur nombre suit donc toujours les lignes actives.
      S'il n'y a pas assez de monde, autant de mineurs que possible, et le fer
      extrait baisse en proportion ;
-  2. les **fermiers** et les **pêcheurs** sur ce qui reste, dans la proportion
+  2. les **ouvriers des lignes de biens** (tracteurs, bateaux de pêche, pompes,
+     §8) : les lignes de biens demandent leurs ouvriers et en obtiennent la
+     part que la population permet ; leur productivité est le plus petit des
+     deux ratios, fer et ouvriers (§8) ;
+  3. les **fermiers** et les **pêcheurs** sur ce qui reste, dans la proportion
      choisie par le joueur (un réglage ; l'interface sera définie par
      l'auteur). Ils prennent ce que leurs terres et leurs cases d'eau peuvent
      employer (§6.2, §6.4) ;
-  3. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
+  4. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
      a plus de travailleurs que sa surface n'en demande, le surplus passe à
      l'autre côté, jusqu'à ce que celui-ci soit plein. Le réglage ne joue donc
      que quand la population ne suffit pas à travailler à la fois tous les
      champs et toute la mer ; sinon, les deux sont remplis à 100 % ;
-  4. les **ouvriers d'usine** sur ce qui reste après les fermiers : les lignes
-     demandent leurs ouvriers (§8.1) et en obtiennent la part que la
-     population permet (malus de production, §8) ;
-  5. ceux qui n'ont toujours pas d'emploi forment la **population inactive** ;
-  6. les **hommes des divisions** ne travaillent pas : la répartition se fait
+  5. les **ouvriers de l'armement** sur ce qui reste après les fermiers : les
+     lignes d'armement demandent leurs ouvriers (§8.1) et en obtiennent la
+     part que la population permet (malus de production, §8) ;
+  6. ceux qui n'ont toujours pas d'emploi forment la **population inactive** ;
+  7. les **hommes des divisions** ne travaillent pas : la répartition se fait
      sur la population moins ces hommes, et moins les **blessés** (§4.2). La
      création d'une division et le renfort prennent leurs hommes parmi les
      inactifs ; en mobilisation forcée, le renfort passe avant les emplois
      (règles dans `05-Fronts.md` §3.5, §4.3). Les blessés ne sont jamais pris,
      mobilisation forcée comprise.
 
-  Les mineurs étant servis les premiers, les lignes ont leur fer même avec
-  une petite population ; ce sont alors les champs qui manquent de bras, puis
-  les ouvriers d'usine (productivité réduite, §8). La demande de tracteurs et
+  Avec une petite population, les lignes ont leur fer et les lignes de biens
+  leurs ouvriers ; ce sont alors les champs qui manquent de bras, puis
+  l'armement (productivité réduite, §8). Le début de partie sert l'expansion
+  (machines, nourriture) avant l'armement. La demande de tracteurs et
   de bateaux (§8.2) est calculée sur toute la population répartie entre champs
   et pêche, mineurs compris (provisoire : les retirer rendrait le calcul
   circulaire, les mineurs dépendant des lignes).
@@ -554,14 +560,15 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
   ```
   actifs   = population − soldats − blessés
   mineurs  = min(mineurs requis par le fer demandé, actifs)
-  F, P              = fermiers et pêcheurs disponibles, selon le réglage, sur actifs − mineurs
+  ouvriers_biens = ouvriers demandés par les biens × productivité des biens (§8)
+  F, P              = fermiers et pêcheurs disponibles, selon le réglage, sur actifs − mineurs − ouvriers_biens
   F_requis, P_requis = travailleurs requis (§6.2, §6.4 ; mécanisation calculée
                        avec F et P, une fois)
   fermiers = min(F_requis, F + max(0, P − P_requis))
   pêcheurs = min(P_requis, P + max(0, F − F_requis))
-  reste    = actifs − mineurs − fermiers − pêcheurs
-  ouvriers = ouvriers demandés × productivité (§8)    (au plus reste)
-  inactifs = reste − ouvriers
+  reste    = actifs − mineurs − ouvriers_biens − fermiers − pêcheurs
+  ouvriers_armement = ouvriers demandés par l'armement × productivité de l'armement (§8)    (au plus reste)
+  inactifs = reste − ouvriers_armement
   ```
 
 ### 4.1 Population maximale et croissance
@@ -880,8 +887,9 @@ vaut 0 (§2).
   population. **Pas encore dans le moteur** : seul le fer est extrait, il
   reçoit donc toutes les pompes ; la répartition reste à écrire avec
   l'extraction de l'aluminium.
-- Les mineurs sont pris avant les fermiers, les pêcheurs et les ouvriers
-  d'usine, pour le fer de toutes les lignes qui tournent à la fois (§4).
+- Les mineurs sont pris avant tous les autres (ouvriers des biens, fermiers,
+  pêcheurs, ouvriers de l'armement), pour le fer de toutes les lignes qui
+  tournent à la fois (§4).
 - Le groupe (§3.5) où se trouvent les cases n'intervient pas : l'extraction
   est nationale (§3.4).
 
@@ -960,8 +968,9 @@ vaut 0 (§2).
   si la population ou le fer manquent, elles tournent moins vite. **Deux passes**
   (décision de l'auteur, 4 novembre 2026) : les **lignes de biens** (tracteurs,
   bateaux, pompes) passent avant l'**armement** dans le partage du fer extrait et des
-  ouvriers disponibles. Les mineurs sont servis avant les deux passes et
-  avant les fermiers. Sur une échelle entière `RATIO_SCALE` = 10 000 (100 %) :
+  ouvriers disponibles. Les mineurs sont servis avant les deux passes ; la
+  passe des biens prend ses ouvriers avant les fermiers, celle de l'armement
+  après (§4). Sur une échelle entière `RATIO_SCALE` = 10 000 (100 %) :
 
   ```
   passe 1, biens (lignes utiles seulement, à 100 % de productivité, §8.2) :

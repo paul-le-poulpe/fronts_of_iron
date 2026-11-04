@@ -399,8 +399,9 @@ interface Allocation {
 
 /**
  * Répartition de `people` personnes (00-Game §4) : les mineurs du fer que demandent les lignes qui tournent d'abord ; puis
- * fermiers et pêcheurs, selon le réglage du joueur, avec le report de l'un à l'autre ; puis les ouvriers des usines ; le
- * reste est inactif. Les lignes de biens tournent à une productivité commune, puis celles d'armement à la leur, sur ce que les biens ont laissé (00-Game §8). Ne change que
+ * les ouvriers des lignes de biens ; puis fermiers et pêcheurs, selon le réglage du joueur, avec le report de l'un à
+ * l'autre ; puis les ouvriers de l'armement ; le reste est inactif. Les lignes de biens tournent à une productivité
+ * commune, celles d'armement à la leur, sur ce que les biens et les champs ont laissé (00-Game §8). Ne change que
  * `running` des groupes de lignes (recalculé à chaque appel).
  */
 function allocate(p: Player, people: number): Allocation {
@@ -417,7 +418,12 @@ function allocate(p: Player, people: number): Allocation {
   const needed = minersFor(capped, p.goodsEffective[MINING_MACHINE]!);
   const miners = Math.min(needed, people);
   const extracted = needed === 0 ? 0 : Math.floor((capped * miners) / needed);
-  const fieldPeople = people - miners;
+  // Puis les ouvriers des lignes de biens (auteur, 4 novembre 2026), avant les champs : ils prennent leur part du fer
+  // extrait et des personnes qui restent.
+  const goods = ratiosFor(lines.goodsIron, lines.goodsWorkers, extracted, people - miners);
+  const goodsIronUsed = scaledByRatio(lines.goodsIron, goods.line);
+  const goodsWorkersUsed = scaledByRatio(lines.goodsWorkers, goods.line);
+  const fieldPeople = people - miners - goodsWorkersUsed;
   const tractors = p.goodsEffective[TRACTOR]!;
   const fishingBoats = p.goodsEffective[FISHING_BOAT]!;
   const availableFarmers = Math.floor((fieldPeople * p.farmPercent) / 100);
@@ -431,12 +437,10 @@ function allocate(p: Player, people: number): Allocation {
   const seaYield = Math.floor((p.seaTiles * waterYieldMilli(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), fishingBoats)) / MILLI);
   const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
   const available = fieldPeople - farm.workers - sea.workers;
-  // Deux passes (00-Game §8) : les biens prennent leur part du fer extrait et des ouvriers, puis l'armement le reste.
-  const goods = ratiosFor(lines.goodsIron, lines.goodsWorkers, extracted, available);
-  const goodsIronUsed = scaledByRatio(lines.goodsIron, goods.line);
-  const goodsWorkersUsed = scaledByRatio(lines.goodsWorkers, goods.line);
-  const arm = ratiosFor(lines.iron - lines.goodsIron, lines.workers - lines.goodsWorkers, extracted - goodsIronUsed, available - goodsWorkersUsed);
-  const factoryWorkers = goodsWorkersUsed + scaledByRatio(lines.workers - lines.goodsWorkers, arm.line);
+  // L'armement en dernier (00-Game §8) : le fer que les biens ont laissé et les personnes que les champs ont laissées.
+  const arm = ratiosFor(lines.iron - lines.goodsIron, lines.workers - lines.goodsWorkers, extracted - goodsIronUsed, available);
+  const armWorkersUsed = scaledByRatio(lines.workers - lines.goodsWorkers, arm.line);
+  const factoryWorkers = goodsWorkersUsed + armWorkersUsed;
   return {
     farm,
     sea,
@@ -448,7 +452,7 @@ function allocate(p: Player, people: number): Allocation {
     ironConsumed: goodsIronUsed + scaledByRatio(lines.iron - lines.goodsIron, arm.line),
     goods,
     arm,
-    idle: available - factoryWorkers,
+    idle: available - armWorkersUsed,
   };
 }
 

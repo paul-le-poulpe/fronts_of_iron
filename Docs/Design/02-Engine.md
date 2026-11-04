@@ -506,7 +506,7 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
    pompes = goods[miningMachine]  (produits au tour précédent, §7)
 
 1. répartition (00-Game §4) sur population_active = max(0, population − soldiers − hurt) :
-   les lignes, puis les mineurs, puis fermiers et pêcheurs, puis les ouvriers :
+   les lignes, puis les mineurs, les ouvriers des biens, fermiers et pêcheurs, les ouvriers de l'armement :
 
    demande de tracteurs, de bateaux = fieldMachineDemand(b, population_active)
      (machines d'une mécanisation totale pour les fermiers et pêcheurs répartis) ;
@@ -527,21 +527,23 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
    mineurs   = min(requis, population_active)
    extrait   = requis == 0 ? 0 : floor(demande_plafonnée × mineurs / requis)
 
-   fermiers_disponibles = floor((population_active − mineurs) × farmPercent / 100)
-   pêcheurs_disponibles = population_active − mineurs − fermiers_disponibles
+   passe 1, biens (voir ratios plus bas) : dispo = extrait, population_active − mineurs → fer_b, ouv_b
+
+   fermiers_disponibles = floor((population_active − mineurs − ouv_b) × farmPercent / 100)
+   pêcheurs_disponibles = population_active − mineurs − ouv_b − fermiers_disponibles
    récolte, report, blé, poisson : voir plus bas (inchangés)
 
-   disponibles = population_active − mineurs − fermiers − pêcheurs ; S_r = RATIO_SCALE = 10 000
+   disponibles = population_active − mineurs − ouv_b − fermiers − pêcheurs ; S_r = RATIO_SCALE = 10 000
    ratios(fer_d, ouv_d, fer_dispo, ouv_dispo) :
      ratio_fer = fer_d == 0 ? S_r : min(S_r, floor(fer_dispo × S_r / fer_d))
      ratio_ouvriers = ouv_d == 0 ? S_r : min(S_r, floor(ouv_dispo × S_r / ouv_d))
      r = min(ratio_fer, ratio_ouvriers)
-   passe 1, biens : (fer_d, ouv_d) = demandes des lignes de biens ; dispo = extrait, disponibles ;
+   passe 1, biens : (fer_d, ouv_d) = demandes des lignes de biens ; dispo = extrait, population_active − mineurs ;
      fer_b = floor(fer_d × r_b / S_r) ; ouv_b = floor(ouv_d × r_b / S_r)          goods*Ratio
-   passe 2, armement : demandes des lignes d'armement ; dispo = extrait − fer_b, disponibles − ouv_b   arm*Ratio
+   passe 2, armement : demandes des lignes d'armement ; dispo = extrait − fer_b, disponibles   arm*Ratio
    ouvriers = ouv_b + ouv_a                                     factoryWorkers
    fer_consommé = fer_b + fer_a                                 ironConsumed
-   inactifs   = disponibles − ouvriers
+   inactifs   = disponibles − ouv_a
 
    cases_exploitées(d) = ceil(d / capacityPerTile)
    mineurs(d, pompes)  = ceil(cases_exploitées(d) × 1000 / M)
@@ -983,7 +985,8 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     terre ses fermiers sont inactifs et sa nourriture vaut `FOOD.minimum`
     (nomades, 00-Game §4).
 22. Répartition de la population (00-Game §4, depuis le 4 novembre 2026) : mineurs d'abord (le fer des lignes qui
-    tournent), puis fermiers et pêcheurs, puis les ouvriers d'usine, le reste est inactif. Sans ligne, toute la population va aux fermiers et
+    tournent), puis les ouvriers des biens, puis fermiers et pêcheurs, puis les ouvriers de l'armement, le reste est
+    inactif. Sans ligne, toute la population va aux fermiers et
     aux pêcheurs.
 23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `farmMechanization`, `fished`,
     `fishMechanization`, `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
