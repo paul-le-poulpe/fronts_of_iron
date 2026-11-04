@@ -41,10 +41,15 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    mixte ; 50 rounds font donc 15 % à 50 % de la route). Un attaquant sans infanterie
    engagée au lancement ne combat pas : le combat n'a aucun round et n'est pas
    enregistré. Les dégâts sont appliqués aux
-   divisions dans ce tour. Pendant ces rounds, l'échange avec la seconde ligne
-   suit la règle **du combat** (`05-Fronts.md` §5.3 : sous la moitié de l'état
-   d'une division de seconde ligne), pas celle du repos : sinon chaque division
-   touchée serait remplacée aussitôt par une division intacte de seconde ligne.
+   divisions dans ce tour.
+   **Ni renfort ni remplacement pendant un combat** (décision de l'auteur,
+   5 novembre 2026 ; vaut pour tous les combats, percée comprise) : les
+   divisions engagées au premier round sont les seules à combattre ; une
+   division détruite ou en fuite laisse sa place vide jusqu'à la fin du combat.
+   Pas d'échange avec la seconde ligne (`05-Fronts.md` §5.3) ni de remplissage
+   des lignes (§4.2) pendant les rounds ; le rangement des lignes reprend au
+   tour suivant, entre deux combats. Le combat est assez court pour s'en
+   passer.
 3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
    à chaque round, comme avant (50 rounds avancent comme 50 secondes
    d'attaque), prise de ville comprise.
@@ -53,17 +58,22 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    en dehors de ces événements : un front sans combat lancé ne fait aucun dégât.
 5. **Percée** (décision de l'auteur, 5 novembre 2026) : ses phases et ses délais
    restent ceux de `05-Fronts.md` §7.2, mais **chacun de ses deux combats est
-   instantané** : le combat 1 (contre la tranche de première ligne) et le
-   combat 2 (contre-attaque du défenseur, avec sa réaction rapide puis sa
-   seconde ligne) sont chacun résolus en un tour, au tour où le délai qui les
-   précède finit, avec les règles de la percée (forces, multiplicateurs,
-   largeur d'une liaison, fuites). **La force de contre-attaque est choisie au
-   premier round du combat 2** (`05-Fronts.md` §7.2, point 8), puis elle n'est
-   que **complétée** : la place d'une division détruite ou en fuite est
-   reprise dans l'ordre de choix. Elle n'est plus recalculée à chaque round :
-   l'ordre de choix (meilleur état d'abord) remplaçait chaque division touchée
-   par une intacte, si bien que toute la réserve passait dans une seule
-   liaison. Un combat s'arrête à son issue
+   instantané**, chacun résolu en un tour, au tour où le délai qui le précède
+   finit, avec les règles de la percée (multiplicateurs, fuites) :
+   - **combat 1** : la force qui perce, sur une largeur de 1 liaison, contre
+     les défenseurs de la première ligne sur une largeur de 1 liaison (la
+     tranche, choisie au lancement du combat) ;
+   - **combat 2, contre-attaque du défenseur** (si le combat 1 est gagné) :
+     la force de contre-attaque est formée **une fois, au début du combat** :
+     pour chaque niche, d'abord le plus possible de la **réaction rapide** du
+     défenseur, puis, s'il n'y en a pas assez, sa **seconde ligne** (jamais sa
+     première ligne), pour couvrir si possible 100 % d'une liaison dans chaque
+     niche (`05-Fronts.md` §7.2, point 8). Le combat se joue sur **ces
+     divisions et pas d'autres** : elle n'est ni recalculée ni complétée
+     ensuite. Une infanterie de la contre-attaque détruite ou en fuite n'est
+     donc pas remplacée : sans infanterie engagée, la contre-attaque est
+     battue (§7.2, point 9).
+   Un combat s'arrête à son issue
    (§7.2 : première ligne percée, réaction rapide battue, force détruite ou
    essoufflée) ou au bout de 50 rounds ; *provisoire* : sans issue au bout des
    50 rounds, la percée échoue comme une force essoufflée. Une percée donne

@@ -20,7 +20,6 @@ import {
   failBreakthroughCombat,
   forceOf,
   removeEmptyBoxes,
-  topUpCounterForce,
   type Arrival,
   type Breakthrough,
 } from "./breakthroughs.ts";
@@ -43,7 +42,7 @@ import {
   type Division,
 } from "./divisions.ts";
 import { ROUTE, endOf, frontWidth, hasRound, isActive, isBreakthroughCombat, type Front } from "./fronts.ts";
-import { applyFlight, applySwaps, arrangeSide, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
+import { applyFlight, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 /**
@@ -172,15 +171,12 @@ function fightFront(state: GameState, front: Front): Arrival[] {
  * Un round d'un combat de percée (05-Fronts §7.2), ajouté à `record` : la force qui perce avec
  * `breakthroughMultiplier` ; la tranche de première ligne sans multiplicateur, la force de contre-attaque avec
  * `counterAttackMultiplier` ; le défenseur avec ses PV de défense. Puis fuites et vérifications de fin de round
- * (`checkBreakthrough`). La force de contre-attaque est choisie au premier round, puis seulement complétée
- * (`topUpCounterForce`). Renvoie false quand le combat est fini.
+ * (`checkBreakthrough`). La force de contre-attaque est choisie au premier round seulement : ensuite, ni renfort ni
+ * remplacement (06-Combat-Simplifie §1). Renvoie false quand le combat est fini.
  */
 function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, record: CombatRecord, first: boolean): boolean {
   const phase = bt.phase;
-  if (phase === 3) {
-    if (first) assignCounterForces(state, front);
-    else topUpCounterForce(state, front, bt);
-  }
+  if (phase === 3 && first) assignCounterForces(state, front);
   const force = forceOf(state, bt, true);
   const defense = forceOf(state, bt, false);
   const losses = new Map<Division, number>();
@@ -209,8 +205,6 @@ function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, rec
   breakthroughFlight(state, front);
   const advance = bt.advance;
   checkBreakthrough(state, front, bt);
-  applySwaps(state, front, false);
-  for (const p of front.players) arrangeSide(state, front, p);
   // Avancée du round : le saut, quand la première ligne est percée.
   record.rounds.push({ ...roundHits(state, engaged, before, index, alive), advance: bt.advance - advance });
   return state.breakthroughs.includes(bt) && bt.phase === phase;
@@ -402,10 +396,9 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   trimAll(state);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
+  // Pas d'échange ni de renfort pendant un combat (06-Combat-Simplifie §1) : une division détruite ou en fuite laisse sa
+  // place vide ; le rangement des lignes (`arrangeAll`) ne reprend qu'au tour suivant.
   applyFlight(state, front);
-  // Règle d'échange du combat (05-Fronts §5.3) : sans `false`, la règle hors combat remplacerait chaque division touchée.
-  applySwaps(state, front, false);
-  for (const p of front.players) arrangeSide(state, front, p);
 
   // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant.
   const after = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
