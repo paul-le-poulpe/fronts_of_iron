@@ -14,6 +14,7 @@ garde qu'un résumé et y renvoie. Une règle n'est écrite qu'à un seul endroi
 | Domaine | Document |
 | --- | --- |
 | Fronts terrestres : détection, divisions, placement sur les fronts, renfort, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
+| Combat instantané et replay, usines placées sur la carte qui produisent des divisions, centres de recrutement (branche `Simpler-Combat`) ; remplace §8 à §8.4 ici et 05-Fronts §3.5, §5 à §7.2 là où il les contredit | `06-Combat-Simplifie.md` |
 
 Un fichier dont le nom finit par `-History` (par exemple `05-Fronts-History.md`)
 est un historique de discussions : il ne fait jamais foi.

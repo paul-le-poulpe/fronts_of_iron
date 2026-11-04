@@ -1,0 +1,149 @@
+# 06 — Combat simplifié et usines d'unités (branche `Simpler-Combat`)
+
+**Ce document fait foi pour son domaine** : combats instantanés et leur replay,
+usines placées sur la carte qui produisent des divisions, centres de
+recrutement. Il remplace, sur cette branche, les parties suivantes, qui ne font
+plus foi là où elles le contredisent :
+
+- `05-Fronts.md` §5 (attaques), §6 (round de combat continu), §7.1 et §7.2
+  (déclenchement de l'avancée et de la percée) ;
+- `00-Game.md` §8 (usines à lignes, spécialisation, malus de production des
+  lignes), §8.1, §8.2, §8.3 (réserve d'armement) et §8.4 (types d'usines) ;
+- `05-Fronts.md` §3.5 (création des divisions par le joueur).
+
+Décisions de l'auteur du 4 novembre 2026. Ce que l'auteur n'a pas tranché est
+marqué « *provisoire* » et listé au §5. Version stable d'avant : tag git
+`avant-combat-simplifie`.
+
+But : le combat continu fait des dégâts sans qu'on en voie l'effet, et les
+quantités d'équipement produites sont abstraites. Deux leviers : un combat est
+un événement ponctuel qu'on peut revoir ; une usine produit une division.
+
+---
+
+## 1. Combat instantané
+
+1. **Lancement** : le joueur clique sur l'attaque (attaque sur tout le front, ou
+   percée sur un axe). Un **délai de `COMBAT.delaySeconds` secondes (5)**
+   s'écoule, affiché par un compte à rebours (le même que celui de la percée).
+2. **Résolution** : au tour où le délai finit, le moteur calcule **tout le
+   combat dans ce tour**. *Provisoire* : il enchaîne les rounds du §6 de
+   `05-Fronts.md` (mêmes dégâts, mêmes pertes, fuites, échanges) jusqu'à ce
+   qu'un camp n'ait plus de division engagée ou que `COMBAT.maxRounds` (10)
+   rounds soient joués. Les dégâts sont appliqués aux divisions dans ce tour.
+3. **Issue** : *provisoire* : l'avancée du §7 de `05-Fronts.md` est appliquée
+   une fois, avec le rapport de force de la fin du combat (le vainqueur avance,
+   prise de ville comprise).
+4. **Plus d'état d'attaque durable** : une attaque est un ordre ponctuel. Un
+   nouveau clic lance un nouveau combat (après un nouveau délai). Pas de combat
+   en dehors de ces événements : un front sans combat lancé ne fait aucun dégât.
+5. **Enregistrement** : chaque combat produit un **rapport** gardé dans l'état
+   (`Combat`) : front, axe ou front entier, tour, attaquant, défenseur, liste
+   des divisions des deux camps (type, état au début), et pour chaque round la
+   perte d'état de chaque division (en entiers). Le rapport ne sert qu'à
+   l'affichage ; le moteur ne le relit pas. *Provisoire* : les
+   `COMBAT.historySize` (20) derniers combats par joueur sont gardés, les plus
+   anciens sont supprimés.
+
+## 2. Affichage d'un combat
+
+- **Icône sur la carte** : à la fin d'un combat, une icône de combat apparaît
+  au milieu de la connexion de l'axe (ou au milieu du front pour une attaque sur
+  tout le front), chez les deux joueurs concernés. *Provisoire* : elle reste
+  `COMBAT.iconSeconds` secondes (30) ou jusqu'au clic.
+- **Replay** : un clic sur l'icône ouvre un petit panneau. Les pions des
+  divisions des deux camps sont en deux colonnes face à face ; ils avancent les
+  uns vers les autres, puis chaque round est joué en une courte étape : la barre
+  d'état de chaque pion baisse de sa perte, un nombre de dégâts s'affiche
+  au-dessus, une division détruite disparaît, une division qui fuit recule.
+  *Provisoire* : 0,6 seconde par round, donc 6 secondes au plus ; un bouton pour
+  passer à la fin ; le panneau affiche ensuite le résultat (vainqueur, pertes,
+  avancée).
+- **Historique** : la fenêtre d'un front liste les derniers combats de ce
+  front (tour, attaquant, résultat) ; un clic sur une ligne ouvre le replay.
+
+## 3. Usines d'unités
+
+1. **Une usine est placée sur une case** de la zone d'une ville du joueur, par
+   un ordre (*provisoire* : n'importe quelle case de la zone, sans restriction ;
+   les restrictions viendront après la V1). **Plusieurs usines peuvent être sur
+   la même case.**
+2. **L'icône d'une usine est celle de ce qu'elle produit** (type de division ou
+   bien), affichée sur sa case.
+3. **Niveau** : une usine de niveau `n` entretient `n` divisions de son type
+   (ou, pour un bien, `n` fois sa quantité, §3.6). Le joueur peut **augmenter le
+   niveau** d'une usine par un ordre (*provisoire* : gratuit, sans limite).
+4. **Production** : tant que l'usine a moins de divisions vivantes que son
+   niveau, elle produit une nouvelle division de son type, qui apparaît dans la
+   réserve nationale une fois finie (*provisoire* : en
+   `COMBAT.divisionBuildSeconds` secondes, 60). Une division est **liée** à
+   l'usine qui l'a produite.
+5. **Réparation** : quand une division liée est abîmée (état < 100 %), l'usine
+   la répare (*provisoire* : `COMBAT.repairPercentPerSecond` %, 2, d'état par
+   seconde, une division à la fois, la plus abîmée d'abord, avant de produire
+   une nouvelle division). Détruite, elle est remplacée par une nouvelle
+   production.
+6. **Quand toutes ses divisions sont produites et à 100 %, l'usine ne travaille
+   plus** : elle n'emploie ni ouvriers ni fer.
+7. **Coût** : *provisoire* : une usine qui travaille emploie les ouvriers et le
+   fer d'une ligne du type d'armement principal de la division (valeurs
+   actuelles de `ARMAMENT`), sinon rien. Si le fer ou les ouvriers manquent, elle
+   travaille moins vite (même malus que `00-Game.md` §8).
+8. **Plus de réserve d'armement** ni de création de division par le joueur
+   (`create_division` disparaît) : les divisions viennent des usines et des
+   centres de recrutement. La suppression d'une division (`delete_division`) la
+   fait remplacer par son usine ; *provisoire* : gardée telle quelle.
+
+### 3.5 Types d'usines et amélioration
+
+- **Types de base** : ceux du menu « Inaugurer une usine », plus un nouveau
+  bouton **« Centre de recrutement »** (§4).
+- **Amélioration** : une usine peut être **remplacée par une usine d'un type
+  enfant** dans l'arbre de production existant (`00-Game.md` §8.4), par un ordre
+  du joueur. L'usine améliorée prend la place de l'ancienne (même case, même
+  niveau) ; les divisions liées à l'ancienne restent, mais ne sont plus réparées
+  ni remplacées (*provisoire*). *Provisoire* : amélioration gratuite et possible
+  dès que l'usine a produit toutes ses divisions.
+- **L'usine d'armement d'infanterie disparaît** (fusils, mitrailleuses) : ses
+  divisions viennent des centres de recrutement. *Provisoire* : la manufacture
+  d'armes reste pour l'appui-feu, sa racine devient l'artillerie, avec les
+  branches actuelles (antichar, antiaérien, puis les pièces blindées).
+- Les forces spéciales sont hors de ce système pour l'instant.
+
+### 3.6 Usines de biens
+
+- **Usine de tracteurs** de niveau 1 : produit assez de tracteurs pour
+  **mécaniser entièrement une ville** (le nombre de machines d'une mécanisation
+  totale, `00-Game.md` §6.2, pour la surface d'une ville). *Provisoire* :
+  surface de référence = la surface agricole moyenne d'une zone de ville.
+- **Chantier naval** de niveau 1 : produit **la même quantité** que l'usine de
+  tracteurs, soit assez de bateaux pour mécaniser entièrement une ville qui
+  n'aurait que de l'eau autour d'elle.
+- Pompes à vapeur : *provisoire* : même règle, assez pour mécaniser entièrement
+  les mineurs d'une ville.
+- Une usine de biens produit jusqu'à `niveau × quantité` machines en service,
+  puis s'arrête ; elle reprend quand des machines s'usent.
+
+## 4. Centres de recrutement
+
+- Nouveau type, construit comme une usine (§3) : bouton « Centre de
+  recrutement » dans « Inaugurer une usine ».
+- Un centre de recrutement **recrute de la milice**, avec les mêmes règles de
+  niveau, de production et de réparation qu'une usine (§3).
+- **Amélioration** : il peut être amélioré pour recruter de **l'infanterie
+  régulière**.
+
+## 5. Choix provisoires (non tranchés par l'auteur)
+
+1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés, `maxRounds` 10.
+2. Avancée appliquée une fois après le combat.
+3. 20 combats gardés par joueur ; icône 30 s ; replay 0,6 s par round.
+4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.
+5. Niveau d'une usine augmenté gratuitement, sans limite.
+6. Production d'une division en 60 s ; réparation 2 %/s, la plus abîmée d'abord.
+7. Coût d'une usine qui travaille : une ligne de son armement principal.
+8. Amélioration gratuite, possible quand l'usine est au complet ; les divisions
+   de l'ancienne usine ne sont plus entretenues.
+9. Manufacture d'armes gardée pour l'appui-feu, racine = artillerie.
+10. Quantité de référence des tracteurs : surface agricole moyenne d'une zone de
+    ville ; pompes : mineurs d'une ville.

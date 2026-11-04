@@ -14,6 +14,8 @@ garde qu'un résumé. Règles décidées avec l'auteur les 29 et 30 octobre 2026
   Tout le reste est décidé.
 - **Version 2** (décidée le 31 octobre 2026) : la **réaction rapide**, les
   **boîtes de percée** (§4.6) et la **percée** (§7.2).
+- **Branche `Simpler-Combat`** : `06-Combat-Simplifie.md` remplace §3.5, §5,
+  §6, §7.1 et §7.2 là où il les contredit (combat instantané, usines d'unités).
 - **Hors périmètre** : fronts aériens et maritimes, avions, barrage
   d'artillerie, bots (§16).
 
