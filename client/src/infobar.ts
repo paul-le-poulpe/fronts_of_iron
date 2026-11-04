@@ -26,7 +26,7 @@
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
-import { productName } from "./names.ts";
+import { productName, unitName } from "./names.ts";
 import { type FactoryCatalog, type HumanDetail, type PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
 import { setTip } from "./tooltip.ts";
@@ -118,6 +118,31 @@ function track(kind: "flow" | "stock"): Track {
 
 /** Une ligne : étiquette, barre, texte de valeurs. */
 function row(label: HTMLElement | string, bar: HTMLElement, value: HTMLElement, className = ""): HTMLElement {
+/**
+ * Graduations d'une barre d'armement : un trait par division de référence (`per` exemplaires), de gauche à droite sur
+ * toute l'échelle. Quand deux traits seraient à moins de 8 px, un trait vaut 2, 5, 10, 20, 50, 100… divisions. Un trait
+ * épais toutes les 5 graduations. Renvoie le nombre de divisions que vaut un trait (0 : pas de graduation).
+ */
+function graduations(grad: HTMLElement, width: number, scale: number, per: number): number {
+  if (per <= 0 || scale <= 0 || width <= 0) {
+    grad.replaceChildren();
+    return 0;
+  }
+  const pxPerDivision = (width * per) / scale;
+  let step = 0;
+  for (let magnitude = 1; step === 0; magnitude *= 10) {
+    for (const base of [1, 2, 5]) if (step === 0 && base * magnitude * pxPerDivision >= 8) step = base * magnitude;
+  }
+  const ticks: HTMLElement[] = [];
+  for (let k = step, n = 1; k * per <= scale; k += step, n++) {
+    const tick = el("i", n % 5 === 0 ? "ib-tick major" : "ib-tick");
+    tick.style.left = `${(k * per * 100) / scale}%`;
+    ticks.push(tick);
+  }
+  grad.replaceChildren(...ticks);
+  return step;
+}
+
   const r = el("div", `ib-row ${className}`.trim());
   const l = el("span", "ib-label");
   if (typeof label === "string") l.textContent = label;
@@ -756,12 +781,23 @@ export class InfoBar {
     const rows = catalog.armamentIds.map((id, index) => {
       const t = track("stock");
       t.mark.hidden = false;
-      const value = el("span", "ib-value");
-      value.title = "Stock / cible · par minute · sur les fronts";
+      // Texte de droite : « n équipé · n en stock » (ou « n requis » si le stock ne couvre pas les fronts), puis « n/min ».
+      const value = el("span", "ib-value ib-eq");
+      const equipped = el("b");
+      const equippedWord = el("span", undefined, "équipé");
+      const second = el("b");
+      const secondWord = el("span");
+      const perMinute = el("span", "ib-perminute");
+      equipped.title = "Équipement dans les divisions des fronts, déployé et en route";
+      perMinute.title = "Production par minute";
+      value.append(equipped, equippedWord, second, secondWord, perMinute);
       // 32 px : les chars n'ont pas d'icône 16 px (icons.ts, `ICONS_32`).
       const label = el("span", "ib-iconlabel");
       label.append(productIcon(id, 32), ` ${capitalize(productName(id))}`);
-      return { id, index, t, value, r: row(label, t.root, value) };
+      // Graduations sous le trait du stock cible : un trait par division de référence (`graduations`).
+      const grad = el("i", "ib-grad");
+      t.root.insertBefore(grad, t.mark);
+      return { id, index, t, value, equipped, second, secondWord, perMinute, label, grad, per: catalog.equipUnit[id]?.count ?? 0, key: "", r: row(label, t.root, value) };
     });
     const empty = el("p", "muted", "Aucune ligne d'armement.");
     const legend = el("p", "ib-legend");
@@ -774,7 +810,7 @@ export class InfoBar {
      * De gauche à droite : jaune foncé (fronts), bleu (en stock), hachures rouges (au-dessus du stock cible).
      * Échelle : 1,5 × la cible, ou le total s'il la dépasse davantage, pour que l'excès se voie.
      */
-    const stockSpans = (t: Track, stock: number, target: number, onFronts: number): void => {
+    const stockSpans = (t: Track, stock: number, target: number, onFronts: number): number => {
       const scale = Math.max(Math.floor((target * 3) / 2), stock + onFronts);
       span(t.deployed, 0, pct(onFronts, scale));
       span(t.fill, pct(onFronts, scale), pct(onFronts + stock, scale));
@@ -797,6 +833,7 @@ export class InfoBar {
         stockSpans(miniStock, stock, target, onFronts);
       },
       body: (d, s) => {
+    legend.append(el("span", "ib-legend-item", "un trait : l'équipement d'une division (trait épais : toutes les 5)"));
         let shown = 0;
         for (const x of rows) {
           const stock = d.reserve[x.index] ?? 0;
@@ -806,8 +843,29 @@ export class InfoBar {
           x.r.hidden = target === 0 && stock === 0 && onFronts === 0;
           if (x.r.hidden) continue;
           shown++;
-          stockSpans(x.t, stock, target, onFronts);
-          x.value.textContent = `${num(stock)} / ${num(target)} · +${num(this.production(d, x.id, catalog))} par minute · ${num(onFronts)} sur les fronts`;
+          const scale = stockSpans(x.t, stock, target, onFronts);
+          // Les traits ne sont refaits que si l'échelle ou la largeur de la barre change.
+          const key = `${scale}:${x.t.root.clientWidth}`;
+          if (key !== x.key) {
+            x.key = key;
+            const step = graduations(x.grad, x.t.root.clientWidth, scale, x.per);
+            const unit = catalog.equipUnit[x.id];
+            x.label.title =
+              step === 0 || unit === undefined
+                ? ""
+                : `Un trait = ${step === 1 ? "une division" : `${step} divisions`} (${num(x.per * step)} exemplaires) · division de référence : ${unitName(unit.division)}`;
+          }
+          // Le stock couvre-t-il ce qui manque aux divisions pour être complètes ? Sinon : l'armement requis, en rouge.
+          const full = s.divisionEquipmentFull[x.index] ?? 0;
+          const enough = stock >= full - onFronts;
+          x.equipped.textContent = num(onFronts);
+          x.second.textContent = num(enough ? stock : full);
+          x.second.className = enough ? "stk" : "req";
+          x.secondWord.textContent = enough ? "en stock" : "requis";
+          x.secondWord.className = enough ? "stk" : "req";
+          x.perMinute.textContent = `${num(this.production(d, x.id, catalog))}/min`;
+          x.value.title = `Stock ${num(stock)} / cible ${num(target)} · requis par les divisions ${num(full)}`;
+      return scale;
         }
         empty.hidden = shown > 0;
         decay.textContent = `${num(this.info.armamentDecayPercent)} % de l'excès disparaît par tour`;

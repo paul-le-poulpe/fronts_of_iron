@@ -404,6 +404,8 @@ export interface PlayerStats {
   readonly forcedMobilization: boolean;
   /** Armement dans les divisions du joueur, par type d'armement dans l'ordre de `FactoryCatalog.armamentIds` (05-Fronts §4.5, §11.6). */
   readonly divisionEquipment: readonly number[];
+  /** Armement que les divisions du joueur auraient à effectif complet, dans le même ordre que `divisionEquipment`. */
+  readonly divisionEquipmentFull: readonly number[];
   /** Population entière, blessés compris (ils mangent et occupent des places de maximum). Le total affiché est `population − hurt`. */
   readonly population: number;
   readonly farmers: number;

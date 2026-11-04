@@ -546,6 +546,13 @@ tr.me td { font-weight: 600; }
 .ib-track { position: relative; height: 14px; border: 1px solid var(--line); background: #ece9e2; }
 .ib-track i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
 .ib-track .ib-fill { background: var(--ok); }
+/* Texte de droite de l'armement : équipé, stock (bleu) ou requis (rouge), production ; colonnes fixes pour aligner les lignes. */
+.ib-value.ib-eq { display: grid; grid-template-columns: 6ch 7ch 6ch 8ch 9ch; gap: 0 6px; align-items: baseline; }
+.ib-eq b { font-weight: 400; }
+.ib-eq span { text-align: left; color: var(--muted); }
+.ib-eq .stk { color: var(--stock); }
+.ib-eq .req { color: var(--bad); }
+.ib-eq .ib-perminute { text-align: right; color: inherit; }
 .ib-track.wheat .ib-fill { background: #e3c766; }
 .ib-track.fish .ib-fill { background: #3a7fc4; }
 .ib-track.wheat .ib-max { background: repeating-linear-gradient(45deg, #e3c766 0 2px, transparent 2px 5px); }
@@ -574,6 +581,10 @@ tr.me td { font-weight: 600; }
 .ib-key.stock { background: var(--stock); }
 .ib-key.gap { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
 .ib-key.req { width: 4px; height: 14px; background: #000; border: 0; }
+/* Graduations de l'armement (infobar.ts, `graduations`) : un trait par division, épais toutes les 5. */
+.ib-track .ib-grad { left: 0; right: 0; width: auto; pointer-events: none; }
+.ib-track .ib-tick { width: 1px; margin-left: -1px; background: rgba(0, 0, 0, 0.22); }
+.ib-track .ib-tick.major { width: 2px; background: rgba(0, 0, 0, 0.5); }
 .ib-key.target { width: 2px; height: 14px; background: var(--fg); border: 0; }
 .ib-key.hatch { background: repeating-linear-gradient(45deg, rgba(179, 55, 44, 0.85) 0 2px, transparent 2px 6px); }
 

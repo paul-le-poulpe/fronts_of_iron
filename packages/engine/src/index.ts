@@ -100,6 +100,7 @@ export {
   attackOf,
   countSoldiers,
   divisionEquipment,
+  divisionEquipmentFull,
   eliteAllowed,
   inFormation,
   isDivisionId,

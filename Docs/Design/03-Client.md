@@ -243,8 +243,9 @@ Worker → page (`FromWorker`) :
     vide après un rejeu. `players[i].defeated` dit, à chaque tour, si un joueur est éliminé (la page en tire l'état de
     spectateur, même après un rejeu) ;
   - `players` porte aussi `soldiers`, `hurt` (blessés, 00-Game §4.2 : `population` les compte, le total affiché les retire),
-    `forcedMobilization` et `divisionEquipment` (armement
-    des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) ;
+    `forcedMobilization`, `divisionEquipment` (armement
+    des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) et
+    `divisionEquipmentFull` (le même armement à effectif complet) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
 - `paused { paused }` : état de la pause (la réponse du relais, solo comme en ligne).
@@ -799,7 +800,17 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      **jaune foncé** = l'équipement des unités des fronts, déployé et en route (`PlayerStats.divisionEquipment`),
      **bleu** = stock, **hachures rouges** = au-delà du stock cible ; trait fin = stock cible (`reserveMax`),
      échelle = max(1,5 × cible, stock + fronts) pour que cette zone se voie ;
-     texte « stock / cible · +production par tour · n sur les fronts ». Légende : l'excès disparaît à
+     **graduations** (`graduations` dans `infobar.ts`, classes `.ib-grad`, `.ib-tick`) : des traits sombres dans la barre, de 0 à
+     la fin de l'échelle, un par division de référence, c'est-à-dire tous les `equipUnit[type].count` exemplaires (les
+     réguliers pour l'infanterie, comme l'indication « approprié pour » de l'onglet Production) ; trait épais toutes les
+     5 graduations. Ils comptent aussi l'équipement des fronts (à gauche). Quand deux traits seraient à moins de
+     8 px, un trait vaut 2, 5, 10, 20, 50… divisions ; l'infobulle du nom de la ligne dit ce que vaut un trait. Les traits
+     sont refaits seulement quand l'échelle ou la largeur de la barre change (la mini-barre n'en a pas) ;
+     texte de droite en colonnes fixes (`.ib-eq`) : « n équipé » (`divisionEquipment`), puis « n en stock » en
+     bleu si le stock couvre ce qui manque aux divisions pour être complètes
+     (`stock ≥ divisionEquipmentFull − divisionEquipment`), sinon « n requis » en rouge
+     (`divisionEquipmentFull`) ; puis « n/min », la production par minute. Le stock, la cible et le requis sont dans
+     l'infobulle de la ligne. Légende : l'excès disparaît à
      `armamentDecayPercent` % par tour ; l'équipement des fronts compte dans le stock, mais seul
      l'équipement non déployé décline (05-Fronts §4.6).
   5. **Forces** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces

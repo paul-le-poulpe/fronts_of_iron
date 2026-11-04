@@ -364,3 +364,13 @@ export function divisionEquipment(state: GameState, playerId: number): number[] 
   }
   return out;
 }
+
+/** Armement que les divisions du joueur auraient à effectif complet, par type d'armement (même ordre que `divisionEquipment`). */
+export function divisionEquipmentFull(state: GameState, playerId: number): number[] {
+  const out = new Array<number>(ARMAMENT_KEYS.length).fill(0);
+  for (const d of state.divisions) {
+    if (d.owner !== playerId) continue;
+    for (const c of dataOf(d).components) if (c.resource !== MEN) out[c.resource] = out[c.resource]! + c.count;
+  }
+  return out;
+}
