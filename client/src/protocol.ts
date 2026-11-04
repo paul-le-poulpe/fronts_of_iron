@@ -186,6 +186,14 @@ export interface CombatView {
   readonly city2: number;
   readonly units: readonly CombatUnitView[];
   readonly rounds: readonly CombatRoundView[];
+  /**
+   * Pertes de l'attaquant puis du défenseur : hommes, et exemplaires de chaque type d'armement (ordre de
+   * `FactoryCatalog.armamentIds`).
+   */
+  readonly losses: readonly [
+    { readonly men: number; readonly equipment: readonly number[] },
+    { readonly men: number; readonly equipment: readonly number[] },
+  ];
   /** Ville prise à la fin du combat, 0 sinon. */
   readonly captured: number;
 }

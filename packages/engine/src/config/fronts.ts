@@ -15,8 +15,11 @@ export const FRONTS = {
    * 06-Combat-Simplifie §1).
    */
   attackDelayTurns: 50,
-  /** Rounds au plus d'un combat résolu en un tour (06-Combat-Simplifie §1 ; provisoire). */
-  combatMaxRounds: 10,
+  /**
+   * Rounds au plus d'un combat résolu en un tour ; il s'arrête avant quand un camp n'a plus d'infanterie engagée
+   * (06-Combat-Simplifie §1 ; décision de l'auteur, 5 novembre 2026).
+   */
+  combatMaxRounds: 50,
   /** Rapports de combat gardés par joueur, les plus anciens supprimés (06-Combat-Simplifie §1 ; provisoire). */
   combatHistoryPerPlayer: 20,
   /** Tours entre deux rounds de combat (10 = 1 s). */

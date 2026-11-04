@@ -28,16 +28,19 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    50 tours, la même durée que les délais de la percée) s'écoule, affiché par un
    compte à rebours sur le bouton d'attaque, qui sert aussi à annuler.
 2. **Résolution** : au tour où le délai finit, le moteur calcule **tout le
-   combat dans ce tour**. *Provisoire* : il enchaîne les rounds du §6 de
-   `05-Fronts.md` (mêmes dégâts, mêmes pertes, fuites, échanges) jusqu'à ce
-   qu'un camp n'ait plus de division engagée, que `FRONTS.combatMaxRounds` (10)
-   rounds soient joués, ou qu'une ville soit prise. Les dégâts sont appliqués aux
+   combat dans ce tour**. Il enchaîne les rounds du §6 de `05-Fronts.md` (mêmes
+   dégâts, mêmes pertes, fuites, échanges ; *provisoire*) pendant **50 rounds**
+   (`FRONTS.combatMaxRounds`), ou jusqu'à ce qu'**un camp n'ait plus
+   d'infanterie engagée** en première ligne (décision de l'auteur, 5 novembre
+   2026), ou jusqu'à une prise de ville. Un camp sans infanterie engagée au
+   moment du lancement ne combat pas : le combat n'a aucun round et n'est pas
+   enregistré. Les dégâts sont appliqués aux
    divisions dans ce tour. Pendant ces rounds, l'échange avec la seconde ligne
    suit la règle **du combat** (`05-Fronts.md` §5.3 : sous la moitié de l'état
    d'une division de seconde ligne), pas celle du repos : sinon chaque division
    touchée serait remplacée aussitôt par une division intacte de seconde ligne.
 3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
-   à chaque round, comme avant (dix rounds avancent comme dix secondes
+   à chaque round, comme avant (50 rounds avancent comme 50 secondes
    d'attaque), prise de ville comprise.
 4. **Plus d'état d'attaque durable** : une attaque est un ordre ponctuel. Un
    nouveau clic lance un nouveau combat (après un nouveau délai). Pas de combat
@@ -46,7 +49,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    (`Combat`) : front, axe ou front entier, tour, attaquant, défenseur, liste
    des divisions des deux camps (type, état au début), et pour chaque round la
    perte d'état de chaque division (en entiers), les divisions détruites et en
-   fuite, l'avancée. Le rapport ne sert qu'à l'affichage ; le moteur ne le relit
+   fuite, l'avancée ; pour chaque camp, les pertes du combat en hommes et en
+   exemplaires de chaque type d'armement (pertes tirées, sans les excédents
+   rendus au stock). Le rapport ne sert qu'à l'affichage ; le moteur ne le relit
    pas, et il est hors du hash (`GameState.combats`, comme `events`).
    *Provisoire* : les `FRONTS.combatHistoryPerPlayer` (20) derniers combats par
    joueur sont gardés, les plus anciens sont supprimés.
@@ -58,14 +63,33 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   première connexion du front, *provisoire*), chez les deux joueurs concernés.
   *Provisoire* : elle reste 30 secondes ou jusqu'au clic ; symbole ⚔ en
   attendant une icône de l'auteur.
-- **Replay** : un clic sur l'icône ouvre un petit panneau. Les pions des
-  divisions des deux camps sont en deux colonnes face à face ; ils avancent les
-  uns vers les autres, puis chaque round est joué en une courte étape : la barre
-  d'état de chaque pion baisse de sa perte, un nombre de dégâts s'affiche
-  au-dessus, une division détruite disparaît, une division qui fuit recule.
-  *Provisoire* : 0,6 seconde par round, donc 6 secondes au plus ; un bouton pour
-  passer à la fin ; le panneau affiche ensuite le résultat (vainqueur, pertes,
-  avancée).
+- **Replay** : un clic sur l'icône ouvre un panneau, au milieu de la carte. Le
+  joueur local est à gauche, l'adversaire à droite (décisions de l'auteur,
+  5 novembre 2026, sauf mention *provisoire*) :
+  - **en haut, le rapport de force** : une barre par statistique (attaque
+    anti-infanterie, attaque anti-blindé, PV), partagée entre les deux camps en
+    proportion de leurs totaux, avec les deux valeurs ; mise à jour à chaque
+    round, sur les divisions en ligne seulement ;
+  - **une carte par groupe** de divisions d'un camp du **même type** : nom, et
+    les statistiques **soft, hard et PV** du groupe (somme). Peu de divisions :
+    elles sont **côte à côte** dans la carte, chacune avec son icône et sa barre
+    de vie, comme dans la fenêtre d'un front ; **trop** (*provisoire* : plus de
+    4) : une seule icône avec le nombre (×N) et la barre de vie de l'état moyen. *Provisoire* : estimées
+    sur l'état de chaque division (attaques des composants × état, ×
+    `attackMultiplier` pour l'attaquant ; PV × état), le rapport ne gardant pas
+    les exemplaires ;
+  - deux colonnes face à face qui se rapprochent, puis chaque round est une
+    courte étape : les barres de vie baissent, la perte du groupe s'affiche
+    au-dessus de sa carte, une division détruite quitte le compte de son
+    groupe ;
+  - une division **en fuite** passe dans une carte à part de son type,
+    **nettement en retrait** vers l'arrière de son camp, avec le **drapeau
+    blanc** sur l'icône ;
+  - **à la fin**, à gauche et à droite, les **pertes de chaque camp** : hommes
+    et matériel (exemplaires de chaque type d'armement), et l'issue (avancée,
+    ville prise).
+  *Provisoire* : 0,3 seconde par round (15 secondes au plus pour 50 rounds) ;
+  un bouton « Passer » va à la fin.
 - **Historique** : la fenêtre d'un front liste les derniers combats de ce
   front (tour, attaquant, résultat) ; un clic sur une ligne ouvre le replay.
 
@@ -150,9 +174,12 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 
 ## 5. Choix provisoires (non tranchés par l'auteur)
 
-1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés, `combatMaxRounds` 10.
+1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés (50 rounds au plus :
+   décision de l'auteur).
 2. Avancée du §7.1 appliquée à chaque round du combat.
-3. 20 combats gardés par joueur ; icône 30 s ; replay 0,6 s par round.
+3. 20 combats gardés par joueur ; icône 30 s ; replay 0,3 s par round ;
+   regroupement en une icône ×N au-delà de 4 divisions d'un type ; statistiques
+   des cartes estimées sur l'état.
 4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.
 5. Niveau d'une usine augmenté gratuitement, sans limite.
 6. Formation d'une division en 60 s ; soin 2 %/s, toutes en même temps, hors

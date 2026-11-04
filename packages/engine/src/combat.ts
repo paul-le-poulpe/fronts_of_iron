@@ -19,7 +19,7 @@ import {
   removeEmptyBoxes,
   type Arrival,
 } from "./breakthroughs.ts";
-import { FRONTS } from "./config.ts";
+import { ARMAMENT, FRONTS } from "./config.ts";
 import { captureCity } from "./conquest.ts";
 import {
   INFANTRY_NICHE,
@@ -31,6 +31,7 @@ import {
   attackOf,
   countSoldiers,
   currentTurn,
+  MEN,
   dataOf,
   isFleeing,
   stateOf,
@@ -221,6 +222,12 @@ export interface CombatRound {
   readonly advance: number;
 }
 
+/** Pertes d'un camp sur tout un combat : hommes, et exemplaires de chaque type d'armement (ordre de `ARMAMENT.types`). */
+export interface CombatLosses {
+  men: number;
+  readonly equipment: number[];
+}
+
 /** Rapport d'un combat (06-Combat-Simplifie §1), pour le replay. Le moteur ne le relit pas. */
 export interface CombatRecord {
   readonly id: number;
@@ -234,18 +241,21 @@ export interface CombatRecord {
   readonly city2: number;
   readonly units: CombatUnit[];
   readonly rounds: CombatRound[];
+  /** Pertes de l'attaquant puis du défenseur (pertes tirées, 05-Fronts §6.2), sans les excédents rendus au stock. */
+  readonly losses: readonly [CombatLosses, CombatLosses];
   /** Ville prise à la fin du combat, 0 sinon. */
   captured: number;
 }
 
 /**
  * Un round de l'attaque sur tout le front de `front.players[x]` (05-Fronts §6, §7.1), ajouté à `record`. Renvoie les
- * connexions arrivées au bout de leur route, ou `undefined` si un camp n'a plus de division engagée (fin du combat).
+ * connexions arrivées au bout de leur route, ou `undefined` si un camp n'a plus d'infanterie engagée (fin du combat,
+ * 06-Combat-Simplifie §1).
  */
 function frontAttackRound(state: GameState, front: Front, x: number, record: CombatRecord): Arrival[] | undefined {
   const sides = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
   const attacker = sides[x]!;
-  if (attacker.length === 0 || sides[1 - x]!.length === 0) return undefined;
+  if (infantryWidth(attacker) === 0 || infantryWidth(sides[1 - x]!) === 0) return undefined;
   const losses = new Map<Division, number>();
   // L'attaquant avec `attackMultiplier`, le défenseur sans multiplicateur, avec ses PV de défense.
   fightLosses(
@@ -272,9 +282,16 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   });
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
   for (const d of hit) {
+    const counts = d.counts.slice();
     const men = applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
     const byNiche = front.sides[front.players.indexOf(d.owner)]!.lastLossByNiche;
     byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + men;
+    const lost = record.losses[d.owner === record.attacker ? 0 : 1];
+    dataOf(d).components.forEach((c, i) => {
+      const n = counts[i]! - d.counts[i]!;
+      if (c.resource === MEN) lost.men += n;
+      else lost.equipment[c.resource] = lost.equipment[c.resource]! + n;
+    });
   }
   trimAll(state);
   removeDestroyed(state, hit);
@@ -309,6 +326,8 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   }
   return arrivals;
 }
+
+const noCombatLosses = (): CombatLosses => ({ men: 0, equipment: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0) });
 
 /** Garde au plus `FRONTS.combatHistoryPerPlayer` rapports par joueur : un rapport part quand ses deux joueurs en ont trop. */
 function trimCombats(state: GameState): void {
@@ -347,7 +366,7 @@ function captureArrivals(state: GameState, pending: readonly Arrival[], changed:
 /**
  * Attaques sur tout le front arrivées à leur tour (06-Combat-Simplifie §1), fronts par identifiant, camps 0 puis 1 :
  * chacune est résolue en entier dans ce tour, jusqu'à `FRONTS.combatMaxRounds` rounds, jusqu'à ce qu'un camp n'ait
- * plus de division engagée, ou jusqu'à une prise de ville. Appelée par `applyTurn` à chaque tour.
+ * plus d'infanterie engagée, ou jusqu'à une prise de ville. Appelée par `applyTurn` à chaque tour.
  */
 export function resolveFrontAttacks(state: GameState, changed: number[]): void {
   const now = currentTurn(state);
@@ -376,6 +395,7 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
       city2: first.city2,
       units: [],
       rounds: [],
+      losses: [noCombatLosses(), noCombatLosses()],
       captured: 0,
     };
     let arrivals: Arrival[] = [];

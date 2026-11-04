@@ -435,25 +435,65 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 
 .cr {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 8;
-  width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
+  width: min(860px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
   background: var(--t-panel); color: var(--t-fg); border: 1px solid var(--t-line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   font-size: 13px;
 }
 .cr-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
-.cr-round { padding: 4px 8px; color: var(--t-muted); min-height: 1.2em; }
-.cr-field { display: flex; justify-content: center; gap: 24px; padding: 8px 12px 12px; }
-.cr-col { display: flex; flex-direction: column; gap: 6px; transition: transform 0.6s ease-out; }
+
+/* Rapport de force : la part du joueur local (bleu, à gauche) et de l'adversaire (rouge, à droite) de chaque statistique. */
+.cr-balance { display: flex; flex-direction: column; gap: 3px; padding: 6px 12px; border-bottom: 1px solid var(--t-line); }
+.cr-names { display: flex; justify-content: space-between; font-weight: 700; }
+.cr-me { color: #4f86e8; }
+.cr-them { color: #e0564b; }
+.cr-bal-row { display: grid; grid-template-columns: 56px 16px 1fr 56px; align-items: center; gap: 6px; }
+.cr-bal-num { font-variant-numeric: tabular-nums; }
+.cr-bal-num.right { text-align: right; }
+.cr-bal-track { height: 10px; background: #c2443a; border: 1px solid var(--t-line); }
+.cr-bal-fill { height: 100%; background: #3d6fd1; transition: width 0.25s ease-out; }
+.cr-stat-icon { width: 16px; height: 16px; image-rendering: pixelated; display: block; }
+
+.cr-round { padding: 4px 12px; color: var(--t-muted); min-height: 1.2em; text-align: center; }
+.cr-field { display: flex; justify-content: space-between; gap: 32px; padding: 8px 12px 12px; }
+.cr-col { flex: 1; display: flex; flex-direction: column; gap: 6px; transition: transform 0.6s ease-out; }
+.cr-right { align-items: flex-end; }
 .cr-field.apart .cr-left { transform: translateX(-60px); }
 .cr-field.apart .cr-right { transform: translateX(60px); }
-.cr-unit { position: relative; display: flex; align-items: center; gap: 6px; width: 180px; padding: 3px 4px; background: var(--t-capsule); border: 1px solid var(--t-line); transition: opacity 0.4s, transform 0.4s; }
+.cr-unit {
+  position: relative; display: flex; align-items: center; gap: 8px; width: 340px; max-width: 100%; padding: 4px 6px;
+  background: var(--t-capsule); border: 1px solid var(--t-line); transition: opacity 0.4s, transform 0.4s;
+}
 .cr-right .cr-unit { flex-direction: row-reverse; }
-.cr-icon { width: 32px; height: 32px; }
-.cr-bar { flex: 1; height: 8px; background: var(--t-air); border: 1px solid var(--t-line); }
-.cr-fill { height: 100%; background: #3aa655; transition: width 0.35s ease-out; }
-.cr-dmg { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); color: var(--t-red); font-weight: 700; pointer-events: none; }
-.cr-unit.hit { animation: cr-hit 0.35s; }
-@keyframes cr-hit { 30% { background: rgba(255, 70, 60, 0.35); } }
-.cr-left .cr-unit.fled { transform: translateX(-24px); opacity: 0.6; }
-.cr-right .cr-unit.fled { transform: translateX(24px); opacity: 0.6; }
-.cr-unit.dead { opacity: 0.15; }
-.cr-result { padding: 6px 10px 10px; min-height: 1.2em; }
+.cr-pawns { display: flex; gap: 4px; flex: none; }
+.cr-right .cr-pawns { flex-direction: row-reverse; }
+.cr-pawn { display: flex; flex-direction: column; gap: 2px; width: 34px; }
+.cr-iconbox { position: relative; flex: none; width: 32px; height: 32px; }
+.cr-icon { width: 32px; height: 32px; display: block; }
+.cr-count {
+  position: absolute; right: -6px; bottom: -6px; font: 700 14px/1 system-ui, sans-serif; color: #fff;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+}
+.cr-flag { position: absolute; left: -4px; top: -4px; width: 16px; height: 16px; image-rendering: pixelated; }
+.cr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cr-right .cr-body { align-items: flex-end; }
+.cr-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-bar { height: 5px; background: var(--t-air); border: 1px solid var(--t-line); }
+.cr-fill { height: 100%; background: #3aa655; }
+.cr-stats { display: flex; gap: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cr-stat { display: flex; align-items: center; gap: 3px; }
+.cr-dmg { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); color: var(--t-red); font-weight: 700; pointer-events: none; text-shadow: 0 0 2px #000; }
+.cr-unit.hit { animation: cr-hit 0.3s; }
+@keyframes cr-hit { 30% { background: rgba(255, 70, 60, 0.4); } }
+/* En fuite : la carte est nettement en retrait, vers l'arrière de son camp. */
+.cr-unit.fled { opacity: 0.55; border-style: dashed; }
+.cr-left .cr-unit.fled { transform: translateX(-40px); }
+.cr-right .cr-unit.fled { transform: translateX(40px); }
+.cr-unit.dead { opacity: 0.12; }
+
+.cr-result { padding: 6px 12px 12px; }
+.cr-summary { text-align: center; font-weight: 700; margin-bottom: 6px; }
+.cr-losses { display: flex; justify-content: space-between; gap: 32px; }
+.cr-loss { display: flex; flex-direction: column; gap: 3px; }
+.cr-loss.right { align-items: flex-end; }
+.cr-loss-row { display: flex; align-items: center; gap: 5px; }
+.cr-loss-n { color: var(--t-red); font-weight: 700; font-variant-numeric: tabular-nums; }

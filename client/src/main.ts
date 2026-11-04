@@ -263,7 +263,7 @@ function onInit(s: Session, init: InitMessage): void {
   s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces(), startAxisMode);
   // Combats (06-Combat-Simplifie §2) : icônes par-dessus le canvas, replacées à chaque dessin ; replay dans `#stage`.
   for (const old of document.querySelectorAll(".cr-icons, .cr")) old.remove();
-  s.replay = new CombatReplay($("stage"), init.military, localPlayer);
+  s.replay = new CombatReplay($("stage"), init.military, init.catalog.armamentIds, localPlayer);
   s.combatIcons = new CombatIcons(
     $("stage"),
     { cityTile: (id) => mirror.cities[id - 1]?.tile, tileToCss: (x, y) => s.view?.tileToCss(x, y) ?? null, width: mirror.width },
