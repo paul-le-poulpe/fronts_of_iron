@@ -45,7 +45,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
-| `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
+| `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) ; `hideTip` |
+| `src/tutorial.ts` | tutoriel (`07-Tutoriel.md`) : contour bleu sur les composants `data-tuto` dont la leçon n'est pas lue, premier clic consommé qui ouvre la leçon (`#tuto`), leçons lues dans `localStorage` ; `resetTutorial`, `skipTutorial` (menu « Tutoriel ») |
 | `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), forces, diplomatie, menu « Carte » ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
 | `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; noms des types de division, des niches (et leurs lettres) et de l'équipement des divisions ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
@@ -593,6 +594,11 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   lignes, biens débloqués), et jamais pendant un glisser ou un réglage de curseur
   (ni pendant 500 ms après, le temps que le moteur applique l'ordre) ; entre deux
   reconstructions, seuls les nombres sont mis à jour.
+- **« Tutoriel »**, à droite de « Production » : un clic déplie vers le haut un
+  menu de deux choix, « Revoir le tutoriel » (toutes les leçons à lire) et
+  « Passer le tutoriel » (toutes lues, plus aucun contour). Un appui en dehors
+  ou Échap ferme le menu ; l'ouvrir ferme celui des usines. Mécanisme et
+  leçons : `07-Tutoriel.md`.
 - **Barre d'informations**, en haut de l'écran de jeu (00-Game §11, `infobar.ts`) :
   44 px de haut, six boutons séparés par un trait (le sixième, Diplomatie, n'a ni chiffre ni mini-barre) ; chacun a une ligne de
   chiffres et, juste dessous, une **mini-barre** (10 px, `.ib-mini`) : la barre

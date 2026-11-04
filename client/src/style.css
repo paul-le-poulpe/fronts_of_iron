@@ -17,6 +17,8 @@
   --occ-hurt: #000;
   --front-red: #c81e1e;
   --front-dark: #7a0c0c;
+  /* Contour des composants qui ont une leçon du tutoriel non lue (tutorial.ts). */
+  --tuto: #1e88e5;
   /* Largeur du panneau latéral : le bouton « Carte » s'arrête à son bord gauche. */
   --panel-w: 320px;
   /* Largeur du panneau de production, posé sur le bord droit de la carte. */
@@ -268,6 +270,8 @@ input[type="number"] {
   box-shadow: 0 4px 14px #0003;
 }
 .menu button { text-align: left; font-weight: 400; padding: 6px 10px; }
+/* Menu « Tutoriel » : deux choix courts, largeur du texte. */
+.menu.menu-short { min-width: 0; }
 
 /* ---- panneau de production (00-Game §8.1) ---- */
 
@@ -435,6 +439,33 @@ tr.me td { font-weight: 600; }
   line-height: 1.35;
   pointer-events: none;
 }
+/* Tutoriel (tutorial.ts, 07-Tutoriel.md) : contour bleu qui pulse sur un composant dont la leçon n'est pas lue.
+   `outline` ne change pas la taille du composant et ne touche pas au box-shadow rouge des boutons d'attaque.
+   Fondu lent (provisoire), pour ne pas ressembler au clignotement net de 1 s des attaques (blink.ts).
+   Les leçons lues sont éteintes par une feuille de style générée par tutorial.ts. */
+[data-tuto] { outline: 2px solid var(--tuto); outline-offset: 2px; animation: tuto-pulse 1.6s ease-in-out infinite; }
+@keyframes tuto-pulse { 50% { outline-color: transparent; } }
+/* La barre d'informations a `overflow` : le contour de ses onglets est tracé à l'intérieur du bouton. */
+.ib-sec[data-tuto] { outline-offset: -3px; }
+/* Lettres d'une niche (fenêtre d'un front) : leur rangée a `overflow: hidden` et `pointer-events: none`. */
+.fw-big[data-tuto] { pointer-events: auto; outline-offset: 1px; }
+#tuto {
+  position: fixed;
+  z-index: 1001;
+  width: 320px;
+  max-width: calc(100vw - 8px);
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--fg);
+  border: 2px solid var(--tuto);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px #0003;
+  font-size: 13px;
+  line-height: 1.4;
+}
+#tuto h4 { margin: 0 0 6px; font-size: 15px; }
+#tuto p { margin: 0 0 6px; }
+#tuto button { display: block; margin: 8px 0 0 auto; padding: 4px 14px; }
 /* Infobulle construite (setTip, goodtips.ts) : largeur fixe pour les barres, sections séparées par un trait. */
 #tip:not(.rich) { white-space: pre-line; }
 #tip.rich { width: 340px; max-width: calc(100vw - 8px); padding: 8px 10px; font-size: 13px; }

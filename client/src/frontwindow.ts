@@ -200,6 +200,7 @@ export class FrontWindow implements DndHost {
     sw.append(this.advancedBox, el("span", "fw-switch"), el("span", undefined, "Sélection avancée"));
     this.attackButton = el("button", "fw-btn", "Attaque sur tout le front");
     this.attackButton.type = "button";
+    this.attackButton.dataset.tuto = "attack";
     this.attackButton.addEventListener("click", () => this.toggleAttack());
     const barrage = el("button", "fw-btn", "Barrage d'artillerie");
     barrage.type = "button";
@@ -232,12 +233,15 @@ export class FrontWindow implements DndHost {
     retour.dataset.drop = "reserve";
     // Le « + » est le dernier élément de la liste : juste après la dernière boîte, en haut de la colonne si elle est vide.
     this.pierceList.append(this.plus);
-    pierce.append(el("div", "fw-lab", "Forces de percée"), this.pierceList, retour);
+    const pierceLab = el("div", "fw-lab", "Forces de percée");
+    pierceLab.dataset.tuto = "pierce";
+    pierce.append(pierceLab, this.pierceList, retour);
     this.pierceCol = pierce;
-    const rapid = this.column("Réaction rapide", false, false);
+    // Leçons du tutoriel (07-Tutoriel.md) : titres des colonnes du joueur, niches de sa première ligne.
+    const rapid = this.column("Réaction rapide", false, false, undefined, "rapid");
     rapid.col.classList.add("fw-rapid");
-    const o2 = this.column("Seconde ligne", false, false);
-    const o1 = this.column("Première ligne", true, false, "ours");
+    const o2 = this.column("Seconde ligne", false, false, undefined, "lines");
+    const o1 = this.column("Première ligne", true, false, "ours", "lines");
     // La seconde ligne du joueur absorbe le manque de place : la première garde au moins `FIRST_MIN` et au plus ce que le côté adverse peut porter.
     o2.col.classList.add("fw-second");
     o1.col.classList.add("fw-first");
@@ -583,15 +587,18 @@ export class FrontWindow implements DndHost {
   /**
    * Une colonne de cinq rangées, une par niche. `coverage` : première ligne, avec le pourcentage de couverture (et, avec un
    * titre, les pertes du dernier round à droite du titre) ; `compressed` : zone comprimée. `side` : première ligne d'un
-   * camp avec titre, qui porte les totaux de ses statistiques sous le titre.
+   * camp avec titre, qui porte les totaux de ses statistiques sous le titre. `tuto` : leçon du tutoriel sur le titre ;
+   * la première ligne du joueur porte aussi une leçon par niche, sur ses lettres.
    */
-  private column(label: string | null, coverage: boolean, compressed: boolean, side?: "ours" | "theirs"): Column {
+  private column(label: string | null, coverage: boolean, compressed: boolean, side?: "ours" | "theirs", tuto?: string): Column {
     const col = el("div", `fw-col${compressed ? " comp" : ""}`);
     let loss: HTMLElement | null = null;
     let totals: Totals | null = null;
     if (label !== null) {
       const lab = el("div", "fw-lab");
-      lab.append(el("span", undefined, label));
+      const title = el("span", undefined, label);
+      if (tuto !== undefined) title.dataset.tuto = tuto;
+      lab.append(title);
       if (coverage) {
         loss = el("span", "fw-loss");
         lab.append(loss);
@@ -609,6 +616,7 @@ export class FrontWindow implements DndHost {
       const clip = el("div", "fw-clip");
       const big = el("div", "fw-big");
       big.append(el("span", "fw-letters", nicheLetters(niche.id)));
+      if (side === "ours") big.dataset.tuto = niche.support ? "niche-support" : `niche-${niche.id}`;
       const pct = coverage ? el("span", "fw-pct", "0 %") : null;
       if (pct !== null) big.append(pct);
       clip.append(big);

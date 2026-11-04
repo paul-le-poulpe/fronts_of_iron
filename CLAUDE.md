@@ -42,6 +42,8 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   d'unités et centres de recrutement (pas encore implémentés) ; fait foi et
   remplace les parties de `05-Fronts.md` et `00-Game.md` qu'il liste en tête.
   La version d'avant (combat continu, production par lignes) est au tag `v0.2`.
+- `Docs/Design/07-Tutoriel.md` — tutoriel : composants à contour bleu, premier
+  clic qui ouvre une leçon, leçons écrites et à écrire.
 
 ---
 

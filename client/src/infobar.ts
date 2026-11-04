@@ -180,6 +180,7 @@ function yieldLabel(job: string): { readonly root: HTMLElement; readonly value: 
 function gearIcon(machine: string): HTMLImageElement {
   const gear = icon("miscellaneous/misc-gear-stolen.png");
   gear.classList.add("ib-gear");
+  gear.dataset.tuto = "gear";
   attachGoodTip(gear, machine);
   return gear;
 }
@@ -188,6 +189,7 @@ function gearIcon(machine: string): HTMLImageElement {
 function pieIcon(): HTMLImageElement {
   const pie = icon("miscellaneous/icon-pie-chart.png");
   pie.classList.add("ib-gear");
+  pie.dataset.tuto = "pie";
   return pie;
 }
 
@@ -444,6 +446,7 @@ export class InfoBar {
     const b = el("button", "ib-sec");
     b.type = "button";
     b.id = `ib-${id}`;
+    b.dataset.tuto = `tab-${id}`;
     b.setAttribute("aria-expanded", "false");
     b.setAttribute("aria-controls", `ib-pane-${id}`);
     const line = el("span", "ib-line");

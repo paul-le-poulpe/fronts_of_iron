@@ -23,6 +23,8 @@ const builders = new WeakMap<Element, () => Node>();
 const besides = new WeakMap<Element, Element>();
 /** Reconstruit l'encadré affiché ; sans effet avant `installTooltips`. */
 let refresh = (): void => {};
+/** Cache l'encadré ; sans effet avant `installTooltips`. */
+let hideBox = (): void => {};
 
 /** Donne à `el` une infobulle construite par `build` (à la place d'un `title`), à droite de `beside` s'il est donné. */
 export function setTip(el: Element, build: () => Node, beside?: Element): void {
@@ -35,6 +37,11 @@ export function setTip(el: Element, build: () => Node, beside?: Element): void {
 /** À appeler quand les données changent (chaque tour) : reconstruit l'infobulle construite affichée. */
 export function refreshTip(): void {
   refresh();
+}
+
+/** Cache l'infobulle affichée (le tutoriel consomme le `pointerdown` qui l'aurait cachée). */
+export function hideTip(): void {
+  hideBox();
 }
 
 export function installTooltips(): void {
@@ -52,6 +59,7 @@ export function installTooltips(): void {
     target = null;
     box.hidden = true;
   };
+  hideBox = hide;
 
   /** Sous l'élément, aligné sur son bord gauche, sans sortir de la fenêtre ; au-dessus s'il n'y a pas la place. */
   const place = (el: Element): void => {

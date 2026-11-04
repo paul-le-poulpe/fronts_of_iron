@@ -321,12 +321,20 @@
         </aside>
 
         <footer id="bar">
-          <button id="found" type="button" aria-pressed="false">Créer une ville <span id="found-cost" class="btn-cost" hidden><img class="ib-img" src="icons/population/pop-default.png" alt="" /><span></span></span></button>
+          <button id="found" type="button" aria-pressed="false" data-tuto="found">Créer une ville <span id="found-cost" class="btn-cost" hidden><img class="ib-img" src="icons/population/pop-default.png" alt="" /><span></span></span></button>
           <div class="menu-wrap">
-            <button id="factory" type="button" aria-pressed="false" aria-haspopup="true">Inaugurer une usine</button>
+            <button id="factory" type="button" aria-pressed="false" aria-haspopup="true" data-tuto="factory">Inaugurer une usine</button>
             <div id="factory-menu" class="menu" hidden></div>
           </div>
-          <button id="production" type="button" aria-pressed="false">Production</button>
+          <button id="production" type="button" aria-pressed="false" data-tuto="production">Production</button>
+          <!-- Tutoriel (src/tutorial.ts, 07-Tutoriel.md) : menu déplié vers le haut, comme celui des usines. -->
+          <div class="menu-wrap">
+            <button id="tuto-button" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="tuto-menu">Tutoriel</button>
+            <div id="tuto-menu" class="menu menu-short" hidden>
+              <button id="tuto-reset" type="button">Revoir le tutoriel</button>
+              <button id="tuto-skip" type="button">Passer le tutoriel</button>
+            </div>
+          </div>
           <span id="bar-hint" class="muted"></span>
           <div id="debug-bar" class="debug-bar" title="Outils de développement : modifient la partie hors des règles.">
             <span class="debug-label">Debug</span>

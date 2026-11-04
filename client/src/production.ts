@@ -205,6 +205,7 @@ export class ProductionPanel {
         return;
       }
       const row = el("div", "locked");
+      row.dataset["tuto"] = "prod-locked";
       const bar = el("span", "arrow");
       const fill = el("i");
       fill.dataset["prog"] = `${f.city}:${parentIndex}`;
@@ -231,6 +232,7 @@ export class ProductionPanel {
   private plus(city: number, good: string, title: string, blocked?: string): HTMLElement {
     const b = el("button", "plus") as HTMLButtonElement;
     b.type = "button";
+    b.dataset["tuto"] = "prod-plus";
     b.append(miscIcon("misc-plus-lighter.png", title));
     b.title = `${title} : ${productName(good)}`;
     if (blocked !== undefined) {
@@ -311,6 +313,7 @@ export class ProductionPanel {
     const slack = el("i", "slider-slack");
     slack.dataset["slack"] = `${f.city}:${g.good}`;
     wrap.dataset["bar"] = `${f.city}:${g.good}`;
+    wrap.dataset["tuto"] = "prod-slider";
     wrap.append(track, fill, short, slack, slider, shortMark);
     if (!this.catalog.armamentIds.includes(g.good)) {
       const mark = el("i", "useful-mark");
@@ -334,6 +337,7 @@ export class ProductionPanel {
     // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
     if (!this.catalog.armamentIds.includes(g.good)) {
       const growth = el("div", "growth");
+      growth.dataset["tuto"] = "prod-growth";
       const bar = el("span", "arrow");
       const fill = el("i");
       fill.dataset["growth"] = `${f.city}:${g.good}`;

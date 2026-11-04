@@ -25,6 +25,7 @@ import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./good
 import { applyBlinkPeriod } from "./blink.ts";
 import { currentTheme, toggleTheme } from "./theme.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
+import { installTutorial, resetTutorial, skipTutorial } from "./tutorial.ts";
 import { num } from "./format.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -35,6 +36,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 
 
 installTooltips();
+installTutorial();
 applyBlinkPeriod();
 installNotifications($("notifs"));
 /** Menu de diplomatie et notifications des événements diplomatiques (00-Game §1). */
@@ -788,6 +790,34 @@ productionButton.addEventListener("click", () => {
   productionButton.setAttribute("aria-pressed", String(!panel.hidden));
   session?.production?.refresh();
   session?.infobar?.place();
+});
+
+// ---- barre de boutons : Tutoriel (07-Tutoriel.md) ----
+
+const tutoButton = $<HTMLButtonElement>("tuto-button");
+const tutoMenu = $("tuto-menu");
+
+function setTutoMenu(open: boolean): void {
+  if (open && !factoryMenu.hidden) setFactoryArmed(null);
+  tutoMenu.hidden = !open;
+  tutoButton.setAttribute("aria-expanded", String(open));
+}
+
+tutoButton.addEventListener("click", () => setTutoMenu(tutoMenu.hidden !== false));
+$("tuto-reset").addEventListener("click", () => {
+  resetTutorial();
+  setTutoMenu(false);
+});
+$("tuto-skip").addEventListener("click", () => {
+  skipTutorial();
+  setTutoMenu(false);
+});
+// Un appui en dehors du bouton et du menu, ou Échap, ferme le menu.
+document.addEventListener("pointerdown", (e) => {
+  if (!(e.target instanceof Node) || !tutoButton.parentElement!.contains(e.target)) setTutoMenu(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setTutoMenu(false);
 });
 
 /**

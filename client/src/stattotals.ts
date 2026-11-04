@@ -50,7 +50,10 @@ export function statTotals(side: "ours" | "theirs"): Totals {
     const fill = document.createElement("span");
     fill.className = "fw-tot-fill";
     track.append(fill);
-    line.append(statIcon(kind), num, track);
+    const img = statIcon(kind);
+    // Leçon du tutoriel (07-Tutoriel.md) sur les deux attaques des totaux du joueur ; pas de leçon sur les PV.
+    if (side === "ours" && kind !== "hp") img.dataset.tuto = "attack-types";
+    line.append(img, num, track);
     root.append(line);
     nums.push(num);
     fills.push(fill);
