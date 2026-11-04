@@ -391,6 +391,17 @@ export function checkBreakthrough(state: GameState, front: Front, bt: Breakthrou
 }
 
 /**
+ * Combat d'une percée sans issue au bout de `FRONTS.combatMaxRounds` rounds (06-Combat-Simplifie §1, provisoire) :
+ * échec, comme une force essoufflée (délai de repli après le combat 1, gains minimes après le combat 2).
+ */
+export function failBreakthroughCombat(state: GameState, front: Front, bt: Breakthrough): void {
+  releaseDefenders(state, bt);
+  bt.phase = bt.phase === 1 ? 5 : 6;
+  bt.phaseTick = currentTurn(state);
+  assignCounterForces(state, front);
+}
+
+/**
  * Fuite dans une percée (05-Fronts §5.4, §7.2 point 11) : une division de la force qui perce ou de la force de
  * contre-attaque qui tombe à `fleeStatePercent` ou moins quitte la percée, en fuite ; celle de la force qui perce reste
  * dans sa boîte. La tranche de première ligne fuit avec la règle de la première ligne (`applyFlight`).

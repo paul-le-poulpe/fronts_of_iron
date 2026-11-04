@@ -177,6 +177,8 @@ export interface CombatRoundView {
 /** Rapport d'un combat résolu en un tour par le moteur, que la page rejoue (06-Combat-Simplifie §1, §2). */
 export interface CombatView {
   readonly id: number;
+  /** Attaque sur tout le front ; percée contre la première ligne ; contre-attaque de la réaction rapide contre une percée. */
+  readonly kind: "front" | "breakthrough" | "counter";
   readonly front: number;
   readonly tick: number;
   readonly attacker: number;
@@ -196,6 +198,8 @@ export interface CombatView {
   ];
   /** Ville prise à la fin du combat, 0 sinon. */
   readonly captured: number;
+  /** Issue pour l'attaquant : le front a avancé ; la première ligne est percée ; la réaction rapide est battue. */
+  readonly success: boolean;
 }
 
 /** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */

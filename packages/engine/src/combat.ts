@@ -2,12 +2,14 @@
 // - Attaque sur tout le front : résolue en un seul tour, `FRONTS.attackDelayTurns` après
 //   l'ordre : jusqu'à `FRONTS.combatMaxRounds` rounds enchaînés, chacun écrit dans un
 //   rapport (`CombatRecord`) que le client rejoue.
-// - Percée : un round tous les `FRONTS.combatTurns` tours. Les choix des forces d'une
-//   percée et ses vérifications de fin de round sont dans breakthroughs.ts.
+// - Percée : ses délais se terminent tous les `FRONTS.combatTurns` tours ; chacun de ses
+//   deux combats (contre la tranche de première ligne, puis contre la réaction rapide) est
+//   résolu en un seul tour de la même façon, avec son propre rapport. Les choix des forces
+//   d'une percée et ses vérifications de fin de round sont dans breakthroughs.ts.
 //
 // Les dégâts des deux camps sont calculés sur les divisions du début du round,
 // puis appliqués ensemble (provisoire, 05-Fronts §6). Tout est en entiers.
-// Ordre des parcours : fronts par identifiant, camps 0 puis 1, divisions par
+// Ordre des parcours : fronts par identifiant, camps 0 puis 1, percées et divisions par
 // identifiant, composants dans l'ordre de `components` (règle 2 du CLAUDE.md).
 
 import {
@@ -15,9 +17,11 @@ import {
   breakthroughFlight,
   checkBreakthrough,
   endDelays,
+  failBreakthroughCombat,
   forceOf,
   removeEmptyBoxes,
   type Arrival,
+  type Breakthrough,
 } from "./breakthroughs.ts";
 import { ARMAMENT, FRONTS } from "./config.ts";
 import { captureCity } from "./conquest.ts";
@@ -147,57 +151,158 @@ function fightLosses(fight: Fight, total: Map<Division, number>): void {
   strike(fight, fight.b, fight.a, total);
 }
 
-/** Un round des percées d'un front (05-Fronts §6, §7.2). Renvoie les connexions arrivées au bout de leur route. */
+/**
+ * Les percées d'un front, tous les `combatTurns` tours (05-Fronts §7.2) : fin des délais, puis chaque combat qui vient de
+ * commencer (contre la première ligne, ou contre la réaction rapide) est résolu en entier dans ce tour
+ * (06-Combat-Simplifie §1). Renvoie les connexions arrivées au bout de leur route (chute d'une ville).
+ */
 function fightFront(state: GameState, front: Front): Arrival[] {
   const arrivals: Arrival[] = [];
-  // Percées : fin des délais (combat 1, combat 2, chute de la ville), puis forces de contre-attaque du combat 2, recalculées à chaque round.
   endDelays(state, front, arrivals);
-  assignCounterForces(state, front);
-
-  // Dégâts, calculés sur les divisions du début du round, puis appliqués ensemble.
-  const losses = new Map<Division, number>();
-  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && isBreakthroughCombat(b.phase))) {
-    // Percée : la force qui perce avec `breakthroughMultiplier` ; la tranche de première ligne sans multiplicateur, la
-    // force de contre-attaque avec `counterAttackMultiplier` ; le défenseur avec ses PV de défense (05-Fronts §7.2).
-    const force = forceOf(state, bt, true);
-    const defense = forceOf(state, bt, false);
-    fightLosses(
-      {
-        a: force,
-        b: defense,
-        // Une percée se bat sur une liaison, tranche de première ligne comprise.
-        frontWidth: WIDTH_SCALE,
-        width: (d) => d.btEngaged,
-        // Force qui perce et force de contre-attaque : `breakthroughWidth` ; tranche de première ligne : `frontWidth`.
-        fullWidth: (d) => (d.owner !== bt.owner && bt.phase === 1 ? dataOf(d).width : dataOf(d).breakthroughWidth),
-        attackMult: (d) => (d.owner === bt.owner ? dataOf(d).breakthroughMultiplier : bt.phase === 3 ? dataOf(d).counterAttackMultiplier : MULT_SCALE),
-        hpMult: (d) => (d.owner === bt.owner ? MULT_SCALE : dataOf(d).defenseHitPointsMultiplier),
-      },
-      losses,
-    );
+  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && isBreakthroughCombat(b.phase)).sort((a, b) => a.id - b.id)) {
+    resolveBreakthroughCombat(state, front, bt);
   }
+  // Pendant un délai : l'axe a pu disparaître.
+  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase > 0).sort((a, b) => a.id - b.id)) checkBreakthrough(state, front, bt);
+  return arrivals;
+}
 
-  // Application, divisions par identifiant (pertes tirées, 05-Fronts §1).
+/**
+ * Un round d'un combat de percée (05-Fronts §7.2), ajouté à `record` : la force qui perce avec
+ * `breakthroughMultiplier` ; la tranche de première ligne sans multiplicateur, la force de contre-attaque avec
+ * `counterAttackMultiplier` (recalculée à chaque round) ; le défenseur avec ses PV de défense. Puis fuites et
+ * vérifications de fin de round (`checkBreakthrough`). Renvoie false quand le combat est fini.
+ */
+function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, record: CombatRecord): boolean {
+  const phase = bt.phase;
+  if (phase === 3) assignCounterForces(state, front);
+  const force = forceOf(state, bt, true);
+  const defense = forceOf(state, bt, false);
+  const losses = new Map<Division, number>();
+  fightLosses(
+    {
+      a: force,
+      b: defense,
+      // Une percée se bat sur une liaison, tranche de première ligne comprise.
+      frontWidth: WIDTH_SCALE,
+      width: (d) => d.btEngaged,
+      // Force qui perce et force de contre-attaque : `breakthroughWidth` ; tranche de première ligne : `frontWidth`.
+      fullWidth: (d) => (d.owner !== bt.owner && phase === 1 ? dataOf(d).width : dataOf(d).breakthroughWidth),
+      attackMult: (d) => (d.owner === bt.owner ? dataOf(d).breakthroughMultiplier : phase === 3 ? dataOf(d).counterAttackMultiplier : MULT_SCALE),
+      hpMult: (d) => (d.owner === bt.owner ? MULT_SCALE : dataOf(d).defenseHitPointsMultiplier),
+    },
+    losses,
+  );
+  const engaged = [...force, ...defense].sort((a, b) => a.id - b.id);
+  const { before, index } = snapshot(record, engaged);
+  // Hommes perdus par la première ligne de chaque camp (05-Fronts §11.4) : la tranche de première ligne.
+  const hit = applyLosses(state, front, record, losses, (d) => d.line === LINE_FIRST && d.front === front.id);
+  trimAll(state);
+  removeDestroyed(state, hit);
+  const alive = new Set(state.divisions.map((d) => d.id));
+  applyFlight(state, front);
+  breakthroughFlight(state, front);
+  const advance = bt.advance;
+  checkBreakthrough(state, front, bt);
+  applySwaps(state, front, false);
+  for (const p of front.players) arrangeSide(state, front, p);
+  // Avancée du round : le saut, quand la première ligne est percée.
+  record.rounds.push({ ...roundHits(state, engaged, before, index, alive), advance: bt.advance - advance });
+  return state.breakthroughs.includes(bt) && bt.phase === phase;
+}
+
+/**
+ * Combat d'une percée, résolu en entier dans ce tour (06-Combat-Simplifie §1) : jusqu'à `FRONTS.combatMaxRounds` rounds,
+ * ou jusqu'à son issue (05-Fronts §7.2 : première ligne percée, réaction rapide battue, force détruite ou essoufflée).
+ * Sans issue au bout des rounds : échec (provisoire). Le rapport est gardé s'il y avait des divisions des deux camps.
+ */
+function resolveBreakthroughCombat(state: GameState, front: Front, bt: Breakthrough): void {
+  const defender = front.players.find((p) => p !== bt.owner)!;
+  const record = newRecord(state, front, bt.phase === 1 ? "breakthrough" : "counter", bt.owner, defender, bt.city1, bt.city2);
+  for (const s of front.sides) s.lastLossByNiche.fill(0);
+  let going = true;
+  for (let r = 0; r < FRONTS.combatMaxRounds && going; r++) going = breakthroughRound(state, front, bt, record);
+  if (going) failBreakthroughCombat(state, front, bt);
+  // Première ligne percée : délai avant le combat 2 ; réaction rapide battue : délai avant la chute de la ville.
+  record.success = state.breakthroughs.includes(bt) && (bt.phase === 2 || bt.phase === 4);
+  removeEmptyBoxes(state);
+  countSoldiers(state);
+  if (record.units.some((u) => u.owner === bt.owner) && record.units.some((u) => u.owner === defender)) {
+    state.combats.push(record);
+    trimCombats(state);
+  }
+}
+
+/** Un rapport de combat vide, avec le prochain identifiant. */
+function newRecord(state: GameState, front: Front, kind: CombatKind, attacker: number, defender: number, city1: number, city2: number): CombatRecord {
+  return {
+    id: state.nextCombatId++,
+    kind,
+    front: front.id,
+    tick: currentTurn(state),
+    attacker,
+    defender,
+    city1,
+    city2,
+    units: [],
+    rounds: [],
+    losses: [noCombatLosses(), noCombatLosses()],
+    captured: 0,
+    success: false,
+  };
+}
+
+/** Indices dans `record.units` des divisions engagées (ajoutées à leur première apparition), et leur état avant le round. */
+function snapshot(record: CombatRecord, engaged: readonly Division[]): { before: number[]; index: number[] } {
+  const before = engaged.map((d) => stateOf(d));
+  const index = engaged.map((d) => {
+    let i = record.units.findIndex((u) => u.division === d.id);
+    if (i < 0) {
+      i = record.units.length;
+      record.units.push({ division: d.id, owner: d.owner, type: d.type, start: stateOf(d) });
+    }
+    return i;
+  });
+  return { before, index };
+}
+
+/**
+ * Applique les pertes d'un round, divisions par identifiant (pertes tirées, 05-Fronts §1), et les ajoute aux pertes du
+ * rapport. `firstLine(d)` : les hommes perdus par `d` comptent dans `lastLossByNiche` (05-Fronts §11.4). Renvoie les
+ * divisions touchées.
+ */
+function applyLosses(state: GameState, front: Front, record: CombatRecord, losses: ReadonlyMap<Division, number>, firstLine: (d: Division) => boolean): Division[] {
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
-  // Hommes perdus par la première ligne de chaque camp (05-Fronts §11.4), percées comprises (tranche de première ligne).
   for (const d of hit) {
+    const counts = d.counts.slice();
     const men = applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
-    if (d.line === LINE_FIRST && d.front === front.id) {
+    if (firstLine(d)) {
       const byNiche = front.sides[front.players.indexOf(d.owner)]!.lastLossByNiche;
       byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + men;
     }
+    const lost = record.losses[d.owner === record.attacker ? 0 : 1];
+    dataOf(d).components.forEach((c, i) => {
+      const n = counts[i]! - d.counts[i]!;
+      if (c.resource === MEN) lost.men += n;
+      else lost.equipment[c.resource] = lost.equipment[c.resource]! + n;
+    });
   }
-  trimAll(state);
-  removeDestroyed(state, hit);
-  applyFlight(state, front);
-  breakthroughFlight(state, front);
-  for (const bt of state.breakthroughs.filter((b) => b.front === front.id && b.phase > 0).sort((a, b) => a.id - b.id)) {
-    // Vérifications de fin de round, aussi pendant un délai (axe disparu, force détruite ou épuisée).
-    checkBreakthrough(state, front, bt);
-  }
-  applySwaps(state, front);
-  for (const p of front.players) arrangeSide(state, front, p);
-  return arrivals;
+  return hit;
+}
+
+/** Pertes d'état, divisions détruites et en fuite d'un round, d'après l'état d'avant (`snapshot`) et les survivantes. */
+function roundHits(state: GameState, engaged: readonly Division[], before: readonly number[], index: readonly number[], alive: ReadonlySet<number>): Omit<CombatRound, "advance"> {
+  const destroyed: number[] = [];
+  const fled: number[] = [];
+  const hits = engaged.map((d, k): [number, number] => {
+    if (!alive.has(d.id)) {
+      destroyed.push(index[k]!);
+      return [index[k]!, before[k]!];
+    }
+    if (isFleeing(state, d)) fled.push(index[k]!);
+    return [index[k]!, Math.max(0, before[k]! - stateOf(d))];
+  });
+  return { hits, destroyed, fled };
 }
 
 /** Une division d'un rapport de combat, telle qu'au début du combat. */
@@ -228,15 +333,23 @@ export interface CombatLosses {
   readonly equipment: number[];
 }
 
+/**
+ * Type d'un combat (06-Combat-Simplifie §1) : attaque sur tout le front ; percée, combat contre la tranche de première
+ * ligne ; contre-attaque, combat de la percée contre la réaction rapide (05-Fronts §7.2).
+ */
+export type CombatKind = "front" | "breakthrough" | "counter";
+
 /** Rapport d'un combat (06-Combat-Simplifie §1), pour le replay. Le moteur ne le relit pas. */
 export interface CombatRecord {
   readonly id: number;
+  readonly kind: CombatKind;
   readonly front: number;
   /** Tour où le combat a été résolu. */
   readonly tick: number;
+  /** Le joueur qui attaque sur tout le front, ou qui perce. */
   readonly attacker: number;
   readonly defender: number;
-  /** Connexion au milieu de laquelle le client place l'icône du combat : la première du front. */
+  /** Connexion au milieu de laquelle le client place l'icône du combat : l'axe d'une percée, la première du front sinon. */
   readonly city1: number;
   readonly city2: number;
   readonly units: CombatUnit[];
@@ -245,6 +358,11 @@ export interface CombatRecord {
   readonly losses: readonly [CombatLosses, CombatLosses];
   /** Ville prise à la fin du combat, 0 sinon. */
   captured: number;
+  /**
+   * Issue pour l'attaquant : attaque sur tout le front, le front a avancé ; percée, la première ligne est percée ;
+   * contre-attaque, la réaction rapide est battue (la ville tombera après le délai).
+   */
+  success: boolean;
 }
 
 /**
@@ -274,28 +392,8 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
     losses,
   );
   const engaged = [...sides[0]!, ...sides[1]!].sort((a, b) => a.id - b.id);
-  const before = engaged.map((d) => stateOf(d));
-  const index = engaged.map((d) => {
-    let i = record.units.findIndex((u) => u.division === d.id);
-    if (i < 0) {
-      i = record.units.length;
-      record.units.push({ division: d.id, owner: d.owner, type: d.type, start: stateOf(d) });
-    }
-    return i;
-  });
-  const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
-  for (const d of hit) {
-    const counts = d.counts.slice();
-    const men = applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
-    const byNiche = front.sides[front.players.indexOf(d.owner)]!.lastLossByNiche;
-    byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + men;
-    const lost = record.losses[d.owner === record.attacker ? 0 : 1];
-    dataOf(d).components.forEach((c, i) => {
-      const n = counts[i]! - d.counts[i]!;
-      if (c.resource === MEN) lost.men += n;
-      else lost.equipment[c.resource] = lost.equipment[c.resource]! + n;
-    });
-  }
+  const { before, index } = snapshot(record, engaged);
+  const hit = applyLosses(state, front, record, losses, () => true);
   trimAll(state);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
@@ -304,21 +402,10 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   applySwaps(state, front, false);
   for (const p of front.players) arrangeSide(state, front, p);
 
-  const destroyed: number[] = [];
-  const fled: number[] = [];
-  const hits = engaged.map((d, k): [number, number] => {
-    if (!alive.has(d.id)) {
-      destroyed.push(index[k]!);
-      return [index[k]!, before[k]!];
-    }
-    if (isFleeing(state, d)) fled.push(index[k]!);
-    return [index[k]!, Math.max(0, before[k]! - stateOf(d))];
-  });
-
   // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant.
   const after = [0, 1].map((i) => engagedOf(sideDivisions(state, front, front.players[i]!)));
   const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), frontSpeed(after[x]!));
-  return advanceRound(front, x, by, record, { hits, destroyed, fled });
+  return advanceRound(front, x, by, record, roundHits(state, engaged, before, index, alive));
 }
 
 /** Écrit le round dans `record` et avance le front de `by` millièmes dans le sens de `front.players[x]`. Renvoie les connexions arrivées au bout. */
@@ -394,19 +481,7 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
     if (front === undefined || !isActive(state, front)) continue;
     for (const s of front.sides) s.lastLossByNiche.fill(0);
     const first = front.connections[0]!;
-    const record: CombatRecord = {
-      id: state.nextCombatId++,
-      front: front.id,
-      tick: now,
-      attacker: front.players[x]!,
-      defender: front.players[1 - x]!,
-      city1: first.city1,
-      city2: first.city2,
-      units: [],
-      rounds: [],
-      losses: [noCombatLosses(), noCombatLosses()],
-      captured: 0,
-    };
+    const record = newRecord(state, front, "front", front.players[x]!, front.players[1 - x]!, first.city1, first.city2);
     let arrivals: Arrival[] = [];
     for (let r = 0; r < FRONTS.combatMaxRounds; r++) {
       const got = frontAttackRound(state, front, x, record);
@@ -417,6 +492,7 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
       }
     }
     record.captured = captureArrivals(state, arrivals, changed);
+    record.success = record.captured !== 0 || record.rounds.some((r) => r.advance > 0);
     removeEmptyBoxes(state);
     countSoldiers(state);
     if (record.rounds.length > 0) state.combats.push(record);
@@ -425,12 +501,12 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
 }
 
 /**
- * Round des percées de tous les fronts, puis les prises de villes (05-Fronts §13.2).
- * Appelée par `applyTurn` quand le numéro du tour est un multiple de `combatTurns`.
+ * Percées de tous les fronts (fin des délais, combats résolus en un tour), puis les prises de villes (05-Fronts §13.2).
+ * Appelée par `applyTurn` quand le numéro du tour est un multiple de `combatTurns`. `lastLossByNiche` garde les pertes
+ * du dernier combat du front : remis à zéro au début de chaque combat, pas ici.
  */
 export function combatRound(state: GameState, changed: number[]): void {
   const pending: Arrival[] = [];
-  for (const front of state.fronts) for (const s of front.sides) s.lastLossByNiche.fill(0);
   for (const front of state.fronts) {
     if (hasRound(state, front)) pending.push(...fightFront(state, front));
   }

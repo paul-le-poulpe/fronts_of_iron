@@ -38,11 +38,18 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 /** Une ligne d'historique : « tour, attaquant, résultat » (fenêtre d'un front, 06-Combat-Simplifie §2). */
 export function combatSummary(c: CombatView, me: number): string {
   const seconds = Math.floor(c.tick / 10);
-  const who = c.attacker === me ? `Vous attaquez ${playerName(c.defender)}` : `${playerName(c.attacker)} vous attaque`;
+  const who = c.attacker === me ? `vous contre ${playerName(c.defender)}` : `${playerName(c.attacker)} contre vous`;
   const advance = c.rounds.reduce((s, r) => s + r.advance, 0);
   const result = c.captured !== 0 ? `ville n° ${c.captured} prise` : advance > 0 ? `avancée ${Math.round(advance / 10)} %` : "pas d'avancée";
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${who} — ${result}`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${COMBAT_KIND[c.kind]} — ${who} — ${result}`;
 }
+
+/** Nom de chaque type de combat (06-Combat-Simplifie §2), affiché en tête du replay et dans l'historique. */
+export const COMBAT_KIND: Readonly<Record<CombatView["kind"], string>> = {
+  front: "Attaque sur tout le front",
+  breakthrough: "Percée : première ligne",
+  counter: "Percée : contre-attaque de la réaction rapide",
+};
 
 /**
  * Vainqueur d'un combat (06-Combat-Simplifie §2) : le camp qui a perdu le moins d'infanterie, en état de division
@@ -136,7 +143,11 @@ export class CombatReplay {
     const attackerSide = sideOf(c.attacker);
 
     const head = el("div", "cr-head");
-    head.append(el("strong", undefined, c.attacker === me ? `Votre attaque contre ${playerName(c.defender)}` : `Attaque de ${playerName(c.attacker)}`));
+    // Type du combat, puis qui attaque (06-Combat-Simplifie §2).
+    head.append(
+      el("strong", "cr-kind", COMBAT_KIND[c.kind]),
+      el("span", undefined, c.attacker === me ? `— vous attaquez ${playerName(c.defender)}` : `— ${playerName(c.attacker)} vous attaque`),
+    );
     const skip = el("button", "fw-btn", "Passer");
     skip.type = "button";
     const closeBtn = el("button", "fw-btn", "✕");
@@ -339,11 +350,22 @@ export class CombatReplay {
         });
         return box;
       };
-      const summary = el(
-        "div",
-        "cr-summary",
-        c.captured !== 0 ? `Ville n° ${c.captured} prise.` : advance > 0 ? `Le front avance de ${Math.round(advance / 10)} %.` : "Le front ne bouge pas.",
-      );
+      const pct = Math.round(advance / 10);
+      const issue =
+        c.kind === "breakthrough"
+          ? c.success
+            ? `Première ligne percée : le front saute de ${pct} % sur l'axe.`
+            : "Percée arrêtée par la première ligne."
+          : c.kind === "counter"
+            ? c.success
+              ? "Réaction rapide battue : la ville au bout de l'axe tombe après le délai."
+              : "Percée arrêtée par la réaction rapide."
+            : c.captured !== 0
+              ? `Ville n° ${c.captured} prise.`
+              : advance > 0
+                ? `Le front avance de ${pct} %.`
+                : "Le front ne bouge pas.";
+      const summary = el("div", "cr-summary", issue);
       const lossCols = el("div", "cr-losses");
       lossCols.append(losses(0), losses(1));
       result.replaceChildren(summary, lossCols);
