@@ -260,6 +260,8 @@ export class CombatReplay {
         }
         const n = here.length;
         card.root.classList.toggle("dead", n === 0);
+        // Carte d'un type dont toutes les divisions restantes ont fui : elles sont dans la carte des fuyards, celle-ci disparaît.
+        card.root.hidden = !card.fled && n === 0 && card.units.some((i) => cardOf[i] !== card);
         // Une icône par division, empilées, au plus `MAX_STACK` ; la carte vidée garde une icône, effacée.
         const shown = Math.max(1, Math.min(n, MAX_STACK));
         if (card.stack.childElementCount !== shown + 1) {

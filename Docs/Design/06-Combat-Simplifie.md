@@ -95,7 +95,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   - une division **en fuite** passe dans la **carte des fuyards** de son type,
     posée juste après celle du type, un peu en retrait vers l'arrière de son
     camp et en gris, avec le **drapeau blanc** sur la pile ; seule de son type,
-    sa carte recule sur place ; **l'ordre des cartes ne change pas** ;
+    sa carte recule sur place ; **l'ordre des cartes ne change pas** ; quand
+    toutes les divisions restantes d'un type ont fui, la carte du type
+    disparaît, il ne reste que celle des fuyards ;
   - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
     camp** : hommes et matériel (exemplaires de chaque type d'armement), et
     l'issue au-dessus (avancée, ville prise).
