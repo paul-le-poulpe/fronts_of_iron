@@ -126,6 +126,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
     estimés sur l'état de chaque division (attaques des composants × état, ×
     `attackMultiplier` pour l'attaquant ; PV × état), le rapport ne gardant pas
     les exemplaires ;
+  - au milieu, entre les deux colonnes, une **flèche** de l'attaquant vers le
+    défenseur (vers la droite quand le joueur local attaque, vers la gauche
+    quand il est attaqué) ;
   - deux colonnes face à face qui se rapprochent, puis chaque round est une
     courte étape : les barres de vie baissent, la perte s'affiche au-dessus de
     la carte, une division détruite quitte la pile ;

@@ -185,7 +185,10 @@ export class CombatReplay {
     const round = el("div", "cr-round", "");
     const field = el("div", "cr-field");
     const cols = [el("div", "cr-col cr-left"), el("div", "cr-col cr-right")] as const;
-    field.append(cols[0], cols[1]);
+    // Au milieu, une flèche de l'attaquant vers le défenseur : vers la droite quand le joueur local attaque.
+    const arrow = el("div", attackerSide === 0 ? "cr-arrow" : "cr-arrow back", "➜");
+    arrow.title = attackerSide === 0 ? "Vous attaquez" : `${playerName(c.attacker)} attaque`;
+    field.append(cols[0], arrow, cols[1]);
     const result = el("div", "cr-result");
 
     // État de chaque division au fil du replay.
