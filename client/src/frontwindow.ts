@@ -19,6 +19,7 @@ import { STAT_KINDS, firstLineStats, formatStat, type FirstLineStats, type StatK
 import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
+import { STAT_TITLE, drawTotals, statIcon, statTotals, type Totals } from "./stattotals.ts";
 import { combatSummary } from "./combatreplay.ts";
 import { type BreakthroughView, type CombatView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
@@ -48,11 +49,6 @@ interface Column {
   readonly totals: Totals | null;
 }
 
-interface Totals {
-  readonly nums: HTMLElement[];
-  readonly fills: HTMLElement[];
-}
-
 /** Colonne de statistiques d'une première ligne : par niche, une ligne par statistique (`lines`) et son nombre (`values`). */
 interface Gutter {
   readonly root: HTMLElement;
@@ -62,29 +58,8 @@ interface Gutter {
   readonly losses: HTMLElement[];
 }
 
-/** Icône (16 × 16 px, sous `public/icons/miscellaneous/`) et texte de survol de chaque statistique de combat. */
-const STAT_ICON: Readonly<Record<StatKind, string>> = {
-  soft: "icons/miscellaneous/icon-soft-attack.png",
-  hard: "icons/miscellaneous/icon-hard-attack.png",
-  hp: "icons/miscellaneous/icon-health.png",
-};
-const STAT_TITLE: Readonly<Record<StatKind, string>> = {
-  soft: "Attaque anti-infanterie",
-  hard: "Attaque anti-armure",
-  hp: "Points de vie (niches principales)",
-};
-
 /** Largeur minimale de la première ligne du joueur (px) : en dessous, la fenêtre défile horizontalement. */
 const FIRST_MIN = 200;
-
-/** Une icône de statistique. */
-function statIcon(kind: StatKind): HTMLImageElement {
-  const img = el("img", "fw-st-icon");
-  img.src = STAT_ICON[kind];
-  img.alt = "";
-  img.draggable = false;
-  return img;
-}
 
 /** Une boîte de percée du joueur : sa carte dans la liste, et sa vue étendue (rangées par niche), construites une fois. */
 interface BoxUi {
@@ -586,26 +561,6 @@ export class FrontWindow implements DndHost {
     return { root, lines, values, losses };
   }
 
-  /** Les trois totaux d'une première ligne, sous son titre : icône, nombre, barre (`side` : du joueur ou de l'adversaire). */
-  private totals(side: "ours" | "theirs"): { readonly root: HTMLElement; readonly totals: Totals } {
-    const root = el("div", `fw-tots ${side}`);
-    const nums: HTMLElement[] = [];
-    const fills: HTMLElement[] = [];
-    for (const kind of STAT_KINDS) {
-      const line = el("div", `fw-tot ${kind}`);
-      line.title = STAT_TITLE[kind];
-      const num = el("span", "fw-tot-num", "0");
-      const track = el("span", "fw-tot-track");
-      const fill = el("span", "fw-tot-fill");
-      track.append(fill);
-      line.append(statIcon(kind), num, track);
-      root.append(line);
-      nums.push(num);
-      fills.push(fill);
-    }
-    return { root, totals: { nums, fills } };
-  }
-
   /**
    * Une colonne de cinq rangées, une par niche. `coverage` : première ligne, avec le pourcentage de couverture (et, avec un
    * titre, les pertes du dernier round à droite du titre) ; `compressed` : zone comprimée. `side` : première ligne d'un
@@ -623,9 +578,8 @@ export class FrontWindow implements DndHost {
         lab.append(loss);
       }
       if (side !== undefined) {
-        const t = this.totals(side);
-        totals = t.totals;
-        lab.append(t.root);
+        totals = statTotals(side);
+        lab.append(totals.root);
       }
       col.append(lab);
     }
@@ -770,14 +724,7 @@ export class FrontWindow implements DndHost {
       // Les niches d'appui-feu n'ont pas de PV affichés : la ligne garde sa place, les attaques restent à la même hauteur.
       gut.lines[i]![2]!.classList.toggle("off", niche.support);
     });
-    // Les deux attaques ont la même échelle : la plus grande des quatre valeurs (deux attaques, deux camps) remplit la barre. Les PV ont la leur.
-    const attackMax = Math.max(own.total.soft, own.total.hard, other.total.soft, other.total.hard);
-    STAT_KINDS.forEach((kind, k) => {
-      const v = own.total[kind];
-      const max = kind === "hp" ? Math.max(v, other.total.hp) : attackMax;
-      tots.nums[k]!.textContent = formatStat(v);
-      tots.fills[k]!.style.width = max > 0 ? `${(100 * v) / max}%` : "0";
-    });
+    drawTotals(tots, own.total, other.total);
   }
 
   /** Couverture d'une liaison par une niche d'une boîte : somme des `breakthroughWidth` (en liaisons), sans plafond : deux infanteries de largeur de percée 1 sur une liaison font 200 % (§11.4). */

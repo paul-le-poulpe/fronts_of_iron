@@ -66,28 +66,28 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 - **Replay** : un clic sur l'icône ouvre un panneau, au milieu de la carte. Le
   joueur local est à gauche, l'adversaire à droite (décisions de l'auteur,
   5 novembre 2026, sauf mention *provisoire*) :
-  - **en haut, le rapport de force** : une barre par statistique (attaque
-    anti-infanterie, attaque anti-blindé, PV), partagée entre les deux camps en
-    proportion de leurs totaux, avec les deux valeurs ; mise à jour à chaque
-    round, sur les divisions en ligne seulement ;
-  - **une carte par groupe** de divisions d'un camp du **même type** : nom, et
-    les statistiques **soft, hard et PV** du groupe (somme). Peu de divisions :
-    elles sont **côte à côte** dans la carte, chacune avec son icône et sa barre
-    de vie, comme dans la fenêtre d'un front ; **trop** (*provisoire* : plus de
-    4) : une seule icône avec le nombre (×N) et la barre de vie de l'état moyen. *Provisoire* : estimées
-    sur l'état de chaque division (attaques des composants × état, ×
+  - **en haut, les totaux des deux camps** (attaque anti-infanterie, attaque
+    anti-armure, PV des niches principales) : **les mêmes barres que dans la
+    fenêtre d'un front** (05-Fronts §11.4, même code, `stattotals.ts`), mises à
+    jour à chaque round sur les divisions en ligne ;
+  - **une carte par division** : icône, **grosse barre de vie**, et dessous ses
+    attaques **soft et hard** avec leurs icônes. Au-delà de 4 divisions d'un
+    même type dans un camp (*provisoire*), **une seule carte** pour le type :
+    le nombre (×N) est **à côté de l'icône**, hors de la barre ; la barre montre
+    l'état moyen, les attaques sont la somme. *Provisoire* : attaques et PV
+    estimés sur l'état de chaque division (attaques des composants × état, ×
     `attackMultiplier` pour l'attaquant ; PV × état), le rapport ne gardant pas
     les exemplaires ;
   - deux colonnes face à face qui se rapprochent, puis chaque round est une
-    courte étape : les barres de vie baissent, la perte du groupe s'affiche
-    au-dessus de sa carte, une division détruite quitte le compte de son
-    groupe ;
-  - une division **en fuite** passe dans une carte à part de son type,
-    **nettement en retrait** vers l'arrière de son camp, avec le **drapeau
-    blanc** sur l'icône ;
-  - **à la fin**, à gauche et à droite, les **pertes de chaque camp** : hommes
-    et matériel (exemplaires de chaque type d'armement), et l'issue (avancée,
-    ville prise).
+    courte étape : les barres de vie baissent, la perte s'affiche au-dessus de
+    la carte, une division détruite s'efface ;
+  - une division **en fuite** recule un peu vers l'arrière de son camp et passe
+    en gris, avec le **drapeau blanc** sur l'icône ; **l'ordre des cartes ne
+    change pas** (une division d'un type groupé passe dans la carte des fuyards
+    du type, posée juste après) ;
+  - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
+    camp** : hommes et matériel (exemplaires de chaque type d'armement), et
+    l'issue au-dessus (avancée, ville prise).
   *Provisoire* : 0,3 seconde par round (15 secondes au plus pour 50 rounds) ;
   un bouton « Passer » va à la fin.
 - **Historique** : la fenêtre d'un front liste les derniers combats de ce
@@ -178,7 +178,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    décision de l'auteur).
 2. Avancée du §7.1 appliquée à chaque round du combat.
 3. 20 combats gardés par joueur ; icône 30 s ; replay 0,3 s par round ;
-   regroupement en une icône ×N au-delà de 4 divisions d'un type ; statistiques
+   une seule carte ×N au-delà de 4 divisions d'un type ; statistiques
    des cartes estimées sur l'état.
 4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.
 5. Niveau d'une usine augmenté gratuitement, sans limite.

@@ -2,18 +2,21 @@
 // - `CombatIcons` : une icône par combat récent du joueur local, posée sur la carte au
 //   milieu de la connexion du combat, retirée après `ICON_TURNS` tours ou au clic ;
 // - `CombatReplay` : le panneau qui rejoue un rapport (`CombatView`) round par round.
-//   Les deux camps sont en deux colonnes face à face, une carte par groupe de divisions
-//   du même type (×N), avec leurs attaques et leurs PV ; en haut, le rapport de force.
-//   À chaque round, les barres de vie baissent de la perte, la perte s'affiche, une
-//   division détruite quitte son groupe, une division en fuite passe dans une carte en
-//   retrait, avec le drapeau blanc. À la fin : les pertes en hommes et en matériel.
-// Le rapport vient du moteur : rien ici ne recalcule un combat. Les statistiques des
-// cartes sont estimées sur l'état des divisions (le rapport ne garde pas les exemplaires).
+//   En haut, les totaux des deux camps, les mêmes que dans la fenêtre d'un front
+//   (`stattotals.ts`). Dessous, deux colonnes face à face : une carte par division, avec
+//   sa barre de vie et ses attaques ; au-delà de `MAX_SIDE_BY_SIDE` divisions d'un même
+//   type dans un camp, une seule carte pour le type, avec ×N. À chaque round, les barres
+//   baissent de la perte, la perte s'affiche, une division détruite s'efface, une division
+//   en fuite recule un peu et passe en gris. À la fin : les pertes en hommes et en matériel.
+// Le rapport vient du moteur : rien ici ne recalcule un combat. Les statistiques sont
+// estimées sur l'état des divisions (le rapport ne garde pas les exemplaires).
 
 import { num } from "./format.ts";
+import { formatStat, type Stats } from "./frontstats.ts";
 import { icon32Path, productIcon } from "./icons.ts";
 import { equipmentName, playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
+import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
 /** Durée de vie d'une icône de combat sur la carte, en tours (300 = 30 s ; provisoire, 06-Combat-Simplifie §2). */
 const ICON_TURNS = 300;
@@ -21,6 +24,8 @@ const ICON_TURNS = 300;
 const ROUND_MS = 300;
 /** Durée de l'approche des deux colonnes avant le premier round, en ms. */
 const APPROACH_MS = 700;
+/** Au-delà de ce nombre de divisions d'un type dans un camp, une seule carte pour le type, avec ×N (provisoire, 06-Combat-Simplifie §2). */
+const MAX_SIDE_BY_SIDE = 4;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -38,40 +43,18 @@ export function combatSummary(c: CombatView, me: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${who} — ${result}`;
 }
 
-/** Icône (16 × 16, `public/icons/miscellaneous/`) de chaque statistique, comme dans la fenêtre d'un front. */
-const STAT_ICON = {
-  soft: "icons/miscellaneous/icon-soft-attack.png",
-  hard: "icons/miscellaneous/icon-hard-attack.png",
-  hp: "icons/miscellaneous/icon-health.png",
-} as const;
-const STAT_LABEL = { soft: "Attaque anti-infanterie (soft)", hard: "Attaque anti-blindé (hard)", hp: "PV" } as const;
-type Stat = keyof typeof STAT_ICON;
-const STATS: readonly Stat[] = ["soft", "hard", "hp"];
-type Stats = Record<Stat, number>;
 const noStats = (): Stats => ({ soft: 0, hard: 0, hp: 0 });
 
-/** Au-delà de ce nombre de divisions, une carte n'en montre qu'une icône avec le nombre (×N) (provisoire, 06-Combat-Simplifie §2). */
-const MAX_SIDE_BY_SIDE = 4;
-
-/** Une carte du replay : les divisions d'un camp, d'un même type, en ligne ou en fuite. */
-interface Group {
-  readonly key: string;
-  readonly side: 0 | 1;
-  readonly type: number;
+/** Une carte du replay : une division, ou toutes les divisions d'un type d'un camp (`units`), en ligne ou en fuite. */
+interface Card {
+  readonly units: readonly number[];
   readonly fled: boolean;
-  readonly card: HTMLElement;
-  /** Les icônes des divisions, côte à côte, ou une seule avec ×N. */
-  readonly pawns: HTMLElement;
+  readonly root: HTMLElement;
+  readonly count: HTMLElement;
+  readonly fill: HTMLElement;
   readonly dmg: HTMLElement;
-  readonly stats: Record<Stat, HTMLElement>;
-}
-
-function statIcon(kind: Stat): HTMLImageElement {
-  const img = el("img", "cr-stat-icon");
-  img.src = STAT_ICON[kind];
-  img.alt = "";
-  img.title = STAT_LABEL[kind];
-  return img;
+  readonly soft: HTMLElement;
+  readonly hard: HTMLElement;
 }
 
 export class CombatReplay {
@@ -118,22 +101,15 @@ export class CombatReplay {
     closeBtn.addEventListener("click", () => this.close());
     head.append(el("div", "fw-spacer"), skip, closeBtn);
 
-    // Rapport de force : une barre par statistique, la part de chaque camp (gauche : le joueur local).
-    const balance = el("div", "cr-balance");
-    const names = el("div", "cr-names");
-    names.append(el("span", "cr-me", playerName(me)), el("span", "cr-them", playerName(other)));
-    balance.append(names);
-    const bars = STATS.map((kind) => {
-      const row = el("div", "cr-bal-row");
-      const a = el("span", "cr-bal-num");
-      const b = el("span", "cr-bal-num right");
-      const track = el("div", "cr-bal-track");
-      const fill = el("div", "cr-bal-fill");
-      track.append(fill);
-      row.append(a, statIcon(kind), track, b);
-      balance.append(row);
-      return { a, b, fill };
-    });
+    // Totaux des deux camps : les barres de la fenêtre d'un front.
+    const tots = [statTotals("ours"), statTotals("theirs")] as const;
+    const top = el("div", "cr-top");
+    const sideHead = (side: 0 | 1): HTMLElement => {
+      const box = el("div", side === 0 ? "cr-side ours" : "cr-side theirs");
+      box.append(el("div", "cr-side-name", playerName(side === 0 ? me : other)), tots[side].root);
+      return box;
+    };
+    top.append(sideHead(0), sideHead(1));
 
     const round = el("div", "cr-round", "");
     const field = el("div", "cr-field");
@@ -146,42 +122,92 @@ export class CombatReplay {
     const fled = c.units.map(() => false);
     const dead = c.units.map(() => false);
 
-    const groups = new Map<string, Group>();
-    const groupOf = (i: number): Group => {
-      const u = c.units[i]!;
-      const side = sideOf(u.owner);
-      const isFled = fled[i]!;
-      const key = `${side}:${u.type}:${isFled ? 1 : 0}`;
-      const found = groups.get(key);
-      if (found !== undefined) return found;
+    const makeCard = (units: readonly number[], isFled: boolean, grouped: boolean): Card => {
+      const u = c.units[units[0]!]!;
       const info = m.divisions[u.type];
-      const card = el("div", isFled ? "cr-unit fled" : "cr-unit");
-      const pawns = el("div", "cr-pawns");
+      const root = el("div", isFled ? "cr-unit fled" : "cr-unit");
+      const iconBox = el("div", "cr-iconbox");
+      const img = el("img", "cr-icon");
+      img.src = info === undefined ? "" : `icons/${icon32Path(info.icon)}`;
+      img.alt = "";
+      iconBox.append(img);
+      const flag = el("img", "cr-flag");
+      flag.src = "icons/miscellaneous/icon-white-flag.png";
+      flag.alt = "";
+      flag.title = "En fuite";
+      iconBox.append(flag);
+      // Le nombre est à côté de l'icône, hors de la barre de vie.
+      const count = el("span", "cr-count", "");
+      count.hidden = !grouped;
       const body = el("div", "cr-body");
-      const statsEl = el("div", "cr-stats");
-      const stats = {} as Record<Stat, HTMLElement>;
-      for (const kind of STATS) {
-        const v = el("span", "cr-stat-v");
-        const one = el("span", "cr-stat");
+      const bar = el("div", "cr-bar");
+      const fill = el("div", "cr-fill");
+      bar.append(fill);
+      const stats = el("div", "cr-stats");
+      const stat = (kind: "soft" | "hard"): HTMLElement => {
+        const v = el("span", "cr-stat-v", "0");
+        const one = el("span", `cr-stat ${kind}`);
+        one.title = STAT_TITLE[kind];
         one.append(statIcon(kind), v);
-        statsEl.append(one);
-        stats[kind] = v;
-      }
-      body.append(el("div", "cr-name", info === undefined ? "" : unitName(info.id)), statsEl);
+        stats.append(one);
+        return v;
+      };
+      const soft = stat("soft");
+      const hard = stat("hard");
+      body.append(bar, stats);
       const dmg = el("div", "cr-dmg");
-      card.append(dmg, pawns, body);
-      const g: Group = { key, side, type: u.type, fled: isFled, card, pawns, dmg, stats };
-      groups.set(key, g);
-      // Ordre des cartes : par type, les cartes en fuite en dernier.
-      const col = cols[side];
-      const later = [...groups.values()].filter((x) => x.side === side && x !== g && (Number(x.fled) > Number(isFled) || (x.fled === isFled && x.type > u.type)));
-      const before = [...col.children].find((e) => later.some((x) => x.card === e));
-      if (before !== undefined) col.insertBefore(card, before);
-      else col.append(card);
-      return g;
+      root.append(dmg, iconBox, count, body);
+      root.title = info === undefined ? "" : unitName(info.id);
+      return { units, fled: isFled, root, count, fill, dmg, soft, hard };
     };
 
-    /** Statistiques d'une division d'après son état ; attaques × `attackMultiplier` pour l'attaquant (05-Fronts §6.1). */
+    // Cartes, dans l'ordre des divisions du rapport (type par type) ; elles ne changent plus d'ordre.
+    const cards: Card[] = [];
+    const cardOf: Card[] = [];
+    /** Types groupés d'un camp : leur carte des divisions en fuite, créée à la première fuite, juste après la carte du type. */
+    const fledCards = new Map<string, Card>();
+    for (const side of [0, 1] as const) {
+      const idx = c.units.map((_, i) => i).filter((i) => sideOf(c.units[i]!.owner) === side);
+      const types = [...new Set(idx.map((i) => c.units[i]!.type))].sort((a, b) => a - b);
+      for (const t of types) {
+        const ofType = idx.filter((i) => c.units[i]!.type === t);
+        if (ofType.length <= MAX_SIDE_BY_SIDE) {
+          for (const i of ofType) {
+            const card = makeCard([i], false, false);
+            cards.push(card);
+            cardOf[i] = card;
+            cols[side].append(card.root);
+          }
+        } else {
+          const card = makeCard(ofType, false, true);
+          cards.push(card);
+          for (const i of ofType) cardOf[i] = card;
+          cols[side].append(card.root);
+        }
+      }
+    }
+    /** Une division d'un type groupé qui fuit passe dans la carte des fuyards du type, posée juste après celle du type. */
+    const flee = (i: number): void => {
+      fled[i] = true;
+      const card = cardOf[i]!;
+      // Carte d'une seule division : elle recule sur place.
+      if (card.count.hidden) {
+        card.root.classList.add("fled");
+        return;
+      }
+      const key = `${sideOf(c.units[i]!.owner)}:${c.units[i]!.type}`;
+      let f = fledCards.get(key);
+      if (f === undefined) {
+        const same = card.units;
+        f = makeCard(same, true, true);
+        fledCards.set(key, f);
+        cards.push(f);
+        card.root.after(f.root);
+      }
+      cardOf[i] = f;
+    };
+
+    /** Attaques d'une division d'après son état, × `attackMultiplier` pour l'attaquant (05-Fronts §6.1) ; PV des niches principales. */
     const statsOf = (i: number): Stats => {
       const u = c.units[i]!;
       const type = m.divisions[u.type]!;
@@ -193,74 +219,42 @@ export class CombatReplay {
         soft += comp.softAttack;
         hard += comp.hardAttack;
       }
-      return { soft: soft * k * mult, hard: hard * k * mult, hp: type.hitPoints * k };
+      return { soft: soft * k * mult, hard: hard * k * mult, hp: type.support ? 0 : type.hitPoints * k };
     };
 
-    /** Une icône de division avec sa barre de vie (`state` sur `scale`), le drapeau blanc en fuite, et ×N si `n` > 1. */
-    const pawn = (type: number, isFled: boolean, state: number, n: number): HTMLElement => {
-      const info = m.divisions[type];
-      const p = el("div", "cr-pawn");
-      const box = el("div", "cr-iconbox");
-      const img = el("img", "cr-icon");
-      img.src = info === undefined ? "" : `icons/${icon32Path(info.icon)}`;
-      img.alt = "";
-      box.append(img);
-      if (isFled) {
-        const flag = el("img", "cr-flag");
-        flag.src = "icons/miscellaneous/icon-white-flag.png";
-        flag.alt = "";
-        flag.title = "En fuite";
-        box.append(flag);
-      }
-      if (n > 1) box.append(el("span", "cr-count", `×${n}`));
-      const bar = el("div", "cr-bar");
-      const fill = el("div", "cr-fill");
-      fill.style.width = `${(100 * state) / scale}%`;
-      bar.append(fill);
-      p.append(box, bar);
-      return p;
-    };
-
-    const redraw = (lossByGroup: ReadonlyMap<string, number>): void => {
-      const totals = [noStats(), noStats()];
-      const perGroup = new Map<string, { alive: number[]; stats: Stats }>();
-      c.units.forEach((u, i) => {
-        const g = groupOf(i);
-        const e = perGroup.get(g.key) ?? { alive: [], stats: noStats() };
-        perGroup.set(g.key, e);
-        if (dead[i]) return;
-        const st = statsOf(i);
-        e.alive.push(i);
-        for (const kind of STATS) e.stats[kind] += st[kind];
-        // Le rapport de force ne compte que les divisions en ligne.
-        if (!fled[i]) for (const kind of STATS) totals[sideOf(u.owner)]![kind] += st[kind];
-      });
-      for (const g of groups.values()) {
-        const e = perGroup.get(g.key) ?? { alive: [], stats: noStats() };
-        const n = e.alive.length;
-        g.card.classList.toggle("dead", n === 0);
-        // Peu de divisions : côte à côte, chacune avec sa barre ; trop : une icône ×N et l'état moyen.
-        if (n <= MAX_SIDE_BY_SIDE) g.pawns.replaceChildren(...e.alive.map((i) => pawn(g.type, g.fled, hp[i]!, 1)));
-        else g.pawns.replaceChildren(pawn(g.type, g.fled, e.alive.reduce((s, i) => s + hp[i]!, 0) / n, n));
-        for (const kind of STATS) g.stats[kind].textContent = String(Math.round(e.stats[kind]));
-        const loss = lossByGroup.get(g.key) ?? 0;
-        g.dmg.textContent = loss > 0 ? `−${Math.max(1, Math.round((100 * loss) / scale))} %` : "";
+    const redraw = (lossByCard: ReadonlyMap<Card, number>): void => {
+      const totals = [noStats(), noStats()] as const;
+      for (const card of cards) {
+        // Divisions de la carte : celles qui y sont encore (une carte groupée perd ses fuyards au profit de sa carte de fuite).
+        const here = card.units.filter((i) => cardOf[i] === card && !dead[i]);
+        const st = noStats();
+        let state = 0;
+        for (const i of here) {
+          const s = statsOf(i);
+          for (const kind of ["soft", "hard", "hp"] as const) st[kind] += s[kind];
+          state += hp[i]!;
+          // Les totaux du haut ne comptent que les divisions en ligne.
+          if (!fled[i]) for (const kind of ["soft", "hard", "hp"] as const) totals[sideOf(c.units[i]!.owner)][kind] += s[kind];
+        }
+        const n = here.length;
+        card.root.classList.toggle("dead", n === 0);
+        if (!card.count.hidden) card.count.textContent = `×${n}`;
+        card.fill.style.width = n === 0 ? "0" : `${(100 * state) / (n * scale)}%`;
+        card.soft.textContent = formatStat(Math.round(st.soft));
+        card.hard.textContent = formatStat(Math.round(st.hard));
+        const loss = lossByCard.get(card) ?? 0;
+        card.dmg.textContent = loss > 0 ? `−${Math.max(1, Math.round((100 * loss) / (Math.max(1, n) * scale)))} %` : "";
         if (loss > 0) {
-          g.card.classList.remove("hit");
-          void g.card.offsetWidth;
-          g.card.classList.add("hit");
+          card.root.classList.remove("hit");
+          void card.root.offsetWidth;
+          card.root.classList.add("hit");
         }
       }
-      STATS.forEach((kind, k) => {
-        const a = totals[0]![kind];
-        const b = totals[1]![kind];
-        bars[k]!.a.textContent = String(Math.round(a));
-        bars[k]!.b.textContent = String(Math.round(b));
-        bars[k]!.fill.style.width = a + b > 0 ? `${(100 * a) / (a + b)}%` : "50%";
-      });
+      drawTotals(tots[0], totals[0], totals[1]);
+      drawTotals(tots[1], totals[1], totals[0]);
     };
 
-    this.panel.replaceChildren(head, balance, round, field, result);
+    this.panel.replaceChildren(head, top, round, field, result);
     this.panel.hidden = false;
     redraw(new Map());
 
@@ -269,16 +263,16 @@ export class CombatReplay {
       const r = next++;
       const rd = c.rounds[r]!;
       round.textContent = `Round ${r + 1} / ${c.rounds.length}`;
-      // Les pertes sont rangées dans le groupe où la division était pendant le round.
-      const lossByGroup = new Map<string, number>();
+      // La perte est rangée dans la carte où la division était pendant le round.
+      const lossByCard = new Map<Card, number>();
       for (const [i, loss] of rd.hits) {
-        const key = groupOf(i).key;
-        lossByGroup.set(key, (lossByGroup.get(key) ?? 0) + loss);
+        const card = cardOf[i]!;
+        lossByCard.set(card, (lossByCard.get(card) ?? 0) + loss);
         hp[i] = Math.max(0, hp[i]! - loss);
       }
       for (const i of rd.destroyed) dead[i] = true;
-      for (const i of rd.fled) fled[i] = true;
-      redraw(lossByGroup);
+      for (const i of rd.fled) if (!fled[i]) flee(i);
+      redraw(lossByCard);
     };
     const finish = (): void => {
       for (const t of this.timers) clearTimeout(t);
@@ -290,7 +284,7 @@ export class CombatReplay {
       const losses = (side: 0 | 1): HTMLElement => {
         const l = c.losses[side === attackerSide ? 0 : 1];
         const box = el("div", side === 0 ? "cr-loss" : "cr-loss right");
-        box.append(el("strong", undefined, side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
+        box.append(el("div", "cr-loss-title", side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
         const men = el("div", "cr-loss-row");
         men.append(el("span", "cr-loss-n", num(l.men)), el("span", undefined, "hommes"));
         box.append(men);
