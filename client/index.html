@@ -259,6 +259,18 @@
           <button id="axis-cancel" type="button" hidden>Annuler la percée</button>
           <div id="map-legend" hidden aria-label="Légende des ressources naturelles"></div>
           <div id="notifs" aria-live="polite"></div>
+          <!-- Case survolée (main.ts, showHover) : en bas à droite de la vue de la carte, affichée quand la souris est sur une case. -->
+          <section id="hover-box" hidden aria-label="Case survolée">
+            <dl>
+              <dt>Case</dt><dd id="h-tile">—</dd>
+              <dt>Terrain</dt><dd id="h-terrain">—</dd>
+              <dt>Fertilité</dt><dd id="h-fertility">—</dd>
+              <dt>Fer</dt><dd id="h-iron">—</dd>
+              <dt>Aluminium</dt><dd id="h-aluminium">—</dd>
+              <dt>Propriétaire</dt><dd id="h-owner">—</dd>
+              <dt>Ville</dt><dd id="h-city">—</dd>
+            </dl>
+          </section>
           <aside id="prod" hidden aria-label="Production"></aside>
           <aside id="front-panel" hidden aria-label="Front"></aside>
           <div id="toast" hidden></div>
@@ -277,7 +289,8 @@
           </div>
         </section>
 
-        <aside id="panel">
+        <!-- Panneau de debug (03-Client §7) : caché au départ, ouvert par le bouton « Debug » en bas à droite. -->
+        <aside id="panel" hidden aria-label="Panneau de debug">
           <section>
             <h2>Votre pays <span class="muted" id="you-swatch"></span></h2>
             <dl id="you">
@@ -290,27 +303,6 @@
               <dt>Villes</dt><dd id="s-cities">0</dd>
               <dt>Cultivé / max</dt><dd id="s-cultivated" title="Cultivées / cultivables">0 / 0</dd>
               <dt>Pêché / max</dt><dd id="s-fished" title="Pêchées / pêchables">0 / 0</dd>
-            </dl>
-          </section>
-
-          <section>
-            <h2>Joueurs</h2>
-            <table id="players">
-              <thead><tr><th></th><th>Joueur</th><th>Population</th><th>Villes</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </section>
-
-          <section>
-            <h2>Case survolée</h2>
-            <dl id="hover">
-              <dt>Case</dt><dd id="h-tile">—</dd>
-              <dt>Terrain</dt><dd id="h-terrain">—</dd>
-              <dt>Fertilité</dt><dd id="h-fertility">—</dd>
-              <dt>Fer</dt><dd id="h-iron">—</dd>
-              <dt>Aluminium</dt><dd id="h-aluminium">—</dd>
-              <dt>Propriétaire</dt><dd id="h-owner">—</dd>
-              <dt>Ville</dt><dd id="h-city">—</dd>
             </dl>
           </section>
 
@@ -343,6 +335,7 @@
             <button id="dbg-bots" type="button" title="Chaque bot reçoit de la population et de quoi équiper 30 divisions de chaque type (les bots ne produisent pas d'armement).">Armer les bots</button>
             <button id="dbg-theme" type="button" title="Bascule le thème clair ou sombre de la fenêtre d'un front et de l'onglet des forces (provisoire).">Thème : clair</button>
           </div>
+          <button id="debug-toggle" type="button" aria-pressed="false" aria-controls="panel" title="Ouvre ou ferme le panneau de debug (votre pays, mesures, pause, quitter).">Panneau de debug</button>
         </footer>
       </div>
     </div>

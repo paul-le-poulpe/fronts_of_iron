@@ -115,6 +115,9 @@ export class MapView {
   /** Ville mise en évidence (0 : aucune) et le masque de sa zone. */
   private highlighted = 0;
   private highlightMask: HTMLCanvasElement | null = null;
+  /** Joueur survolé dans la liste de l'onglet Diplomatie (0 : aucun) et le masque de son territoire, refait quand des cases changent. */
+  private highlightedPlayer = 0;
+  private playerMask: HTMLCanvasElement | null = null;
   /** Calque des hachures, à la taille du canvas : un masque à la caméra, rempli du motif. */
   private readonly hatch: HTMLCanvasElement;
   private readonly hatchCtx: CanvasRenderingContext2D;
@@ -178,6 +181,7 @@ export class MapView {
   /** Envoie tout le tampon au canvas de la carte (début de partie, bascule du fer). */
   uploadAll(): void {
     this.baseCtx.putImageData(this.image, 0, 0);
+    this.playerMask = null;
     this.requestDraw();
   }
 
@@ -198,6 +202,7 @@ export class MapView {
       if (y > y1) y1 = y;
     }
     this.baseCtx.putImageData(this.image, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+    this.playerMask = null;
     this.requestDraw();
   }
 
@@ -393,6 +398,14 @@ export class MapView {
     this.requestDraw();
   }
 
+  /** Hachure en blanc le territoire du joueur `player` (0 : retire) : la liste des joueurs de l'onglet Diplomatie. */
+  highlightPlayer(player: number): void {
+    if (player === this.highlightedPlayer) return;
+    this.highlightedPlayer = player;
+    this.playerMask = null;
+    this.requestDraw();
+  }
+
   /** Calque des cases de la zone de la ville `city`, vert ou rouge, avec la position de son coin dans la carte. */
   private zoneLayer(city: number, ok: boolean): { canvas: HTMLCanvasElement; x: number; y: number } {
     const key = `${city}:${ok ? 1 : 0}`;
@@ -557,6 +570,11 @@ export class MapView {
     if (this.highlighted > 0 && this.highlighted <= mirror.cities.length) {
       this.highlightMask ??= buildMask(mirror, (t) => mirror.tileCity[t] === this.highlighted);
       this.cityHatch.mask = this.highlightMask;
+      this.drawHatch(this.cityHatch);
+    }
+    if (this.highlightedPlayer > 0) {
+      this.playerMask ??= buildMask(mirror, (t) => mirror.ownerOf(t) === this.highlightedPlayer && (mirror.terrain[t]! & TERRAIN_LAND) !== 0);
+      this.cityHatch.mask = this.playerMask;
       this.drawHatch(this.cityHatch);
     }
 

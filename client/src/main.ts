@@ -13,6 +13,7 @@ import { type EndedMessage, type FrontView, type FromWorker, type HumanOrder, ty
 import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
 import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
+import { DiplomacyTab } from "./diplomacytab.ts";
 import { CombatIcons, CombatReplay, onCombatViewed, resetViewed } from "./combatreplay.ts";
 import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
 import { ForcesTab } from "./forcestab.ts";
@@ -101,6 +102,8 @@ interface Session {
   infobar: InfoBar | null;
   frontPanel: FrontWindow | null;
   forces: ForcesTab | null;
+  /** Onglet Diplomatie de la barre d'informations : la liste des joueurs. */
+  players: DiplomacyTab | null;
   /** Icônes des combats sur la carte et panneau du replay (06-Combat-Simplifie §2). */
   combatIcons: CombatIcons | null;
   replay: CombatReplay | null;
@@ -133,6 +136,7 @@ function openSession(online: boolean): Session {
     combatIcons: null,
     replay: null,
     forces: null,
+    players: null,
     nextOrderId: 1,
     paused: false,
     ticks: 0,
@@ -256,7 +260,7 @@ function onInit(s: Session, init: InitMessage): void {
   s.view.factoryCheck = (tile) => factoryTarget(mirror, tile);
   setGoodTipEconomy(init.catalog.economy);
   setProductIcons(init.catalog.icons);
-  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city));
+  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city), (tab) => s.infobar?.openTab(tab));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
@@ -280,6 +284,14 @@ function onInit(s: Session, init: InitMessage): void {
     s.frontPanel?.redrawHistory();
   });
   s.forces = new ForcesTab(init.military, init.catalog, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
+  // Onglet Diplomatie : un clic sur un joueur ouvre le même menu qu'un clic sur son territoire ; un spectateur n'en a pas.
+  s.players = new DiplomacyTab(
+    mirror.playerCount,
+    (id) => {
+      if (!spectator) diplomacy.openFor(id);
+    },
+    (id) => s.view?.highlightPlayer(id),
+  );
   s.infobar = new InfoBar(
     $("infobar"),
     init.catalog,
@@ -287,12 +299,17 @@ function onInit(s: Session, init: InitMessage): void {
     (percent) => sendOrder({ type: "set_farm_share", percent }),
     (enabled) => sendOrder({ type: "set_forced_mobilization", enabled }),
     s.forces,
+    s.players,
   );
+  // Un détail de la barre d'informations ou le menu « Carte » qui s'ouvre désarme « Créer une ville ».
+  s.infobar.onOpen = () => {
+    if (placement) setPlacement(false);
+  };
   buildFactoryMenu(init.catalog);
-  $("prod").hidden = true;
-  $("production").setAttribute("aria-pressed", "false");
+  // Le panneau de production est ouvert au début de chaque partie ; le bouton « Production » le ferme.
+  $("prod").hidden = false;
+  $("production").setAttribute("aria-pressed", "true");
   setFactoryArmed(null);
-  buildPlayersTable(mirror);
   $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(localPlayer()))}"></span>`;
   setPlacement(false);
   clearNotifications();
@@ -363,6 +380,7 @@ function onTick(s: Session, msg: TickMessage): void {
   };
 
   updatePanel(msg.players);
+  s.players?.update(msg.players);
   s.production?.update(msg.human, msg.players[localPlayer() - 1]!);
   s.infobar?.update(msg.human, msg.players[localPlayer() - 1]!);
   setGoodTipStats(msg.players[localPlayer() - 1]!);
@@ -417,7 +435,15 @@ const DIPLOMATIC_ORDERS: readonly HumanOrder["type"][] = ["declare_war", "propos
 
 const lerp = (avg: number, x: number): number => (avg === 0 ? x : avg * 0.9 + x * 0.1);
 
-// ---- panneau latéral ----
+// ---- panneau de debug ----
+
+const debugToggle = $<HTMLButtonElement>("debug-toggle");
+debugToggle.addEventListener("click", () => {
+  const panel = $("panel");
+  panel.hidden = !panel.hidden;
+  debugToggle.setAttribute("aria-pressed", String(!panel.hidden));
+  session?.infobar?.place();
+});
 
 function updatePanel(players: readonly PlayerStats[]): void {
   const me = players[localPlayer() - 1]!;
@@ -430,40 +456,12 @@ function updatePanel(players: readonly PlayerStats[]): void {
   $("s-cities").textContent = num(me.cities);
   $("s-cultivated").textContent = `${num(me.cultivated)} / ${num(me.farmTiles)}`;
   $("s-fished").textContent = `${num(me.fished)} / ${num(me.seaTiles)}`;
-
-  const rows = $("players").querySelectorAll("tbody tr");
-  players.forEach((p, i) => {
-    const cells = rows[i]!.children;
-    cells[1]!.textContent = p.defeated ? `${playerName(p.id)} (éliminé)` : playerName(p.id);
-    cells[2]!.textContent = num(p.population - p.hurt);
-    cells[3]!.textContent = num(p.cities);
-  });
   // Coût de la prochaine ville, en habitants ; la première (sans capitale) est gratuite.
   const cost = $("found-cost");
   cost.hidden = me.capital === 0;
   cost.lastElementChild!.textContent = num(me.foundingCost);
   // Le coût d'une fondation dépend de la population : la case survolée peut changer de couleur.
   if (placement) session?.view?.requestDraw();
-}
-
-function buildPlayersTable(mirror: Mirror): void {
-  const body = $("players").querySelector("tbody")!;
-  body.innerHTML = "";
-  for (let id = 1; id <= mirror.playerCount; id++) {
-    const tr = document.createElement("tr");
-    if (id === localPlayer()) tr.className = "me";
-    const swatch = document.createElement("span");
-    swatch.className = "sw";
-    swatch.style.background = rgbCss(playerColor(id));
-    // Les noms viennent des autres joueurs : textContent, jamais innerHTML.
-    const cells = [document.createElement("td"), document.createElement("td"), document.createElement("td"), document.createElement("td")];
-    cells[0]!.append(swatch);
-    cells[1]!.textContent = playerName(id);
-    cells[2]!.textContent = "0";
-    cells[3]!.textContent = "0";
-    tr.append(...cells);
-    body.appendChild(tr);
-  }
 }
 
 /** Cases du menu « Carte » telles que le joueur les a laissées. */
@@ -586,9 +584,8 @@ $("quit").addEventListener("click", () => {
 function showHover(tile: number): void {
   const m = session?.mirror;
   if (!m) return;
-  if (tile < 0) {
-    for (const id of ["h-tile", "h-terrain", "h-fertility", "h-iron", "h-aluminium", "h-owner", "h-city"]) $(id).textContent = "—";
-  } else {
+  $("hover-box").hidden = tile < 0;
+  if (tile >= 0) {
     const w = m.width;
     const b = m.terrain[tile]!;
     $("h-tile").textContent = `${tile % w}, ${Math.floor(tile / w)}`;

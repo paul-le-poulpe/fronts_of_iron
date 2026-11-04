@@ -99,7 +99,9 @@ de chaque paire ; les fronts le lisent.
 Effets de la guerre et de la paix sur les fronts : `05-Fronts.md` §2.3.
 
 *Actions.* Le joueur clique sur le territoire d'un autre joueur (quand aucun
-bouton de la barre n'est armé) : un petit menu apparaît à côté de la souris,
+bouton de la barre n'est armé), ou sur sa ligne dans l'onglet Diplomatie de la
+barre d'informations (liste des joueurs ; survoler une ligne met le territoire
+du joueur en évidence sur la carte) : un petit menu apparaît à côté de la souris,
 pas un panneau latéral. Il montre le nom du joueur, sa couleur, son statut avec
 le joueur, puis seulement les actions possibles :
 
@@ -1025,10 +1027,11 @@ consommation[fer] = demande[fer] × r
   qui tournent.
 - Les lignes identiques d'une usine (même bien) se règlent ensemble : un
   nombre de lignes actives, par exemple avec un curseur.
-- **Panneau latéral** (décrit par l'auteur, 24 octobre 2026), ouvert par le
-  bouton « Production » (§1) :
-  - une section par ville qui a une usine : nom de la ville, type d'usine,
-    niveau (nombre de lignes), et en haut à droite une croix discrète qui
+- **Panneau de production** (décrit par l'auteur, 24 octobre 2026), à droite
+  de la carte, ouvert par défaut (auteur, 4 novembre 2026) ; le bouton
+  « Production » (§1) le ferme ou le rouvre :
+  - une section par ville qui a une usine : le type d'usine en gras (auteur,
+    4 novembre 2026 : plus le nom de la ville ni le niveau), et en haut à droite une croix discrète qui
     supprime l'usine (§8) ;
   - dans la section, une sous-section par bien produit : les lignes de ce bien,
     leur nombre de lignes actives (curseur) ;
@@ -1101,6 +1104,9 @@ consommation[fer] = demande[fer] × r
   « Ressources » (§11).
 - **Le bouton + reste** sur chaque bien en production (précision de l'auteur) :
   le joueur peut ajouter une ligne à la main, y compris au-delà de la demande.
+  Il est bloqué tant que des lignes existantes de ce bien sont inactives (auteur,
+  4 novembre 2026) : un clic affiche « Ligne inactive. Impossible d'agrandir. »
+  en rouge. Le blocage est dans l'interface seulement, le moteur accepte l'ordre.
   Il est gardé pour le développement, où il est pratique. **Problème connu**
   (noté par l'auteur, 24 octobre 2026) : tel quel, le joueur n'a aucune raison
   d'attendre la croissance automatique, trop lente à côté d'un clic. Pour la
@@ -1381,15 +1387,16 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 - **Le territoire s'arrête à la côte.** La zone d'une ville couvre aussi l'eau
   pour les règles (port, pêche : §3.6, §6.4), mais la couleur du joueur et les
   frontières et limites ne sont dessinées que sur la terre.
-- **Menu « Carte »** dans la barre d'informations, à gauche du panneau latéral
-  et collé à lui, texte plus gros que les sections (une icône de carte à
+- **Menu « Carte »** dans la barre d'informations, contre son bord droit (à
+  gauche du panneau de debug quand il est ouvert), texte plus gros que les sections (une icône de carte à
   terme), avec des cases à cocher : « Ressources naturelles » (hachures rouge
   foncé sur le fer, décochée en début de partie), « Couleur des joueurs »
   (cochée) et « Fertilité » (hachures vertes épaisses sur les terres
   cultivables, décochée) et « Icônes d'usine » (les logos des usines à côté des
   villes, cochée ; elle n'est pas forcée pendant le placement) et « Zones de front » (hachures rouges des fronts actifs,
   cochée ; `05-Fronts.md` §11.1). D'autres vues pourront s'y ajouter (relief, par
-  exemple).
+  exemple). Les informations de la case survolée sont dans un encadré en bas à
+  droite de la vue de la carte, affiché quand la souris est sur une case.
   Pendant le mode « Créer une ville » (§3.3), une liste de vues est affichée
   d'office, même décochées (précision de l'auteur, 24 octobre 2026) : pour
   l'instant les trois premières (pas « Icônes d'usine »). C'est temporaire : à la sortie du mode, la carte revient
@@ -1421,8 +1428,10 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   autre joueur (§1) ; les propositions et les changements de statut arrivent
   par des notifications empilées en bas à gauche de la carte (03-Client §7).
 - **Barre d'informations en haut de l'écran** (décrite par l'auteur, 24 octobre
-  2026), compacte, sur une ligne. Quatre sections ; un clic sur une section
-  déplie son détail sous la barre, un second clic le replie :
+  2026), compacte, sur une ligne. Survoler une section déplie son détail sous la
+  barre ; sortir la souris de la section et de son détail le replie (auteur,
+  4 novembre 2026, à la place du clic). Le menu « Carte » aussi. Ouvrir un détail ou ce menu désarme « Créer une
+  ville » :
   1. **Population** : total, variation par tour, maximum. Détail : la part de
      la population par occupation (ouvriers d'usine, mineurs, fermiers,
      pêcheurs, inactifs), en rectangles proportionnels.

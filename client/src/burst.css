@@ -13,3 +13,6 @@
   pointer-events: none;
 }
 #burst-hint[hidden] { display: none; }
+/* Bouton bloqué déjà appuyé : la raison, en rouge. */
+#burst-hint .burst-blocked { color: var(--bad); font-weight: 600; }
+#burst-hint .burst-blocked[hidden] { display: none; }

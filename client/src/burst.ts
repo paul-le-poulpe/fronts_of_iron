@@ -9,6 +9,9 @@
 // sert plus qu'au clavier (`detail` vaut 0).
 //
 // Un petit texte suit la souris au-dessus d'un bouton marqué (`data-burst`) pour rappeler les touches.
+//
+// Un bouton qui porte `data-burst-blocked` (un texte) n'appelle pas son action : un appui marque le bouton
+// (`data-burst-tried`) et le texte s'ajoute en rouge sous les touches, jusqu'à ce que la souris quitte le bouton.
 
 import "./burst.css";
 
@@ -28,10 +31,17 @@ export function onPress(el: HTMLElement, action: (count: number) => void): void 
   installHint();
   el.dataset["burst"] = "";
   el.addEventListener("pointerdown", (e) => {
-    if (e.button === 0) action(burstCount(e));
+    if (e.button !== 0) return;
+    if (el.dataset["burstBlocked"] !== undefined) {
+      el.dataset["burstTried"] = "";
+      showBlocked(el);
+      return;
+    }
+    action(burstCount(e));
   });
+  el.addEventListener("pointerleave", () => delete el.dataset["burstTried"]);
   el.addEventListener("click", (e) => {
-    if (e.detail === 0) action(1);
+    if (e.detail === 0 && el.dataset["burstBlocked"] === undefined) action(1);
   });
 }
 
@@ -41,15 +51,29 @@ export function onPress(el: HTMLElement, action: (count: number) => void): void 
 const OFFSET_PX = 16;
 
 let hint: HTMLElement | null = null;
+/** Ligne rouge de l'aide : le texte `data-burst-blocked` du bouton, après un appui. */
+let blockedLine: HTMLElement | null = null;
+
+/** Montre la ligne rouge si `target` est un bouton bloqué déjà appuyé, la cache sinon. */
+function showBlocked(target: Element | null): void {
+  if (blockedLine === null) return;
+  const text = target instanceof HTMLElement && target.dataset["burstTried"] !== undefined ? target.dataset["burstBlocked"] : undefined;
+  blockedLine.hidden = text === undefined;
+  blockedLine.textContent = text ?? "";
+}
 
 function installHint(): void {
   if (hint !== null) return;
   const box = document.createElement("div");
   box.id = "burst-hint";
   box.hidden = true;
-  box.append(line(`Shift + ${BURST_SHIFT}`), line(`Ctrl + ${BURST_CTRL}`));
+  const blocked = line("");
+  blocked.className = "burst-blocked";
+  blocked.hidden = true;
+  box.append(line(`Shift + ${BURST_SHIFT}`), line(`Ctrl + ${BURST_CTRL}`), blocked);
   document.body.append(box);
   hint = box;
+  blockedLine = blocked;
 
   document.addEventListener("pointermove", (e) => {
     const target = e.target instanceof Element ? e.target.closest("[data-burst]:not(.unavailable)") : null;
@@ -58,6 +82,7 @@ function installHint(): void {
       return;
     }
     box.hidden = false;
+    showBlocked(target);
     const w = box.offsetWidth;
     const h = box.offsetHeight;
     // Sous le pointeur, à droite ; de l'autre côté s'il n'y a pas la place.

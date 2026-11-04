@@ -41,12 +41,12 @@ Depuis la racine du dépôt, après `npm install` :
 
 | Fichier (`client/`) | Rôle |
 | --- | --- |
-| `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau latéral, panneau de production |
+| `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau de debug, panneau de production |
 | `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) |
-| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), forces ; DOM construit une fois, pas de règle |
+| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), forces, diplomatie, menu « Carte » ; DOM construit une fois, pas de règle |
 | `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
 | `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; noms des types de division, des niches (et leurs lettres) et de l'équipement des divisions ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
@@ -60,7 +60,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
 | `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, statistiques de combat et totaux des premières lignes, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
-| `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable`. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
+| `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable` ; un élément `data-burst-blocked` n'envoie rien et, après un appui, l'aide ajoute son texte en rouge. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
+| `src/diplomacytab.ts` | onglet Diplomatie : détail de la sixième section de la barre d'informations ; liste des joueurs, clic → menu de diplomatie, survol → joueur mis en évidence sur la carte |
 | `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la cinquième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
 | `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales, « supportable » et « créable » du menu « + », couverture d'un front, rangement des fronts |
@@ -467,7 +468,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   coût de la prochaine ville (`foundingCost`, mis à jour à chaque tour) avec
   l'icône de population neutre ; caché tant que le joueur n'a pas de capitale
   (première ville gratuite). Active le mode
-  placement (échap : quitte). Sans ville : rien de particulier, toute terre libre
+  placement (échap : quitte ; l'ouverture d'un détail de la barre d'informations
+  ou du menu « Carte » aussi). Sans ville : rien de particulier, toute terre libre
   est valide. Avec des villes : le rayon d'expansion de chacune est dessiné ; la
   case survolée est verte si la fondation respecte 00-Game §3.3 (terre,
   `tileCity === 0`, dans le rayon d'expansion d'une ville du joueur, population ≥
@@ -501,14 +503,22 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   affiche la raison et n'envoie rien. Échap désarme et ferme le menu. Armer
   l'un des deux modes (ville, usine) quitte l'autre.
 - **« Production »** : ouvre ou ferme le panneau de production (`production.ts`),
-  posé sur le bord droit de la carte :
-  - en haut, un résumé : lignes remplies / actives, ouvriers d'usine, fer
-    (capacité, extrait, cases exploitées, mineurs), biens produits au dernier
-    tour ;
-  - une section par ville qui a une usine, dans l'ordre de priorité : « Ville
-    n° N », icône du bien dominant (`dominantGood`) et nom propre du type
+  posé sur le bord droit de la carte, ouvert au début de chaque partie (auteur, 4 novembre 2026) :
+  - en haut, deux lignes (auteur, 4 novembre 2026), 14 px : icône d'ouvrier puis
+    « Ouvriers suffisants » en vert, ou « Ouvriers insuffisants » suivi du malus
+    « −n % de production » en gras rouge ; même chose pour le fer (« Fer
+    suffisant » / « Fer insuffisant »). Le malus est celui de la catégorie la plus
+    touchée : 100 % moins `goodsWorkerRatio` ou `armWorkerRatio` (fer :
+    `goodsIronRatio`, `armIronRatio`), le plus grand des deux ; l'infobulle donne
+    les deux. Chaque ligne est un bouton (curseur main) : un clic ouvre l'onglet
+    Population (ouvriers) ou Ressources (flux) (fer) de la barre d'informations
+    (`InfoBar.openTab`) ;
+  - une section par ville qui a une usine, dans l'ordre de priorité. En-tête
+    (auteur, 4 novembre 2026) : la poignée puis, en gras, le nom propre du type
     (`FACTORY_NAMES` dans `names.ts` : manufacture d'armes, chantier naval, usine
-    mécanique ; le même nom est dans le menu « Inaugurer une usine »), niveau (nombre de lignes) ; une poignée
+    mécanique ; le même nom est dans le menu « Inaugurer une usine ») ; ni le numéro
+    de la ville, ni l'icône du bien dominant (chaque ligne a déjà la sienne), ni le
+    niveau. La poignée
     `⋮⋮` à glisser change la priorité de la ville (`set_city_priority`, position
     = indice de la section sur laquelle on dépose) ; une croix `×` discrète en
     haut à droite de la section (`.fdelete`) demande confirmation (`window.confirm`,
@@ -519,6 +529,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),
     icône du fer, →, production totale (lignes remplies × `productionPerLine` du
     catalogue : par tour pour un bien, par minute pour un type d'armement),
+    suivie de son unité en gris (« /mn » ou « /tour », auteur, 4 novembre 2026),
     icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
     ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
     groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
@@ -542,7 +553,11 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     `unlockTurns` tours-lignes) : `[parent]`, « compteur / unlockTurns », barre qui se remplit,
     cadenas (`icons/miscellaneous/misc-padlock.png`), `[bien]` ;
   - une ligne par bien de l'arbre : en production, un bouton + à côté du curseur
-    envoie `create_line` (une ligne de plus, à la main) et, pour une machine,
+    envoie `create_line` (une ligne de plus, à la main) ; il est bloqué (grisé,
+    classe `blocked`, `data-burst-blocked`) tant que le réglage est sous le nombre
+    de lignes (`active < lines`) : un appui n'envoie rien et ajoute « Ligne
+    inactive. Impossible d'agrandir. » en rouge sous « Shift + 5 / Ctrl + 10 » dans
+    l'aide de `burst.ts`, jusqu'à ce que la souris quitte le bouton ; pour une machine,
     une jauge de croissance automatique dessous, précédée de l'icône `misc-up-lighter.png` (les boutons +
     portent `misc-plus-lighter.png`, dans `icons/miscellaneous/`) (`growth / growthTurns` en tours-lignes, ou
     « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait noir sur
@@ -579,7 +594,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (ni pendant 500 ms après, le temps que le moteur applique l'ordre) ; entre deux
   reconstructions, seuls les nombres sont mis à jour.
 - **Barre d'informations**, en haut de l'écran de jeu (00-Game §11, `infobar.ts`) :
-  44 px de haut, cinq boutons séparés par un trait ; chacun a une ligne de
+  44 px de haut, six boutons séparés par un trait (le sixième, Diplomatie, n'a ni chiffre ni mini-barre) ; chacun a une ligne de
   chiffres et, juste dessous, une **mini-barre** (10 px, `.ib-mini`) : la barre
   la plus pertinente de son détail, mise à jour par `head` à chaque tour, détail
   ouvert ou non. Population : la barre empilée de toutes les occupations, avec
@@ -601,14 +616,22 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   que le fer. Armement : tous les types additionnés, mêmes couleurs et même
   échelle que les lignes du détail (fronts, stock, hachures au-delà de la cible,
   trait de la cible). Fronts : part des fronts du joueur qui sont actifs
-  (vert). Un clic sur un
-  bouton déplie son détail juste sous la barre, par-dessus le haut de la carte,
-  aligné sur le bord gauche du bouton ; un second clic le replie ; un seul détail
+  (vert). Le survol d'un
+  bouton (auteur, 4 novembre 2026 ; le clic aussi, pour le clavier) déplie son détail
+  juste sous la barre, par-dessus le haut de la carte, aligné sur le bord gauche du
+  bouton ; la souris sortie du bouton et du détail le replie après 200 ms
+  (`CLOSE_DELAY_MS`, le temps de passer de l'un à l'autre ; y revenir annule). Pendant un
+  geste commencé dans le détail (`Section.busy` : glisser de l'onglet des forces, curseur
+  de la part de fermiers tenu), le repli attend la fin du geste. Un détail ouvert par le
+  programme (« ← Retour » d'un front, ligne de l'en-tête du panneau de production) reste
+  ouvert jusqu'à ce que la souris y entre puis en sorte, ou qu'un autre bouton soit
+  survolé. Chaque ouverture appelle `InfoBar.onOpen`, que `main.ts` branche sur la sortie
+  du mode « Créer une ville ». Le menu « Carte » se comporte de la même façon. Un seul détail
   est ouvert à la fois. Le détail ne sort pas de la carte : sa butée à droite est
-  le bord gauche du panneau latéral (`#panel`) et, quand il est ouvert, du panneau
-  de production (`#prod`) ; le détail se décale vers la gauche (et se rétrécit si
-  besoin) à l'ouverture ou à la fermeture du panneau de production
-  (`InfoBar.place`, appelé par le bouton « Production »). Le DOM est construit une fois par partie ; chaque tour,
+  le bord gauche du panneau de debug (`#panel`) et du panneau
+  de production (`#prod`), quand ils sont ouverts ; le détail se décale vers la gauche (et se rétrécit si
+  besoin) à l'ouverture ou à la fermeture de l'un d'eux
+  (`InfoBar.place`, appelé par les boutons « Production » et « Panneau de debug »). Le DOM est construit une fois par partie ; chaque tour,
   `InfoBar.update` écrit seulement des textes et des largeurs (la barre, et le
   détail ouvert ; un détail replié est mis à jour à l'ouverture). Les barres
   **vertes** sont des flux (production du tour), les barres **bleues** des stocks.
@@ -629,9 +652,13 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   les fichiers 16 × 16 agrandis sans lissage. Provisoire : à terme, un bien aura
   ses deux versions dessinées.
   **Menu « Carte »** : dernier élément de la barre (bouton `Carte ▾`, texte plus
-  gros que les sections ; une icône de carte le remplacera). Son bord droit est
-  contre le bord gauche du panneau latéral : `margin-right: var(--panel-w)`, la
-  variable qui donne aussi sa largeur à la colonne du panneau ; sous 760 px, le
+  gros que les sections ; une icône de carte le remplacera). Il est en haut à droite
+  de la vue de la carte (auteur, 4 novembre 2026) : son bord droit est contre le bord
+  gauche du panneau de production quand il est ouvert, sinon du panneau de debug.
+  `margin-right: calc(var(--panel-w) + var(--prod-offset))` : `--panel-w` donne aussi
+  sa largeur à la colonne du panneau de debug, et `#game:has(> #panel[hidden])` la met
+  à 0 ; `--prod-offset` vaut `--prod-w` (la largeur de `#prod`) quand `#prod` est
+  ouvert, 0 sinon. Le menu a le même décalage à droite ; sous 760 px, le
   panneau passe sous la carte et le bouton revient contre le bord droit. Il ouvre
   sous le bouton, aligné sur son bord droit, un menu de cases à cocher
   (`MAP_OPTIONS`, `infobar.ts`, avec l'état de chaque case en début de partie :
@@ -655,8 +682,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (en bas à gauche de `#stage`, rempli par `main.ts` depuis `RESOURCE_LEGEND`)
   montre pour chaque ressource son icône, un rectangle rayé de la couleur des
   hachures et son nom. Le menu est un enfant de `#infobar`, comme les détails, parce que
-  `.ib-bar` a `overflow` et le couperait. Il reste ouvert quand on coche ; il se
-  ferme au reclic sur le bouton, au clic en dehors (`pointerdown` sur le document),
+  `.ib-bar` a `overflow` et le couperait. Il s'ouvre au survol du bouton (ou au clic) et
+  reste ouvert quand on coche ; il se ferme quand la souris sort du bouton et du menu
+  (même délai que les détails), au clic en dehors (`pointerdown` sur le document),
   à Échap, ou à l'ouverture d'un détail, et l'ouvrir replie le détail ouvert. Les
   cases reprennent leur état de début de partie à chaque nouvelle partie (rien
   n'est mémorisé). `main.ts`
@@ -669,7 +697,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   navigateur, trop lente) : chaque nombre a un `title` qui nomme ses valeurs dans l'ordre
   d'écriture, avec les mêmes séparateurs, en un mot chacune : « Actuelle /
   nourrie / potentielle », « Stock / cible · par tour ». Sur la barre, l'infobulle
-  est celle du bouton entier. Même règle dans le panneau latéral (« Cultivées /
+  est celle du bouton entier. Même règle dans le panneau de debug (« Cultivées /
   cultivables ») et le panneau de production (« En service · réglé / lignes »).
   **Infobulles construites** (`setTip(el, build)` de `tooltip.ts`) : `build`
   renvoie un contenu (titre, sections, barres) au lieu d'un texte ; il est appelé
@@ -821,8 +849,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   affichée tient compte des soldats.
   **Blessés** (00-Game §4.2) : dernière ligne de l'onglet (icône `pop-hurt`, noir `--occ-hurt`), après les inactifs, avec
   son segment noir à la fin de la barre ; son nombre n'a pas de part (les parts des autres lignes sont calculées sans lui).
-  Le total de population (bouton de la barre, panneau latéral `s-pop`, tableau des joueurs) est `population − hurt`, et la
-  croissance affichée est celle de ce total. Le panneau latéral a une ligne « Blessés » (`s-hurt`). La jauge « Population »
+  Le total de population (bouton de la barre, panneau de debug `s-pop`, onglet Diplomatie) est `population − hurt`, et la
+  croissance affichée est celle de ce total. Le panneau de debug a une ligne « Blessés » (`s-hurt`). La jauge « Population »
   de l'onglet Nourriture (et sa mini-barre) a un segment noir tout à gauche, de 0 à `hurt`, puis le vert jusqu'à
   `population` ; son texte est « population sans blessés + blessés / nourrie / potentielle ». Le maximum nourri compte
   les places des blessés. Les bots (`bots.ts`) et `foundingProblem` (`main.ts`) testent `population − hurt`
@@ -927,7 +955,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   qui annonce le mode résistance « pas encore implémenté » ; pour l'éliminé, la fenêtre `#defeat` au centre de la carte
   (« Continuer en spectateur » ou « Quitter la partie »). `setSpectator` (`main.ts`), appelée à chaque tour d'après
   `players[you].defeated`, affiche le bandeau `#spectator-badge`, désactive « Créer une ville » et « Inaugurer une usine »,
-  désarme les outils et supprime le menu de diplomatie au clic ; le tableau des joueurs ajoute « (éliminé) ». Les bots
+  désarme les outils et supprime le menu de diplomatie au clic ; l'onglet Diplomatie ajoute « (éliminé) » (ligne grisée, ni clic ni mise en évidence). Les bots
   éliminés ne jouent plus (`bots.ts`).
 - **Menu de diplomatie** (`diplomacy.ts`, 00-Game §1). Quand aucun outil n'est armé
   (ni « Créer une ville » ni « Inaugurer une usine »), un clic sans glisser sur une
@@ -977,12 +1005,26 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   joueurs n'ont pas encore de nom propre.
   **Provisoire, à valider** : une proposition par paire à la fois, les bots ne
   répondent pas, durée de vie des propositions à fixer (02-Engine §7, point 33).
-- **Panneau latéral** : population, fermiers, pêcheurs, inactifs, nourriture,
-  villes, cultivé / max, pêché / max du joueur (le curseur de la part de
-  fermiers est dans le détail Nourriture de la barre d'informations) ; tableau de tous les
-  joueurs (couleur, population, villes) ; case survolée (coordonnées, terrain et
-  altitude, fertilité, fer, propriétaire, ville) ; bloc
-  développement (durées mesurées, pause, quitter).
+- **Panneau de debug** (`#panel`, auteur, 4 novembre 2026) : caché au départ ; le bouton
+  « Panneau de debug », dernier élément de la barre de boutons (en bas à droite), l'ouvre ou le ferme
+  (`aria-pressed`). Fermé, sa colonne a une largeur nulle et la carte prend la place. Contenu : population,
+  fermiers, pêcheurs, inactifs, blessés, nourriture, villes, cultivé / max, pêché / max du joueur ; bloc
+  développement (durées mesurées, pause, quitter). La liste des joueurs est dans l'onglet Diplomatie.
+- **Case survolée** (`#hover-box`, dans `#stage`, auteur, 4 novembre 2026) : petit encadré
+  en bas à droite de la vue de la carte, à gauche du panneau de production quand il est
+  ouvert (`right: calc(12px + var(--prod-offset))`), `pointer-events: none`. Coordonnées,
+  terrain et altitude, fertilité, fer, aluminium, propriétaire, ville, écrits par
+  `showHover` (`main.ts`) ; affiché seulement quand la souris est sur une case.
+- **Onglet Diplomatie** (`diplomacytab.ts`, sixième section de la barre d'informations, juste à droite de
+  Forces) : bouton « Diplomatie » sans chiffre ni mini-barre ; détail : tableau des joueurs (couleur, nom,
+  population, villes), le joueur local en gras. Les lignes sont construites une fois par partie et
+  `DiplomacyTab.update` (appelé par `onTick`, détail ouvert ou non) n'écrit que les textes. Un clic sur la ligne
+  d'un autre joueur ouvre le menu de diplomatie de ce joueur à côté de la souris (`Diplomacy.openFor`, comme un
+  clic sur son territoire ; rien pour un spectateur, ni sur sa propre ligne). Le survol d'une ligne hachure en
+  blanc le territoire terrestre du joueur sur la carte (`MapView.highlightPlayer`, même motif que la ville
+  survolée du panneau de production) ; le masque est refait quand des cases changent (`upload`, `uploadAll`) ;
+  la mise en évidence est retirée quand la souris quitte la ligne ou que le détail se replie
+  (`Section.collapsed`).
 - Tout le texte est en français.
 
 La section maritime de la barre (00-Game §1) n'existe pas. La diplomatie se limite au

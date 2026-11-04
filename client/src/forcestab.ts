@@ -132,7 +132,11 @@ export class ForcesTab implements DndHost {
     return this.byId.get(id);
   }
 
+  /** Vrai pendant un glisser commencé dans l'onglet : la barre d'informations ne le replie pas encore. */
+  isDragging = false;
+
   dragging(on: boolean): void {
+    this.isDragging = on;
     this.content.classList.toggle("dragging", on);
     this.frontWindow.externalDrag(on);
   }

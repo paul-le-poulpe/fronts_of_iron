@@ -1,6 +1,7 @@
-// Barre d'informations en haut de l'écran (00-Game §11) : quatre sections, un clic
-// déplie le détail sous la barre, un second clic le replie, un seul détail ouvert
-// à la fois. La page n'applique aucune règle : elle affiche des nombres du moteur
+// Barre d'informations en haut de l'écran (00-Game §11) : six sections. Le survol d'un
+// bouton déplie son détail sous la barre ; la souris sortie du bouton et du détail le
+// replie (après `CLOSE_DELAY_MS`, le temps de passer de l'un à l'autre). Un seul détail
+// ouvert à la fois ; chaque ouverture appelle `onOpen`. La page n'applique aucune règle : elle affiche des nombres du moteur
 // (HumanDetail, PlayerStats) et en tire quelques rapports (parts, écarts).
 //
 // Chaque bouton porte, sous ses chiffres, la barre la plus pertinente de son détail
@@ -12,17 +13,18 @@
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
 //
-// La cinquième section est l'onglet des forces (05-Fronts §11.2, `forcestab.ts`), juste à droite d'Armement ; la barre
-// ne fait que poser son détail.
+// La cinquième section est l'onglet des forces (05-Fronts §11.2, `forcestab.ts`), juste à droite d'Armement ; la
+// sixième, l'onglet Diplomatie (`diplomacytab.ts`), juste à droite de Forces. La barre ne fait que poser leur détail.
 //
 // Le dernier élément de la barre, contre le bord droit, est le bouton « Carte » : il
-// ouvre un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
+// ouvre, au survol comme les sections, un menu de cases à cocher (vues de la carte). Le menu est un enfant de la
 // racine, comme les détails (la barre a `overflow` et le couperait). Les cases ne
 // changent rien ici : elles appellent le rappel `onMapOption`.
 //
 // Chaque nombre a une infobulle (`title`) qui nomme ses valeurs dans l'ordre où
 // elles sont écrites, avec les mêmes séparateurs : « Stock / cible · par minute ».
 
+import { type DiplomacyTab } from "./diplomacytab.ts";
 import { type ForcesTab } from "./forcestab.ts";
 import { attachGoodTip } from "./goodtips.ts";
 import { productIcon } from "./icons.ts";
@@ -116,8 +118,6 @@ function track(kind: "flow" | "stock"): Track {
   return { root, fill, gap, mark, hatch, deployed };
 }
 
-/** Une ligne : étiquette, barre, texte de valeurs. */
-function row(label: HTMLElement | string, bar: HTMLElement, value: HTMLElement, className = ""): HTMLElement {
 /**
  * Graduations d'une barre d'armement : un trait par division de référence (`per` exemplaires), de gauche à droite sur
  * toute l'échelle. Quand deux traits seraient à moins de 8 px, un trait vaut 2, 5, 10, 20, 50, 100… divisions. Un trait
@@ -143,6 +143,8 @@ function graduations(grad: HTMLElement, width: number, scale: number, per: numbe
   return step;
 }
 
+/** Une ligne : étiquette, barre, texte de valeurs. */
+function row(label: HTMLElement | string, bar: HTMLElement, value: HTMLElement, className = ""): HTMLElement {
   const r = el("div", `ib-row ${className}`.trim());
   const l = el("span", "ib-label");
   if (typeof label === "string") l.textContent = label;
@@ -221,9 +223,19 @@ interface Section {
   readonly head: (d: HumanDetail, s: PlayerStats) => void;
   /** Contenu du détail : mis à jour seulement s'il est ouvert. */
   readonly body: (d: HumanDetail, s: PlayerStats) => void;
+  /** Appelé quand le détail se replie. */
+  readonly collapsed?: () => void;
+  /** Vrai pendant un geste commencé dans le détail (glisser, curseur) : la sortie de la souris ne le replie pas encore. */
+  readonly busy?: () => boolean;
 }
 
+/** Délai entre la sortie de la souris (bouton et détail) et le repli du détail, en ms. */
+const CLOSE_DELAY_MS = 200;
+
 export class InfoBar {
+  /** Appelé à chaque ouverture d'un détail (main.ts : désarme « Créer une ville »). */
+  onOpen: (() => void) | null = null;
+  private closeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly root: HTMLElement;
   private readonly catalog: FactoryCatalog;
   private readonly bar: HTMLElement;
@@ -235,6 +247,8 @@ export class InfoBar {
   private readonly onFarmShare: (percent: number) => void;
   private readonly onForcedMobilization: (enabled: boolean) => void;
   private readonly forcesTab: ForcesTab;
+  /** Position de l'onglet des forces dans `sections`. */
+  private readonly forcesIndex: number;
   /** Vrai pendant que le joueur tient le curseur de la part de fermiers : les tours n'y touchent pas. */
   private farmSliderActive = false;
   /** Jusqu'à cette heure, la case « mobilisation forcée » n'est pas réécrite par les tours (l'ordre n'est pas encore appliqué). */
@@ -244,7 +258,7 @@ export class InfoBar {
    * `onMapOption` est appelé à chaque case du menu « Carte » cochée ou décochée ;
    * `onFarmShare`, au relâchement du curseur de la part de fermiers ;
    * `onForcedMobilization`, au changement de l'interrupteur de l'onglet Population ;
-   * `forces`, l'onglet des forces (cinquième section).
+   * `forces`, l'onglet des forces (cinquième section) ; `diplomacy`, l'onglet Diplomatie (sixième section).
    */
   constructor(
     root: HTMLElement,
@@ -253,6 +267,7 @@ export class InfoBar {
     onFarmShare: (percent: number) => void,
     onForcedMobilization: (enabled: boolean) => void,
     forces: ForcesTab,
+    diplomacy: DiplomacyTab,
   ) {
     this.root = root;
     this.catalog = catalog;
@@ -260,11 +275,19 @@ export class InfoBar {
     this.onForcedMobilization = onForcedMobilization;
     this.forcesTab = forces;
     this.bar = el("div", "ib-bar");
-    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.forcesSection(forces)];
+    this.sections = [this.population(), this.food(), this.flows(catalog), this.stocks(catalog), this.forcesSection(forces), this.diplomacySection(diplomacy)];
+    this.forcesIndex = 4;
     root.replaceChildren(this.bar);
     this.sections.forEach((s, i) => {
       s.pane.hidden = true;
-      s.button.addEventListener("click", () => this.toggle(i));
+      // Le survol ouvre ; le clic aussi (clavier). Sortir du bouton et du détail replie.
+      s.button.addEventListener("pointerenter", () => {
+        this.cancelClose();
+        this.show(i);
+      });
+      s.button.addEventListener("click", () => this.show(i));
+      for (const e of [s.button, s.pane]) e.addEventListener("pointerleave", () => this.scheduleClose());
+      s.pane.addEventListener("pointerenter", () => this.cancelClose());
       this.bar.append(s.button);
       root.append(s.pane);
     });
@@ -288,7 +311,14 @@ export class InfoBar {
       label.append(box, document.createTextNode(` ${o.label}`));
       this.mapMenu.append(label);
     }
-    this.mapButton.addEventListener("click", () => (this.mapMenu.hidden ? this.openMenu() : this.closeMenu()));
+    // Comme les sections : le survol (ou le clic) ouvre, sortir du bouton et du menu ferme.
+    this.mapButton.addEventListener("pointerenter", () => {
+      this.cancelClose();
+      this.openMenu();
+    });
+    this.mapButton.addEventListener("click", () => this.openMenu());
+    for (const e of [this.mapButton, this.mapMenu]) e.addEventListener("pointerleave", () => this.scheduleClose());
+    this.mapMenu.addEventListener("pointerenter", () => this.cancelClose());
     this.bar.append(this.mapButton);
     root.append(this.mapMenu);
   }
@@ -304,10 +334,13 @@ export class InfoBar {
     return target instanceof Node && (this.mapButton.contains(target) || this.mapMenu.contains(target));
   }
 
+  /** Ouvre le menu « Carte » (sans effet s'il est ouvert) et appelle `onOpen`. */
   private openMenu(): void {
+    if (!this.mapMenu.hidden) return;
     this.collapse();
     this.mapMenu.hidden = false;
     this.mapButton.setAttribute("aria-expanded", "true");
+    this.onOpen?.();
   }
 
   /** Replie le détail ouvert et ferme le menu « Carte ». */
@@ -318,13 +351,18 @@ export class InfoBar {
 
   /** Ouvre le détail de l'onglet des forces (bouton « ← Retour » de la fenêtre d'un front). */
   openForces(): void {
-    const index = this.sections.length - 1;
-    if (this.open !== index) this.toggle(index);
+    this.show(this.forcesIndex);
+  }
+
+  /** Ouvre le détail Population ou Ressources (flux) : clic sur une ligne de l'en-tête du panneau de production. */
+  openTab(tab: "population" | "resources"): void {
+    this.closeMenu();
+    this.show(tab === "population" ? 0 : 2);
   }
 
   /** Replie le détail ouvert, s'il y en a un. */
   private collapse(): void {
-    this.forcesTab.collapsed();
+    for (const s of this.sections) s.collapsed?.();
     this.open = -1;
     this.sections.forEach((s) => {
       s.pane.hidden = true;
@@ -343,23 +381,44 @@ export class InfoBar {
     }
   }
 
-  private toggle(index: number): void {
+  /** Ouvre le détail `index` (sans effet s'il est déjà ouvert) et appelle `onOpen`. */
+  private show(index: number): void {
+    if (this.open === index) return;
     this.closeMenu();
-    const previous = this.open;
     this.collapse();
-    if (index === previous) return;
     this.open = index;
     const section = this.sections[index]!;
     section.pane.hidden = false;
     section.button.setAttribute("aria-expanded", "true");
     this.place();
     if (this.last) this.sections[this.open]!.body(this.last.detail, this.last.stats);
+    this.onOpen?.();
+  }
+
+  private cancelClose(): void {
+    clearTimeout(this.closeTimer);
+    this.closeTimer = undefined;
+  }
+
+  /**
+   * Replie le détail ouvert, ou ferme le menu « Carte », après `CLOSE_DELAY_MS`, sauf si la souris revient ; pendant
+   * un geste (`busy`), attend sa fin.
+   */
+  private scheduleClose(): void {
+    this.cancelClose();
+    this.closeTimer = setTimeout(() => {
+      this.closeTimer = undefined;
+      this.closeMenu();
+      if (this.open < 0) return;
+      if (this.sections[this.open]!.busy?.() === true) this.scheduleClose();
+      else this.collapse();
+    }, CLOSE_DELAY_MS);
   }
 
   /**
    * Aligne le détail ouvert sur le bord gauche de sa section, sans le laisser sortir de la carte : sa butée à droite
-   * est le bord gauche du panneau latéral et, s'il est ouvert, du panneau de production. À rappeler quand le
-   * panneau de production s'ouvre ou se ferme.
+   * est le bord gauche du panneau de debug et du panneau de production, quand ils sont ouverts. À rappeler quand l'un
+   * ou l'autre s'ouvre ou se ferme.
    */
   place(): void {
     if (this.open < 0) return;
@@ -621,6 +680,7 @@ export class InfoBar {
     return {
       button,
       pane,
+      busy: () => this.farmSliderActive,
       head: (_d, s) => {
         total.textContent = num(s.food);
         setSigned(surplus, surplusOf(s));
@@ -805,6 +865,7 @@ export class InfoBar {
     const hatched = legendItem("hatch", "hachuré : au-delà du stock cible, ");
     hatched.append(decay);
     legend.append(legendItem("front", "sur les fronts"), legendItem("stock", "stock"), legendItem("target", "stock cible"), hatched);
+    legend.append(el("span", "ib-legend-item", "un trait : l'équipement d'une division (trait épais : toutes les 5)"));
     const pane = this.pane("stock", el("h3", undefined, "Armement (stock)"), ...rows.map((x) => x.r), empty, legend);
     /**
      * De gauche à droite : jaune foncé (fronts), bleu (en stock), hachures rouges (au-dessus du stock cible).
@@ -816,6 +877,7 @@ export class InfoBar {
       span(t.fill, pct(onFronts, scale), pct(onFronts + stock, scale));
       span(t.hatch, pct(target, scale), 100);
       t.mark.style.left = `${pct(target, scale)}%`;
+      return scale;
     };
 
     return {
@@ -833,7 +895,6 @@ export class InfoBar {
         stockSpans(miniStock, stock, target, onFronts);
       },
       body: (d, s) => {
-    legend.append(el("span", "ib-legend-item", "un trait : l'équipement d'une division (trait épais : toutes les 5)"));
         let shown = 0;
         for (const x of rows) {
           const stock = d.reserve[x.index] ?? 0;
@@ -865,7 +926,6 @@ export class InfoBar {
           x.secondWord.className = enough ? "stk" : "req";
           x.perMinute.textContent = `${num(this.production(d, x.id, catalog))}/min`;
           x.value.title = `Stock ${num(stock)} / cible ${num(target)} · requis par les divisions ${num(full)}`;
-      return scale;
         }
         empty.hidden = shown > 0;
         decay.textContent = `${num(this.info.armamentDecayPercent)} % de l'excès disparaît par tour`;
@@ -888,6 +948,24 @@ export class InfoBar {
         count.textContent = num(tab.divisionCount);
       },
       body: (d, s) => tab.body(d, s),
+      collapsed: () => tab.collapsed(),
+      busy: () => tab.isDragging,
+    };
+  }
+
+  // ---- 6. Diplomatie ----
+
+  private diplomacySection(tab: DiplomacyTab): Section {
+    const button = this.button("diplomacy", [el("span", "ib-name", "Diplomatie")]);
+    button.title = "Joueurs de la partie";
+    const pane = this.pane("diplomacy", tab.content);
+    return {
+      button,
+      pane,
+      // Les lignes sont mises à jour à chaque tour par main.ts (elles lisent tous les joueurs, pas seulement le joueur local).
+      head: () => {},
+      body: () => {},
+      collapsed: () => tab.collapsed(),
     };
   }
 

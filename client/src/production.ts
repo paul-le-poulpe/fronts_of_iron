@@ -13,7 +13,7 @@
 import { attachGoodTip } from "./goodtips.ts";
 import { onPress } from "./burst.ts";
 import { icon32Path, productIcon } from "./icons.ts";
-import { dominantGood, factoryName, productName, productSymbol, unitName } from "./names.ts";
+import { factoryName, productName, productSymbol, unitName } from "./names.ts";
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
 
@@ -40,6 +40,16 @@ const miscIcon = (file: string, alt: string): HTMLImageElement => icon(`miscella
 const ironIcon = (): HTMLImageElement => icon("goods/goods-iron-ingot.png", "Fer");
 const workerIcon = (): HTMLImageElement => icon("population/pop-worker.png", "Ouvriers");
 
+/** Onglet de la barre d'informations qu'ouvre une ligne de l'en-tête. */
+export type SummaryTab = "population" | "resources";
+
+/** Une ligne de l'en-tête : icône, « … suffisant(s) » en vert, ou « … insuffisant(s) » et le malus en gras rouge. */
+interface SummaryLine {
+  readonly root: HTMLButtonElement;
+  readonly text: HTMLElement;
+  readonly malus: HTMLElement;
+}
+
 export class ProductionPanel {
   private readonly root: HTMLElement;
   private readonly send: (order: HumanOrder) => void;
@@ -47,6 +57,8 @@ export class ProductionPanel {
   private readonly highlight: (city: number) => void;
   private readonly catalog: FactoryCatalog;
   private readonly summary: HTMLElement;
+  private readonly workersLine: SummaryLine;
+  private readonly ironLine: SummaryLine;
   private readonly cities: HTMLElement;
   private readonly reserves: HTMLElement;
   private key = "";
@@ -57,6 +69,7 @@ export class ProductionPanel {
 
   constructor(root: HTMLElement, catalog: FactoryCatalog, send: (order: HumanOrder) => void,
     highlight: (city: number) => void,
+    openTab: (tab: SummaryTab) => void,
   ) {
     this.root = root;
     this.catalog = catalog;
@@ -64,9 +77,40 @@ export class ProductionPanel {
     this.highlight = highlight;
     root.innerHTML = "";
     this.summary = el("div", "prod-summary");
+    this.workersLine = this.summaryLine(workerIcon(), () => openTab("population"));
+    this.ironLine = this.summaryLine(ironIcon(), () => openTab("resources"));
+    this.summary.append(this.workersLine.root, this.ironLine.root);
     this.cities = el("div", "prod-cities");
     this.reserves = el("div", "prod-reserves");
     root.append(this.summary, this.cities, this.reserves);
+  }
+
+  private summaryLine(sym: HTMLImageElement, open: () => void): SummaryLine {
+    const root = el("button", "prod-status") as HTMLButtonElement;
+    root.type = "button";
+    const text = el("span");
+    const malus = el("b", "neg");
+    root.append(sym, text, malus);
+    root.addEventListener("click", open);
+    return { root, text, malus };
+  }
+
+  /**
+   * Écrit une ligne de l'en-tête. Le malus est celui de la catégorie la plus touchée (biens, ou armement, servi après) :
+   * 100 % moins sa productivité pour cette ressource.
+   */
+  private writeSummary(line: SummaryLine, labels: readonly [string, string], goodsRatio: number, armRatio: number, tab: string): void {
+    const scale = this.catalog.ratioScale;
+    const malus = (ratio: number): number => Math.round(((scale - ratio) * 100) / scale);
+    const worst = Math.max(malus(goodsRatio), malus(armRatio));
+    const enough = worst <= 0;
+    line.text.textContent = enough ? labels[0] : labels[1];
+    line.text.className = enough ? "pos" : "";
+    line.malus.textContent = enough ? "" : `−${num(worst)} % de production`;
+    line.root.title =
+      `Malus de production : biens ${num(Math.max(0, malus(goodsRatio)))} %, armement ${num(Math.max(0, malus(armRatio)))} %.
+` +
+      `Cliquez pour ouvrir l'onglet ${tab}.`;
   }
 
   /** À appeler à chaque tour (même panneau fermé : le coût est négligeable). */
@@ -127,14 +171,9 @@ export class ProductionPanel {
     section.addEventListener("pointerleave", () => this.highlight(0));
     const head = el("header", "fhead");
     const grip = this.grip({ kind: "city", city: f.city }, section);
+    // En-tête : la poignée et le nom du type d'usine, sans la ville ni le niveau (les lignes portent déjà l'icône du bien).
     const title = el("strong");
-    title.textContent = `Ville n° ${f.city}`;
-    const meta = el("span", "muted");
-    meta.textContent = `${factoryName(f.type)} · niveau ${f.level}`;
-    // Le bien qui a le plus de lignes construites représente l'usine (actives ou non).
-    const dominant = dominantGood(this.tree(f.type), f.groups);
-    const mark = productIcon(dominant, 32);
-    if (!attachGoodTip(mark, dominant)) mark.title = productName(dominant);
+    title.textContent = factoryName(f.type);
     // Croix en haut à droite de la section : envoie `delete_factory` (l'usine et toutes ses lignes).
     const remove = el("button", "fdelete") as HTMLButtonElement;
     remove.type = "button";
@@ -145,7 +184,7 @@ export class ProductionPanel {
       this.holdUntil = 0;
       this.send({ type: "delete_factory", city: f.city });
     });
-    head.append(grip, title, mark, meta);
+    head.append(grip, title);
     section.append(head, remove);
 
     // Une ligne par bien de l'arbre (00-Game §8.1) : d'abord les biens en production,
@@ -185,12 +224,20 @@ export class ProductionPanel {
     return section;
   }
 
-  /** Bouton + : envoie `create_line` (une ligne de plus de ce bien dans cette usine). */
-  private plus(city: number, good: string, title: string): HTMLElement {
+  /**
+   * Bouton + : envoie `create_line` (une ligne de plus de ce bien dans cette usine). `blocked` : le bouton n'envoie
+   * rien, et un appui ajoute ce texte en rouge à l'aide sous la souris (burst.ts).
+   */
+  private plus(city: number, good: string, title: string, blocked?: string): HTMLElement {
     const b = el("button", "plus") as HTMLButtonElement;
     b.type = "button";
     b.append(miscIcon("misc-plus-lighter.png", title));
     b.title = `${title} : ${productName(good)}`;
+    if (blocked !== undefined) {
+      b.classList.add("blocked");
+      b.setAttribute("aria-disabled", "true");
+      b.dataset["burstBlocked"] = blocked;
+    }
     onPress(b, (n) => {
       this.holdUntil = 0;
       for (let i = 0; i < n; i++) this.send({ type: "create_line", city, good });
@@ -277,8 +324,13 @@ export class ProductionPanel {
     ironNum.dataset["costIron"] = `${f.city}:${g.good}`;
     const outNum = el("span");
     outNum.dataset["costOut"] = `${f.city}:${g.good}`;
-    cost.append(ironNum, ironIcon(), "→", outNum, sym);
-    row.append(grip, cost, wrap, count, this.plus(f.city, g.good, "Ajouter une ligne"), filled);
+    // Unité de la production, juste après son nombre : par minute pour l'armement, par tour pour les biens.
+    const unit = el("span", "muted");
+    unit.textContent = this.catalog.armamentIds.includes(g.good) ? "/mn" : "/tour";
+    cost.append(ironNum, ironIcon(), "→", outNum, unit, sym);
+    // Pas de ligne de plus tant que des lignes existantes sont inactives (réglage sous le nombre de lignes).
+    const plus = this.plus(f.city, g.good, "Ajouter une ligne", g.active < g.lines ? "Ligne inactive. Impossible d'agrandir." : undefined);
+    row.append(grip, cost, wrap, count, plus, filled);
     // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
     if (!this.catalog.armamentIds.includes(g.good)) {
       const growth = el("div", "growth");
@@ -371,12 +423,8 @@ export class ProductionPanel {
   // ---- nombres mis à jour à chaque tour ----
 
   private refreshNumbers(d: HumanDetail, s: PlayerStats): void {
-    let active = 0;
-    let running = 0;
     for (const f of d.factories) {
       for (const g of f.groups) {
-        active += g.active;
-        running += g.running;
         // Seulement les lignes qui tournent ce tour : fer obtenu et production totale
         // (× productivité) sur la première ligne, ouvriers obtenus sur la seconde.
         // Le fer est toujours en gras, en rouge quand le fer manque (ratio de la catégorie du groupe < 100 %) ;
@@ -467,13 +515,8 @@ export class ProductionPanel {
         if (text) text.textContent = `${num(p)} / ${num(this.catalog.unlockTurns)}`;
       });
     }
-    const lines = [
-      `Lignes qui tournent : ${num(running)} sur ${num(active)} actives · ouvriers d'usine : ${num(s.factoryWorkers)}`,
-      `Fer : capacité ${num(d.ironCapacity)} · extrait ${num(s.ironExtracted)} · cases exploitées ${num(s.minedTiles)} · mineurs ${num(s.miners)}`,
-      "Biens produits au dernier tour (machines du tour suivant) : " +
-        this.catalog.goodIds.map((id, i) => `${productName(id)} ${num(d.goods[i]!)}`).join(" · "),
-    ];
-    this.summary.replaceChildren(...lines.map((t) => Object.assign(el("div"), { textContent: t })));
+    this.writeSummary(this.workersLine, ["Ouvriers suffisants", "Ouvriers insuffisants"], s.goodsWorkerRatio, s.armWorkerRatio, "Population");
+    this.writeSummary(this.ironLine, ["Fer suffisant", "Fer insuffisant"], s.goodsIronRatio, s.armIronRatio, "Ressources (flux)");
 
     const reserveLines = this.catalog.armamentIds
       .map((id, i) => ({ id, i }))
