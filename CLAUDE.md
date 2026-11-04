@@ -36,7 +36,12 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   divisions, placement, renfort, attaques, combat, avancée, prise de ville,
   encerclement, interface, et notes d'implémentation. Historique des
   discussions (ne fait pas foi) : `05-Fronts-History.md`, qui garde aussi la
-  version 0.1 (tag `v0.1`).
+  version 0.1 (tag `v0.1`) ;
+- `Docs/Design/06-Combat-Simplifie.md` — combat instantané et son replay
+  (attaque sur tout le front, deux combats de la percée, renforts), usines
+  d'unités et centres de recrutement (pas encore implémentés) ; fait foi et
+  remplace les parties de `05-Fronts.md` et `00-Game.md` qu'il liste en tête.
+  La version d'avant (combat continu, production par lignes) est au tag `v0.2`.
 
 ---
 

@@ -14,7 +14,7 @@ plus foi là où elles le contredisent :
 
 Décisions de l'auteur du 4 novembre 2026. Ce que l'auteur n'a pas tranché est
 marqué « *provisoire* » et listé au §5. Version stable d'avant : tag git
-`avant-combat-simplifie`.
+`v0.2` (même commit que `avant-combat-simplifie`).
 
 But : le combat continu fait des dégâts sans qu'on en voie l'effet, et les
 quantités d'équipement produites sont abstraites. Deux leviers : un combat est
