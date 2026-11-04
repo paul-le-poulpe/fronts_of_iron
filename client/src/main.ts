@@ -13,7 +13,7 @@ import { type EndedMessage, type FrontView, type FromWorker, type HumanOrder, ty
 import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
 import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
-import { CombatIcons, CombatReplay } from "./combatreplay.ts";
+import { CombatIcons, CombatReplay, onCombatViewed, resetViewed } from "./combatreplay.ts";
 import { clearNotifications, installNotifications, notify, updateNotifications } from "./notifications.ts";
 import { ForcesTab } from "./forcestab.ts";
 import { FrontWindow } from "./frontwindow.ts";
@@ -267,10 +267,18 @@ function onInit(s: Session, init: InitMessage): void {
   s.combatIcons = new CombatIcons(
     $("stage"),
     { cityTile: (id) => mirror.cities[id - 1]?.tile, tileToCss: (x, y) => s.view?.tileToCss(x, y) ?? null, width: mirror.width },
+    init.military,
+    localPlayer,
     (c) => s.replay?.open(c),
   );
   s.view.onDrawn = () => s.combatIcons?.place();
   s.frontPanel.onReplay = (c) => s.replay?.open(c);
+  // Un combat visionné, depuis la carte ou depuis la fenêtre d'un front, quitte la carte et n'est plus en évidence dans l'historique.
+  resetViewed();
+  onCombatViewed((id) => {
+    s.combatIcons?.remove(id);
+    s.frontPanel?.redrawHistory();
+  });
   s.forces = new ForcesTab(init.military, init.catalog, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
   s.infobar = new InfoBar(
     $("infobar"),
@@ -304,10 +312,9 @@ function onTick(s: Session, msg: TickMessage): void {
   if (msg.fronts !== null) view.frontsChanged();
   s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
   if (msg.combats !== null) {
-    s.combatIcons?.setCombats(msg.combats, msg.tick);
+    s.combatIcons?.setCombats(msg.combats);
     s.frontPanel?.setCombats(msg.combats);
   }
-  s.combatIcons?.expire(msg.tick);
   s.forces?.setData(mirror.fronts, mirror.divisions);
   if (msg.failedBreakthroughs > 0) toast("Percée arrêtée : plus aucune division à engager dans la force qui perce.", 6000);
   for (const c of msg.captured) {

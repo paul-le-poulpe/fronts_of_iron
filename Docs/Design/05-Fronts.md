@@ -687,12 +687,13 @@ avancée      = arrondi(déséquilibre × v)     en millièmes de route
   rapport à partir duquel il avance à vitesse maximale ; entre les deux, la
   vitesse croît en ligne droite.
 - `v` : vitesse maximale, **progressive** (décision de l'auteur, 1er novembre
-  2026) : de `FRONTS.footSpeedPermille` = **10** (1 % de la route par round,
-  aucune division motorisée) à `FRONTS.motorizedSpeedPermille` = **20**
-  (toutes motorisées), au prorata de la largeur engagée des divisions
-  motorisées, toutes niches :
+  2026) : de `FRONTS.footSpeedPermille` = **3** (0,3 % de la route par round,
+  aucune division motorisée) à `FRONTS.motorizedSpeedPermille` = **10**
+  (toutes motorisées ; valeurs de l'auteur du 5 novembre 2026, avant : 10 et
+  20), au prorata de la largeur engagée des divisions motorisées, toutes
+  niches :
   `v = foot + floor((motorisée − foot) × M / T)`, `M` = largeur engagée des
-  divisions motorisées, `T` = largeur engagée de toutes (50 % motorisé : 15).
+  divisions motorisées, `T` = largeur engagée de toutes (50 % motorisé : 6).
   Les deux vitesses servent aussi au saut d'une percée (§7.2), qui est tout
   ou rien.
 - En entiers (largeurs comptées en millièmes de liaison) : `x = a − A × d`,
@@ -1451,8 +1452,8 @@ la ligne survolée (*provisoire*) :
 | `encirclementLossPercent` | 50 | pertes d'encerclement |
 | `advanceThresholdA` | 2 | rapport d'infanterie sous lequel l'assaut n'avance pas |
 | `advanceThresholdB` | 10 | rapport d'infanterie à partir duquel l'assaut avance à vitesse maximale |
-| `footSpeedPermille` | 10 | vitesse maximale à pied, en millièmes de route par round (aussi pour le saut d'une percée) |
-| `motorizedSpeedPermille` | 20 | vitesse maximale entièrement motorisée (aussi pour le saut d'une percée) ; une armée mixte est entre les deux (§7.1) |
+| `footSpeedPermille` | 3 | vitesse maximale à pied, en millièmes de route par round (aussi pour le saut d'une percée) |
+| `motorizedSpeedPermille` | 10 | vitesse maximale entièrement motorisée (aussi pour le saut d'une percée) ; une armée mixte est entre les deux (§7.1) |
 
 | `breakthroughDelayTurns` | 50 | durée de **tous** les délais d'une percée (5 s) : avant le combat 1, avant le combat 2, avant la chute de la ville, et les deux délais d'échec |
 | `breakthroughJumpRounds` | 10 | `N` : le saut d'une première ligne percée vaut `N × vitesse × facteur de réaction` |

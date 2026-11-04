@@ -56,10 +56,10 @@ export const FRONTS = {
   advanceThresholdA: 2,
   /** `B` : rapport d'infanterie à partir duquel l'assaut avance à vitesse maximale (10 contre 1 ; décision de l'auteur, 1er novembre 2026). */
   advanceThresholdB: 10,
-  /** Vitesse maximale d'une armée à pied, en millièmes de route par round (10 = 1 % de la route). Sert aussi au saut d'une percée. */
-  footSpeedPermille: 10,
-  /** Vitesse maximale d'une armée entièrement motorisée, en millièmes de route par round (20 = 2 %) ; une armée mixte est entre les deux (`frontSpeed`). Sert aussi au saut d'une percée. */
-  motorizedSpeedPermille: 20,
+  /** Vitesse maximale d'une armée à pied, en millièmes de route par round (3 = 0,3 % de la route ; auteur, 5 novembre 2026). Sert aussi au saut d'une percée. */
+  footSpeedPermille: 3,
+  /** Vitesse maximale d'une armée entièrement motorisée, en millièmes de route par round (10 = 1 % ; auteur, 5 novembre 2026) ; une armée mixte est entre les deux (`frontSpeed`). Sert aussi au saut d'une percée. */
+  motorizedSpeedPermille: 10,
   /**
    * Durée de tous les délais d'une percée (50 = 5 s) : avant le combat 1, avant le combat 2, avant la chute de la ville,
    * et les deux délais d'échec (05-Fronts §7.2). Valeur de la version 0.1, confirmée par l'auteur ; la même partout.

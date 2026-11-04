@@ -1,6 +1,7 @@
 // Combats résolus en un tour par le moteur (Docs/Design/06-Combat-Simplifie.md §2) :
-// - `CombatIcons` : une icône par combat récent du joueur local, posée sur la carte au
-//   milieu de la connexion du combat, retirée après `ICON_TURNS` tours ou au clic ;
+// - `CombatIcons` : une icône par combat du joueur local pas encore visionné, posée sur la
+//   carte au milieu de la connexion du combat, bleue si le joueur local a gagné, rouge
+//   sinon (`localWon`), qui clignote ; retirée dès que le replay est ouvert (`onCombatViewed`) ;
 // - `CombatReplay` : le panneau qui rejoue un rapport (`CombatView`) round par round.
 //   En haut, les totaux des deux camps, les mêmes que dans la fenêtre d'un front
 //   (`stattotals.ts`). Dessous, deux colonnes face à face : une carte par type de division
@@ -19,8 +20,6 @@ import { equipmentName, playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
-/** Durée de vie d'une icône de combat sur la carte, en tours (300 = 30 s ; provisoire, 06-Combat-Simplifie §2). */
-const ICON_TURNS = 300;
 /** Durée d'un round dans le replay, en ms (provisoire, 06-Combat-Simplifie §2) : 50 rounds en 22,5 s au plus. */
 const ROUND_MS = 450;
 /** Durée de l'approche des deux colonnes avant le premier round, en ms. */
@@ -43,6 +42,44 @@ export function combatSummary(c: CombatView, me: number): string {
   const advance = c.rounds.reduce((s, r) => s + r.advance, 0);
   const result = c.captured !== 0 ? `ville n° ${c.captured} prise` : advance > 0 ? `avancée ${Math.round(advance / 10)} %` : "pas d'avancée";
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} — ${who} — ${result}`;
+}
+
+/**
+ * Vainqueur d'un combat (06-Combat-Simplifie §2) : le camp qui a perdu le moins d'infanterie, en état de division
+ * (somme des pertes des divisions de la niche d'infanterie). Égalité : le défenseur (provisoire).
+ */
+export function localWon(c: CombatView, military: MilitaryCatalog, me: number): boolean {
+  const lost = new Map<number, number>();
+  for (const r of c.rounds) {
+    for (const [i, loss] of r.hits) {
+      const u = c.units[i]!;
+      if (military.divisions[u.type]?.niche !== "infantry") continue;
+      lost.set(u.owner, (lost.get(u.owner) ?? 0) + loss);
+    }
+  }
+  const other = me === c.attacker ? c.defender : c.attacker;
+  const mine = lost.get(me) ?? 0;
+  const theirs = lost.get(other) ?? 0;
+  return mine === theirs ? me === c.defender : mine < theirs;
+}
+
+/** Combats visionnés pendant cette partie (replay ouvert, depuis la carte ou la fenêtre d'un front). */
+const viewed = new Set<number>();
+const viewedListeners: ((id: number) => void)[] = [];
+export const isViewed = (id: number): boolean => viewed.has(id);
+/** `fn` est appelée à chaque combat visionné pour la première fois. */
+export function onCombatViewed(fn: (id: number) => void): void {
+  viewedListeners.push(fn);
+}
+/** Nouvelle partie : plus aucun combat visionné, plus aucun abonné. */
+export function resetViewed(): void {
+  viewed.clear();
+  viewedListeners.length = 0;
+}
+function markViewed(id: number): void {
+  if (viewed.has(id)) return;
+  viewed.add(id);
+  for (const fn of viewedListeners) fn(id);
 }
 
 const noStats = (): Stats => ({ soft: 0, hard: 0, hp: 0 });
@@ -89,6 +126,7 @@ export class CombatReplay {
 
   open(c: CombatView): void {
     this.close();
+    markViewed(c.id);
     const m = this.military;
     const me = this.me();
     const scale = m.stateScale;
@@ -329,51 +367,48 @@ export interface CombatIconHost {
 export class CombatIcons {
   private readonly layer: HTMLElement;
   private readonly host: CombatIconHost;
+  private readonly military: MilitaryCatalog;
+  private readonly me: () => number;
   private readonly onOpen: (c: CombatView) => void;
   private readonly icons = new Map<number, { readonly combat: CombatView; readonly el: HTMLElement }>();
-  /** Combats déjà vus : une icône retirée ne revient pas quand la liste est renvoyée. */
-  private readonly seen = new Set<number>();
 
-  constructor(root: HTMLElement, host: CombatIconHost, onOpen: (c: CombatView) => void) {
+  constructor(root: HTMLElement, host: CombatIconHost, military: MilitaryCatalog, me: () => number, onOpen: (c: CombatView) => void) {
     this.layer = el("div", "cr-icons");
     root.append(this.layer);
     this.host = host;
+    this.military = military;
+    this.me = me;
     this.onOpen = onOpen;
   }
 
   clear(): void {
     this.icons.clear();
-    this.seen.clear();
     this.layer.replaceChildren();
   }
 
-  /** Nouvelle liste des combats du joueur local : une icône pour chaque combat récent pas encore vu. */
-  setCombats(combats: readonly CombatView[], tick: number): void {
+  /**
+   * Nouvelle liste des combats du joueur local : une icône pour chaque combat pas encore visionné, bleue si le joueur
+   * local a gagné, rouge sinon (`localWon`) ; celles des combats sortis de la liste sont retirées.
+   */
+  setCombats(combats: readonly CombatView[]): void {
+    const ids = new Set(combats.map((c) => c.id));
+    for (const id of [...this.icons.keys()]) if (!ids.has(id)) this.remove(id);
     for (const c of combats) {
-      if (this.seen.has(c.id)) continue;
-      this.seen.add(c.id);
-      if (tick - c.tick > ICON_TURNS) continue;
-      const b = el("button", "cr-mapicon", "⚔");
+      if (this.icons.has(c.id) || isViewed(c.id)) continue;
+      const b = el("button", `cr-mapicon ${localWon(c, this.military, this.me()) ? "win" : "lose"}`, "⚔");
       b.type = "button";
       b.title = "Voir le combat";
-      b.addEventListener("click", () => {
-        this.remove(c.id);
-        this.onOpen(c);
-      });
+      b.addEventListener("click", () => this.onOpen(c));
       this.layer.append(b);
       this.icons.set(c.id, { combat: c, el: b });
     }
     this.place();
   }
 
-  private remove(id: number): void {
+  /** Retire l'icône d'un combat (visionné). */
+  remove(id: number): void {
     this.icons.get(id)?.el.remove();
     this.icons.delete(id);
-  }
-
-  /** Retire les icônes trop anciennes ; à appeler à chaque tour. */
-  expire(tick: number): void {
-    for (const [id, i] of [...this.icons]) if (tick - i.combat.tick > ICON_TURNS) this.remove(id);
   }
 
   /** Replace les icônes ; à appeler après chaque dessin de la carte (déplacement, zoom). */

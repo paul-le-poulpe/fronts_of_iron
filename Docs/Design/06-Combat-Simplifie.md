@@ -35,9 +35,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    (décisions de l'auteur, 5 novembre 2026). Quand c'est **le défenseur** qui
    n'a plus d'infanterie engagée (détruite ou en fuite), **l'attaquant avance
    pendant les rounds qui restent**, sans combat (*provisoire* : sans dégâts
-   de part et d'autre), à sa vitesse maximale (`05-Fronts.md` §7.1 : 1 % de la
-   route par round à pied, 2 % motorisé, entre les deux pour une armée mixte ;
-   50 rounds font donc 50 % à 100 % de la route). Un attaquant sans infanterie
+   de part et d'autre), à sa vitesse maximale (`05-Fronts.md` §7.1 : 0,3 % de
+   la route par round à pied, 1 % motorisé, entre les deux pour une armée
+   mixte ; 50 rounds font donc 15 % à 50 % de la route). Un attaquant sans infanterie
    engagée au lancement ne combat pas : le combat n'a aucun round et n'est pas
    enregistré. Les dégâts sont appliqués aux
    divisions dans ce tour. Pendant ces rounds, l'échange avec la seconde ligne
@@ -66,8 +66,14 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 - **Icône sur la carte** : à la fin d'un combat, une icône de combat apparaît
   au milieu de la connexion de l'axe (pour une attaque sur tout le front : de la
   première connexion du front, *provisoire*), chez les deux joueurs concernés.
-  *Provisoire* : elle reste 30 secondes ou jusqu'au clic ; symbole ⚔ en
-  attendant une icône de l'auteur.
+  Tant que le combat n'a pas été visionné, elle **clignote en bleu** si le
+  joueur local a gagné, **en rouge** sinon. **Vainqueur** : le camp qui a
+  perdu le moins d'infanterie (somme des pertes d'état des divisions de la
+  niche d'infanterie ; *provisoire* : à égalité, le défenseur). Un combat
+  **visionné** (replay ouvert, depuis la carte ou depuis la fenêtre d'un
+  front) **disparaît de la carte** ; sinon l'icône reste. *Provisoire* :
+  symbole ⚔ en attendant une icône de l'auteur ; « visionné » est retenu par la
+  page, pour la partie en cours (pas dans l'état du moteur).
 - **Replay** : un clic sur l'icône ouvre un panneau, au milieu de la carte. Le
   joueur local est à gauche, l'adversaire à droite (décisions de l'auteur,
   5 novembre 2026, sauf mention *provisoire*) :
@@ -97,6 +103,8 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   un bouton « Passer » va à la fin.
 - **Historique** : la fenêtre d'un front liste les derniers combats de ce
   front (tour, attaquant, résultat) ; un clic sur une ligne ouvre le replay.
+  Une ligne pas encore visionnée clignote, en bleu ou en rouge comme l'icône
+  de la carte ; visionnée, elle redevient ordinaire.
 
 ## 3. Usines d'unités
 
@@ -182,7 +190,8 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 1. Résolution : rounds du §6 de `05-Fronts.md` enchaînés (50 rounds au plus :
    décision de l'auteur).
 2. Avancée du §7.1 appliquée à chaque round du combat.
-3. 20 combats gardés par joueur ; icône 30 s ; replay 0,45 s par round ;
+3. 20 combats gardés par joueur ; à égalité de pertes d'infanterie, le
+   défenseur gagne ; replay 0,45 s par round ;
    8 icônes empilées au plus par carte ; statistiques
    des cartes estimées sur l'état.
 4. Placement d'une usine sur n'importe quelle case de la zone d'une ville.

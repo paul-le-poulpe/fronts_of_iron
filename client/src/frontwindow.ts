@@ -20,7 +20,7 @@ import { icon32Path } from "./icons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals, type Totals } from "./stattotals.ts";
-import { combatSummary } from "./combatreplay.ts";
+import { combatSummary, isViewed, localWon } from "./combatreplay.ts";
 import { type BreakthroughView, type CombatView, type DivisionView, type FrontView, type HumanOrder, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
 
@@ -356,20 +356,26 @@ export class FrontWindow implements DndHost {
     this.frontId = 0;
   }
 
-  /** À appeler à chaque tour. */
   /** Nouvelle liste des combats du joueur local. */
   setCombats(combats: readonly CombatView[]): void {
     this.combats = combats;
+    this.redrawHistory();
+  }
+
+  /** Redessine l'historique (un combat vient d'être visionné). */
+  redrawHistory(): void {
     if (this.isOpen) this.drawHistory();
   }
 
+  /** Historique du front : un combat pas encore visionné clignote, en bleu si le joueur local a gagné, en rouge sinon. */
   private drawHistory(): void {
     const mine = this.combats.filter((c) => c.front === this.frontId).slice(-5).reverse();
     this.history.hidden = mine.length === 0;
     this.history.replaceChildren(
       el("span", "fw-history-title", "Derniers combats :"),
       ...mine.map((c) => {
-        const b = el("button", "fw-history-row", combatSummary(c, localPlayer()));
+        const unseen = isViewed(c.id) ? "" : localWon(c, this.military, localPlayer()) ? " unseen win" : " unseen lose";
+        const b = el("button", `fw-history-row${unseen}`, combatSummary(c, localPlayer()));
         b.type = "button";
         b.title = "Revoir le combat";
         b.addEventListener("click", () => this.onReplay?.(c));
@@ -395,6 +401,7 @@ export class FrontWindow implements DndHost {
       : "Seulement sur un front actif.";
   }
 
+  /** À appeler à chaque tour. */
   refresh(fronts: readonly FrontView[], divisions: readonly DivisionView[], tick: number): void {
     const changed = fronts !== this.fronts || divisions !== this.divisions;
     const tickChanged = tick !== this.tick;

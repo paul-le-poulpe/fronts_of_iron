@@ -1124,7 +1124,7 @@ points 31 et 32 sont des choix de plus.
     (`shareEqually`) ; les dégâts des deux camps sont calculés sur les divisions du début du round puis appliqués ensemble ;
     une division à 0 % qui vient de subir des pertes est retirée avec ce qui lui reste (`removeDestroyed(state, hit)`) ; les prises d'un même round sont revérifiées
     une à une sur l'état d'alors. Aucune valeur de `config/fronts.ts` ni de `config/divisions.ts` n'est de moi (valeurs de
-    l'auteur, 05-Fronts §3.4 et §12) ; `advanceThresholdA` est repris de la version 0.1 (provisoire) ; `advanceThresholdB` (20), `footSpeedPermille` (10) et `motorizedSpeedPermille` (20) sont de l'auteur (31 octobre 2026).
+    l'auteur, 05-Fronts §3.4 et §12) ; `advanceThresholdA` est repris de la version 0.1 (provisoire) ; `advanceThresholdB` (20), `footSpeedPermille` (3) et `motorizedSpeedPermille` (10) sont de l'auteur (31 octobre, puis 5 novembre 2026).
 
 **Réglé le 24 octobre 2026.** La première version suspendait une ligne
 d'armement quand sa réserve atteignait son maximum ; sans armée, la ligne ne
