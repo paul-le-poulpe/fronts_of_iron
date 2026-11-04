@@ -46,7 +46,7 @@ export const GOODS_DECAY = {
  */
 export const GOODS = {
   tractor: {
-    productionPerLine: 10, workersPerLine: 200, ironPerLine: 100,
+    productionPerLine: 10, workersPerLine: 200, ironPerLine: 50,
     icon: "goods/goods-tractor-outline.png",
   },
   fishingBoat: {

@@ -13,6 +13,9 @@ import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { createRoadNetwork, type RoadNetwork } from "./roads.ts";
 
+/** Échelle des productivités (`Player.goodsLineRatio`…) : 100 % s'écrit 10 000. Aussi celle des restes de production. */
+export const RATIO_SCALE = 10_000;
+
 /** Les lignes d'un même bien dans une usine, réglées ensemble (00-Game §8.1). */
 export interface LineGroup {
   readonly good: ProductId;
@@ -20,8 +23,12 @@ export interface LineGroup {
   lines: number;
   /** Lignes activées par le joueur, 0 à `lines`. Les premières du groupe sont les actives. */
   active: number;
-  /** Lignes remplies au dernier tour (ouvriers et mineurs reçus), 0 à `active`. */
-  filled: number;
+  /**
+   * Lignes qui tournent au dernier tour, 0 à `active` : les actives, sauf les lignes de tracteurs, bateaux ou pompes en
+   * trop, dont la production à 100 % couvre déjà la demande (00-Game §8.2). Elles tournent toutes à la même
+   * productivité de sa catégorie (`Player.goodsLineRatio` ou `armLineRatio`).
+   */
+  running: number;
   /** Tours-lignes comptés vers la prochaine ligne automatique (00-Game §8.2, biens seulement), de 0 à `FACTORY.growthTurns` exclu. */
   growth: number;
 }
@@ -34,10 +41,12 @@ export interface Factory {
   readonly groups: LineGroup[];
   /**
    * Un compteur par nœud de l'arbre du type d'usine (même indice) : somme, sur les
-   * tours, du nombre de lignes de ce bien remplies dans cette usine, plafonnée à
+   * tours, du nombre de lignes de ce bien qui tournent dans cette usine, pondéré par la productivité, plafonnée à
    * `FACTORY.unlockTurns` (00-Game §8.2).
    */
   readonly progress: number[];
+  /** Fraction de progression de chaque nœud, sur l'échelle `RATIO_SCALE` (0 à `RATIO_SCALE` − 1). */
+  readonly progressRemainder: number[];
 }
 
 export interface Player {
@@ -104,17 +113,33 @@ export interface Player {
   readonly armamentReserve: number[];
   /** Reste de la baisse de l'excès de chaque réserve, sur l'échelle `CURVE_SCALE` (0 si pas d'excès). */
   readonly armamentRemainder: number[];
-  /** Reste de la production de chaque type d'armement, en soixantièmes d'exemplaire (0 à 59, 00-Game §8.3). */
+  /** Reste de la production de chaque type d'armement, en 3 600es d'exemplaire × `RATIO_SCALE` (00-Game §8.3). */
   readonly armamentProductionRemainder: number[];
-  /** Ouvriers des lignes remplies au dernier tour. */
+  /** Reste de la production de chaque bien, dans l'ordre des clés de `GOODS`, sur l'échelle `RATIO_SCALE` (00-Game §8). */
+  readonly goodsRemainder: number[];
+  /** Ouvriers employés par les lignes au dernier tour : demandés × productivité. */
   factoryWorkers: number;
+  /** Fer demandé par les lignes qui tournent au dernier tour. */
+  ironDemanded: number;
+  /** Fer consommé au dernier tour : demandé × productivité (≤ extrait). */
+  ironConsumed: number;
+  /** min(1, fer extrait / fer demandé), sur l'échelle `RATIO_SCALE` (00-Game §8). */
+  goodsIronRatio: number;
+  /** min(1, ouvriers disponibles / ouvriers demandés), sur l'échelle `RATIO_SCALE`. */
+  goodsWorkerRatio: number;
+  /** Productivité des lignes de biens : min des deux ratios précédents. */
+  goodsLineRatio: number;
+  /** Mêmes trois ratios pour l'armement, sur le fer et les ouvriers que les biens ont laissés (00-Game §8). */
+  armIronRatio: number;
+  armWorkerRatio: number;
+  armLineRatio: number;
   /** Mineurs de fer au dernier tour. */
   miners: number;
   /** Cases de fer exploitées au dernier tour (00-Game §7, `cases_exploitées`). */
   minedTiles: number;
   /** Mécanisation de l'extraction (00-Game §7) : cases de fer par mineur, en millièmes de case. */
   mineMechanization: number;
-  /** Fer extrait au dernier tour : celui des lignes remplies. */
+  /** Fer extrait au dernier tour : celui que les mineurs disponibles tirent des cases de fer, au plus la demande des lignes. */
   ironExtracted: number;
   /** Mobilisation forcée (05-Fronts §4.3) : le renfort des divisions passe avant les emplois. Éteinte au départ. */
   forcedMobilization: boolean;
@@ -262,8 +287,17 @@ export function createGame(setup: GameSetup): GameState {
       goodsDemand: new Array<number>(Object.keys(GOODS).length).fill(0),
       armamentReserve: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       armamentProductionRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
+      goodsRemainder: new Array<number>(Object.keys(GOODS).length).fill(0),
       armamentRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
       factoryWorkers: 0,
+      ironDemanded: 0,
+      ironConsumed: 0,
+      goodsIronRatio: RATIO_SCALE,
+      goodsWorkerRatio: RATIO_SCALE,
+      goodsLineRatio: RATIO_SCALE,
+      armIronRatio: RATIO_SCALE,
+      armWorkerRatio: RATIO_SCALE,
+      armLineRatio: RATIO_SCALE,
       miners: 0,
       minedTiles: 0,
       mineMechanization: 0,

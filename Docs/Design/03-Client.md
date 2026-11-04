@@ -226,8 +226,8 @@ Worker → page (`FromWorker`) :
     mêmes champs que `DiplomacyEvent`, 02-Engine §4). Pas d'envoi « seulement si
     changé » : c'est petit, et la liste est la source des cartes de proposition (§7) ;
   - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions avec leur position,
-    et pour chaque camp `frontAttack`, l'attaque sur tout le front, et `lastLoss`, les hommes perdus par sa première
-    ligne au dernier round), ou `null` si rien n'a changé depuis le dernier
+    et pour chaque camp `frontAttack`, l'attaque sur tout le front, et `lastLossByNiche`, les hommes perdus par sa première
+    ligne au dernier round, par niche), ou `null` si rien n'a changé depuis le dernier
     envoi. `SoloGame` les reconstruit à chaque round de combat (`combatTurns`), quand le joueur donne un ordre et quand
     des villes changent, et compare le JSON au dernier envoyé ; les positions changent à chaque round.
     Pas de brouillard de guerre : les fronts de tous les joueurs, pas seulement ceux du joueur 1 ;
@@ -551,19 +551,27 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     borné à `lines`). Le curseur (`input.lines-slider`, piste native
     transparente) est à `active`, le maximum réglé par le joueur ; dessous, une
     piste grise et une barre bleue (`.slider-fill`) de longueur
-    `min(filled, active, usefulLines)` : la production réelle. Quand les lignes
-    en service (`min(active, usefulLines)`) dépassent les lignes remplies (pas
-    assez d'ouvriers), une barre rouge (`.slider-short`) couvre l'écart et un
-    trait rouge (`.short-mark`) marque la production réelle ; sans manque,
-    ni l'un ni l'autre (auteur, 1er novembre 2026). Quand le réglage du joueur
+    `min(running, active, usefulLines)` : les lignes qui tournent (`LineGroupView.running`). Quand les lignes
+    en service (`min(active, usefulLines)`) dépassent les lignes qui tournent,
+    une barre rouge (`.slider-short`) couvre l'écart et un
+    trait rouge (`.short-mark`) marque les lignes qui tournent ; sans écart,
+    ni l'un ni l'autre (auteur, 1er novembre 2026). Depuis le malus de production
+    (00-Game §8, 4 novembre 2026), un manque de fer ou d'ouvriers ne retire plus de ligne :
+    l'écart n'existe plus qu'en cas d'écart entre `usefulLines` du client et la sélection du moteur. Quand le réglage du joueur
     dépasse les lignes utiles (`active > usefulLines`, la demande est couverte), une
     barre verte (`.slider-slack`) va des lignes en service au réglage. L'infobulle
-    du curseur (`data-bar`) explique chaque cas : « pas assez de main-d'œuvre ou de
-    ressources » (rouge), « le besoin est inférieur à la production cible » (vert). Barre et traits
+    du curseur (`data-bar`) explique chaque cas : « toutes les lignes en service ne tournent pas » (rouge), « le besoin est inférieur à la production cible » (vert). Barre et traits
     sont placés entre les centres extrêmes du pouce (7 px de chaque côté). Le
     compte affiche « en service · max réglé / lignes ». Débloqué sans
     ligne, un bouton + crée la première ; verrouillé, la flèche de
     progression. Plus de bouton « Ajouter une ligne » ni de liste ;
+  - **Malus de production** (auteur, 4 novembre 2026) : sur chaque ligne de groupe, le nombre à gauche de
+    l'icône du fer (`LineGroupView.ironObtained`, fer obtenu) est **toujours en gras** et **en rouge** quand
+    le ratio du fer de la catégorie du groupe est sous `ratioScale` (`goodsIronRatio` pour un bien, `armIronRatio` pour
+    l'armement) ; le nombre à gauche de l'icône d'ouvrier (`workersObtained`) est en rouge quand le ratio des
+    ouvriers de sa catégorie l'est. Le nombre de produits de la ligne est multiplié par le `…LineRatio` de sa catégorie. Le malus des
+    ouvriers n'est affiché nulle part ailleurs. Les priorités (glisser-déposer) restent à l'écran mais ne servent plus
+    (00-Game §8.1, à supprimer plus tard) ;
   - en bas, les réserves d'armement (réserve et stock cible).
   Le panneau n'est reconstruit que quand sa structure change (usines, groupes,
   lignes, biens débloqués), et jamais pendant un glisser ou un réglage de curseur
@@ -578,10 +586,15 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   population (vert plein), la population que la nourriture du tour fait vivre
   (vert hachuré) et le maximum si toutes les cases étaient travaillées (gris),
   à l'échelle du plus grand des trois.
+  **Largeur fixe** (auteur, 4 novembre 2026) : les nombres qui changent à
+  chaque tour (population, variation, maximum, nourriture, surplus, nombre de
+  divisions) ont une largeur minimale en `ch` (`fixedWidth`), un peu plus que
+  leur texte le plus long avec la notation de `num` (« 99,9K », « +99,9K »,
+  « / 99,9K ») : les boutons ne changent pas de largeur quand les chiffres changent.
   Ressources (flux) : la barre du fer, **orange** (`.ib-track.iron`, comme dans
   le détail) : orange clair pour la barre pleine (capacité, ce que les cases de
-  fer pourraient donner), orange pour l'extrait, écart rouge, trait noir du
-  requis. Provisoire : elle deviendra une vue agrégée de toutes les ressources
+  fer pourraient donner), orange pour le fer consommé, **écart hachuré rouge** (fer demandé non obtenu, même motif que l'infobulle du
+  camembert), trait noir du demandé. Provisoire : elle deviendra une vue agrégée de toutes les ressources
   (hors biens produits), à définir, car elle doit couvrir plusieurs types autres
   que le fer. Armement : tous les types additionnés, mêmes couleurs et même
   échelle que les lignes du détail (fronts, stock, hachures au-delà de la cible,
@@ -756,21 +769,28 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      déplacement n'envoie pas `change`). Il est mis à jour à l'ouverture du
      détail et à chaque tour tant qu'il est ouvert.
   3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
-     *Fer* : barre pleine (orange clair) = capacité (`ironCapacity`), orange = fer extrait au
-     dernier tour, trait noir épais = fer requis (`ironRequired`, compté sur
-     les lignes en service, `min(active, usefulLines)`, pas sur toutes les
-     lignes actives : une ligne arrêtée parce que la demande est atteinte ne
-     demande pas de fer) ; si l'extrait est sous le requis, l'écart est rouge,
-     ce qui veut dire population ou capacité de fer insuffisante. *Aluminium* :
+     *Fer* : barre pleine (orange clair) = capacité (`ironCapacity`), orange = fer consommé au
+     dernier tour (`PlayerStats.ironConsumed`), trait noir épais = fer demandé (`ironDemanded`, des lignes qui
+     tournent : une ligne écartée parce que la demande de son bien est atteinte ne
+     demande pas de fer) ; l'écart entre consommé et demandé est **hachuré rouge**
+     (`.ib-gap`, même motif que l'infobulle). *Aluminium* :
      ligne grisée « à venir » (aucune règle ne l'extrait). Les deux lignes
-     ont leur icône (`goods/goods-iron-ingot.png`, `goods/goods-aluminium-ingot.png`).
+     ont leur icône (`goods/goods-iron-ingot.png`, `goods/goods-aluminium-ingot.png`), suivie dans la case du
+     libellé de l'icône camembert (`miscellaneous/icon-pie-chart.png`, `pieIcon`), au même endroit que l'engrenage
+     de l'onglet Nourriture. **Infobulle du camembert du fer** (`setTip`, `InfoBar.ironTip`) : titre « fer
+     consommé, fer manquant, malus armement en % », plus « malus biens » seulement s'il est sous 100 %
+     (malus = 1 − `armLineRatio` ou `goodsLineRatio`) ; puis une rangée par produit qui demande
+     du fer, du plus gros au plus petit : icône du produit (`productIcon`), barre en deux parties (fer obtenu
+     orange, demandé non obtenu hachuré rouge, `.tip-ibar`), puis « obtenu / demandé ». Toutes les barres ont la
+     même échelle : le plus grand total demandé occupe toute la largeur. Camembert de l'aluminium : grisé,
+     infobulle « Aucune consommation ».
      *Tracteurs*, *bateaux de pêche*,
-     *pompes à vapeur* : vert = machines disponibles (`goods`, produites au tour
+     *pompes à vapeur* : à la place du camembert, l'engrenage `gearIcon(bien)`, qui ouvre la même infobulle que
+     dans l'onglet Nourriture ; vert = machines disponibles (`goods`, produites au tour
      précédent), barre pleine = machines d'une mécanisation totale,
      `stats.fullMachines`, recopié de `Player.goodsDemand` du moteur (la
      demande qui arrête aussi la croissance automatique des lignes, 00-Game
-     §8.2 ; pour les tracteurs et les bateaux, la demande retenue au
-     remplissage, provisoire). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
+     §8.2 ; pour les tracteurs et les bateaux, celle des fermiers et pêcheurs répartis). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
      ligne de légende.
   4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
      type d'armement qui a des lignes, un stock ou de l'équipement sur les fronts, barre de gauche à droite :
@@ -798,8 +818,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   Calculé côté page à partir des messages : la croissance du tour, le maximum de
   population, le surplus, les parts par occupation, les machines d'une
   mécanisation totale, l'échelle et la zone hachurée de l'armement, la production
-  d'armement par minute (lignes remplies × `productionPerLine` du catalogue, qui
-  vaut `productionPerMinute` pour l'armement). Lu tel
+  d'armement par minute, à une décimale (lignes qui tournent × `productionPerLine`
+  du catalogue, qui vaut `productionPerHour` pour l'armement, ÷ 60). Lu tel
   quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
   `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
 - **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste

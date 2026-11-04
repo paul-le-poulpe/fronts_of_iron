@@ -124,7 +124,7 @@ test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et mar
   assert.equal(me.ironExtracted, 1);
   assert.ok(me.miners > 0 && me.factoryWorkers > 0);
   assert.deepEqual(mirror.factoryMarks.get(city), { type: "infantryArmament", level: 2, good: "rifle" });
-  assert.equal(mirror.detail!.factories[0]!.groups[0]!.filled, 1);
+  assert.equal(mirror.detail!.factories[0]!.groups[0]!.running, 1);
   assert.ok(mirror.detail!.reserve[0]! > 0);
   // Un seul gisement exploité : le rayon de la mine couvre au moins une case de fer, et les pixels suivent le recalcul complet.
   assert.deepEqual([...mirror.ironThreshold], mirror.referenceThresholds().iron);
@@ -167,10 +167,10 @@ test("ouvriers d'un groupe de lignes : la somme des coûts par rang, la même qu
     apply(game.step([]));
   }
   const group = mirror.detail!.factories[0]!.groups[0]!;
-  assert.equal(group.filled, 3);
-  assert.equal(group.workers, workersForLines("rifle", 3));
-  assert.equal(group.workers, mirror.stats[HUMAN - 1]!.factoryWorkers);
-  assert.ok(group.workers < 3 * productConfig("rifle").workersPerLine, "les lignes suivantes coûtent moins que la première");
+  assert.equal(group.running, 3);
+  assert.equal(group.workersObtained, workersForLines("rifle", 3));
+  assert.equal(group.workersObtained, mirror.stats[HUMAN - 1]!.factoryWorkers);
+  assert.ok(group.workersObtained < 3 * productConfig("rifle").workersPerLine, "les lignes suivantes coûtent moins que la première");
 });
 
 test("un ordre humain ne peut pas parler au nom d'un autre joueur", () => {

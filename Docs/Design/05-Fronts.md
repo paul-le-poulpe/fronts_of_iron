@@ -304,12 +304,12 @@ Attributs :
 | `infantryTank` | Char d'infanterie | chars | 2 | 1 | 250 000 | 1 | 1 | 0,8 | 0,8 | 100 | foot |
 | `cruiserTank` | Char de cavalerie | chars | 2 | 1 | 100 000 | 1 | 1 | 1 | 1 | 100 | motorized |
 | `mediumTank` | Char moyen | chars | 2 | 1 | 200 000 | 1 | 1 | 1,2 | 1,2 | 100 | motorized |
-| `antiTank` | Canon anti-char | antichar | 5 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
-| `antiAir` | Canon anti-aérien | antiaérien | 5 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
-| `artillery` | Artillerie | artillerie | 5 | 5 | 50 000 | 2 | 1 | 1 | 1 | 0 | foot |
-| `armoredAntiTank` | Canon anti-char blindé | antichar | 5 | 1 | 200 000 | 1 | 0,8 | 1 | 1,2 | 100 | motorized |
-| `selfPropelledAntiAir` | Canon anti-aérien autopropulsé | antiaérien | 5 | 1 | 100 000 | 1 | 0,8 | 1 | 1 | 100 | motorized |
-| `selfPropelledArtillery` | Artillerie autopropulsée | artillerie | 5 | 1 | 100 000 | 1 | 1 | 1,2 | 1 | 100 | motorized |
+| `antiTank` | Canon anti-char | antichar | 3 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
+| `antiAir` | Canon anti-aérien | antiaérien | 3 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
+| `artillery` | Artillerie | artillerie | 3 | 5 | 50 000 | 2 | 1 | 1 | 1 | 0 | foot |
+| `armoredAntiTank` | Canon anti-char blindé | antichar | 3 | 1 | 200 000 | 1 | 0,8 | 1 | 1,2 | 100 | motorized |
+| `selfPropelledAntiAir` | Canon anti-aérien autopropulsé | antiaérien | 3 | 1 | 100 000 | 1 | 0,8 | 1 | 1 | 100 | motorized |
+| `selfPropelledArtillery` | Artillerie autopropulsée | artillerie | 3 | 1 | 100 000 | 1 | 1 | 1,2 | 1 | 100 | motorized |
 
 Formation (`formationTurns`) : élites 200 tours (20 s), réguliers 100 (10 s),
 milice 0, les autres types 100. Dans la niche d'infanterie, du meilleur au moins
@@ -414,8 +414,8 @@ d'artillerie pleines.
    type dans l'ordre de la niche ; à égalité, le plus petit identifiant.
 3. **Part engagée** : les divisions remplissent la largeur dans cet ordre ; la
    dernière peut ne tenir qu'une partie de sa largeur. Une artillerie de
-   largeur 5 sur un front de largeur 1 est engagée à 20 % : **elle n'attaque
-   qu'avec 20 % de sa force et ne reçoit que 20 % des pertes**.
+   largeur 3 sur un front de largeur 1 est engagée au tiers : **elle n'attaque
+   qu'avec un tiers de sa force et ne reçoit qu'un tiers des pertes**.
 4. **Le reste attend en seconde ligne**, sans combattre ni subir de pertes.
 5. **Appui-feu sans infanterie** : si aucune division d'infanterie n'est
    engagée en première ligne, l'appui-feu repasse en seconde ligne ; il
@@ -635,8 +635,8 @@ mixte            = (armorPercent × antiblindé + (100 − armorPercent) × anti
 
 - L'appui-feu prend les dégâts d'**une liaison** de la ligne d'infanterie,
   multipliés par sa part engagée, **quelle que soit sa largeur**. Une division
-  de largeur 5 est peu dense : elle ne prend que le cinquième de ce qu'elle
-  recevrait sur ses 5 liaisons (`mixte × (F/(F+W_chars)) × (largeur engagée/F) / l`).
+  de largeur 3 est peu dense : elle ne prend que le tiers de ce qu'elle
+  recevrait sur ses 3 liaisons (`mixte × (F/(F+W_chars)) × (largeur engagée/F) / l`).
 - **L'infanterie compte comme si elle occupait tout le front** : en avoir moins
   ne protège pas l'appui-feu. Plus de chars le protègent (jusqu'à moitié moins,
   quand ils occupent tout le front).
@@ -1178,8 +1178,14 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
   joueur et de l'adversaire), alignées à droite sur la ligne du titre, en
   rouge : « Pertes : x hommes / tour », `x` = les hommes perdus par les
   divisions de cette première ligne au dernier round de combat (une seconde),
-  tranches de première ligne des percées comprises (`FrontSide.lastLoss`,
-  remis à 0 à chaque round ; 0 sans combat).
+  tranches de première ligne des percées comprises : la somme de
+  `FrontSide.lastLossByNiche`, remis à 0 à chaque round ; 0 sans combat.
+- **Pertes par rangée** (auteur, 4 novembre 2026) : dans la colonne de
+  statistiques de chaque première ligne, sous les trois statistiques de chaque
+  rangée, une quatrième ligne en rouge « −N » : les hommes perdus par cette
+  niche au dernier round (`lastLossByNiche[niche]`, notation courte de
+  `formatStat`). Vide sans perte, à la même hauteur, pour que les statistiques
+  ne bougent pas.
 
 **Rangées par niche** (dans chaque ligne) : une rangée par niche, dans l'ordre
 infanterie, chars, antichar, antiaérien, artillerie (*provisoire*). Fond gris
@@ -1483,7 +1489,7 @@ interface Division {              // divisions.ts
 }
 interface FrontSide {            // fronts.ts, un par camp
   frontAttack: boolean;
-  lastLoss: number;               // hommes perdus par sa première ligne au dernier round (§11.4) ; remis à 0 à chaque round
+  lastLossByNiche: number[];      // hommes perdus par sa première ligne au dernier round, par niche (§11.4) ; remis à 0 à chaque round
 }
 interface Front {
   readonly id: number;

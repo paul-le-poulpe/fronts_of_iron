@@ -53,6 +53,8 @@ import {
   statusOf,
   waterYieldMilli,
   workersForLines,
+  scaledByRatio,
+  RATIO_SCALE,
   machineReference,
   advanceOf,
   type Breakthrough,
@@ -136,10 +138,10 @@ function equipUnits(): FactoryCatalog["equipUnit"] {
   return out;
 }
 
-/** Production d'une ligne remplie : par tour pour un bien, par minute pour un type d'armement (00-Game §8, §8.3). */
+/** Production d'une ligne qui tourne à 100 % : par tour pour un bien, par heure pour un type d'armement (00-Game §8, §8.3). */
 function productionOf(id: ProductId): number {
   const a = armamentIndex(id);
-  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerMinute : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
+  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerHour : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
 }
 
 /** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */
@@ -151,6 +153,7 @@ export function factoryCatalog(): FactoryCatalog {
     })),
     unlockTurns: FACTORY.unlockTurns,
     growthTurns: FACTORY.growthTurns,
+    ratioScale: RATIO_SCALE,
     goodIds: GOOD_IDS,
     armamentIds: ARMAMENT_IDS,
     productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productionOf(id)])),
@@ -246,8 +249,8 @@ export function frontView(state: GameState, f: Front): FrontView {
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
     sides: [
-      { frontAttack: f.sides[0].frontAttack, lastLoss: f.sides[0].lastLoss },
-      { frontAttack: f.sides[1].frontAttack, lastLoss: f.sides[1].lastLoss },
+      { frontAttack: f.sides[0].frontAttack, lastLossByNiche: f.sides[0].lastLossByNiche.slice() },
+      { frontAttack: f.sides[1].frontAttack, lastLossByNiche: f.sides[1].lastLossByNiche.slice() },
     ],
     boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
     breakthroughs: state.breakthroughs
@@ -501,6 +504,14 @@ export class Game {
       miners: p.miners,
       minedTiles: p.minedTiles,
       ironExtracted: p.ironExtracted,
+      ironDemanded: p.ironDemanded,
+      ironConsumed: p.ironConsumed,
+      goodsIronRatio: p.goodsIronRatio,
+      goodsWorkerRatio: p.goodsWorkerRatio,
+      goodsLineRatio: p.goodsLineRatio,
+      armIronRatio: p.armIronRatio,
+      armWorkerRatio: p.armWorkerRatio,
+      armLineRatio: p.armLineRatio,
       // Nourriture si toutes les cases fertiles et toutes les cases d'eau étaient travaillées,
       // avec le rendement de l'eau des bateaux actuels (00-Game §6.4, §6.5).
       foodPotential: Math.max(FOOD.minimum, p.fertilitySum + fishMax),
@@ -606,12 +617,17 @@ export class Game {
           // Capacité du joueur pour ce bien : toutes ses lignes, toutes usines (00-Game §8.2).
           let capacity = 0;
           for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productionOf(h.good);
+          const workersDemanded = workersForLines(g.good as ProductId, g.running);
+          const ironDemanded = g.running * productConfig(g.good as ProductId).ironPerLine;
           return {
             good: g.good,
             lines: g.lines,
             active: g.active,
-            filled: g.filled,
-            workers: workersForLines(g.good as ProductId, g.filled),
+            running: g.running,
+            workersDemanded,
+            workersObtained: scaledByRatio(workersDemanded, b < 0 ? p.armLineRatio : p.goodsLineRatio),
+            ironDemanded,
+            ironObtained: scaledByRatio(ironDemanded, b < 0 ? p.armLineRatio : p.goodsLineRatio),
             growth: g.growth,
             demandMet: b < 0 || capacity >= p.goodsDemand[b]!,
             usefulLines,

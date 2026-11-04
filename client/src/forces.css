@@ -148,7 +148,7 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 /* Colonne de statistiques contre la barre : même structure qu'une colonne (marge de titre, cinq rangées), calée sur la capsule
    (bordure 1 px + marge 6 px). Du côté du joueur, icône puis nombre alignés à gauche ; côté adverse, le miroir, alignés à droite. */
 .fw-gut { flex: none; width: 62px; padding: 7px 0; box-sizing: border-box; display: flex; flex-direction: column; }
-.fw-gcell { flex: 1 1 0; min-height: 54px; display: flex; align-items: center; justify-content: flex-start; }
+.fw-gcell { flex: 1 1 0; min-height: 60px; display: flex; align-items: center; justify-content: flex-start; }
 .fw-gut.l .fw-gcell { justify-content: flex-end; }
 .fw-gstack { display: flex; flex-direction: column; }
 .fw-gut.l .fw-gstack { align-items: flex-end; }
@@ -157,6 +157,9 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-st.hard, .fw-tot.hard { --st-c: var(--t-hard); }
 .fw-st.hp, .fw-tot.hp { --st-c: var(--t-hp); }
 .fw-st.off { visibility: hidden; }
+/* Pertes du dernier round (« −N ») : sans icône, rouge, 12 px ; vide hors combat mais à la même hauteur. Avec les trois
+   statistiques (3 × 16 px), 60 px : la hauteur minimale d'une rangée (`.fw-row`, `.fw-gcell`), pour qu'elles tiennent toujours. */
+.fw-st.loss { --st-c: var(--t-red); height: 12px; font-size: 10px; line-height: 12px; cursor: help; }
 .fw-st-icon { flex: none; width: 16px; height: 16px; image-rendering: pixelated; display: block; }
 /* Totaux sous le titre d'une première ligne : trois lignes de 16 px, icônes collées, barre fine (5 px) centrée sur l'icône. */
 .fw-tots { position: absolute; top: 23px; left: 0; right: 0; display: flex; flex-direction: column; }
@@ -202,7 +205,7 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
   --pz-open-bg: var(--n-bg);
   position: relative;
   flex: 1 1 0;
-  min-height: 54px;
+  min-height: 60px;
   padding: 0 4px;
   display: flex;
   align-items: center;

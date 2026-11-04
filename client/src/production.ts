@@ -17,6 +17,9 @@ import { dominantGood, factoryName, productName, productSymbol, unitName } from 
 import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
 
+/** Production par heure (armement) écrite par minute, à une décimale. */
+const perMinute = (perHour: number): number => Math.round(perHour / 6) / 10;
+
 
 /** Délai pendant lequel une reconstruction est retenue après un réglage, le temps que le moteur applique l'ordre (ms). */
 const HOLD_MS = 500;
@@ -227,7 +230,7 @@ export class ProductionPanel {
     count.title = "En service · réglé / lignes";
     const filled = el("span", "muted small");
     filled.dataset["filled"] = `${f.city}:${g.good}`;
-    filled.title = `Par ligne remplie : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${num(this.catalog.productionPerLine[g.good] ?? 0)} produits par ${this.catalog.armamentIds.includes(g.good) ? "minute" : "tour"}. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
+    filled.title = `Par ligne qui tourne : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${this.catalog.armamentIds.includes(g.good) ? `${num(perMinute(this.catalog.productionPerLine[g.good] ?? 0))} produits par minute` : `${num(this.catalog.productionPerLine[g.good] ?? 0)} produits par tour`}. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
     slider.addEventListener("pointerdown", () => (this.sliderActive = true));
     // Un clic sans déplacement ne déclenche pas `change` : sans ceci, `sliderActive`
     // resterait vrai et le panneau ne serait plus jamais reconstruit (nouvelle usine
@@ -251,9 +254,8 @@ export class ProductionPanel {
     const track = el("i", "slider-track");
     const fill = el("i", "slider-fill");
     fill.dataset["fill"] = `${f.city}:${g.good}`;
-    fill.style.width = onTrack(Math.min(g.filled, inService), g.lines);
-    // Manque de main-d'œuvre : de la production réelle (lignes remplies) aux lignes en service,
-    // une barre rouge et, à la production réelle, un trait rouge.
+    fill.style.width = onTrack(Math.min(g.running, inService), g.lines);
+    // Écart entre les lignes qui tournent et les lignes en service : une barre rouge et, aux lignes qui tournent, un trait rouge.
     const short = el("i", "slider-short");
     short.dataset["short"] = `${f.city}:${g.good}`;
     const shortMark = el("i", "short-mark");
@@ -269,7 +271,7 @@ export class ProductionPanel {
       mark.title = "Lignes utiles : au-delà, la production dépasserait la demande et les ouvriers vont ailleurs.";
       wrap.append(mark);
     }
-    // Total des lignes remplies : fer consommé → bien produit (mis à jour à chaque tour).
+    // Total des lignes qui tournent : fer obtenu → bien produit, à la productivité des lignes (mis à jour à chaque tour).
     const cost = el("span", "cost");
     const ironNum = el("span");
     ironNum.dataset["costIron"] = `${f.city}:${g.good}`;
@@ -370,31 +372,44 @@ export class ProductionPanel {
 
   private refreshNumbers(d: HumanDetail, s: PlayerStats): void {
     let active = 0;
-    let filled = 0;
+    let running = 0;
     for (const f of d.factories) {
       for (const g of f.groups) {
         active += g.active;
-        filled += g.filled;
-        // Seulement les lignes qui travaillent ce tour (remplies) : fer consommé et
-        // production totale sur la première ligne, ouvriers employés sur la seconde.
+        running += g.running;
+        // Seulement les lignes qui tournent ce tour : fer obtenu et production totale
+        // (× productivité) sur la première ligne, ouvriers obtenus sur la seconde.
+        // Le fer est toujours en gras, en rouge quand le fer manque (ratio de la catégorie du groupe < 100 %) ;
+        // les ouvriers sont en rouge quand ils manquent. Catégories : biens, ou armement (servi après).
+        const arm = this.catalog.armamentIds.includes(g.good);
+        const ironRatio = arm ? s.armIronRatio : s.goodsIronRatio;
+        const workerRatio = arm ? s.armWorkerRatio : s.goodsWorkerRatio;
+        const lineRatio = arm ? s.armLineRatio : s.goodsLineRatio;
         const perLine = this.catalog.productionPerLine[g.good] ?? 0;
         const ironNum = this.cities.querySelector<HTMLElement>(`[data-cost-iron="${f.city}:${g.good}"]`);
-        if (ironNum) ironNum.textContent = num(g.filled * (this.catalog.ironPerLine[g.good] ?? 0));
+        if (ironNum) {
+          ironNum.textContent = num(g.ironObtained);
+          ironNum.style.fontWeight = "700";
+          ironNum.classList.toggle("neg", ironRatio < this.catalog.ratioScale);
+        }
         const outNum = this.cities.querySelector<HTMLElement>(`[data-cost-out="${f.city}:${g.good}"]`);
-        if (outNum) outNum.textContent = num(g.filled * perLine);
+        // Armement : `perLine` est par heure ; affiché par minute, une décimale.
+        const out = (g.running * perLine * lineRatio) / this.catalog.ratioScale;
+        if (outNum) outNum.textContent = num(this.catalog.armamentIds.includes(g.good) ? perMinute(out) : Math.floor(out));
         const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
         if (cell) {
           const workers = el("b");
-          workers.textContent = num(g.workers);
-          // Ouvriers par ligne : la moyenne des lignes remplies (le coût baisse avec le rang, 00-Game §8.1) ;
-          // sans ligne remplie, le coût de la première.
-          const avg = g.filled > 0 ? Math.round(g.workers / g.filled) : (this.catalog.workersPerLine[g.good] ?? 0);
+          workers.textContent = num(g.workersObtained);
+          workers.classList.toggle("neg", workerRatio < this.catalog.ratioScale);
+          // Ouvriers par ligne : la moyenne des lignes qui tournent (le coût baisse avec le rang, 00-Game §8.1) ;
+          // sans ligne qui tourne, le coût de la première.
+          const avg = g.running > 0 ? Math.round(g.workersDemanded / g.running) : (this.catalog.workersPerLine[g.good] ?? 0);
           cell.replaceChildren(workers, workerIcon(), ` (${num(avg)}/ligne)`);
           // Armement : combien de divisions de référence le stock cible de cette ligne équipe
           // (même formule que le trait du stock cible, 00-Game §8.3 ; arrondi vers le bas).
           const unit = this.catalog.equipUnit[g.good];
           if (unit !== undefined) {
-            const fit = Math.floor(Math.floor((g.lines * perLine * this.catalog.stockSeconds) / 60) / unit.count);
+            const fit = Math.floor(Math.floor((g.lines * perLine * this.catalog.stockSeconds) / 3600) / unit.count);
             const n = el("b");
             n.textContent = num(fit);
             const img = el("img", "unit-ic") as HTMLImageElement;
@@ -406,7 +421,7 @@ export class ProductionPanel {
         }
         const inService = Math.min(g.active, g.usefulLines);
         const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);
-        const real = Math.min(g.filled, inService);
+        const real = Math.min(g.running, inService);
         if (fill) fill.style.width = onTrack(real, g.lines);
         // Lignes en service mais pas remplies : barre et trait rouges (absents quand tout est rempli).
         const missing = real < inService;
@@ -432,7 +447,7 @@ export class ProductionPanel {
         const bar = this.cities.querySelector<HTMLElement>(`[data-bar="${f.city}:${g.good}"]`);
         if (bar) {
           const notes: string[] = [];
-          if (missing) notes.push("Pas assez de main-d'œuvre ou de ressources pour remplir toutes les lignes en service (trait rouge : production réelle).");
+          if (missing) notes.push("Toutes les lignes en service ne tournent pas (trait rouge : lignes qui tournent).");
           if (surplus) notes.push("Le besoin est inférieur à la production cible : les lignes en vert ne produisent pas.");
           bar.title = notes.join("\n");
         }
@@ -453,7 +468,7 @@ export class ProductionPanel {
       });
     }
     const lines = [
-      `Lignes remplies : ${num(filled)} sur ${num(active)} actives · ouvriers d'usine : ${num(s.factoryWorkers)}`,
+      `Lignes qui tournent : ${num(running)} sur ${num(active)} actives · ouvriers d'usine : ${num(s.factoryWorkers)}`,
       `Fer : capacité ${num(d.ironCapacity)} · extrait ${num(s.ironExtracted)} · cases exploitées ${num(s.minedTiles)} · mineurs ${num(s.miners)}`,
       "Biens produits au dernier tour (machines du tour suivant) : " +
         this.catalog.goodIds.map((id, i) => `${productName(id)} ${num(d.goods[i]!)}`).join(" · "),

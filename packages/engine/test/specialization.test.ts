@@ -94,12 +94,12 @@ describe("remplissage avec les coûts par rang (00-Game §4, §8.1)", () => {
     group.lines = group.active = 3;
     p.population = workersForLines("rifle", 3) + minersFor(3, 0);
     stepEconomy(s);
-    assert.deepEqual([group.filled, p.factoryWorkers], [3, workersForLines("rifle", 3)]);
+    assert.deepEqual([group.running, p.factoryWorkers], [3, workersForLines("rifle", 3)]);
     assert.ok(p.factoryWorkers < 3 * productConfig("rifle").workersPerLine, "moins cher que 3 lignes au prix de la première");
 
     p.population = workersForLines("rifle", 3) + minersFor(3, 0) - 1;
     stepEconomy(s);
-    assert.deepEqual([group.filled, p.factoryWorkers], [2, workersForLines("rifle", 2)]);
+    assert.deepEqual([group.running, p.factoryWorkers], [2, workersForLines("rifle", 2)]);
   });
 });
 
@@ -129,7 +129,7 @@ describe("croissance automatique proportionnelle à la production (00-Game §8.2
   it("n lignes qui produisent ajoutent n par tour : quatre lignes gagnent la cinquième en growthTurns / 4 tours", () => {
     const { s, p, g } = ready(4);
     play(s, 1);
-    assert.deepEqual([g.filled, g.growth], [4, 4]);
+    assert.deepEqual([g.running, g.growth], [4, 4]);
     const turns = FACTORY.growthTurns / 4;
     play(s, turns - 2);
     assert.deepEqual([g.lines, g.growth], [4, 4 * (turns - 1)]);
@@ -157,6 +157,6 @@ describe("croissance automatique proportionnelle à la production (00-Game §8.2
     assert.equal(g.growth, 4);
     s.players[0]!.population = 1;
     stepEconomy(s);
-    assert.deepEqual([g.filled, g.growth], [0, 4]);
+    assert.deepEqual([g.running, g.growth], [0, 4]);
   });
 });

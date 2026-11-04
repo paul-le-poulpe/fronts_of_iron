@@ -514,34 +514,36 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
 - La fondation de sa première ville lui donne en plus `POPULATION.initial`
   personnes, une valeur du fichier de configuration.
 - À chaque tour, la population totale est de nouveau répartie, dans cet
-  ordre :
-  1. les **lignes de production actives** (§8.1), **une par une, dans l'ordre
-     de priorité choisi par le joueur** (villes dans leur ordre, puis lignes
-     dans l'ordre de leur ville, §8.1) : pour chaque ligne, d'abord ses
-     ouvriers d'usine, puis les mineurs qui extraient la ressource qu'elle
-     consomme (§7). Une ligne n'est remplie que si les deux sont possibles en
-     entier (assez de population, assez de capacité d'extraction). Sinon elle
-     ne reçoit personne et ne produit rien (pas de production partielle), **et
-     le remplissage des lignes s'arrête là** : les lignes situées plus bas ne
-     reçoivent personne non plus. Ainsi, on n'a jamais des usines
-     pleines sans ressource, ni des ressources extraites sans usine pour les
-     transformer ;
-  2. le reste devient **fermiers** et **pêcheurs**, dans la proportion choisie
-     par le joueur (un réglage ; l'interface sera définie par l'auteur) ;
-  3. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
-     a plus de travailleurs que sa surface n'en demande (§6.2, §6.4), le
-     surplus passe à l'autre côté, jusqu'à ce que celui-ci soit plein. Le
-     réglage ne joue donc que quand la population ne suffit pas à travailler
-     à la fois tous les champs et toute la mer ; sinon, les deux sont remplis
-     à 100 % ;
-  4. ceux qui n'ont toujours pas de surface à travailler forment la
-     **population inactive** ;
-  5. les **hommes des divisions** ne travaillent pas : la répartition se fait
+  ordre (décision de l'auteur, 4 novembre 2026 : plus de remplissage ligne par
+  ligne, qui s'arrêtait à la première ligne manquant de fer ou d'ouvriers, et
+  que l'auteur trouvait illisible) :
+  1. les **fermiers** et les **pêcheurs** d'abord, dans la proportion choisie
+     par le joueur (un réglage ; l'interface sera définie par l'auteur). Ils
+     prennent ce que leurs terres et leurs cases d'eau peuvent employer
+     (§6.2, §6.4) ;
+  2. **report** (décision de l'auteur, 23 octobre 2026) : si un des deux côtés
+     a plus de travailleurs que sa surface n'en demande, le surplus passe à
+     l'autre côté, jusqu'à ce que celui-ci soit plein. Le réglage ne joue donc
+     que quand la population ne suffit pas à travailler à la fois tous les
+     champs et toute la mer ; sinon, les deux sont remplis à 100 % ;
+  3. les **mineurs** sur ce qui reste : ceux qu'il faut pour extraire le fer
+     demandé par toutes les lignes qui tournent (§8), plafonné par la capacité
+     des cases de fer (§7). S'il n'y a pas assez de monde, autant de mineurs que
+     possible, et le fer extrait baisse en proportion ;
+  4. les **ouvriers d'usine** sur ce qui reste après les mineurs : les lignes
+     demandent leurs ouvriers (§8.1) et en obtiennent la part que la
+     population permet (malus de production, §8) ;
+  5. ceux qui n'ont toujours pas d'emploi forment la **population inactive** ;
+  6. les **hommes des divisions** ne travaillent pas : la répartition se fait
      sur la population moins ces hommes, et moins les **blessés** (§4.2). La
      création d'une division et le renfort prennent leurs hommes parmi les
      inactifs ; en mobilisation forcée, le renfort passe avant les emplois
      (règles dans `05-Fronts.md` §3.5, §4.3). Les blessés ne sont jamais pris,
      mobilisation forcée comprise.
+
+  Les fermiers étant servis les premiers, une population juste suffisante pour
+  les champs laisse les usines sans ouvriers ni mineurs : leurs lignes tournent
+  alors à une productivité nulle (§8).
 
   ```
   F, P              = fermiers et pêcheurs disponibles, selon le réglage
@@ -549,7 +551,10 @@ paragraphe n'en est qu'un résumé ; en cas d'écart, `05-Fronts.md` a raison.
                        avec F et P, une fois)
   fermiers = min(F_requis, F + max(0, P − P_requis))
   pêcheurs = min(P_requis, P + max(0, F − F_requis))
-  inactifs = population − fermiers − pêcheurs
+  reste    = population − soldats − blessés − fermiers − pêcheurs
+  mineurs  = min(mineurs requis par le fer demandé, reste)
+  ouvriers = ouvriers demandés × productivité (§8)    (au plus reste − mineurs)
+  inactifs = reste − mineurs − ouvriers
   ```
 
 ### 4.1 Population maximale et croissance
@@ -612,11 +617,11 @@ Un blessé ne revient jamais à un autre état.
   ou par encerclement (05-Fronts §6, §7, §10). Les hommes qui quittent une
   division autrement (suppression, excédent rendu, §3.2 de 05-Fronts) restent des
   inactifs. L'équipement perdu disparaît.
-- **Guérison** : une fois par seconde (`POPULATION.hurtEveryTurns` tours),
+- **Guérison** : une fois toutes les deux secondes (`POPULATION.hurtEveryTurns` tours, 20 ; auteur, 5 novembre 2026),
   `max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor))`
   blessés disparaissent (au plus tous). `hurtDivisor` est un dénominateur entier de
   la configuration, jamais une fraction ; `hurtMinimum` est un nombre d'hommes par
-  seconde. Avec `hurtDivisor` = 5 000, 10 % de la population guérit en 500 s
+  guérison. Avec `hurtDivisor` = 5 000, 10 % de la population guérit en 1 000 s
   (auteur, 3 novembre 2026). Le plancher `hurtMinimum` évite qu'une population presque entièrement
   blessée, donc sans main-d'œuvre pour produire de la nourriture, ne puisse plus
   repartir : quand la population est petite, la deuxième règle l'emporte, et quand
@@ -840,14 +845,15 @@ gisement[r]     = nombre de cases portant r dans les zones de toutes les
                   villes du joueur
 rendement[r]    = RESOURCES[r].capacityPerTile     ressource par case et par tour
 capacité_max[r] = gisement[r] × rendement[r]
-demande[r]      = consommation de r par les lignes remplies (§8)
+demande[r]      = consommation de r par les lignes qui tournent (§8)
                 + quantité de r demandée à l'export par d'autres joueurs
-extraction[r]   = min(demande[r], capacité_max[r]), limitée par la population
+extraction[r]   = min(demande[r], capacité_max[r]), réduite en proportion
+                  si les mineurs manquent (§4)
 cases_exploitées[r] = ceil(extraction[r] / rendement[r])
 mineurs[r]      = ceil(cases_exploitées[r] × 1000 / Mécanisation_minière)
 ```
 
-Pour le fer aujourd'hui : chaque ligne remplie consomme le fer par ligne de
+Pour le fer aujourd'hui : chaque ligne qui tourne demande le fer par ligne de
 son bien ou type d'armement (§8).
 
 **Une case de fer n'est pas cultivable** (décision de l'auteur) : sa fertilité
@@ -867,8 +873,8 @@ vaut 0 (§2).
   population. **Pas encore dans le moteur** : seul le fer est extrait, il
   reçoit donc toutes les pompes ; la répartition reste à écrire avec
   l'extraction de l'aluminium.
-- Les mineurs sont affectés ligne de production par ligne de production, avec
-  les ouvriers d'usine de chaque ligne, avant les champs et la pêche (§4).
+- Les mineurs sont pris après les fermiers et les pêcheurs et avant les
+  ouvriers d'usine, pour le fer de toutes les lignes qui tournent à la fois (§4).
 - Le groupe (§3.5) où se trouvent les cases n'intervient pas : l'extraction
   est nationale (§3.4).
 
@@ -906,11 +912,11 @@ vaut 0 (§2).
   pour chaque groupe de lignes, les ouvriers et le fer qu'il utilise.
 - Chaque ligne produit, par tour, une quantité propre au bien
   (`GOODS[b].productionPerLine`), et consomme la ressource indiquée pour ce
-  bien. **Fer par ligne remplie et par tour** (`ironPerLine`, décisions de
-  l'auteur du 24 octobre, du 3 et du 4 novembre 2026) : fusil et mitrailleuse 4,
-  antichar et antiaérien 20, artillerie 50, tankette 50, char rapide 100,
-  char d'infanterie et char moyen 200, artillerie automotrice 200, antichar
-  blindé 150, antiaérien automoteur 100 ; tracteur 100, bateau de pêche 60,
+  bien. **Fer par ligne qui tourne et par tour** (`ironPerLine`, décisions de
+  l'auteur du 24 octobre, du 3 et du 4 novembre 2026) : fusil et mitrailleuse 8,
+  antichar et antiaérien 20, artillerie 50, tankette 200, char rapide 400,
+  char d'infanterie et char moyen 800, artillerie automotrice 800, antichar
+  blindé 600, antiaérien automoteur 400 ; tracteur 50, bateau de pêche 60,
   pompe à vapeur 20. Une case de fer en extrait 10 par tour
   (`RESOURCES.iron.capacityPerTile`, §7).
 - **Déblocage** : plus une usine produit, plus elle débloque de productions
@@ -935,30 +941,70 @@ vaut 0 (§2).
   sans jamais l'atteindre : hyperbolique avec plancher, continue, sans seuil.
   Le total des ouvriers pour `n` lignes croît donc de plus en plus lentement
   mais n'est jamais borné, et aucune ligne n'est gratuite. Arrondi vers le
-  bas à l'entier. Les lignes remplies sont toujours les premières rangs du
-  groupe, donc les ouvriers d'un groupe sont la somme des coûts des rangs 1 à
-  `filled`.
+  bas à l'entier. Les lignes qui tournent sont toujours les premières rangs du
+  groupe, donc les ouvriers demandés d'un groupe sont la somme des coûts des
+  rangs 1 à `running`.
 - Pas de stock : la production d'une usine à un tour est le flux disponible à
   ce tour.
 
+- **Malus de production** (décision de l'auteur, 4 novembre 2026). Toutes les
+  lignes actives tournent, sans ordre de remplissage, sauf les lignes de biens
+  en trop (lignes utiles, §8.2). Elles demandent leurs ouvriers et leur fer ;
+  si la population ou le fer manquent, elles tournent moins vite. **Deux passes**
+  (décision de l'auteur, 4 novembre 2026) : les **lignes de biens** (tracteurs,
+  bateaux, pompes) passent avant l'**armement** dans le partage du fer extrait et des
+  ouvriers disponibles. Les mineurs restent servis avant les deux passes, les
+  fermiers avant les mineurs. Sur une échelle entière `RATIO_SCALE` = 10 000 (100 %) :
+
+  ```
+  passe 1, biens (lignes utiles seulement, à 100 % de productivité, §8.2) :
+    ratio_fer_b      = min(1, fer extrait / fer demandé par les biens)
+    ratio_ouvriers_b = min(1, ouvriers disponibles / ouvriers demandés par les biens)
+    r_biens          = min(ratio_fer_b, ratio_ouvriers_b)     le plus grand des deux malus
+  passe 2, armement, sur ce que les biens ont laissé (fer extrait − fer consommé par les
+  biens ; ouvriers disponibles − ouvriers employés par les biens) :
+    ratio_fer_a, ratio_ouvriers_a, r_armement : calculés de la même façon
+  ```
+
+  Les biens prennent donc ce qu'il leur faut, ou tout s'il n'y en a pas assez, avec un
+  malus égal entre eux ; l'armement subit seul le manque restant. Pas de boucle : les
+  machines utilisées pendant le tour sont les `goodsEffective` du tour précédent (§12).
+  Les six ratios sont des entiers sur `RATIO_SCALE`, hachés.
+
+  Les ouvriers demandés suivent le coût par rang (`workersForRank`, ci-dessus).
+  Chaque ligne tourne à `r` de sa catégorie : production × r, fer consommé = demandé × r,
+  ouvriers employés = demandés × r (**provisoire** : les ouvriers au-delà de ce
+  que la productivité emploie restent inactifs, même si le fer est la cause du
+  malus). Le malus du fer s'affiche sur l'onglet des usines et dans l'onglet
+  « Ressources » (`03-Client.md`) ; celui des ouvriers seulement en rouge sur
+  l'onglet des usines.
+
+  **Calcul en entiers** (règle 2) : `r` est un entier sur 0…10 000 ; la fraction
+  de production d'un tour est gardée dans un reste, par joueur et par produit,
+  de la même échelle, inclus dans le hash : `Player.goodsRemainder` pour les
+  biens (un flux, à chaque tour), `Player.armamentProductionRemainder` pour
+  l'armement (en soixantièmes d'exemplaire × 10 000, versé chaque seconde,
+  §8.3), `Factory.progressRemainder` pour le déblocage (§8.2).
+
 ```
-production[b]     = somme, sur les lignes actives et remplies de b, de GOODS[b].productionPerLine
+production[b]     = somme, sur les lignes qui tournent de b, de GOODS[b].productionPerLine × r
 consommation[r]   = somme, sur les biens b qui utilisent r, de production[b] × ratio de r pour b
 ```
 
 Pour le fer, le ratio est fixé par ligne et non par unité produite :
 
 ```
-consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironPerLine
+demande[fer]      = somme, sur les lignes qui tournent (biens et armement), de ironPerLine
+consommation[fer] = demande[fer] × r
 ```
 
-`consommation[r]` est la part « usines » de la demande d'extraction (§7).
+`demande[r]` est la part « usines » de la demande d'extraction (§7).
 
 ### 8.1 Activer et désactiver les lignes
 
 - Chaque ligne peut être activée ou désactivée par le joueur. Seules les
-  lignes actives reçoivent des ouvriers (§4), et l'extraction suit les lignes
-  actives.
+  lignes actives demandent des ouvriers (§4) et du fer, et l'extraction suit les
+  lignes qui tournent.
 - C'est ainsi que le joueur répartit sa population : en choisissant les lignes
   qui tournent.
 - Les lignes identiques d'une usine (même bien) se règlent ensemble : un
@@ -984,16 +1030,15 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
     ligne (bouton **+** qui crée la première ligne), ou verrouillé (symbole du
     parent, progression, jauge, cadenas, symbole du bien). Il n'y a pas de bouton « Ajouter une
     ligne » séparé ni de liste de biens à choisir (§8.2).
-- **Priorité** : le joueur fait glisser **des villes entières** (une section
-  monte ou descend avec toutes ses lignes), et **des lignes au sein d'une
-  ville**. Les deux ne se mélangent pas : une ligne ne sort pas de la section
-  de sa ville. Ordre de remplissage (§4) : la première ville, ses lignes de
-  haut en bas, puis la ville suivante. Inspiration : le panneau de production
-  de Hearts of Iron, sauf qu'on n'y affecte pas des usines : on ouvre et ferme
-  des lignes selon la population disponible.
-- Une ligne qui ne peut pas être entièrement alimentée ne produit rien. Le
-  joueur est censé le voir avant et ne pas l'activer ; les ouvriers restants
-  vont aux champs.
+- **Priorité** (**à supprimer plus tard**, décision de l'auteur, 4 novembre
+  2026) : le joueur fait glisser **des villes entières** (une section monte ou
+  descend avec toutes ses lignes), et **des lignes au sein d'une ville**.
+  Les ordres `set_city_priority` et `set_line_priority` restent valides, mais
+  la priorité ne sert plus à rien : il n'y a plus de remplissage (§4, §8). Elle
+  ne départage que les lignes de biens en trop (§8.2). Inspiration : le panneau
+  de production de Hearts of Iron.
+- Une ligne qui ne peut pas être entièrement alimentée tourne à la productivité
+  commune (malus, §8) ; le joueur le voit sur l'onglet des usines.
 
 ### 8.2 Créer une ligne
 
@@ -1007,14 +1052,15 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   l'arbre, par exemple les fusils) n'a pas de condition.
 - **Progression** (décision de l'auteur, 24 octobre 2026) : les tours se
   cumulent. **C'est la production qui fait avancer le déblocage** : quand la
-  ligne du parent ne produit pas (désactivée, ou pas remplie faute de
-  population ou de fer), la progression s'arrête mais n'est pas perdue ; elle
+  ligne du parent ne produit pas (désactivée), la progression s'arrête mais n'est pas perdue ; elle
   reprend quand la ligne produit de nouveau. Lecture retenue : la progression
   est propre à l'usine.
 - **Vitesse du déblocage** (décision de l'auteur, 24 octobre 2026) :
   proportionnelle à la production du parent. Chaque tour, la progression gagne
-  le nombre de lignes du parent remplies dans l'usine : une ligne débloque en
-  500 tours, vingt lignes en 25. Le panneau la montre par la flèche entre les deux
+  le nombre de lignes du parent qui tournent dans l'usine, multiplié par la
+  productivité `r` (§8 ; **provisoire**, avec un reste dans
+  `Factory.progressRemainder`) : une ligne débloque en 500 tours à 100 %,
+  vingt lignes en 25. Le panneau la montre par la flèche entre les deux
   symboles (§8.1).
 - **Coût** : pas encore décidé. Piste de l'auteur : sacrifier un peu de
   population.
@@ -1027,7 +1073,8 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   dépassement éventuel est gardé).
 - **Même principe que le déblocage : proportionnel à la production, pas au
   temps** (décision de l'auteur, 24 octobre 2026). Chaque tour où toutes les
-  lignes du groupe produisent, la jauge gagne le nombre de lignes du groupe :
+  lignes du groupe sont actives et tournent, la jauge gagne le nombre de lignes
+  du groupe, **sans regarder le malus** (**provisoire**) :
   passer de 1 à 2 lignes prend 500 tours, de 10 à 11 lignes 50 tours. Une
   jauge sous la ligne du panneau se remplit ainsi, comme la flèche de
   déblocage.
@@ -1046,35 +1093,24 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   conception) : ce qui serait dépensé reste à trouver (§13).
 - **La production d'un bien ne dépasse jamais sa demande** (décision de
   l'auteur, 24 octobre 2026). Un flux de machines au-delà de la demande ne
-  sert à rien. Au remplissage (§4), les lignes d'un bien ne sont remplies que
-  tant que la production déjà remplie pour ce bien (toutes usines, dans l'ordre
-  de priorité) est sous la demande ; les lignes suivantes de ce bien ne
-  reçoivent personne, et leurs ouvriers vont ailleurs (autres lignes, champs,
-  pêche). Le remplissage continue avec les autres biens. Même si le joueur a
-  mis le curseur plus haut, la production s'arrête à cette limite ; quand la
-  demande baisse, la production baisse d'elle-même. Exemple de l'auteur : ne
-  pas produire des milliers de bateaux de pêche quand les pêcheurs sont partis
-  dans les usines.
-- **Demande des tracteurs et des bateaux calculée au remplissage**
-  (**provisoire, peut-être inutile** : ajouté le 1er novembre 2026 pour
-  l'alternance ouvriers / fermiers, à confirmer par l'auteur ; voir §13). Les
-  fermiers et pêcheurs disponibles dépendent des ouvriers pris par les lignes,
-  y compris celles de tracteurs et de bateaux. Avec la demande du tour
-  précédent, beaucoup de lignes remplies laissaient peu de fermiers, donc une
-  demande basse au tour suivant, donc peu de lignes, donc beaucoup de fermiers,
-  et ainsi de suite : les lignes alternaient à chaque tour. Désormais, juste
-  avant de remplir une ligne de tracteurs ou de bateaux, la demande est
-  calculée avec les personnes qui resteraient si cette ligne était remplie
-  (ses ouvriers et les mineurs de son fer comptés), avec la formule de la
-  mécanisation totale (§6.2) et le report entre fermiers et pêcheurs (§4). La
-  ligne n'est remplie que si la production déjà remplie de ce bien est sous
-  cette demande. Les lignes de priorité plus basse, remplies après, ne sont pas
-  comptées : leurs ouvriers peuvent faire un léger surplus de machines (au plus
-  `maxMachinesPer1000` machines pour 1 000 ouvriers pris par ces lignes). Les
-  pompes gardent la demande du tour précédent : elle ne dépend pas de la
-  population. La demande affichée et comparée à la capacité (croissance des
-  lignes, trait noir) est la production retenue quand une ligne a été refusée,
-  sinon la demande calculée pour la dernière ligne remplie.
+  sert à rien. Une ligne de tracteurs, de bateaux ou de pompes **ne tourne pas**
+  quand la production des lignes déjà retenues pour ce bien (toutes usines,
+  dans l'ordre des usines) couvre la demande, **calculée à 100 % de
+  productivité** (décision de l'auteur, 4 novembre 2026) : s'il faut 100
+  tracteurs et qu'une ligne peut en produire 100, une seule ligne tourne, même
+  si le malus la fait produire 50. Les lignes au-delà ne demandent ni ouvriers
+  ni fer. Même si le joueur a mis le curseur plus haut, la production s'arrête
+  à cette limite ; quand la demande baisse, la production baisse d'elle-même.
+  Exemple de l'auteur : ne pas produire des milliers de bateaux de pêche quand
+  les pêcheurs sont partis dans les usines.
+- **Demande des tracteurs et des bateaux** : les fermiers et les pêcheurs sont
+  servis avant les lignes (§4), la demande est donc celle des fermiers et
+  pêcheurs déjà répartis : machines d'une mécanisation totale (§6.2) pour la
+  population qui travaille (population − soldats − blessés), avec le report
+  entre fermiers et pêcheurs (§4). Elle ne dépend plus des lignes ni de leur
+  ordre (l'alternance d'un tour à l'autre, qui avait motivé un calcul au
+  remplissage le 1er novembre 2026, n'existe plus). Les pompes gardent la
+  demande du tour précédent : elle ne dépend pas de la population.
 - Sur le curseur des lignes actives (§8.1), un **trait noir** (rouge jusqu'au
   1er novembre 2026) marque le
   nombre de lignes utiles de ce groupe : tout à droite si toutes ses lignes ne
@@ -1093,7 +1129,8 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
 - **Avec le commerce** (non décrit) : la production maximale d'une usine sera
   la consommation du joueur **plus ce qu'il exporte** en flux.
 - Choix provisoires du moteur (02-Engine §7), à valider : un tour compte quand
-  **toutes** les lignes du groupe produisent ; la capacité qui se compare à la
+  **toutes** les lignes du groupe sont actives et tournent (quel que soit le
+  malus) ; la capacité qui se compare à la
   demande compte toutes les lignes du joueur pour ce bien, toutes usines
   confondues ; un groupe ne perd pas de ligne si la demande baisse.
 
@@ -1117,30 +1154,34 @@ consommation[fer] = somme, sur les lignes remplies (biens et armement), de ironP
   attribué à une armée sort de la réserve. Quand toutes les armées sont
   entièrement équipées, l'armement produit s'accumule dans la réserve.
 - **La production ne s'arrête jamais** (correction de l'auteur, 24 octobre
-  2026) : une ligne active et remplie produit, et ce qu'elle produit entre dans
+  2026) : une ligne active qui tourne produit, et ce qu'elle produit entre dans
   la réserve. Il n'y a pas de ligne suspendue.
-- **Cadence** (auteur, 3 novembre 2026) : la production d'armement est comptée
-  par minute (`ARMAMENT[a].productionPerMinute`, entier) et versée une fois par
-  seconde (`ARMAMENT.everyTurns` tours). Chaque seconde, chaque type ajoute
-  `lignes remplies × productionPerMinute` à un reste en soixantièmes
-  (`Player.armamentProductionRemainder`) ; les exemplaires entiers
-  (`floor(reste / 60)`) passent dans la réserve, le reste (0 à 59) attend la
-  seconde suivante. Le remplissage des lignes, les ouvriers et le fer restent
-  calculés à chaque tour. Valeurs par minute : fusil 792, mitrailleuse 72,
-  artillerie 60, antichar et antiaérien 360, tankette, char rapide et
-  artillerie automotrice 12, char d'infanterie et char moyen 6, antichar
-  blindé et antiaérien automoteur 18. Le 4 novembre 2026, l'auteur a voulu
-  quatre fois plus de lignes par unité pour l'artillerie tractée et deux fois
-  plus pour les chars et l'appui-feu sur chenilles, au même fer par
-  exemplaire : production et fer par ligne divisés d'autant ; puis tout le fer
-  consommé multiplié par 2. Les biens (§8) restent un flux produit à
-  chaque tour.
+- **Cadence** (auteur, 3 et 5 novembre 2026) : la production d'armement est
+  comptée par heure (`ARMAMENT[a].productionPerHour`, entier) et versée une fois
+  par seconde (`ARMAMENT.everyTurns` tours). Chaque seconde, chaque type ajoute
+  `lignes qui tournent × productionPerHour × r_armement` à un reste
+  (`Player.armamentProductionRemainder`, en 3 600es d'exemplaire ×
+  `RATIO_SCALE`) ; les exemplaires entiers (`floor(reste / (3600 × RATIO_SCALE))`)
+  passent dans la réserve, le reste attend la seconde suivante. La
+  répartition des travailleurs et le fer sont calculés à chaque tour. Valeurs par
+  heure : fusil 2 376, mitrailleuse 432, artillerie 90, antichar et antiaérien
+  540, tankette, char rapide et artillerie automotrice 36, char d'infanterie
+  et char moyen 18, antichar blindé et antiaérien automoteur 54. Le 5 novembre
+  2026, toute la production d'armement a été divisée par 20 (l'unité est passée
+  de la minute à l'heure pour garder des entiers) et le stock cible multiplié
+  par 20 ; fer et ouvriers par ligne inchangés. Le 4 novembre
+  2026, l'auteur a voulu quatre fois plus de lignes par unité pour l'artillerie
+  tractée et deux fois plus pour les chars et l'appui-feu sur chenilles, au même
+  fer par exemplaire : production et fer par ligne divisés d'autant ; puis tout
+  le fer consommé multiplié par 2 ; puis, le même jour, production et fer de
+  l'appui-feu à pied (artillerie, antichar, antiaérien) divisés par 2, ouvriers
+  inchangés. Les biens (§8) restent un flux produit à chaque tour.
 - **Stock cible** : `ARMAMENT.maxStockSeconds` secondes de production (une seule
-  valeur pour tous les types, 40).
+  valeur pour tous les types, 800).
 
   ```
-  stock_cible[a] = floor(nombre de lignes de a × ARMAMENT[a].productionPerMinute
-                         × ARMAMENT.maxStockSeconds / 60)
+  stock_cible[a] = floor(nombre de lignes de a × ARMAMENT[a].productionPerHour
+                         × ARMAMENT.maxStockSeconds / 3600)
   ```
 
   Calculé sur toutes les lignes de ce type (la limite théorique décidée plus
@@ -1223,7 +1264,7 @@ fusils                                        production de base de l'usine
 | Supprimer une usine | la ville (l'usine) | la ville appartient au joueur et a une usine | retire l'usine, ses lignes et sa progression (§8) |
 | Créer une ligne de production | la ville (l'usine), le bien | maximum de lignes non atteint ; conditions et coût à définir (§8.2) | ajoute une ligne |
 | Régler les lignes actives | l'usine, le bien, le nombre de lignes actives | entre 0 et le nombre de lignes de ce bien dans cette usine | change les lignes qui reçoivent des ouvriers (§8.1) |
-| Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de remplissage (§4, §8.1) |
+| Changer la priorité | la ligne (ou le groupe), sa nouvelle position | la ligne appartient au joueur | change l'ordre de priorité, sans effet depuis le malus de production (§8.1 ; à supprimer plus tard) |
 | Déclarer la guerre | le joueur visé | un autre joueur ; statut neutre (§1) | statut guerre ; supprime la proposition en attente de la paire |
 | Proposer un pacte | le joueur visé | un autre joueur ; statut neutre ; aucune proposition en attente pour la paire | crée une proposition (§1) |
 | Rompre le pacte | le joueur visé | statut pacte | statut neutre |
@@ -1257,7 +1298,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `POPULATION.initial` | population donnée à la fondation de la première ville (§4) |
 | `POPULATION.foodPerHead` | `consommation_par_tête` (§4.1) |
 | `POPULATION.growthPerMillion` | `taux_de_croissance` (§4.1), en millionièmes de personne par unité de nourriture restante et par tour |
-| `POPULATION.hurtEveryTurns` | intervalle de la guérison des blessés, en tours (§4.2) ; 10 (une seconde) |
+| `POPULATION.hurtEveryTurns` | intervalle de la guérison des blessés, en tours (§4.2) ; 20 (deux secondes) |
 | `POPULATION.hurtDivisor` | dénominateur de la guérison des blessés, par seconde (§4.2) ; 5 000, valeur donnée par l'auteur |
 | `POPULATION.hurtMinimum` | plancher de la guérison des blessés, en hommes par seconde (§4.2) ; 5, valeur donnée par l'auteur |
 | `FOOD.minimum` | nourriture minimale par tour d'un joueur (§6.5) ; 1 500, valeur donnée par l'auteur |
@@ -1272,15 +1313,15 @@ choisies ensemble plus tard, en essayant des valeurs.
 | `SHIPPING.*` | mêmes quatre valeurs pour les routes maritimes, avec les navires de transport ; la mécanisation y est un travail (quantité × distance) par marin (§3.6) |
 | `RESOURCES` | une section par ressource naturelle, qui regroupe tous ses paramètres : `capacityPerTile` (capacité d'extraction par tour d'une case qui la porte, §7), icône, critères qui modulent son seuil de présence (§2) |
 | `GOODS` | une section par bien : ressource(s) utilisée(s) et ratio (`ironPerLine`), `productionPerLine`, `workersPerLine` (§8), nom du fichier d'icône |
-| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerMinute` (par minute, pas par tour), `workersPerLine`, icône (§8.3) |
+| `ARMAMENT` | une section par type d'armement, comme `GOODS` : ressource(s) utilisée(s) et ratio, `productionPerHour` (par minute, pas par tour), `workersPerLine`, icône (§8.3) |
 | `ARMAMENT.everyTurns` | intervalle du versement de la production d'armement, en tours (§8.3) ; 10 (une seconde) |
-| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 40 |
+| `ARMAMENT.maxStockSeconds` | nombre de secondes de production qu'une réserve d'armement peut contenir, même valeur pour tous les types (§8.3) ; 800 |
 | `ARMAMENT.decayRate` | part de l'excès au-dessus de `réserve_max` perdue à chaque tour (§8.3). À une échelle fine (comme S = 10 000, §6.3) plutôt qu'en %, un tour ne durant que 100 ms |
 | `DIPLOMACY.proposalTurns` | durée de vie d'une proposition de pacte ou de paix, en tours (§1) ; **à fixer** : 300 en attendant (valeur provisoire, pas donnée par l'auteur) |
 | `FACTORY_TYPES` | une section par type d'usine : son arbre de production (biens et armement, de parent à enfant), logo (§8.4). Premier type : `infantryArmament` (§8.4) |
 | `ARMAMENT` (noms) | noms proposés des cinq types d'infanterie : `rifle`, `machineGun`, `artillery`, `antiAirGun`, `antiTankGun` (§8.4) |
 | `FACTORY.specialization` | `decayPercent` (5) : baisse de la 2e ligne en % du coût initial ; `floorPercent` (10) : coût minimal d'une ligne en % du coût initial (§8) |
-| `FACTORY.unlockTurns` | tours-lignes de production du bien parent (somme, par tour, de ses lignes remplies dans l'usine) avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
+| `FACTORY.unlockTurns` | tours-lignes de production du bien parent (somme, par tour, de ses lignes qui tournent dans l'usine × productivité) avant de pouvoir créer une ligne du bien enfant (§8.2) ; 500 pour commencer, valeur donnée par l'auteur |
 | `FACTORY.growthTurns` | tours-lignes de fonctionnement d'un groupe avant qu'il gagne une ligne (§8.2, croissance automatique ; chaque tour ajoute son nombre de lignes) ; à fixer |
 | `FACTORY.maxLines…` | nombre maximal de lignes d'un joueur en fonction de sa population (§8.2) ; forme à définir |
 | `FACTORY.maxTypesPerCity` | types d'usines différents par ville (1 pour commencer, valeur donnée par l'auteur) |
@@ -1439,11 +1480,11 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   tout de suite. Sinon l'effective baisse vers la produite, une fois par seconde
   (tous les 10 tours) : du plus grand de 1 unité et de 1 % de l'effective,
   arrondi vers le bas, sans passer sous la produite. Cela évite que le parc de
-  machines tombe à 0 un tour où les lignes ne sont pas remplies (la population
+  machines tombe à 0 un tour où les lignes sont écartées (la population
   alternait alors entre ouvriers et fermiers). Réglages : `GOODS_DECAY`
   (`config/goods.ts`). Le fer n'a pas de valeur effective propre : les mineurs
-  sont dimensionnés sur le fer des lignes remplies du même tour, donc produit et
-  consommé sont égaux. L'aluminium, quand il sera extrait, suivra la règle des
+  sont dimensionnés sur le fer des lignes qui tournent du même tour : le fer extrait est
+  consommé à la productivité `r` près (§8). L'aluminium, quand il sera extrait, suivra la règle des
   machines si un écart apparaît.
 
 ## 13. Points ouverts
@@ -1496,8 +1537,7 @@ valider sur la visualisation.
 - Priorité d'un groupe de lignes identiques (§8.1) : le groupe a-t-il une seule
   position dans la section de sa ville ? (Priorité décidée : villes entières,
   puis lignes au sein d'une ville, §8.1.)
-- Mineurs pour l'export (§7) : remplis avec les lignes, après elles, ou après
-  les champs ?
+- Mineurs pour l'export (§7) : pris avec ceux des lignes, après eux, ou avant ?
 - Le format du réglage fermiers / pêcheurs, et son effet tant qu'un joueur n'a
   pas de cases de mer. Choix provisoire du moteur : un pourcentage entier de
   fermiers, 100 par défaut (02-Engine §7). Sans mer, les pêcheurs vont aux
@@ -1541,12 +1581,12 @@ valider sur la visualisation.
   moteur, les effectives, qui suivent les produites du tour précédent (§12).
   Le lissage de la baisse est un essai de l'auteur, à mesurer : la demande que
   les usines lisent (`goodsDemand`) n'est pas lissée.
-- **À confirmer : la demande calculée au remplissage (§8.2) est peut-être
-  inutile.** Ajoutée sans relecture de l'auteur (1er novembre 2026), en plus de
-  la valeur effective (§12). Mesure faite (une ville, des tracteurs, population
-  figée) : avant, une ligne de tracteurs changeait d'état à chaque tour entre
-  3 000 et 3 800 habitants ; après, le nombre de lignes s'ajuste en un tour et
-  ne bouge plus. À retirer si la valeur effective suffit en partie réelle.
+- **Provisoire (malus de production, 4 novembre 2026, §8)** : les ouvriers employés valent
+  les ouvriers demandés × la productivité, même quand le malus vient du fer ; la
+  progression du déblocage avance de `lignes qui tournent × r` ; la croissance
+  automatique d'un groupe ignore le malus ; les lignes de biens en trop sont
+  départagées par l'ordre des usines, ce qui garde un rôle aux priorités ;
+  `set_city_priority` et `set_line_priority` sont à supprimer plus tard.
 
 **Usines**
 - Construction : gratuite pour l'instant (§8). Coût réel et durée éventuelle :

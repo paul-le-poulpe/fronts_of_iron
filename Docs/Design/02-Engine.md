@@ -59,7 +59,7 @@ fronts aériens et maritimes.
 | `test/*.test.ts` | tests (`npm test`) |
 | `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage, récolte en rationnels exacts avec BigInt) et cartes fabriquées à la main, pour les tests de villes et d'économie |
 | `test/economy.test.ts` | tests de la courbe, de la récolte, de l'étape de nourriture, de la croissance avec reste, des totaux de fertilité et de `set_farm_share` |
-| `test/factories.test.ts` | tests des usines : remplissage tout ou rien dans l'ordre de priorité, capacité de fer, machines du tour précédent, déblocage, réserve d'armement, ordres, hash |
+| `test/factories.test.ts` | tests des usines : lignes qui tournent et malus (tests à réécrire, `Docs/Tests-a-faire.md`), capacité de fer, machines du tour précédent, déblocage, réserve d'armement, ordres, hash |
 | `test/specialization.test.ts` | ouvriers d'une ligne selon son rang (`workersForRank`, `workersForLines`), remplissage avec ces coûts, jauge de croissance automatique proportionnelle au nombre de lignes |
 | `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population), de temps en temps `set_farm_share`, des ordres d'usine tirés au hasard et, à partir de `warsFromTurn`, des ordres de guerre et de front (`declare_war`, paix, `create_division`, `delete_division`, `move_division`, `set_forced_mobilization`, attaques), dont beaucoup sont invalides |
 | `test/fronts.test.ts` | tests des fronts et des divisions (05-Fronts §13.7) : configuration des divisions, détection, répartition des divisions d'un front qui change, guerre et paix, ordres d'attaque, fondation en guerre, hash |
@@ -258,17 +258,19 @@ Dans `GameState` :
   millièmes de case par fermier), `fished`, `fishMechanization` (M de la pêche,
   par pêcheur), `wheat`, `fish`, `food`, `factoryWorkers`, `miners`,
   `minedTiles`, `mineMechanization` (M de l'extraction, cases de fer par mineur,
-  celle de `minersFor` pour le fer des lignes remplies), `ironExtracted`.
+  celle de `minersFor` pour le fer extrait), `ironExtracted`, `ironDemanded` (fer demandé par les lignes qui
+  tournent), `ironConsumed` (demandé × `lineRatio`), `goodsIronRatio`, `goodsWorkerRatio`, `goodsLineRatio` et `armIronRatio`, `armWorkerRatio`, `armLineRatio`
+  (productivités des biens puis de l'armement, sur `RATIO_SCALE` = 10 000, 00-Game §8), `goodsRemainder` (reste de production de chaque bien, sur `RATIO_SCALE`).
 - Usines et armement, par joueur :
   - `factories : Factory[]`, une usine par ville. **L'ordre du tableau est la
     priorité des villes** (00-Game §4, §8.1). Une `Factory` est `{ city, type,
-    groups, progress }` : `type` est une clé de `FACTORY_TYPES`, `groups` la
+    groups, progress, progressRemainder }` : `type` est une clé de `FACTORY_TYPES`, `groups` la
     liste des groupes de lignes **dans l'ordre de priorité de l'usine**,
     `progress` un compteur par nœud de l'arbre du type (même indice que
-    `FACTORY_TYPES[type].tree`) ;
-  - un `LineGroup` est `{ good, lines, active, filled }` : `lines` lignes du bien
-    `good`, `active` activées par le joueur (les `active` premières), `filled`
-    remplies au dernier tour. `good` est un bien (`GOODS`) ou un type d'armement
+    `FACTORY_TYPES[type].tree`), `progressRemainder` sa fraction (sur `RATIO_SCALE`) ;
+  - un `LineGroup` est `{ good, lines, active, running, growth }` : `lines` lignes du bien
+    `good`, `active` activées par le joueur (les `active` premières), `running`
+    celles qui tournent au dernier tour (les actives, sauf les lignes de biens en trop, 00-Game §8.2). `good` est un bien (`GOODS`) ou un type d'armement
     (`ARMAMENT.types`) ;
   - `goods` : biens produits au dernier tour, dans l'ordre des clés de `GOODS` ;
   - `armamentReserve`, `armamentRemainder` : réserve et reste du déclin de
@@ -357,7 +359,7 @@ Une `City.player` change à la prise de la ville.
 - **Détection** (`updateFronts`, appelée à la fin de `foundCity` et par `captureCity`, jamais à chaque tour) :
   une connexion est une route dont les deux villes sont à deux joueurs ; un front est l'ensemble des
   connexions d'un couple de groupes. Les positions se retrouvent par la clé `(p1, p2, city1, city2)` ; le
-  front garde l'identifiant, l'attaque (`frontAttack`) et les pertes du dernier round (`lastLoss`) de l'ancien front qui partage le plus de connexions
+  front garde l'identifiant, l'attaque (`frontAttack`) et les pertes du dernier round (`lastLossByNiche`) de l'ancien front qui partage le plus de connexions
   avec lui (à égalité, le plus petit identifiant ; un identifiant n'est repris qu'une fois). Les divisions
   des anciens fronts (sur place et en route) suivent leurs connexions gardées (05-Fronts §2.5) : fusion,
   mises ensemble ; coupure, réparties au prorata des connexions (`splitProportional`, divisions et morceaux
@@ -494,8 +496,8 @@ par le serveur, `city` entier, ville du joueur. Les chaînes (`factoryType`,
 `stepEconomy(state)` (`economy.ts`), appelée par `applyTurn` après tous les ordres du
 tour, pour chaque joueur dans l'ordre des identifiants, y compris un joueur sans
 ville. Elle utilise la population de ce moment : le coût d'une fondation de ce tour
-est déjà retiré, et les hommes des divisions (`Player.soldiers`) ne travaillent pas : le remplissage des lignes, les fermiers et
-les pêcheurs se répartissent sur `max(0, population − soldiers − hurt)`, la croissance sur `population` entière. Unités : population en personnes, surfaces en cases, mécanisation
+est déjà retiré, et les hommes des divisions (`Player.soldiers`) ne travaillent pas : les fermiers, les pêcheurs, les mineurs et
+les ouvriers se répartissent sur `max(0, population − soldiers − hurt)`, la croissance sur `population` entière. Unités : population en personnes, surfaces en cases, mécanisation
 `M` en millièmes de case par travailleur, `m_max` en machines pour 1 000
 travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 
@@ -503,36 +505,50 @@ travailleurs (§7). `S` = 10 000. Pour un joueur, dans cet ordre :
 0. machines du tour : tracteurs = goods[tractor], bateaux = goods[fishingBoat],
    pompes = goods[miningMachine]  (produits au tour précédent, §7)
 
-1. remplissage des lignes (00-Game §4, étape 1) :
-     capacité = cases de fer du joueur × RESOURCES.iron.capacityPerTile
-     travailleurs = 0 ; mineurs = 0 ; fer = 0 ; filled = 0 pour tous les groupes
-     produit[b] = 0 pour chaque bien
-     pour chaque usine dans l'ordre de factories,
-       pour chaque groupe dans l'ordre de l'usine,
-         pour j de 1 à active :
-           si le groupe est la pompe b et produit[b] ≥ goodsDemand[b] :
-             groupe suivant (pas un ARRÊT : 00-Game §8.2, la production d'un
-             bien ne dépasse pas sa demande du tour précédent)
-           demande = fer + ironPerLine(bien)
-           si demande > capacité : ARRÊT (de tout le remplissage)
-           m = mineurs(demande, pompes)
-           si travailleurs + workersForRank(bien, j + 1) + m > population : ARRÊT
-           si le groupe est le tracteur ou le bateau b (provisoire, 00-Game §8.2) :
-             d = fieldMachineDemand(b, population − travailleurs − workersForRank(bien, j + 1) − m)
-             si produit[b] ≥ d : demandeRetenue[b] = produit[b] ; groupe suivant
-             demandeRetenue[b] = d
-           travailleurs += workersForRank(bien, j + 1) ; mineurs = m ; fer = demande ; filled++
-           si bien : produit[b] += productionPerLine
+1. répartition (00-Game §4) : fermiers et pêcheurs d'abord, sur
+   population_active = max(0, population − soldiers − hurt), puis les lignes, les mineurs et les ouvriers :
+
+   fermiers_disponibles = floor(population_active × farmPercent / 100)
+   pêcheurs_disponibles = population_active − fermiers_disponibles
+   récolte, report, blé, poisson : voir plus bas (inchangés)
+
+   demande de tracteurs, de bateaux = fieldMachineDemand(b, population_active)
+     (machines d'une mécanisation totale pour les fermiers et pêcheurs répartis) ;
+     demande de pompes = goodsDemand[pompe] du tour précédent
+
+   lignes qui tournent (00-Game §8, §8.2), sans ordre de remplissage :
+     produit[b] = 0 pour chaque bien ; fer_demandé = 0 ; ouvriers_demandés = 0
+     pour chaque usine, pour chaque groupe : running = 0
+       pour j de 1 à active :
+         si le groupe est un bien b et produit[b] ≥ demande[b] : groupe suivant
+           (la production à 100 % couvre la demande : la ligne ne tourne pas)
+         running++ ; si bien : produit[b] += productionPerLine
+       fer_demandé += running × ironPerLine
+       ouvriers_demandés += workersForLines(bien, running)
+
+   reste = population_active − fermiers − pêcheurs
+   demande_plafonnée = min(fer_demandé, cases de fer × RESOURCES.iron.capacityPerTile)
+   requis    = mineurs(demande_plafonnée, pompes)
+   mineurs   = min(requis, reste)
+   extrait   = requis == 0 ? 0 : floor(demande_plafonnée × mineurs / requis)
+   disponibles = reste − mineurs ; S_r = RATIO_SCALE = 10 000
+   ratios(fer_d, ouv_d, fer_dispo, ouv_dispo) :
+     ratio_fer = fer_d == 0 ? S_r : min(S_r, floor(fer_dispo × S_r / fer_d))
+     ratio_ouvriers = ouv_d == 0 ? S_r : min(S_r, floor(ouv_dispo × S_r / ouv_d))
+     r = min(ratio_fer, ratio_ouvriers)
+   passe 1, biens : (fer_d, ouv_d) = demandes des lignes de biens ; dispo = extrait, disponibles ;
+     fer_b = floor(fer_d × r_b / S_r) ; ouv_b = floor(ouv_d × r_b / S_r)          goods*Ratio
+   passe 2, armement : demandes des lignes d'armement ; dispo = extrait − fer_b, disponibles − ouv_b   arm*Ratio
+   ouvriers = ouv_b + ouv_a                                     factoryWorkers
+   fer_consommé = fer_b + fer_a                                 ironConsumed
+   inactifs   = disponibles − ouvriers
 
    cases_exploitées(d) = ceil(d / capacityPerTile)
    mineurs(d, pompes)  = ceil(cases_exploitées(d) × 1000 / M)
      M = mechanization(MINING, ceil(cases_exploitées(d) × 1000 / M_max), pompes)
      (les pompes sont rapportées aux mineurs à pleine mécanisation, §7)
 
-2. reste = population − travailleurs − mineurs
-
-fermiers_disponibles = floor(reste × farmPercent / 100)
-pêcheurs_disponibles = reste − fermiers_disponibles
+2. (fusionnée avec 1 : reste = population_active − fermiers − pêcheurs)
 
 récolte(config, F, machines, surface_max, fertilité_totale, report) :
   R        = min(F + report, ceil(surface_max × 1000 / M_max))    référence : disponibles et report, plafonnés à la pleine mécanisation (machineReference, 00-Game §6.2)
@@ -553,19 +569,22 @@ surplus_pêcheurs = max(0, pêcheurs_disponibles − requis_mer)
 blé      = récolte(FARMING, fermiers_disponibles, tracteurs, farmTiles, fertilitySum, surplus_pêcheurs)
 rendement_eau = tileYield × 1000 + floor((tileYieldMax − tileYield) × 1000 × f / S)   millièmes, même f que la pêche
 poisson  = récolte(FISHING, pêcheurs_disponibles, bateaux, seaTiles, floor(seaTiles × rendement_eau / 1000), surplus_fermiers)
-inactifs = reste − fermiers − pêcheurs
+inactifs = population_active − fermiers − pêcheurs − mineurs − ouvriers
 nourriture = max(blé + poisson, FOOD.minimum)
 
-3. production : pour chaque groupe,
-     un bien : goods[b] += filled × productionPerLine (remis à 0 avant : c'est la production de ce tour) ;
+3. production : pour chaque groupe qui a des lignes qui tournent (r = goodsLineRatio pour un bien, armLineRatio pour un armement),
+     un bien : fabriqué[b] += running × productionPerLine ; puis pour chaque bien :
+       total = goodsRemainder[b] + fabriqué[b] × goodsLineRatio ; goods[b] = floor(total / S_r) ;
+       goodsRemainder[b] = total − goods[b] × S_r      (goods est remis à 0 avant : c'est la production de ce tour)
      un armement, seulement aux tours multiples de ARMAMENT.everyTurns (une seconde) :
-       reste_prod[a] += filled × productionPerMinute ; la production ne s'arrête jamais
-     puis, à ces mêmes tours, pour chaque type : n = floor(reste_prod[a] / 60) ;
-       armamentReserve[a] += n ; reste_prod[a] −= 60 × n   (armamentProductionRemainder)
-   progression : pour chaque usine et chaque nœud de son arbre, n = somme des filled
-     des groupes de ce bien : progress = min(unlockTurns, progress + n)
+       reste_prod[a] += running × productionPerHour × armLineRatio ; la production ne s'arrête jamais
+     puis, à ces mêmes tours, pour chaque type : n = floor(reste_prod[a] / (3600 × S_r)) ;
+       armamentReserve[a] += n ; reste_prod[a] −= 3600 × S_r × n   (armamentProductionRemainder)
+   progression : pour chaque usine et chaque nœud de son arbre, n = somme des running
+     des groupes de ce bien : total = progressRemainder + n × r (r de la catégorie du bien) ;
+       progress = min(unlockTurns, progress + floor(total / S_r)) ; progressRemainder = total mod S_r
    déclin de l'excès, pour chaque type d'armement :
-     stock_cible = floor(lignes de a (toutes les usines, tout état) × productionPerMinute × maxStockSeconds / 60)
+     stock_cible = floor(lignes de a (toutes les usines, tout état) × productionPerHour × maxStockSeconds / 3600)
      excès = max(0, réserve + équipement des divisions − stock_cible)     (05-Fronts §4.5 : `divisionEquipment`, réserve nationale comprise)
      si excès == 0 : reste = 0
      sinon : total = reste + excès × decayRate ; perdu = floor(total / S)
@@ -582,7 +601,7 @@ si population < 0 : population = 0 et reste = 0
      famine : base = avant − soldiers ; si blessés > 0 et base > 0 :
               blessés −= min(blessés, ceil(blessés × perdu / base))
      plafond : blessés = min(blessés, max(0, population − soldiers))
-     guérison, aux tours multiples de POPULATION.hurtEveryTurns (une seconde) :
+     guérison, aux tours multiples de POPULATION.hurtEveryTurns (deux secondes) :
                 si blessés > 0 : g = min(blessés, max(POPULATION.hurtMinimum, floor(population / POPULATION.hurtDivisor)))
                 blessés −= g ; population −= g
 ```
@@ -711,12 +730,12 @@ sa capitale : `cities[capital - 1].group`.
    d'armement : réserve, reste, puis le nombre d'usines et pour
    chacune, dans l'ordre de priorité : ville, indice du type d'usine, `progress`
    (nombre, valeurs), nombre de groupes et pour chacun, dans son ordre : indice du
-   produit (biens puis armements, `PRODUCT_IDS`), `lines`, `active`, `filled` ;
+   produit (biens puis armements, `PRODUCT_IDS`), `lines`, `active`, `running` ;
 5. le nombre de villes, puis pour chacune : identifiant, joueur, case, port
    (0 ou 1), groupe ;
 6. le nombre de routes, puis pour chacune : a, b ;
 7. les fronts : `nextFrontId`, le nombre de fronts, puis pour chacun (par identifiant) : id, joueurs, groupes,
-   nombre de connexions et pour chacune villes et position, puis `frontAttack` et `lastLoss` de chaque camp ; puis les divisions :
+   nombre de connexions et pour chacune villes et position, puis `frontAttack` et `lastLossByNiche` (une valeur par niche) de chaque camp ; puis les divisions :
    `nextDivisionId`, le nombre de divisions, puis pour chacune (par identifiant) : id, joueur, type, `counts` (nombre,
    valeurs), front, ligne, largeur engagée, boîte, percée, largeur engagée dans la percée, tour d'arrivée, tour de fin de
    formation, tour de fin de fuite ; puis les boîtes (`nextBoxId`, nombre, puis id, front, joueur) et les percées
@@ -838,8 +857,8 @@ ils sont donc dans le hash (§6).
   quelles machines le tour a utilisées** : l'étape les remplace à la fin
   (production du tour, puis effective mise à jour), pour le tour suivant. Le
   client lit `goodsEffective` avant l'étape.
-- **Écrire `filled` ailleurs que dans `fillLines`** : c'est le résultat du dernier
-  remplissage, remis à 0 au début de chaque étape. Le compteur de déblocage et la
+- **Écrire `running` ailleurs que dans `selectLines`** : c'est le résultat de la dernière
+  sélection des lignes, remis à 0 au début de chaque étape. Le compteur de déblocage et la
   production le lisent juste après.
 - **Ajouter un champ aux fronts sans l'ajouter à `hashFront`** (hash.ts) : même piège que pour l'état des joueurs ;
   `test/fronts.test.ts` change chaque champ l'un après l'autre.
@@ -963,9 +982,9 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     l'ordre des identifiants. Un joueur sans ville fait aussi l'étape : sans
     terre ses fermiers sont inactifs et sa nourriture vaut `FOOD.minimum`
     (nomades, 00-Game §4).
-22. Répartition de la population (00-Game §4) : les lignes d'abord, puis le reste
-    à l'étape 2 (fermiers et pêcheurs), puis à l'étape 3 (inactifs). Sans ligne
-    remplie, toute la population va à l'étape 2.
+22. Répartition de la population (00-Game §4, depuis le 4 novembre 2026) : fermiers et pêcheurs d'abord, puis les
+    mineurs, puis les ouvriers d'usine, le reste est inactif. Sans ligne, toute la population va aux fermiers et
+    aux pêcheurs.
 23. Résultats du dernier tour (`farmers`, `fishers`, `idle`, `cultivated`, `farmMechanization`, `fished`,
     `fishMechanization`, `wheat`, `fish`, `food`, `factoryWorkers`, `miners`, `minedTiles`,
     `mineMechanization`, `ironExtracted`) gardés dans le joueur et hachés.
@@ -994,7 +1013,7 @@ points 31 et 32 sont des choix de plus.
     GOODS_DECAY.everyTurns === 0`, de `max(minUnits, floor(effective × percent
     / 100))`, sans passer sous `goods`. Les deux tableaux sont hachés. Un joueur
     qui n'a pas de ligne de machines a 0 machine, comme avant. Les usines
-    (`fillLines`) et la demande lisent la production et `goodsDemand`, pas
+    (`selectLines`) et la demande lisent la production et `goodsDemand`, pas
     l'effective.
 27. **Mécanisation minière** (00-Game §6.2, §13) : pompes par mineur = pompes ÷
     mineurs qui exploitent les cases à pleine mécanisation
@@ -1007,17 +1026,18 @@ points 31 et 32 sont des choix de plus.
     une seule position dans la section de sa ville.
 29. **Déblocage** (00-Game §8.2, lecture retenue) : un compteur par usine et par
     bien de son arbre, qui augmente à chaque tour du nombre de lignes de ce bien
-    remplies dans cette usine (vitesse proportionnelle à la production, décision
+    qui tournent dans cette usine, multiplié par la productivité `r` avec un reste
+    (`progressRemainder` ; **provisoire**, 4 novembre 2026 ; vitesse proportionnelle à la production, décision
     de l'auteur du 24 octobre 2026 ; avant : + 1 quel que soit le nombre de
     lignes). Le bien enfant est créable quand le
     compteur du parent atteint `FACTORY.unlockTurns`. Une ligne désactivée ou
-    non remplie ne le fait pas avancer, sans le faire reculer.
+    écartée (bien en trop) ne le fait pas avancer, sans le faire reculer.
 30. **`workersPerLine`** (00-Game §13) : une valeur par produit, dans
     `ProductConfig` à côté de `productionPerLine` et `ironPerLine`
     (`GOODS`, `ARMAMENT.types`). `FACTORY.workersPerLine` n'existe plus.
     **Spécialisation** (00-Game §8.1) : `workersPerLine` est le coût de la
     première ligne d'un groupe ; la ligne de rang `k` (`j + 1` dans la boucle
-    de `fillLines`) coûte `workersForRank(bien, k)`, calculé en entiers
+    de `selectLines`, par `workersForLines`) coûte `workersForRank(bien, k)`, calculé en entiers
     (`Math.floor`, multiplications avant la division, pas de puissance) avec
     `FACTORY.specialization` (5 % et 10 %). `workersForLines(bien, n)` somme
     les rangs 1 à `n` (le client s'en sert pour les ouvriers d'un groupe). Le
@@ -1029,7 +1049,8 @@ points 31 et 32 sont des choix de plus.
 31. **Une ligne créée est active** : `create_line` augmente `active` en même
     temps que `lines` (00-Game ne dit pas dans quel état naît une ligne).
     **Croissance automatique** (00-Game §8.2) : `growLines`, après la production.
-    Biens seulement. Un groupe dont `filled == lines` avance `growth` de `lines`
+    Biens seulement. Un groupe dont `running == lines` (toutes ses lignes actives et en marche, **sans regarder le
+    malus**, provisoire) avance `growth` de `lines`
     (proportionnel à la production, comme `progress`) ; à
     `FACTORY.growthTurns` (500, valeur d'essai), `lines` et `active`
     augmentent de 1 et `growth` perd `growthTurns` (le dépassement reste). Pas d'avance quand la capacité du
@@ -1038,22 +1059,20 @@ points 31 et 32 sont des choix de plus.
     d'une mécanisation totale : `ceil(référence × maxMachinesPer1000 / 1000)`,
     la référence étant `machineReference(cfg, disponibles + report, surface)`
     pour les tracteurs et les bateaux (`fieldMachineDemand`). Tracteurs et
-    bateaux, provisoire (00-Game §8.2, peut-être retiré) : la demande retenue
-    au remplissage, c'est-à-dire la production déjà remplie si une ligne a été
-    refusée, sinon la demande calculée pour la dernière ligne remplie, les
-    disponibles étant ceux qui resteraient avec cette ligne ; sans ligne
-    examinée, les disponibles après toutes les lignes. Le remplissage ne lit
-    plus `goodsDemand` pour eux : calculée au tour précédent, elle faisait
-    alterner les lignes à chaque tour (boucle de gain environ −2 : une ligne
-    de tracteurs de moins rend 200 fermiers, donc 20 tracteurs de demande, donc
-    2 lignes). Pour les pompes, la référence est les
+    bateaux : la demande des fermiers et pêcheurs déjà répartis (`fieldMachineDemand(b,
+    population − soldats − blessés)`), la même qui limite les lignes utiles (00-Game §8.2). Pour les pompes, la référence est lesPour les pompes, la référence est les
     mineurs à pleine mécanisation des cases qu'il faudrait pour le fer de **toutes les
     lignes actives** (borné par la capacité), pas pour le fer extrait : sinon
-    une usine de pompes seule, plafonnée à une demande nulle (§4, remplissage),
+    une usine de pompes seule, plafonnée à une demande nulle (§4, lignes qui tournent),
     n'extrairait jamais de fer et sa demande resterait nulle. Un groupe ne perd
-    jamais de ligne ; ses lignes au-delà de la demande ne sont simplement pas
-    remplies. Choix provisoires : « toutes les lignes produisent » et « jamais
+    jamais de ligne ; ses lignes au-delà de la demande ne tournent simplement pas.
+    Choix provisoires : « toutes les lignes sont actives et tournent, sans regarder le malus » et « jamais
     de perte ».
+33. **Malus de production** (00-Game §8, décision de l'auteur du 4 novembre 2026) : plus de
+    remplissage ligne par ligne (`fillLines` supprimée). deux passes (biens, puis armement sur le reste du fer et des ouvriers), chacune avec
+    `min(ratio_fer, ratio_ouvriers)` sur `RATIO_SCALE` = 10 000 (`goodsLineRatio`, `armLineRatio`). **Provisoire** : ouvriers employés = demandés × le ratio de la catégorie ; progression du déblocage
+    et croissance automatique (voir 29 et 31). `set_city_priority` et `set_line_priority` restent des ordres
+    valides mais ne servent plus au calcul : **à supprimer plus tard**.
 32. Valeurs d'essai (aucune n'est fixée, 00-Game §10), choisies pour qu'une partie
     sur la carte de test soit jouable : `workersPerLine` 200 pour chaque produit (4 × 50) ;
     `RESOURCES.iron.capacityPerTile` 10 (une case de fer fait tourner cinq lignes de fusils à 2 fer) ;
@@ -1116,8 +1135,8 @@ divisions ; `npm run bench` donnera les nouveaux. Les mesures qui suivent datent
 
 `npm run bench`, sur le PC de l'auteur (Node 24.19), 23 octobre 2026. **Les
 usines (24 octobre 2026) changent les chiffres de tour et d'étape** : le scénario
-envoie maintenant des ordres d'usine, ses joueurs ont des lignes remplies (jusqu'à
-la capacité de fer de leurs zones) et le remplissage coûte une boucle par ligne.
+envoie maintenant des ordres d'usine, ses joueurs ont des lignes qui tournent (jusqu'à
+la capacité de fer de leurs zones) et la sélection des lignes coûte une boucle par ligne.
 Même scénario, même machine, avec usines : tour moyen sur 10 000 tours 29 µs (161
 villes fondées) ; étape seule
 31 µs pour 8 joueurs ; 100 joueurs, 3 000 tours : tour 102 µs, étape 110 µs. Un

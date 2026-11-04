@@ -291,3 +291,37 @@ Règle provisoire, peut-être retirée (00-Game §13, Extraction). Si elle reste
   antichar blindé, antiaérien automoteur 18. Fer par ligne et par tour : fusil et mitrailleuse 4, antichar et antiaérien
   20, artillerie 50, biens ×2 (tracteur 100, bateau 60, pompe 20) ; chars et appui-feu sur chenilles inchangés. Les tests
   qui comptent les lignes remplies avec un fer donné, ou les mineurs d'une ligne, sont à recalculer.
+
+## Malus de production (4 novembre 2026, 00-Game §4, §8)
+
+Le remplissage ligne par ligne (`fillLines`) est remplacé par un malus réparti sur toutes les lignes. `LineGroup.filled`
+devient `running` ; nouveaux champs du joueur `ironDemanded`, `ironConsumed`, les six ratios (`goodsIronRatio`… `armLineRatio`),
+`goodsRemainder` ; nouveau `Factory.progressRemainder` ; `armamentProductionRemainder` est maintenant en soixantièmes ×
+`RATIO_SCALE` (10 000). Les tests ont seulement été renommés (`filled` → `running`) pour que le typecheck passe ; ils sont
+à écrire ou à corriger :
+
+- **À corriger** : `factories.test.ts` « remplissage des lignes » (tout ou rien, arrêt à la première ligne, capacité de fer,
+  machines du tour précédent), « déblocage et réserve d'armement » (reste en soixantièmes × 10 000), « hash des usines »
+  (nouveaux champs) ; `specialization.test.ts` « remplissage avec les coûts par rang » ; `client/test/solo.test.ts`
+  « usine du joueur » (les fermiers passent avant : une petite population n'a plus ni mineurs ni ouvriers) ; le scénario
+  (`filledLinePlayerTurns`) compte maintenant les joueurs qui ont des lignes qui tournent.
+- **À écrire** : ordre de répartition (fermiers et pêcheurs, puis mineurs, puis ouvriers, le reste inactif) ; fer extrait
+  proportionnel aux mineurs quand ils manquent ; `ratio_fer`, `ratio_ouvriers`, `r = min` ; production × r avec reste
+  (biens, armement, déblocage) ; ligne de biens en trop écartée à 100 % de productivité (100 tracteurs demandés, une ligne
+  de 100 : une seule tourne même à r = 50 %) ; demande de tracteurs et de bateaux des fermiers et pêcheurs répartis ;
+  croissance automatique indifférente au malus ; ordres de priorité toujours valides, sans effet ; déterminisme avec
+  malus (les restes sont dans le hash) ; **deux passes** : les biens prennent le fer et les ouvriers avant l'armement
+  (`r_biens` et `r_armement` séparés, l'armement reçoit le reste, biens à 100 % : armement non touché si le fer suffit).
+- **Appui-feu à pied divisé par 2** : artillerie 30 par minute et 25 fer, antichar et antiaérien 180 par minute et 10 fer ;
+  ouvriers inchangés.
+- **Client, à vérifier à la main** : onglet des usines (nombre du fer en gras, rouge si `ratio_fer` < 1 ; nombre des
+  ouvriers rouge si `ratio_ouvriers` < 1) ; onglet Ressources (camembert du fer, infobulle, hachures rouges sur la barre et
+  la mini-barre, camembert de l'aluminium grisé, engrenages des machines).
+
+## Production ÷ 20, guérison toutes les 2 s (5 novembre 2026)
+
+- Armement en `productionPerHour` (fusil 2 376, mitrailleuse 432, artillerie 90, antichar et antiaérien 540, tankette, char
+  rapide, artillerie automotrice 36, char d'infanterie et char moyen 18, antichar blindé et antiaérien automoteur 54) ; reste
+  en 3 600es × `RATIO_SCALE`. Stock cible = ⌊ lignes × `productionPerHour` × 800 / 3 600 ⌋ (même valeur par ligne qu'avant).
+- Guérison aux tours multiples de 20 (`hurtEveryTurns`) : les tests qui jouent 10 tours n'en voient plus.
+- Les mentions plus haut de `productionPerMinute` et de 40 s sont périmées.

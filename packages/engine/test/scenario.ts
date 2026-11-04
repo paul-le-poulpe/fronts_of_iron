@@ -318,7 +318,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     changedTiles += changed.length;
     for (const p of state.players) {
       if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
-      if (p.factories.some((f) => f.groups.some((g) => g.filled > 0))) filledLinePlayerTurns++;
+      if (p.factories.some((f) => f.groups.some((g) => g.running > 0))) filledLinePlayerTurns++;
       if (p.soldiers > 0) soldierPlayerTurns++;
     }
     if (state.fronts.some((f) => f.sides.some((x) => x.frontAttack))) fightingTurns++;

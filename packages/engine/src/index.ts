@@ -121,6 +121,7 @@ export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type Ro
 export {
   createGame,
   isPlayerId,
+  RATIO_SCALE,
   setOwner,
   type City,
   type Factory,
@@ -161,6 +162,7 @@ export {
   mechanization,
   mechanizationCurve,
   minersFor,
+  scaledByRatio,
   requiredWorkers,
   stepEconomy,
   waterYieldMilli,

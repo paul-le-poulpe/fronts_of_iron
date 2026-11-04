@@ -62,7 +62,7 @@ function withTwoFactories(): GameState {
 
 const line = (s: GameState, city: number, good: string): boolean => send(s, { type: "create_line", player: 1, city, good });
 const filled = (s: GameState, city: number, good: string): number =>
-  s.players[0]!.factories.find((f) => f.city === city)!.groups.find((g) => g.good === good)!.filled;
+  s.players[0]!.factories.find((f) => f.city === city)!.groups.find((g) => g.good === good)!.running;
 
 describe("remplissage des lignes (00-Game §4, §7, §8)", () => {
   it("une ligne reçoit ses ouvriers et les mineurs de son fer, produit, et le reste va aux champs", () => {
@@ -74,7 +74,7 @@ describe("remplissage des lignes (00-Game §4, §7, §8)", () => {
     const miners = Math.ceil(1000 / MINING.mechanizationBase); // 1 fer = 1 case = 1 000 millièmes, sans pompe
     assert.equal(minersFor(1, 0), miners);
     assert.deepEqual([filled(s, 1, "rifle"), p.factoryWorkers, p.miners, p.ironExtracted, p.minedTiles], [1, W, miners, 1, ironTilesFor(1)]);
-    assert.equal(p.armamentReserve[0], ARMAMENT.types.rifle.productionPerMinute);
+    assert.equal(p.armamentReserve[0], ARMAMENT.types.rifle.productionPerHour);
     assert.equal(p.farmers + p.fishers + p.idle + p.factoryWorkers + p.miners + p.soldiers, pop, "toute la population est affectée");
     // Seul le reste de la population est réparti entre fermiers, pêcheurs et inactifs.
     assert.equal(p.farmers + p.fishers + p.idle, pop - W - miners);
@@ -162,7 +162,7 @@ describe("déblocage et réserve d'armement (00-Game §8.2, §8.3)", () => {
     const p = s.players[0]!;
     assert.ok(line(s, 1, "rifle"));
     // Une usine naît avec une ligne de fusils, plus celle créée ici : deux lignes.
-    const perTick = 2 * ARMAMENT.types.rifle.productionPerMinute;
+    const perTick = 2 * ARMAMENT.types.rifle.productionPerHour;
     const max = armamentReserveMax(p, "rifle");
     assert.equal(max, perTick * ARMAMENT.maxStockSeconds);
     // À la réserve maximale : les lignes produisent encore.
@@ -235,7 +235,7 @@ describe("hash des usines", () => {
       ["ordre des usines", (s) => void s.players[0]!.factories.reverse()],
       ["lignes", (s) => void s.players[0]!.factories[0]!.groups[0]!.lines++],
       ["lignes actives", (s) => void s.players[0]!.factories[0]!.groups[0]!.active--],
-      ["lignes remplies", (s) => void s.players[0]!.factories[0]!.groups[0]!.filled--],
+      ["lignes remplies", (s) => void s.players[0]!.factories[0]!.groups[0]!.running--],
       ["progression", (s) => void s.players[0]!.factories[0]!.progress[0]!++],
       ["type d'usine", (s) => void ((s.players[0]!.factories[1] as { type: string }).type = "miningMachines")],
       ["biens produits", (s) => void s.players[0]!.goods[1]!++],

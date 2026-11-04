@@ -160,11 +160,13 @@ export interface FactoryCatalog {
   readonly unlockTurns: number;
   /** `FACTORY.growthTurns` : tours avant une ligne automatique (00-Game §8.2). */
   readonly growthTurns: number;
+  /** `RATIO_SCALE` : 100 % de productivité s'écrit ainsi (`PlayerStats.goodsLineRatio`…). */
+  readonly ratioScale: number;
   /** Biens, dans l'ordre de `HumanDetail.goods`. */
   readonly goodIds: readonly string[];
   /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
   readonly armamentIds: readonly string[];
-  /** Production d'une ligne remplie : par tour pour un bien, par minute pour un type d'armement (00-Game §8, §8.3). */
+  /** Production d'une ligne qui tourne à 100 % : par tour pour un bien, par heure pour un type d'armement (00-Game §8, §8.3). */
   readonly productionPerLine: Readonly<Record<string, number>>;
   /** Ouvriers de la première ligne d'un groupe, par bien ou type d'armement. */
   readonly workersPerLine: Readonly<Record<string, number>>;
@@ -210,9 +212,16 @@ export interface LineGroupView {
   readonly good: string;
   readonly lines: number;
   readonly active: number;
-  readonly filled: number;
-  /** Ouvriers des lignes remplies (somme selon le rang de chaque ligne, 00-Game §8.1). */
-  readonly workers: number;
+  /** Lignes qui tournent (les actives, sauf les lignes utiles en trop, 00-Game §8.2). */
+  readonly running: number;
+  /** Ouvriers demandés par les lignes qui tournent (somme selon le rang de chaque ligne, 00-Game §8.1). */
+  readonly workersDemanded: number;
+  /** Ouvriers obtenus : demandés × productivité des lignes. */
+  readonly workersObtained: number;
+  /** Fer demandé par les lignes qui tournent. */
+  readonly ironDemanded: number;
+  /** Fer obtenu : demandé × productivité des lignes. */
+  readonly ironObtained: number;
   /** Tours comptés vers la prochaine ligne automatique (biens seulement, 00-Game §8.2). */
   readonly growth: number;
   /** La capacité du joueur pour ce bien couvre la demande : plus de croissance automatique. */
@@ -255,8 +264,8 @@ export interface FrontConnectionView {
 export interface FrontSideView {
   /** Attaque sur tout le front en cours (05-Fronts §5.1). */
   readonly frontAttack: boolean;
-  /** Hommes perdus par sa première ligne au dernier round de combat (05-Fronts §11.4). */
-  readonly lastLoss: number;
+  /** Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `military.niches`, 05-Fronts §11.4). */
+  readonly lastLossByNiche: readonly number[];
 }
 
 /** Une boîte de percée (05-Fronts §4.6), dans l'ordre de création de son camp. */
@@ -372,11 +381,22 @@ export interface PlayerStats {
   readonly defeated: boolean;
   /** Coût en population de la prochaine ville (00-Game §3.3). */
   readonly foundingCost: number;
-  /** Ouvriers des lignes remplies, mineurs, cases de fer exploitées, fer extrait (dernier tour). */
+  /** Ouvriers employés par les lignes, mineurs, cases de fer exploitées, fer extrait (dernier tour). */
   readonly factoryWorkers: number;
   readonly miners: number;
   readonly minedTiles: number;
   readonly ironExtracted: number;
+  /** Fer demandé par les lignes qui tournent, et fer consommé (demandé × productivité). */
+  readonly ironDemanded: number;
+  readonly ironConsumed: number;
+  /** Productivités sur l'échelle `RATIO_SCALE` (10 000 = 100 %), pour les biens puis l'armement : fer, ouvriers, et lignes = le plus petit des deux. */
+  readonly goodsIronRatio: number;
+  readonly goodsWorkerRatio: number;
+  readonly goodsLineRatio: number;
+  /** Idem pour l'armement, servi après les biens (00-Game §8). */
+  readonly armIronRatio: number;
+  readonly armWorkerRatio: number;
+  readonly armLineRatio: number;
   /** Nourriture si toutes les terres et toutes les eaux étaient travaillées (au moins FOOD.minimum). */
   readonly foodPotential: number;
   /** Blé si toutes les cases fertiles étaient cultivées (`Player.fertilitySum`). */

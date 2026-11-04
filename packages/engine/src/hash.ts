@@ -50,7 +50,7 @@ function hashFront(h: number, f: Front): number {
   }
   for (const s of f.sides) {
     h = mixWord(h, s.frontAttack ? 1 : 0);
-    h = mixWord(h, s.lastLoss);
+    for (const n of s.lastLossByNiche) h = mixWord(h, n);
   }
   return h;
 }
@@ -121,6 +121,14 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.minedTiles);
     h = mixWord(h, p.mineMechanization);
     h = mixWord(h, p.ironExtracted);
+    h = mixWord(h, p.ironDemanded);
+    h = mixWord(h, p.ironConsumed);
+    h = mixWord(h, p.goodsIronRatio);
+    h = mixWord(h, p.goodsWorkerRatio);
+    h = mixWord(h, p.goodsLineRatio);
+    h = mixWord(h, p.armIronRatio);
+    h = mixWord(h, p.armWorkerRatio);
+    h = mixWord(h, p.armLineRatio);
     h = mixWord(h, p.forcedMobilization ? 1 : 0);
     h = mixWord(h, p.soldiers);
     h = mixWord(h, p.hurt);
@@ -129,6 +137,7 @@ export function hashState(state: GameState): number {
     for (const n of p.goods) h = mixWord(h, n);
     for (const n of p.goodsEffective) h = mixWord(h, n);
     for (const n of p.goodsDemand) h = mixWord(h, n);
+    for (const n of p.goodsRemainder) h = mixWord(h, n);
     h = mixWord(h, p.armamentReserve.length);
     for (let a = 0; a < p.armamentReserve.length; a++) {
       h = mixWord(h, p.armamentReserve[a]!);
@@ -142,12 +151,13 @@ export function hashState(state: GameState): number {
       h = mixWord(h, factoryTypeIndex(f.type));
       h = mixWord(h, f.progress.length);
       for (const n of f.progress) h = mixWord(h, n);
+      for (const n of f.progressRemainder) h = mixWord(h, n);
       h = mixWord(h, f.groups.length);
       for (const g of f.groups) {
         h = mixWord(h, productIndex(g.good));
         h = mixWord(h, g.lines);
         h = mixWord(h, g.active);
-        h = mixWord(h, g.filled);
+        h = mixWord(h, g.running);
         h = mixWord(h, g.growth);
       }
     }

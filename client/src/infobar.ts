@@ -29,6 +29,7 @@ import { productIcon } from "./icons.ts";
 import { productName } from "./names.ts";
 import { type FactoryCatalog, type HumanDetail, type PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
+import { setTip } from "./tooltip.ts";
 
 const signed = (n: number): string => (n > 0 ? "+" : "") + num(n);
 
@@ -57,6 +58,17 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 }
 
 /** Colore un nombre signé : vert au-dessus de 0, rouge en dessous, neutre à 0. */
+/**
+ * Largeur fixe d'un nombre des onglets du haut, en `ch` : un peu plus que son texte le plus long (`num` : 5 caractères
+ * au plus, « 99,9K », 6 avec un signe, 7 avec « / »), pour que l'onglet ne change pas de largeur quand le nombre change.
+ * Dans `data-w`, pas dans une classe : `setSigned` remplace les classes.
+ */
+function fixedWidth<T extends HTMLElement>(e: T, ch: number): T {
+  e.dataset["w"] = String(ch);
+  e.style.minWidth = `${ch}ch`;
+  return e;
+}
+
 function setSigned(e: HTMLElement, n: number): void {
   e.textContent = signed(n);
   e.className = n > 0 ? "pos" : n < 0 ? "neg" : "zero";
@@ -143,6 +155,13 @@ function gearIcon(machine: string): HTMLImageElement {
   gear.classList.add("ib-gear");
   attachGoodTip(gear, machine);
   return gear;
+}
+
+/** Camembert : l'infobulle de la répartition d'une ressource entre les produits qui la consomment. */
+function pieIcon(): HTMLImageElement {
+  const pie = icon("miscellaneous/icon-pie-chart.png");
+  pie.classList.add("ib-gear");
+  return pie;
 }
 
 /** Libellé précédé d'un élément déjà construit (ici le rendement par travailleur). */
@@ -363,9 +382,9 @@ export class InfoBar {
   // ---- 1. Population ----
 
   private population(): Section {
-    const total = el("strong", "ib-num");
-    const delta = el("span", "zero");
-    const max = el("span", "muted");
+    const total = fixedWidth(el("strong", "ib-num"), 6);
+    const delta = fixedWidth(el("span", "zero"), 7);
+    const max = fixedWidth(el("span", "muted"), 8);
     // Mini-barre : la répartition par occupation, avec toutes les couleurs du détail.
     const miniStack = el("div", "ib-stack");
     const button = this.button("pop", [icon("population/pop-default.png"), el("span", "ib-name", "Population"), total, delta, max], miniStack);
@@ -488,8 +507,8 @@ export class InfoBar {
   // ---- 2. Nourriture ----
 
   private food(): Section {
-    const total = el("strong", "ib-num");
-    const surplus = el("span", "zero");
+    const total = fixedWidth(el("strong", "ib-num"), 6);
+    const surplus = fixedWidth(el("span", "zero"), 7);
     // Mini-barre : la même jauge que « Population » du détail (vert, vert hachuré, gris).
     const miniCap = el("div", "ib-track ib-cap");
     const miniNow = el("i", "cap-now");
@@ -647,9 +666,16 @@ export class InfoBar {
     iron.root.classList.add("iron");
     const ironValue = el("span", "ib-value");
     ironValue.title = "Extrait / demandé · capacité";
-    const ironRow = row(iconLabel("goods/goods-iron-ingot.png", "Fer"), iron.root, ironValue);
+    // Dernières données reçues : l'infobulle du fer les relit à chaque affichage et à chaque tour.
+    let latest: { readonly d: HumanDetail; readonly s: PlayerStats } | null = null;
+    const ironPie = pieIcon();
+    setTip(ironPie, () => this.ironTip(latest?.d ?? null, latest?.s ?? null));
+    const ironRow = row(iconLabel("goods/goods-iron-ingot.png", "Fer", ironPie), iron.root, ironValue);
     // Aucune règle n'extrait l'aluminium encore : même ligne grisée que le commerce.
-    const aluminiumRow = row(iconLabel("goods/goods-aluminium-ingot.png", "Aluminium"), track("flow").root, el("span", "ib-value", "à venir"), "soon");
+    const aluminiumPie = pieIcon();
+    aluminiumPie.classList.add("off");
+    setTip(aluminiumPie, () => el("div", undefined, "Aucune consommation"));
+    const aluminiumRow = row(iconLabel("goods/goods-aluminium-ingot.png", "Aluminium", aluminiumPie), track("flow").root, el("span", "ib-value", "à venir"), "soon");
 
     const machines = [
       { good: "tractor", label: "Tracteurs" },
@@ -662,7 +688,7 @@ export class InfoBar {
       const label = el("span");
       const sym = productIcon(m.good);
       attachGoodTip(sym, m.good);
-      label.append(sym, ` ${m.label}`);
+      label.append(sym, ` ${m.label}`, gearIcon(m.good));
       return { ...m, index: catalog.goodIds.indexOf(m.good), t, value, r: row(label, t.root, value) };
     });
 
@@ -670,7 +696,7 @@ export class InfoBar {
     legend.append(
       legendItem("flow", "produit ce tour"),
       legendItem("req", "production requise"),
-      legendItem("gap", "manque"),
+      legendItem("gap", "demandé, non obtenu"),
     );
     const pane = this.pane(
       "flow",
@@ -681,11 +707,11 @@ export class InfoBar {
       legend,
     );
     iron.root.title = "Barre pleine : capacité · trait noir : demandé";
-    /** Fer : orange = extrait, rouge = écart au requis, trait noir = requis, orange clair (barre pleine) = capacité. */
+    /** Fer : orange = consommé, hachures rouges = demandé non obtenu, trait noir = demandé, orange clair (barre pleine) = capacité. */
     const ironSpans = (t: Track, d: HumanDetail, s: PlayerStats): void => {
       const cap = d.ironCapacity;
-      const got = s.ironExtracted;
-      const need = d.ironRequired;
+      const got = s.ironConsumed;
+      const need = s.ironDemanded;
       span(t.fill, 0, pct(got, cap));
       span(t.gap, pct(got, cap), got < need ? pct(need, cap) : 0);
       t.mark.style.left = `${pct(need, cap)}%`;
@@ -698,8 +724,9 @@ export class InfoBar {
       head: (d, s) => ironSpans(miniIron, d, s),
       body: (d, s) => {
         const cap = d.ironCapacity;
-        const got = s.ironExtracted;
-        const need = d.ironRequired;
+        const got = s.ironConsumed;
+        const need = s.ironDemanded;
+        latest = { d, s };
         ironSpans(iron, d, s);
         ironValue.textContent = `${num(got)} / ${num(need)} · capacité ${num(cap)}`;
         for (const m of machines) {
@@ -788,7 +815,7 @@ export class InfoBar {
   // ---- 5. Forces (05-Fronts §11.2) ----
 
   private forcesSection(tab: ForcesTab): Section {
-    const count = el("strong", "ib-num");
+    const count = fixedWidth(el("strong", "ib-num"), 4);
     const button = this.button("forces", [icon("population/pop-soldier.png"), el("span", "ib-name", "Forces"), count]);
     button.title = "Divisions de votre pays";
     const pane = this.pane("forces", tab.content);
@@ -803,11 +830,49 @@ export class InfoBar {
     };
   }
 
-  /** Production d'un type d'armement par minute : lignes remplies × production par ligne et par minute. */
+  /** Production d'un type d'armement par minute, à une décimale : lignes qui tournent × production par ligne et par heure ÷ 60. */
   private production(d: HumanDetail, id: string, catalog: FactoryCatalog): number {
     let filled = 0;
-    for (const f of d.factories) for (const g of f.groups) if (g.good === id) filled += g.filled;
-    return filled * (catalog.productionPerLine[id] ?? 0);
+    for (const f of d.factories) for (const g of f.groups) if (g.good === id) filled += g.running;
+    return Math.round((filled * (catalog.productionPerLine[id] ?? 0)) / 6) / 10;
+  }
+
+  /**
+   * Infobulle du camembert du fer : fer consommé, manquant et malus des lignes, puis une rangée par produit qui demande du
+   * fer, du plus gros au plus petit. Barres à la même échelle (le plus grand total demandé occupe toute la largeur) :
+   * orange = fer obtenu, hachures rouges = demandé non obtenu.
+   */
+  private ironTip(d: HumanDetail | null, s: PlayerStats | null): Node {
+    const box = el("div");
+    if (d === null || s === null) return box;
+    const scale = this.catalog.ratioScale;
+    const missing = s.ironDemanded - s.ironConsumed;
+    const malus = (ratio: number): number => Math.round(((scale - ratio) * 100) / scale);
+    box.append(el("h4", undefined, `Fer consommé ${num(s.ironConsumed)} · manquant ${num(missing)} · malus armement ${num(malus(s.armLineRatio))} %${s.goodsLineRatio < scale ? ` · malus biens ${num(malus(s.goodsLineRatio))} %` : ""}`));
+    const byGood = new Map<string, { demanded: number; obtained: number }>();
+    for (const f of d.factories) {
+      for (const g of f.groups) {
+        if (g.ironDemanded === 0) continue;
+        const sum = byGood.get(g.good) ?? { demanded: 0, obtained: 0 };
+        sum.demanded += g.ironDemanded;
+        sum.obtained += g.ironObtained;
+        byGood.set(g.good, sum);
+      }
+    }
+    const rows = [...byGood].sort((a, b) => b[1].demanded - a[1].demanded);
+    const biggest = rows.length === 0 ? 1 : rows[0]![1].demanded;
+    const grid = el("div", "tip-iron");
+    for (const [good, v] of rows) {
+      const bar = el("div", "tip-ibar");
+      const got = el("i", "obt");
+      got.style.width = `${(v.obtained * 100) / biggest}%`;
+      const lack = el("i", "mis");
+      lack.style.width = `${((v.demanded - v.obtained) * 100) / biggest}%`;
+      bar.append(got, lack);
+      grid.append(productIcon(good), bar, el("span", undefined, `${num(v.obtained)} / ${num(v.demanded)}`));
+    }
+    box.append(grid);
+    return box;
   }
 
   private get info(): FactoryCatalog["economy"] {

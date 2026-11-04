@@ -57,6 +57,8 @@ interface Gutter {
   readonly root: HTMLElement;
   readonly lines: HTMLElement[][];
   readonly values: HTMLElement[][];
+  /** Pertes de chaque niche au dernier round : « −N », vide sans perte. */
+  readonly losses: HTMLElement[];
 }
 
 /** Icône (16 × 16 px, sous `public/icons/miscellaneous/`) et texte de survol de chaque statistique de combat. */
@@ -508,6 +510,7 @@ export class FrontWindow implements DndHost {
     const rows = el("div", "fw-rows");
     const lines: HTMLElement[][] = [];
     const values: HTMLElement[][] = [];
+    const losses: HTMLElement[] = [];
     for (let i = 0; i < this.military.niches.length; i++) {
       const cell = el("div", "fw-gcell");
       const stack = el("div", "fw-gstack");
@@ -522,13 +525,18 @@ export class FrontWindow implements DndHost {
         nicheLines.push(line);
         nicheValues.push(value);
       }
+      // Quatrième ligne : les pertes du dernier round. Vide (même hauteur) hors combat, pour que les statistiques ne bougent pas.
+      const loss = el("div", "fw-st loss");
+      loss.title = "Hommes perdus au dernier round de combat (une seconde)";
+      stack.append(loss);
+      losses.push(loss);
       lines.push(nicheLines);
       values.push(nicheValues);
       cell.append(stack);
       rows.append(cell);
     }
     root.append(el("div", "fw-lab"), rows);
-    return { root, lines, values };
+    return { root, lines, values, losses };
   }
 
   /** Les trois totaux d'une première ligne, sous son titre : icône, nombre, barre (`side` : du joueur ou de l'adversaire). */
@@ -637,8 +645,11 @@ export class FrontWindow implements DndHost {
     this.attackButton.title = front.active ? "Interrupteur : un clic lance l'attaque, un second l'arrête." : "Seulement sur un front actif.";
     // Hommes perdus par chaque première ligne au dernier round de combat (une seconde).
     const loss = (n: number): string => `Pertes : ${num(n)} hommes / tour`;
-    this.columns.o1.loss!.textContent = loss(front.sides[me]!.lastLoss);
-    this.columns.t1.loss!.textContent = loss(front.sides[1 - me]!.lastLoss);
+    const sum = (byNiche: readonly number[]): number => byNiche.reduce((s, n) => s + n, 0);
+    this.columns.o1.loss!.textContent = loss(sum(front.sides[me]!.lastLossByNiche));
+    this.columns.t1.loss!.textContent = loss(sum(front.sides[1 - me]!.lastLossByNiche));
+    front.sides[me]!.lastLossByNiche.forEach((n, i) => (this.gutOurs.losses[i]!.textContent = n > 0 ? `−${formatStat(n)}` : ""));
+    front.sides[1 - me]!.lastLossByNiche.forEach((n, i) => (this.gutTheirs.losses[i]!.textContent = n > 0 ? `−${formatStat(n)}` : ""));
 
     // La première ligne adverse a la largeur de celle du joueur (§11.4) ; le reste de son côté est comprimé.
     this.capFirstLine();

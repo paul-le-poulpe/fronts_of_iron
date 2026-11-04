@@ -94,12 +94,12 @@ export function factoryLevel(factory: Factory): number {
 
 /**
  * Réserve maximale d'un type d'armement (00-Game §8.3) : toutes ses lignes, quel
- * que soit leur statut, × production par minute × `maxStockSeconds` ÷ 60, arrondi vers le bas.
+ * que soit leur statut, × production par heure × `maxStockSeconds` ÷ 3 600, arrondi vers le bas.
  */
 export function armamentReserveMax(player: Player, id: ArmamentId): number {
   let lines = 0;
   for (const f of player.factories) for (const g of f.groups) if (g.good === id) lines += g.lines;
-  return Math.floor((lines * ARMAMENT.types[id].productionPerMinute * ARMAMENT.maxStockSeconds) / 60);
+  return Math.floor((lines * ARMAMENT.types[id].productionPerHour * ARMAMENT.maxStockSeconds) / 3600);
 }
 
 /** Ville du joueur `playerId` ou null (ordre venu du réseau : `city` a déjà été vérifié entier). */
@@ -121,8 +121,9 @@ export function buildFactory(state: GameState, playerId: number, city: number, t
   player.factories.push({
     city,
     type,
-    groups: [{ good: treeOf(type)[0]!.good, lines: 1, active: 1, filled: 0, growth: 0 }],
+    groups: [{ good: treeOf(type)[0]!.good, lines: 1, active: 1, running: 0, growth: 0 }],
     progress: new Array<number>(treeOf(type).length).fill(0),
+    progressRemainder: new Array<number>(treeOf(type).length).fill(0),
   });
   return true;
 }
@@ -149,7 +150,7 @@ export function createLine(state: GameState, playerId: number, city: number, goo
   const factory = factoryOf(state.players[playerId - 1]!, city);
   if (factory === undefined || !isUnlocked(factory, good)) return false;
   const group = factory.groups.find((g) => g.good === good);
-  if (group === undefined) factory.groups.push({ good, lines: 1, active: 1, filled: 0, growth: 0 });
+  if (group === undefined) factory.groups.push({ good, lines: 1, active: 1, running: 0, growth: 0 });
   else {
     group.lines++;
     group.active++;

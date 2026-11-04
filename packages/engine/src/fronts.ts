@@ -10,8 +10,13 @@
 import { afterFrontsChanged, endBreakthroughsBetween } from "./breakthroughs.ts";
 import { FRONTS } from "./config.ts";
 import { STATUS_WAR, statusOf } from "./diplomacy.ts";
-import { LINE_SECOND, WIDTH_SCALE, type Division } from "./divisions.ts";
+import { LINE_SECOND, NICHE_IDS, WIDTH_SCALE, type Division } from "./divisions.ts";
 import type { GameState } from "./state.ts";
+
+/** Pertes par niche d'un camp sans combat : un zéro par niche. */
+export function noLosses(): number[] {
+  return new Array<number>(NICHE_IDS.length).fill(0);
+}
 
 /** Une route dont les deux villes sont à deux joueurs différents. */
 export interface FrontConnection {
@@ -27,8 +32,11 @@ export interface FrontConnection {
 export interface FrontSide {
   /** Attaque sur tout le front en cours (05-Fronts §5.1). */
   frontAttack: boolean;
-  /** Hommes perdus par sa première ligne au dernier round de combat (05-Fronts §11.4) ; remis à 0 à chaque round. */
-  lastLoss: number;
+  /**
+   * Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `NICHE_IDS`, 05-Fronts §11.4) ;
+   * remis à 0 à chaque round.
+   */
+  lastLossByNiche: number[];
 }
 
 export interface Front {
@@ -216,8 +224,8 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
     });
     const before = matched.get(b.id);
     const sides: [FrontSide, FrontSide] = [
-      { frontAttack: before?.sides[0].frontAttack ?? false, lastLoss: before?.sides[0].lastLoss ?? 0 },
-      { frontAttack: before?.sides[1].frontAttack ?? false, lastLoss: before?.sides[1].lastLoss ?? 0 },
+      { frontAttack: before?.sides[0].frontAttack ?? false, lastLossByNiche: before?.sides[0].lastLossByNiche.slice() ?? noLosses() },
+      { frontAttack: before?.sides[1].frontAttack ?? false, lastLossByNiche: before?.sides[1].lastLossByNiche.slice() ?? noLosses() },
     ];
     return { id: b.id, players: [b.p1, b.p2], groups: [b.g1, b.g2], connections, sides };
   });

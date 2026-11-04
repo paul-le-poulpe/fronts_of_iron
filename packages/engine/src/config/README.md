@@ -50,7 +50,7 @@ résultat faux ou une division par zéro, pas un message.
   `mechanizationMax` ≥ `mechanizationBase`, `maxMachinesPer1000` ≥ 1,
   `curveExponent` entier ≥ 1. `FISHING.tileYieldMax` ≥ `FISHING.tileYield`.
 - **`workforce.ts`, `POPULATION.hurtDivisor`** : entier ≥ 1, dénominateur de la
-  guérison des blessés, appliquée une fois par seconde (`hurtEveryTurns`,
+  guérison des blessés, appliquée toutes les deux secondes (`hurtEveryTurns`,
   00-Game §4.2). 5 000, valeur de l'auteur.
 - **`workforce.ts`, `POPULATION.hurtMinimum`** : entier ≥ 1, plancher de la
   guérison des blessés, en hommes par seconde (00-Game §4.2). 5, valeur de l'auteur.
@@ -116,7 +116,7 @@ d'usine et les icônes de la population n'ont pas encore de champ `icon`.
 Aucune ligne de code à écrire.
 
 1. `armament.ts` : ajouter une entrée à `types`, à la fin, avec
-   `productionPerMinute` (par minute), `workersPerLine`, `ironPerLine` (par tour).
+   `productionPerHour` (par heure), `workersPerLine`, `ironPerLine` (par tour).
 2. `factories.ts` : ajouter un nœud `{ good: "<nom>", parent: "<parent>" }` à
    l'arbre d'un type d'usine, après son parent. Sans nœud, aucune usine ne peut
    en produire.
