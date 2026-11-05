@@ -65,12 +65,12 @@ export function statTotals(side: "ours" | "theirs"): Totals {
  * Remplit les totaux d'un camp. Les deux attaques ont la même échelle : la plus grande des quatre valeurs (deux
  * attaques, deux camps) remplit la barre. Les PV ont la leur.
  */
-export function drawTotals(tots: Totals, own: Stats, other: Stats): void {
+export function drawTotals(tots: Totals, own: Stats, other: Stats, format: (n: number) => string = formatStat): void {
   const attackMax = Math.max(own.soft, own.hard, other.soft, other.hard);
   STAT_KINDS.forEach((kind, k) => {
     const v = own[kind];
     const max = kind === "hp" ? Math.max(v, other.hp) : attackMax;
-    tots.nums[k]!.textContent = formatStat(v);
+    tots.nums[k]!.textContent = format(v);
     tots.fills[k]!.style.width = max > 0 ? `${(100 * v) / max}%` : "0";
   });
 }

@@ -51,6 +51,13 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    combat. Pas d'échange avec la seconde ligne pendant le combat
    (`05-Fronts.md` §5.3 : une division abîmée mais encore en ligne reste). Un
    défenseur dont l'infanterie revient par un renfort combat de nouveau.
+   **Repli faute d'infanterie** (demande de l'auteur, 5 novembre 2026) : un camp
+   qui n'a plus d'infanterie engagée en première ligne (détruite ou en fuite) et
+   aucune infanterie en renfort qui arrive **replie ses autres divisions de
+   première ligne** en seconde ligne, en fuite jusqu'à la fin du combat ; le
+   rapport garde le camp dans `withdrawn` du round, et les divisions dans `fled`.
+   Le replay affiche « … se sont repliées : plus d'infanterie » au round et dans
+   l'issue. Attaque sur tout le front seulement (*provisoire* pour la percée).
    **Pas de renfort dans les combats d'une percée** (point 5).
 3. **Issue** : *provisoire* : l'avancée du §7.1 de `05-Fronts.md` est appliquée
    à chaque round, comme avant (50 rounds avancent comme 50 secondes
@@ -143,6 +150,8 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
     16 × 16 pixels sur la pile, sans gris ; il y reste les 5 rounds de retrait,
     puis rejoint la carte de son type en première ligne (créée s'il n'y en
     avait pas) ;
+  - **aucune décimale** dans l'écran de bataille (totaux, attaques, pertes) :
+    entiers, puis « 5K », « 3M » ;
   - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
     camp** : hommes et matériel (exemplaires de chaque type d'armement), et
     l'issue au-dessus (avancée, ville prise ; pour une percée : première ligne

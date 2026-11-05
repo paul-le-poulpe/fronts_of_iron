@@ -28,6 +28,7 @@ import { captureCity } from "./conquest.ts";
 import {
   INFANTRY_NICHE,
   LINE_FIRST,
+  LINE_SECOND,
   LOSS_SCALE,
   MULT_SCALE,
   WIDTH_SCALE,
@@ -301,7 +302,36 @@ function roundHits(state: GameState, engaged: readonly Division[], before: reado
     if (isFleeing(state, d)) fled.push(index[k]!);
     return [index[k]!, Math.max(0, before[k]! - stateOf(d))];
   });
-  return { hits, destroyed, fled, arrived: [], joined: [] };
+  return { hits, destroyed, fled, arrived: [], joined: [], withdrawn: [] };
+}
+
+/**
+ * Repli faute d'infanterie (06-Combat-Simplifie §1) : un camp sans infanterie engagée en première ligne, et sans
+ * infanterie en renfort qui arrive (`pending`), replie toutes ses autres divisions de première ligne en seconde ligne,
+ * en fuite jusqu'à la fin du combat. Renvoie les indices (dans `record.units`) des divisions repliées et les camps
+ * concernés.
+ */
+function withdrawWithoutInfantry(state: GameState, front: Front, record: CombatRecord, pending: Map<number, number>): { fled: number[]; withdrawn: number[] } {
+  const fled: number[] = [];
+  const withdrawn: number[] = [];
+  const until = currentTurn(state) + FRONTS.combatMaxRounds * FRONTS.combatTurns;
+  for (const p of front.players) {
+    const mine = sideDivisions(state, front, p);
+    const inLine = engagedOf(mine);
+    if (inLine.length === 0 || infantryWidth(inLine.filter((d) => !pending.has(d.id))) > 0) continue;
+    if (mine.some((d) => pending.has(d.id) && dataOf(d).niche === INFANTRY_NICHE)) continue;
+    for (const d of inLine) {
+      fled.push(snapshot(record, [d]).index[0]!);
+      pending.delete(d.id);
+      d.line = LINE_SECOND;
+      d.engaged = 0;
+      d.breakthrough = 0;
+      d.btEngaged = 0;
+      d.fleeUntilTick = until;
+    }
+    withdrawn.push(p);
+  }
+  return { fled, withdrawn };
 }
 
 /** Une division d'un rapport de combat, telle qu'au début du combat. */
@@ -329,6 +359,11 @@ export interface CombatRound {
   readonly arrived: readonly number[];
   /** Renforts qui rejoignent la première ligne au début de ce round et combattent à partir de lui. */
   readonly joined: readonly number[];
+  /**
+   * Camps (joueurs) qui se replient à la fin de ce round faute d'infanterie : leurs divisions de première ligne sont
+   * dans `fled` (06-Combat-Simplifie §1).
+   */
+  readonly withdrawn: readonly number[];
   /** Avancée de l'attaquant pendant ce round, en millièmes de route. */
   readonly advance: number;
 }
@@ -393,7 +428,10 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   if (infantryWidth(attacker) === 0) return undefined;
   // Le défenseur n'a plus d'infanterie engagée (détruite ou en fuite) : l'attaquant avance sans combat, à sa vitesse
   // maximale (06-Combat-Simplifie §1), jusqu'à la fin des rounds ou au retour d'une infanterie du défenseur (renfort).
-  if (infantryWidth(sides[1 - x]!) === 0) return advanceRound(front, x, frontSpeed(attacker), record, { hits: [], destroyed: [], fled: [], arrived: [], joined });
+  if (infantryWidth(sides[1 - x]!) === 0) {
+    const out = withdrawWithoutInfantry(state, front, record, pending);
+    return advanceRound(front, x, frontSpeed(attacker), record, { hits: [], destroyed: [], fled: out.fled, arrived: [], joined, withdrawn: out.withdrawn });
+  }
   const losses = new Map<Division, number>();
   // L'attaquant avec `attackMultiplier`, le défenseur sans multiplicateur, avec ses PV de défense.
   fightLosses(
@@ -427,10 +465,16 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
     arrived.push(snapshot(record, [d]).index[0]!);
   }
 
+  const hits = roundHits(state, engaged, before, index, alive);
+  const out = withdrawWithoutInfantry(state, front, record, pending);
+  // Un renfort monté ce round puis replié ne compte plus comme renfort.
+  const gone = new Set(out.fled);
+  const arrivedKept = arrived.filter((i) => !gone.has(i));
+
   // Avancée (05-Fronts §7.1) : la même sur toutes les routes du front, dans le sens de l'attaquant ; sans les renforts en retrait.
   const after = [0, 1].map(fighting);
   const by = frontAdvance(infantryWidth(after[x]!), infantryWidth(after[1 - x]!), frontSpeed(after[x]!));
-  return advanceRound(front, x, by, record, { ...roundHits(state, engaged, before, index, alive), arrived, joined });
+  return advanceRound(front, x, by, record, { ...hits, fled: [...hits.fled, ...out.fled.filter((i) => !hits.fled.includes(i))], arrived: arrivedKept, joined, withdrawn: out.withdrawn });
 }
 
 /** Écrit le round dans `record` et avance le front de `by` millièmes dans le sens de `front.players[x]`. Renvoie les connexions arrivées au bout. */

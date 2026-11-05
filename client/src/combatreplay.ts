@@ -13,8 +13,8 @@
 // Le rapport vient du moteur : rien ici ne recalcule un combat. Les statistiques sont
 // estimées sur l'état des divisions (le rapport ne garde pas les exemplaires).
 
-import { num } from "./format.ts";
-import { formatStat, type Stats } from "./frontstats.ts";
+import { compactInt } from "./format.ts";
+import type { Stats } from "./frontstats.ts";
 import { icon32Path, productIcon } from "./icons.ts";
 import { equipmentName, playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
@@ -281,6 +281,12 @@ export class CombatReplay {
       return { soft: soft * k * mult, hard: hard * k * mult, hp: type.support ? 0 : type.hitPoints * k };
     };
 
+    /** Message d'un repli faute d'infanterie (06-Combat-Simplifie §1). */
+    const withdrawnText = (owners: readonly number[]): string => {
+      const who = owners.map((p) => (p === me ? "vos troupes se sont repliées" : `les troupes de ${playerName(p)} se sont repliées`));
+      return `${who.join(" ; ")} : plus d'infanterie`;
+    };
+
     const redraw = (lossByCard: ReadonlyMap<Card, number>): void => {
       const totals = [noStats(), noStats()] as const;
       for (const card of cards) {
@@ -321,8 +327,8 @@ export class CombatReplay {
         }
         card.root.title = n > 1 ? `${card.name} : ${n} divisions` : card.name;
         card.fill.style.width = n === 0 ? "0" : `${(100 * state) / (n * scale)}%`;
-        card.soft.textContent = formatStat(Math.round(st.soft));
-        card.hard.textContent = formatStat(Math.round(st.hard));
+        card.soft.textContent = compactInt(st.soft);
+        card.hard.textContent = compactInt(st.hard);
         const loss = lossByCard.get(card) ?? 0;
         card.dmg.textContent = loss > 0 ? `−${Math.max(1, Math.round((100 * loss) / (Math.max(1, n) * scale)))} %` : "";
         if (loss > 0) {
@@ -331,8 +337,8 @@ export class CombatReplay {
           card.root.classList.add("hit");
         }
       }
-      drawTotals(tots[0], totals[0], totals[1]);
-      drawTotals(tots[1], totals[1], totals[0]);
+      drawTotals(tots[0], totals[0], totals[1], compactInt);
+      drawTotals(tots[1], totals[1], totals[0], compactInt);
     };
 
     this.panel.replaceChildren(head, top, round, field, result);
@@ -346,6 +352,7 @@ export class CombatReplay {
       // Un round sans division touchée : le défenseur n'a plus d'infanterie, l'attaquant avance (06-Combat-Simplifie §1).
       const total = Math.round(c.rounds.slice(0, r + 1).reduce((s, x) => s + x.advance, 0) / 10);
       round.textContent = rd.hits.length === 0 ? `Round ${r + 1} / ${c.rounds.length} — plus d'infanterie en face : avancée ${total} %` : `Round ${r + 1} / ${c.rounds.length}`;
+      if (rd.withdrawn.length > 0) round.textContent += ` — ${withdrawnText(rd.withdrawn)}`;
       // Renforts qui rejoignent la première ligne au début du round.
       for (const i of rd.joined) {
         arriving[i] = false;
@@ -359,7 +366,11 @@ export class CombatReplay {
         hp[i] = Math.max(0, hp[i]! - loss);
       }
       for (const i of rd.destroyed) dead[i] = true;
-      for (const i of rd.fled) if (!fled[i]) flee(i);
+      for (const i of rd.fled) {
+        if (fled[i]) continue;
+        arriving[i] = false;
+        flee(i);
+      }
       // Renforts montés de la seconde ligne à la fin du round : carte du type en retrait, avec le plus bleu.
       for (const i of rd.arrived) {
         arriving[i] = true;
@@ -379,13 +390,13 @@ export class CombatReplay {
         const box = el("div", side === 0 ? "cr-loss" : "cr-loss right");
         box.append(el("div", "cr-loss-title", side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
         const men = el("div", "cr-loss-row");
-        men.append(el("span", "cr-loss-n", num(l.men)), el("span", undefined, "hommes"));
+        men.append(el("span", "cr-loss-n", compactInt(l.men, 10_000)), el("span", undefined, "hommes"));
         box.append(men);
         l.equipment.forEach((n, k) => {
           if (n === 0) return;
           const id = this.armamentIds[k]!;
           const row = el("div", "cr-loss-row");
-          row.append(el("span", "cr-loss-n", num(n)), productIcon(id), el("span", undefined, equipmentName(id)));
+          row.append(el("span", "cr-loss-n", compactInt(n, 10_000)), productIcon(id), el("span", undefined, equipmentName(id)));
           box.append(row);
         });
         return box;
@@ -405,7 +416,8 @@ export class CombatReplay {
               : advance > 0
                 ? `Le front avance de ${pct} %.`
                 : "Le front ne bouge pas.";
-      const summary = el("div", "cr-summary", issue);
+      const retreats = [...new Set(c.rounds.flatMap((r) => r.withdrawn))];
+      const summary = el("div", "cr-summary", retreats.length > 0 ? `${issue} ${withdrawnText(retreats)[0]!.toUpperCase()}${withdrawnText(retreats).slice(1)}.` : issue);
       const lossCols = el("div", "cr-losses");
       lossCols.append(losses(0), losses(1));
       result.replaceChildren(summary, lossCols);

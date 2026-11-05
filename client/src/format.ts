@@ -16,6 +16,15 @@ export function compact(n: number, from = 10_000): string {
   return n < 0 ? `-${text}` : text;
 }
 
+/** Comme `compact`, sans décimale : entier arrondi sous `from`, puis « 5K », « 135K », « 3M » (écran de bataille). */
+export function compactInt(n: number, from = 1000): string {
+  const a = Math.abs(n);
+  if (a < from) return full.format(Math.round(n));
+  const k = Math.round(a / 1000);
+  const text = k < 1000 ? `${k}K` : `${Math.round(a / 1_000_000)}M`;
+  return n < 0 ? `-${text}` : text;
+}
+
 /** Nombre affiché : exact sous 10 000, puis K et M. */
 export function num(n: number): string {
   return compact(n);

@@ -175,6 +175,8 @@ export interface CombatRoundView {
   readonly arrived: readonly number[];
   /** Renforts qui rejoignent la première ligne au début du round. */
   readonly joined: readonly number[];
+  /** Joueurs dont les troupes se replient à la fin du round faute d'infanterie (leurs divisions sont dans `fled`). */
+  readonly withdrawn: readonly number[];
   readonly advance: number;
 }
 
