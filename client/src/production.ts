@@ -741,7 +741,12 @@ Besoin satisfait à ${units === 0 ? 100 : Math.floor((a.output * 100) / units)} 
           const unitsFor = (n: number): number => Math.floor((n * info.unitsPerWorker) / info.workersPerUnit);
           value.textContent = info.hasPlaces ? `${num(unitsFor(a.workers))} / ${num(unitsFor(a.places))}` : `${num(a.existing)} / ${num(a.limit)}`;
           tileOut.classList.toggle("pb-bad", a.existing > a.limit);
-          if (info.good === null) tileOut.title = `${num(a.existing - a.forming)} active(s), ${num(a.forming)} en formation`;
+          if (info.good === null) {
+            const elite = this.military.divisions.find((t) => t.id === info.division)?.elite === true;
+            const cap = elite ? `
+Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` : "";
+            tileOut.title = `${num(a.existing - a.forming)} active(s), ${num(a.forming)} en formation${cap}`;
+          }
         }
       }
     }

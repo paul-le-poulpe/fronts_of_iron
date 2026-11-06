@@ -254,7 +254,8 @@ et les ouvriers en trop retournent dans Inactifs. La production visée ne passe 
 
 La sortie affiche deux nombres : à gauche du trait oblique, ce que permettent les ouvriers
 présents ; à droite, le maximum réglé. Elle ne distingue pas les divisions en formation des
-divisions déployées ; le survol donne le nombre d'actives et le nombre en formation.
+divisions déployées ; le survol donne le nombre d'actives et le nombre en formation, et pour les élites leur limite
+(« Max 10 % de l'infanterie », d'après `ELITE_TROOPS_RATIO`).
 
 ## 8. Blessés
 
