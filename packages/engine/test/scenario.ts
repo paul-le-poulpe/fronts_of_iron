@@ -1,26 +1,25 @@
 // Partie scriptée pour les tests et la mesure : des joueurs simulés envoient des
 // ordres `found_city` tirés au hasard (dont beaucoup sont invalides), de temps en
-// temps un ordre `set_farm_share`, et un ordre malformé par tour. Les villes sont
-// payées par la croissance de la population (economy.ts). Les ordres ne dépendent
-// que de `botSeed` et de l'état, donc deux exécutions avec les mêmes options
-// envoient exactement les mêmes ordres.
+// temps un ordre sur leurs activités (08 §10), et un ordre malformé par tour. Les
+// villes sont payées en bonshommes. Les ordres ne dépendent que de `botSeed` et de
+// l'état, donc deux exécutions avec les mêmes options envoient exactement les mêmes ordres.
 
 import {
+  ACTIVITY_DATA,
+  ACTIVITY_IDS,
+  activityOf,
+  activityUnlocked,
   applyTurn,
   CITY,
   createGame,
   createRng,
-  FACTORY_TYPE_IDS,
-  generateTestMap,
-  hashState,
-  nextInt,
-  POPULATION,
-  DIVISION_DATA,
   DIVISION_IDS,
+  generateTestMap,
+  GOOD_IDS,
+  hashState,
   isActive,
-  MEN,
-  PRODUCT_IDS,
-  type DivisionId,
+  nextInt,
+  type ActivityId,
   type Front,
   type GameMap,
   type GameState,
@@ -39,20 +38,16 @@ export interface ScenarioOptions {
   ordersPerPlayer: number;
   /**
    * Un joueur qui a déjà une ville n'envoie d'ordre `found_city` que si sa
-   * population atteint ce nombre : sans cela, il dépense toute sa croissance
-   * dès qu'elle dépasse le coût d'une ville et sa population reste au niveau
-   * du coût. 0 : il en envoie toujours. Le scénario par défaut attend 6 000 :
-   * les joueurs fondent alors des villes à population plus grande, souvent
-   * proche du maximum que permet leur nourriture, et les cases prises à un
-   * voisin font baisser sa population (surplus négatif, testé par
-   * determinism.test.ts ; 02-Engine §6).
+   * population atteint ce nombre de bonshommes : sans cela, il dépense chaque
+   * bonhomme dès qu'il arrive et sa population reste au niveau du coût. 0 : il en
+   * envoie toujours.
    */
   foundMinPopulation: number;
   /** Un hash est relevé tous les `checkpointEvery` tours. */
   checkpointEvery: number;
   /**
    * Les joueurs simulés n'envoient d'ordres de guerre et de front qu'à partir de ce tour : sans cela, les soldats et les
-   * pertes freinent la croissance de la population et donc les fondations de villes, que d'autres tests mesurent.
+   * blessés freinent la croissance de la population et donc les fondations de villes, que d'autres tests mesurent.
    */
   warsFromTurn: number;
   /** Carte déjà générée, pour ne pas la refaire à chaque partie. */
@@ -69,19 +64,15 @@ export interface ScenarioResult {
   changedTiles: number;
   /** Nombre de villes à la fin. */
   cities: number;
-  /**
-   * Nombre de couples (joueur, tour) où la nourriture produite est inférieure à
-   * la consommation de la population en fin de tour : la population baisse
-   * (surplus négatif, 00-Game §4.1).
-   */
+  /** Nombre de couples (joueur, tour) où la population dépasse la capacité : des bonshommes sont en sursis (08 §6). */
   starvingPlayerTurns: number;
   /** Population de tous les joueurs à la fin. */
   totalPopulation: number;
-  /** Nombre de couples (joueur, tour) où au moins une ligne de production était remplie : les usines sont jouées. */
-  filledLinePlayerTurns: number;
-  /** Nombre de couples (joueur, tour) où le joueur a des soldats : les troupes sont jouées. */
+  /** Nombre de couples (joueur, tour) où une usine ou une caserne a une sortie servie en fer : la production est jouée. */
+  producingPlayerTurns: number;
+  /** Nombre de couples (joueur, tour) où une caserne a des bonshommes : les troupes sont jouées. */
   soldierPlayerTurns: number;
-  /** Nombre de tours où au moins un front a une attaque en cours : le combat est joué. */
+  /** Nombre de tours où au moins un combat est résolu : le combat est joué. */
   fightingTurns: number;
   /** Nombre de villes prises. */
   captures: number;
@@ -105,71 +96,82 @@ const GARBAGE: readonly unknown[] = [
   { type: "found_city", player: "1", tile: 0 },
   { type: "found_city", player: 1, tile: "0" },
   { type: "unknown", player: 1, tile: 0 },
-  { type: "set_farm_share" },
-  { type: "set_farm_share", player: 1 },
-  { type: "set_farm_share", player: 0, percent: 50 },
-  { type: "set_farm_share", player: 1, percent: -1 },
-  { type: "set_farm_share", player: 1, percent: 101 },
-  { type: "set_farm_share", player: 1, percent: 50.5 },
-  { type: "set_farm_share", player: 1, percent: "50" },
-  { type: "set_farm_share", player: 1, percent: NaN },
-  { type: "set_farm_share", player: "1", percent: 50 },
+  // Ordres qui n'existent plus (08 §10).
+  { type: "set_farm_share", player: 1, percent: 50 },
+  { type: "build_factory", player: 1, city: 1, factoryType: "infantryArmament" },
+  { type: "create_division", player: 1, division: "regulars" },
+  { type: "delete_division", player: 1, id: 1 },
+  { type: "move_pawn" },
+  { type: "move_pawn", player: 1, from: "idle", to: "hurt", kind: "worker", count: 1 },
+  { type: "move_pawn", player: 1, from: "hurt", to: "idle", kind: "worker", count: 1 },
+  { type: "move_pawn", player: 1, from: "idle", to: "farmers", kind: "worker", count: 0 },
+  { type: "move_pawn", player: 1, from: "idle", to: "farmers", kind: "worker", count: 1.5 },
+  { type: "move_pawn", player: 1, from: "idle", to: "farmers", kind: "machine", good: "bois", count: 1 },
+  { type: "move_pawn", player: "1", from: "idle", to: "farmers", kind: "worker", count: 1 },
+  { type: "set_activity_order", player: 1, activity: "idle", position: 1 },
+  { type: "set_activity_order", player: 1, activity: "farmers", position: 0 },
+  { type: "set_auto_assign", player: 1, enabled: 1 },
+  { type: "set_disabled_slots", player: 1, activity: "idle", count: 1 },
+  { type: "change_production_target", player: 1, activity: "farmers", delta: 1 },
+  { type: "open_activity", player: 1, activity: "farmers" },
+  { type: "close_activity", player: 1, activity: "farmers" },
 ];
 
-/** Un ordre d'usine tiré au hasard sur l'une des villes `mine` du joueur `player` ; beaucoup sont invalides (ville sans usine, bien verrouillé…). */
-function factoryOrder(bot: Rng, player: number, mine: readonly number[]): Intent {
-  const city = mine[nextInt(bot, mine.length)]!;
-  const good = PRODUCT_IDS[nextInt(bot, PRODUCT_IDS.length)]!;
-  switch (nextInt(bot, 5)) {
+const randomActivity = (bot: Rng): ActivityId => ACTIVITY_IDS[nextInt(bot, ACTIVITY_IDS.length)]!;
+
+/** Un ordre sur les activités, tiré au hasard (08 §10) ; beaucoup sont invalides (activité verrouillée, trop peu de bonshommes, pas de places…). */
+function activityOrder(bot: Rng, player: number, me: Player): Intent {
+  const activity = randomActivity(bot);
+  switch (nextInt(bot, 7)) {
     case 0:
-      return { type: "build_factory", player, city, factoryType: FACTORY_TYPE_IDS[nextInt(bot, FACTORY_TYPE_IDS.length)]! };
+      return { type: "move_pawn", player, from: randomActivity(bot), to: randomActivity(bot), kind: "worker", count: 1 + nextInt(bot, 3) };
     case 1:
+      return { type: "move_pawn", player, from: randomActivity(bot), to: randomActivity(bot), kind: "machine", good: GOOD_IDS[nextInt(bot, GOOD_IDS.length)]!, count: 1 };
     case 2:
-      return { type: "create_line", player, city, good };
+      return { type: "set_activity_order", player, activity, position: nextInt(bot, me.activities.length + 1) };
     case 3:
-      return { type: "set_active_lines", player, city, good, count: nextInt(bot, 4) };
+      return { type: "set_disabled_slots", player, activity, count: nextInt(bot, 4) };
+    case 4:
+      return { type: "open_activity", player, activity };
+    case 5:
+      return { type: "close_activity", player, activity };
     default:
-      return nextInt(bot, 2) === 0
-        ? { type: "set_city_priority", player, city, position: nextInt(bot, 3) }
-        : { type: "set_line_priority", player, city, good, position: nextInt(bot, 3) };
+      return { type: "change_production_target", player, activity, delta: nextInt(bot, 7) - 3 };
   }
 }
 
-/** Rifles et inactifs d'une division d'infanterie complète (05-Fronts §3.4). */
-const INFANTRY = DIVISION_DATA[DIVISION_IDS.indexOf("regulars")]!;
-
-/** Le joueur peut-il créer une division de ce type avec son stock et ses inactifs ? */
-function affordable(p: Player, type: DivisionId): boolean {
-  const data = DIVISION_DATA[DIVISION_IDS.indexOf(type)]!;
-  return data.components.every((c) => (c.resource === MEN ? p.idle : p.armamentReserve[c.resource]!) >= c.count);
+/** Ouvre une caserne débloquée et la met juste sous Inactifs : ses places se remplissent avant celles des champs. */
+function openBarracks(player: number, activity: ActivityId): Intent[] {
+  return [
+    { type: "open_activity", player, activity },
+    { type: "set_activity_order", player, activity, position: 1 },
+  ];
 }
 
 /** Fronts du joueur, par identifiant croissant. */
 const frontsOf = (state: GameState, player: number): Front[] => state.fronts.filter((f) => f.players[0] === player || f.players[1] === player);
 
 /**
- * Un ordre d'armée pour le joueur `player`, pour que les fronts voient des divisions : l'infanterie d'abord (c'est elle
- * qui avance), puis un autre type tiré au hasard ; sans les hommes, mais avec les fusils, il coupe ses lignes de production
- * pour libérer des ouvriers. Un `move_division` envoie une de ses divisions vers un de ses fronts, parfois en première ligne,
- * et une attaque est lancée sur un front actif.
+ * Un ordre d'armée pour le joueur `player`, pour que les fronts voient des divisions : d'abord les casernes (milice, puis
+ * réguliers) et leur production visée. Un `move_division` envoie une de ses divisions vers un de ses fronts, parfois en
+ * première ligne, et une attaque est lancée sur un front actif.
  */
 function armyOrders(bot: Rng, state: GameState, player: number): Intent[] {
   const me = state.players[player - 1]!;
   const mine = state.divisions.filter((d) => d.owner === player);
   const fronts = frontsOf(state, player);
   const active = fronts.filter((f) => isActive(state, f));
+  const opened = (id: ActivityId): boolean => activityOf(me, ACTIVITY_IDS.indexOf(id)) !== undefined;
+  const unlocked = (id: ActivityId): boolean => activityUnlocked(me, ACTIVITY_IDS.indexOf(id));
   switch (nextInt(bot, 8)) {
     case 0:
     case 1: {
-      if (affordable(me, "regulars")) return [{ type: "create_division", player, division: "regulars" }];
-      const others = DIVISION_IDS.filter((id) => affordable(me, id));
-      if (others.length > 0 && nextInt(bot, 4) === 0) return [{ type: "create_division", player, division: others[nextInt(bot, others.length)]! }];
-      // Ni hommes ni armement : couper les lignes libère des ouvriers, donc des inactifs.
-      const hasRifles = me.armamentReserve[INFANTRY.components[1]!.resource]! >= INFANTRY.components[1]!.count;
-      if (!hasRifles) return [{ type: "create_division", player, division: DIVISION_IDS[nextInt(bot, DIVISION_IDS.length)]! }];
-      const out: Intent[] = [];
-      for (const f of me.factories) for (const g of f.groups) out.push({ type: "set_active_lines", player, city: f.city, good: g.good, count: 0 });
-      return out;
+      for (const id of ["militia", "regulars"] as const) {
+        if (!opened(id) && unlocked(id)) return openBarracks(player, id);
+      }
+      const makers = DIVISION_IDS.filter((id) => opened(id));
+      if (makers.length === 0) return [];
+      return [{ type: "change_production_target", player, activity: makers[nextInt(bot, makers.length)]!, delta: 1 + nextInt(bot, 2) }];
     }
     case 2:
     case 3:
@@ -195,17 +197,18 @@ function armyOrders(bot: Rng, state: GameState, player: number): Intent[] {
       const f = peace[nextInt(bot, peace.length)]!;
       return [{ type: "declare_war", player, target: f.players[0] === player ? f.players[1] : f.players[0] }];
     }
-    default:
-      return nextInt(bot, 6) === 0 && mine.length > 0
-        ? [{ type: "delete_division", player, id: mine[nextInt(bot, mine.length)]!.id }]
-        : [];
+    default: {
+      // Une boîte supprimée : ses divisions deviennent en trop (08 §9).
+      const closable = DIVISION_IDS.filter((id) => opened(id));
+      return nextInt(bot, 40) === 0 && closable.length > 0 ? [{ type: "close_activity", player, activity: closable[nextInt(bot, closable.length)]! }] : [];
+    }
   }
 }
 
 /**
  * Un ordre de guerre ou de front tiré au hasard pour le joueur `player` : déclarer la guerre,
- * proposer ou accepter la paix, créer, supprimer ou déplacer une division, lancer ou arrêter une attaque. Beaucoup
- * sont invalides (front inconnu, joueur étranger au front, pas en guerre, stock insuffisant).
+ * proposer ou accepter la paix, changer une production visée, déplacer une division, lancer ou arrêter une attaque.
+ * Beaucoup sont invalides (front inconnu, joueur étranger au front, pas en guerre, boîte fermée).
  */
 function frontOrder(bot: Rng, state: GameState, player: number): Intent {
   const front = 1 + nextInt(bot, Math.max(1, state.nextFrontId));
@@ -221,14 +224,13 @@ function frontOrder(bot: Rng, state: GameState, player: number): Intent {
       return { type: "answer_proposal", player, from: other, accept: nextInt(bot, 2) === 0 };
     case 4:
     case 5:
-      return { type: "create_division", player, division: DIVISION_IDS[nextInt(bot, DIVISION_IDS.length)]! };
+      return { type: "change_production_target", player, activity: DIVISION_IDS[nextInt(bot, DIVISION_IDS.length)]!, delta: nextInt(bot, 5) - 2 };
     case 6:
-      return { type: "delete_division", player, id: division };
+      return { type: "set_auto_assign", player, enabled: nextInt(bot, 8) !== 0 };
     case 7:
     case 12:
       return { type: "move_division", player, ids: [division, division + 1], front: nextInt(bot, 3) === 0 ? 0 : front, ...(nextInt(bot, 2) === 0 ? { line: "first" as const } : {}) };
     case 8:
-      return { type: "set_forced_mobilization", player, enabled: nextInt(bot, 2) === 0 };
     case 9:
     case 10:
       return { type: "start_front_attack", player, front };
@@ -245,19 +247,17 @@ export const DEFAULT_SCENARIO: Omit<ScenarioOptions, "turns"> = {
   botSeed: 4242,
   players: 8,
   ordersPerPlayer: 4,
-  foundMinPopulation: 6000,
+  foundMinPopulation: 4,
   checkpointEvery: 100,
   warsFromTurn: 1500,
 };
 
-/** Un joueur sur `FARM_SHARE_ONE_IN` envoie un `set_farm_share` à chaque tour, en moyenne. */
-const FARM_SHARE_ONE_IN = 150;
 /** Un joueur qui a une ville envoie un ordre de guerre ou de front à un tour sur `FRONT_ORDER_ONE_IN`. */
 const FRONT_ORDER_ONE_IN = 60;
 /** Un joueur qui a une ville envoie un ordre d'armée (`armyOrders`) à un tour sur `ARMY_ORDER_ONE_IN`, en plus des ordres de `frontOrder`. */
 const ARMY_ORDER_ONE_IN = 15;
-/** Un joueur qui a une ville envoie un ordre d'usine (construire, créer, régler, priorité) à un tour sur `FACTORY_ORDER_ONE_IN`. */
-const FACTORY_ORDER_ONE_IN = 25;
+/** Un joueur qui a une ville envoie un ordre sur ses activités (`activityOrder`) à un tour sur `ACTIVITY_ORDER_ONE_IN`. */
+const ACTIVITY_ORDER_ONE_IN = 25;
 
 export function runScenario(opts: ScenarioOptions, now: () => number = () => 0): ScenarioResult {
   const map = opts.map ?? generateTestMap(opts.mapSeed);
@@ -268,7 +268,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
   let changedTiles = 0;
   let applyMs = 0;
   let starvingPlayerTurns = 0;
-  let filledLinePlayerTurns = 0;
+  let producingPlayerTurns = 0;
   let soldierPlayerTurns = 0;
   let fightingTurns = 0;
   let captures = 0;
@@ -296,11 +296,8 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
         }
         intents.push({ type: "found_city", player: p, tile });
       }
-      if (nextInt(bot, FARM_SHARE_ONE_IN) === 0) {
-        intents.push({ type: "set_farm_share", player: p, percent: 50 + nextInt(bot, 51) });
-      }
-      if (mine.length > 0 && nextInt(bot, FACTORY_ORDER_ONE_IN) === 0) {
-        intents.push(factoryOrder(bot, p, mine));
+      if (mine.length > 0 && nextInt(bot, ACTIVITY_ORDER_ONE_IN) === 0) {
+        intents.push(activityOrder(bot, p, state.players[p - 1]!));
       }
       if (mine.length > 0 && turn >= opts.warsFromTurn && nextInt(bot, FRONT_ORDER_ONE_IN) === 0) {
         intents.push(frontOrder(bot, state, p));
@@ -317,11 +314,12 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
 
     changedTiles += changed.length;
     for (const p of state.players) {
-      if (p.food < p.population * POPULATION.foodPerHead) starvingPlayerTurns++;
-      if (p.factories.some((f) => f.groups.some((g) => g.running > 0))) filledLinePlayerTurns++;
-      if (p.soldiers > 0) soldierPlayerTurns++;
+      if (p.population > p.capacity) starvingPlayerTurns++;
+      const makers = p.activities.filter((a) => ACTIVITY_DATA[a.id]!.kind === "factory" || ACTIVITY_DATA[a.id]!.kind === "barracks");
+      if (makers.some((a) => a.output > 0)) producingPlayerTurns++;
+      if (makers.some((a) => ACTIVITY_DATA[a.id]!.kind === "barracks" && a.workers > 0)) soldierPlayerTurns++;
     }
-    if (state.fronts.some((f) => f.sides.some((x) => x.attackAt !== 0))) fightingTurns++;
+    if (state.combats.some((c) => c.tick === turn)) fightingTurns++;
     captures += state.events.filter((e) => e.type === "city_captured").length;
     opts.onTurn?.(state, turn, changed);
     if (turn % opts.checkpointEvery === 0) checkpoints.push(hashState(state));
@@ -333,7 +331,7 @@ export function runScenario(opts: ScenarioOptions, now: () => number = () => 0):
     changedTiles,
     cities: state.cities.length,
     starvingPlayerTurns,
-    filledLinePlayerTurns,
+    producingPlayerTurns,
     soldierPlayerTurns,
     fightingTurns,
     captures,

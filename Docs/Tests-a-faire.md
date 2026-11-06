@@ -28,6 +28,12 @@ décident. Les tests sont écrits vers la fin, à la demande de l'auteur.
   chiffres avec la nouvelle règle (05-Fronts §6.3) : à revérifier à la passe finale.
 - **Audit des tests qui vérifient une règle disparue sans échouer** : non fait.
   À faire à la passe finale, en même temps que la décision ci-dessus.
+- **État au 6 novembre 2026** : `npm test` et `npm run typecheck` passent. Les tests du moteur et du client ont été
+  réécrits d'après `08-Population.md` et `06-Combat-Simplifie.md` : `economy.test.ts`, `activities.test.ts` (nouveau),
+  `combat.test.ts`, `divisions.test.ts`, `scenario.ts`. `factories.test.ts` et `specialization.test.ts` sont supprimés :
+  usines sur la carte, lignes, spécialisation et réserve d'armement n'existent plus. Dans les sections ci-dessous, les
+  mentions de ces deux fichiers, du renfort et de `filledLinePlayerTurns` sont périmées. **Restent à écrire** : les tests
+  des percées (section suivante, aucun test n'existe) et le soin des divisions en combat.
 
 ## Fronts version 2 : réaction rapide, boîtes de percée, percée
 

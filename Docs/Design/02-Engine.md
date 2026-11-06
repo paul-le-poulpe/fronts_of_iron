@@ -62,13 +62,12 @@ fronts aériens et maritimes.
 | `src/turn.ts` | `applyTurn(state, { turn, intents })` : l'ordre d'un tour est au §4 |
 | `src/hash.ts` | `hashMap`, `hashState` |
 | `test/*.test.ts` | tests (`npm test`) |
-| `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage, récolte en rationnels exacts avec BigInt) et cartes fabriquées à la main, pour les tests de villes et d'économie |
-| `test/economy.test.ts` | tests de la courbe, de la récolte, de l'étape de nourriture, de la croissance avec reste, des totaux de fertilité et de `set_farm_share` |
-| `test/factories.test.ts` | tests des usines : lignes qui tournent et malus (tests à réécrire, `Docs/Tests-a-faire.md`), capacité de fer, machines du tour précédent, déblocage, réserve d'armement, ordres, hash |
-| `test/specialization.test.ts` | ouvriers d'une ligne selon son rang (`workersForRank`, `workersForLines`), remplissage avec ces coûts, jauge de croissance automatique proportionnelle au nombre de lignes |
-| `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés par la croissance de la population), de temps en temps `set_farm_share`, des ordres d'usine tirés au hasard et, à partir de `warsFromTurn`, des ordres de guerre et de front (`declare_war`, paix, `create_division`, `delete_division`, `move_division`, `set_forced_mobilization`, attaques), dont beaucoup sont invalides |
+| `test/helpers.ts` | calculs de référence lents (zones par toutes les villes, routes par toutes les paires, groupes par parcours, ports, totaux de fertilité par recomptage), cartes fabriquées à la main, et `box`, `openBox` pour lire et ouvrir une activité, pour les tests de villes et d'économie |
+| `test/economy.test.ts` | étape de l'économie (08 §2.1 à §6, §8) : places, capacité, fer et malus, limites, apparitions et disparitions, blessés, totaux de fertilité, invariants du scénario à chaque tour |
+| `test/activities.test.ts` | activités (08 §2, §7, §9, §10) : ordres, casernes, production visée, auto-assignation, déblocage, fondation payée en bonshommes |
+| `test/scenario.ts` | partie scriptée utilisée par les tests et la mesure : des joueurs simulés envoient des ordres `found_city` (payés en bonshommes), des ordres sur leurs activités tirés au hasard et, à partir de `warsFromTurn`, des ordres de guerre et de front (`declare_war`, paix, casernes et production visée, `move_division`, attaques), dont beaucoup sont invalides |
 | `test/fronts.test.ts` | tests des fronts et des divisions (05-Fronts §13.7) : configuration des divisions, détection, répartition des divisions d'un front qui change, guerre et paix, ordres d'attaque, fondation en guerre, hash |
-| `test/war-helpers.ts` | petite carte de terre, duel de deux villes, `turn`, `play`, outils pour doter un joueur en hommes et en armement et créer des divisions |
+| `test/war-helpers.ts` | petite carte de terre, duel de deux villes (économie gelée par défaut : une division posée à la main n'y est pas en trop), `turn`, `play`, `put` pour poser une division, `resolve` pour jouer le délai d'une attaque, `hitsOf` pour lire l'état perdu à un round d'un rapport |
 | `test/bench.ts` | mesure (`npm run bench`) |
 | `test/fronts-viz.ts` | visualisation des fronts d'une partie scriptée : routes, connexions colorées par front, points du front, chaînes de 05-Fronts §11.4 (calcul de `client/src/frontgeom.ts`), tableau par joueur avec le nombre de divisions de chaque camp (`npm run viz:fronts`) → `out/fronts.html`, ignoré par git |
 | `test/seazones-viz.ts` | visualisation pas à pas des zones maritimes (`npm run viz:sea`) → `out/sea-zones.html`, ignoré par git |
@@ -632,10 +631,6 @@ factoryWorkers + miners` = cette population. La mécanisation est calculée avec
 travailleurs disponibles, pas ceux qui travaillent (00-Game §6.2). Le rayon
 d'exploitation (§6.6) n'est pas calculé : la visualisation le fait.
 
-`harvest` (récolte), `mechanization` et `minersFor` sont exportées. Les tests comparent `harvest` à
-`bruteHarvest` (`test/helpers.ts`), écrit avec des rationnels exacts (BigInt), sur
-4 000 cas tirés au hasard.
-
 ### Zones (00-Game §3.2)
 
 Une case est à la ville la plus proche si celle-ci est à une distance ≤
@@ -756,9 +751,8 @@ sa capitale : `cities[capital - 1].group`.
 9. `owner`, deux cases par mot ;
 10. `tileCity`, deux cases par mot.
 
-`test/engine.test.ts` change chaque champ des villes et de l'économie l'un après
-l'autre et vérifie que le hash change ; `test/factories.test.ts` fait de même
-pour les usines, les biens et l'armement. Les résultats du dernier tour sont
+`test/engine.test.ts` change chaque champ des villes, de l'économie et des activités
+l'un après l'autre et vérifie que le hash change. Les résultats du dernier tour sont
 entièrement déterminés par le reste de l'état, mais ils sont dans `GameState` :
 ils sont donc dans le hash (§6).
 

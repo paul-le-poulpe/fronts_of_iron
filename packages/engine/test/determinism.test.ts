@@ -14,7 +14,7 @@ interface RunOutput {
   changedTiles: number;
   cities: number;
   starvingPlayerTurns: number;
-  filledLinePlayerTurns: number;
+  producingPlayerTurns: number;
   soldierPlayerTurns: number;
   fightingTurns: number;
   captures: number;
@@ -36,13 +36,13 @@ describe("déterminisme", () => {
     assert.equal(a.checkpoints.length, TURNS / DEFAULT_SCENARIO.checkpointEvery);
     assert.ok(a.cities >= 50, `seulement ${a.cities} villes fondées : le scénario ne teste rien`);
     assert.ok(a.changedTiles > 10_000, `seulement ${a.changedTiles} cases modifiées : le scénario ne teste rien`);
-    // La croissance et la baisse de population (surplus négatif) sont jouées, pas seulement des fondations.
+    // Les arrivées et les disparitions de bonshommes sont jouées, pas seulement des fondations.
     assert.ok(a.totalPopulation > 0, "aucune population à la fin : la croissance n'est pas testée");
-    assert.ok(a.starvingPlayerTurns > 1000, `seulement ${a.starvingPlayerTurns} tours-joueurs de baisse : le surplus négatif n'est pas testé`);
-    // Les usines sont jouées : des lignes remplies, donc des ouvriers, des mineurs et du fer.
-    assert.ok(a.filledLinePlayerTurns > 1000, `seulement ${a.filledLinePlayerTurns} tours-joueurs avec une ligne remplie : les usines ne sont pas testées`);
-    assert.equal(b.filledLinePlayerTurns, a.filledLinePlayerTurns);
-    // Les fronts sont joués : des divisions créées, des soldats, des attaques en cours, des villes prises (05-Fronts §13.7).
+    assert.ok(a.starvingPlayerTurns > 1000, `seulement ${a.starvingPlayerTurns} tours-joueurs au-dessus de la capacité : les disparitions ne sont pas testées`);
+    // Les usines et les casernes sont jouées : des sorties servies, donc des ouvriers, des mineurs et du fer.
+    assert.ok(a.producingPlayerTurns > 1000, `seulement ${a.producingPlayerTurns} tours-joueurs avec une sortie : la production n'est pas testée`);
+    assert.equal(b.producingPlayerTurns, a.producingPlayerTurns);
+    // Les fronts sont joués : des divisions créées, des soldats, des combats, des villes prises (05-Fronts §13.7).
     assert.ok(a.divisions >= 5, `seulement ${a.divisions} divisions créées : les divisions ne sont pas testées`);
     assert.ok(a.soldierPlayerTurns > 1000, `seulement ${a.soldierPlayerTurns} tours-joueurs avec des soldats : les troupes ne sont pas testées`);
     assert.ok(a.fightingTurns > 100, `seulement ${a.fightingTurns} tours de combat : le combat n'est pas testé`);

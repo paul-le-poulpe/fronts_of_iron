@@ -10,6 +10,7 @@ import {
   createRoadNetwork,
   createRng,
   foundingCost,
+  foundingCostPawns,
   generateTestMap,
   nextInt,
   POPULATION,
@@ -45,7 +46,7 @@ function play(map: GameMap, players: number, orders: readonly (readonly [number,
   const s = createGame({ seed: 1, map, playerCount: players });
   orders.forEach(([player, x, y], i) => {
     const p = s.players[player - 1]!;
-    if (p.capital !== 0) p.population = Math.max(p.population, foundingCost(p.cityIds.length));
+    if (p.capital !== 0) p.population = Math.max(p.population, foundingCostPawns(p.cityIds.length));
     const before = s.cities.length;
     applyTurn(s, { turn: i + 1, intents: [{ type: "found_city", player, tile: tileAt(map, x, y) }] });
     assert.equal(s.cities.length, before + 1, `ordre ${i + 1} (${player}, ${x}, ${y}) refusé`);
@@ -394,7 +395,7 @@ describe("parties jouées par des joueurs simulés", () => {
     assert.equal(checked.length, 4);
     // La population grossit avec la nourriture : au moins un joueur a plus de villes que la population de départ n'en paie.
     let paid = 1;
-    for (let left = POPULATION.initial; left >= foundingCost(paid); paid++) left -= foundingCost(paid);
+    for (let left = POPULATION.initial; left >= foundingCostPawns(paid); paid++) left -= foundingCostPawns(paid);
     assert.ok(r.state.players.some((p) => p.cityIds.length > paid), `${paid} villes payées au départ`);
     for (const p of r.state.players) assert.ok(p.population >= 0, `joueur ${p.id}`);
   });
@@ -406,7 +407,7 @@ describe("parties jouées par des joueurs simulés", () => {
       turns: 200,
       foundMinPopulation: 0,
       onTurn: (state) => {
-        for (const p of state.players) if (p.capital !== 0) p.population = Math.max(p.population, foundingCost(p.cityIds.length));
+        for (const p of state.players) if (p.capital !== 0) p.population = Math.max(p.population, foundingCostPawns(p.cityIds.length));
       },
     });
     assert.ok(r.cities >= 140, `${r.cities} villes`);

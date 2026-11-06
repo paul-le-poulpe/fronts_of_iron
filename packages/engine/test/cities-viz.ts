@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
 import { CITY, generateTestMap, RESOURCE_IRON, type GameState } from "../src/index.ts";
+import { box } from "./helpers.ts";
 import { DEFAULT_SCENARIO, runScenario } from "./scenario.ts";
 
 const args = new Map(
@@ -108,8 +109,8 @@ function snapshot(state: GameState, turn: number): void {
     tc: pack(new Uint8Array(delta.buffer)),
     st: pack(new Uint8Array(st.buffer)),
     pl: state.players.map((p) => [
-      p.population, p.farmers, p.fishers, p.idle, p.food, p.cityIds.length,
-      p.cultivated, p.farmTiles, p.fished, p.seaTiles, p.farmPercent,
+      p.population, box(p, "farmers").workers, box(p, "fishers").workers, box(p, "idle").workers, p.food, p.cityIds.length,
+      p.cultivated, p.farmTiles, p.fished, p.seaTiles,
     ]),
   });
   lastCount = n;
@@ -212,7 +213,7 @@ const html = `<!doctype html>
 <table>
   <thead><tr>
     <th>joueur</th><th>population</th><th>fermiers</th><th>pêcheurs</th><th>inactifs</th><th>nourriture</th>
-    <th>villes</th><th>cultivé / max</th><th>pêché / max</th><th>% fermiers</th>
+    <th>villes</th><th>cultivé / max</th><th>pêché / max</th>
   </tr></thead>
   <tbody id="table"></tbody>
 </table>
@@ -330,8 +331,7 @@ function fillTable(pl) {
   document.getElementById("table").innerHTML = pl.map((r, k) => {
     const sw = '<span class="sw" style="background:' + css(playerColor(k + 1)) + '"></span>';
     return "<tr><td>" + sw + (k + 1) + "</td><td>" + r[0] + "</td><td>" + r[1] + "</td><td>" + r[2] + "</td><td>" + r[3] +
-      "</td><td>" + r[4] + "</td><td>" + r[5] + "</td><td>" + r[6] + " / " + r[7] + "</td><td>" + r[8] + " / " + r[9] +
-      "</td><td>" + r[10] + "</td></tr>";
+      "</td><td>" + r[4] + "</td><td>" + r[5] + "</td><td>" + r[6] + " / " + r[7] + "</td><td>" + r[8] + " / " + r[9] + "</td></tr>";
   }).join("");
 }
 

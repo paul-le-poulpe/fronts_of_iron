@@ -14,7 +14,6 @@ import {
   hashState,
   NICHES,
   updateFronts,
-  type DivisionComponentConfig,
   type GameState,
   type Intent,
 } from "../src/index.ts";
@@ -34,7 +33,6 @@ describe("config des divisions (05-Fronts §3)", () => {
       assert.ok(Math.abs(x * 100 - Math.round(x * 100)) < 1e-9, `${name} = ${x} a plus de deux décimales`);
     for (const [id, d] of Object.entries(DIVISIONS)) {
       for (const key of ["defenseHitPointsMultiplier", "attackMultiplier", "breakthroughMultiplier", "counterAttackMultiplier"] as const) decimals(d[key], `${id}.${key}`);
-      for (const c of d.components as readonly DivisionComponentConfig[]) if (c.lossMultiplier !== undefined) decimals(c.lossMultiplier, `${id}.${c.resource}.lossMultiplier`);
     }
   });
 
@@ -191,16 +189,14 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     const theirs = put(s, 2, "regulars");
     const before = hashState(s);
     const bad: Record<string, unknown>[] = [
-      { type: "create_division", player: 1, division: "char" },
-      { type: "create_division", player: 1, division: "regulars" }, // ni armement ni inactifs
-      { type: "delete_division", player: 1, id: theirs.id },
-      { type: "delete_division", player: 1, id: 99 },
+      { type: "create_division", player: 1, division: "regulars" }, // l'ordre n'existe plus (08 §10)
+      { type: "delete_division", player: 1, id: mine.id },
       { type: "move_division", player: 1, ids: [theirs.id], front: id },
       { type: "move_division", player: 1, ids: [mine.id], front: 99 },
       { type: "move_division", player: 1, ids: [mine.id], front: id, line: "third" },
       { type: "move_division", player: 1, ids: mine.id, front: id },
       { type: "move_division", player: 1, ids: [mine.id], front: 0 }, // déjà dans la réserve
-      { type: "set_forced_mobilization", player: 1, enabled: 1 },
+      { type: "set_forced_mobilization", player: 1, enabled: true },
       { type: "start_front_attack", player: 1, front: id }, // front en paix
     ];
     for (const intent of bad) assert.ok(!applyIntent(s, intent as unknown as Intent, []), JSON.stringify(intent));
@@ -212,7 +208,7 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     assert.ok(!applyIntent(t, { type: "move_division", player: 3, ids: [third.id], front: 1 }, []));
   });
 
-  it("attaque sur tout le front : interrupteur de chaque camp, les deux peuvent attaquer en même temps", () => {
+  it("attaque sur tout le front : ordre ponctuel de chaque camp, annulable pendant son délai, pas de second ordre en attente", () => {
     const s = duel();
     const id = front(s).id;
     turn(s, { type: "declare_war", player: 1, target: 2 });
@@ -220,14 +216,14 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     assert.ok(!applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 2, front: id }, []));
     assert.ok(applyIntent(s, { type: "stop_front_attack", player: 1, front: id }, []));
-    assert.equal(front(s).sides[0]!.attackAt !== 0, false);
-    assert.equal(front(s).sides[1]!.attackAt !== 0, true);
+    assert.equal(front(s).sides[0]!.attackAt, 0);
+    assert.equal(front(s).sides[1]!.attackAt, s.tick + 1 + FRONTS.attackDelayTurns);
   });
 });
 
 describe("fondation pendant une guerre (05-Fronts §8)", () => {
   it("le rayon d'expansion d'une ville d'un front actif ne compte pas", () => {
-    const s = duel();
+    const s = duel(false);
     s.players.forEach((p) => (p.population = 1_000_000));
     // En paix : une ville dans le rayon d'expansion de la ville 1.
     const tile = at(9.5, 12.6);
@@ -264,15 +260,14 @@ describe("hash des fronts et des divisions (05-Fronts §13.3)", () => {
       ["attaque", (s) => void (front(s).sides[0]!.attackAt = 0)],
       ["nextFrontId", (s) => void s.nextFrontId++],
       ["nextDivisionId", (s) => void s.nextDivisionId++],
-      ["exemplaires d'un composant", (s) => void div(s).counts[1]!--],
+      ["barre de vie", (s) => void div(s).state--],
       ["front", (s) => void (div(s).front = 0)],
       ["ligne", (s) => void (div(s).line = 0)],
       ["largeur engagée", (s) => void div(s).engaged++],
       ["arrivée", (s) => void (div(s).arrivalTick = 999)],
       ["fin de formation", (s) => void ((div(s) as { formedTick: number }).formedTick = 999)],
       ["fuite", (s) => void (div(s).fleeUntilTick = 999)],
-      ["mobilisation forcée", (s) => void (s.players[1]!.forcedMobilization = true)],
-      ["soldats", (s) => void s.players[0]!.soldiers++],
+      ["sursis", (s) => void (div(s).leaveTick = 999)],
       ["statut de guerre", (s) => void s.diplomacy.fill(1)],
     ];
     for (const [name, mutate] of mutations) {

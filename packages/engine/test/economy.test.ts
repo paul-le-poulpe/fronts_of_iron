@@ -1,38 +1,55 @@
+// Étape de l'économie d'un joueur (Docs/Design/08-Population.md §2.1 à §6, §8) : places, capacité de population, fer,
+// limites, apparitions et disparitions, soin des blessés. Les valeurs attendues sont calculées à la main d'après le
+// document. Les ordres sur les activités sont dans activities.test.ts.
+//
+// `stepEconomy` appelée seule ne fait pas avancer `state.tick` : les compteurs ne se terminent pas. Les tests des délais
+// passent par `applyTurn` (`play`). `withCity` éteint l'auto-assignation : les bonshommes restent là où le test les met.
+
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ACTIVITY_DATA,
+  ACTIVITY_IDS,
   applyIntent,
   applyTurn,
   CITY,
   createGame,
-  createRng,
-  CURVE_SCALE,
+  DIVISION_DATA,
+  DIVISION_TIMING,
+  divisionLimit,
+  ELITE_TROOPS_RATIO,
+  eliteCap,
   FARMING,
   FERTILITY,
   FISHING,
   FOOD,
-  foundingCost,
-  GROWTH_SCALE,
-  harvest,
-  hashState,
-  machineCurve,
-  mechanization,
-  mechanizationCurve,
-  nextInt,
+  FRONTS,
+  GOOD_IDS,
+  GOODS_TIMING,
+  hurtPawns,
+  idlePawns,
+  inFormation,
+  IRON_INDEX,
+  machineCount,
+  machineLimit,
+  MINING,
   POPULATION,
+  RESOURCES,
+  slotsOf,
+  STATE_SCALE,
   stepEconomy,
   TERRAIN_LAND,
-  waterYieldMilli,
+  type ActivityId,
   type GameMap,
   type GameState,
   type Intent,
-  type MechanizationConfig,
+  type Player,
 } from "../src/index.ts";
 import { DEFAULT_SCENARIO, runScenario } from "./scenario.ts";
-import { bruteHarvest, checkCityInvariants, customMap, tileAt } from "./helpers.ts";
+import { box, checkCityInvariants, customMap, openBox, tileAt } from "./helpers.ts";
+import { D, duel, play, put, resolve, war } from "./war-helpers.ts";
 
-const S = CURVE_SCALE;
 const R = CITY.controlRadius;
 
 /** Position de la première ville des tests. Cartes de 10 R × 6 R, R = rayon de contrôle. */
@@ -44,6 +61,10 @@ const LAND_MAP = customMap(10 * R, 6 * R, () => "land");
 const SEA_MAP = customMap(10 * R, 6 * R, (x) => (x >= CX + Math.floor(R / 2) ? "ocean" : "land"));
 /** Fertilités variées de 0 à 10 (un neuvième à peu près de cases à 0). */
 const VARIED_MAP = customMap(10 * R, 6 * R, () => "land", () => false, (x, y) => (x * 7 + y * 3) % 11);
+/** Fer sur une case sur dix. */
+const IRON_MAP = customMap(10 * R, 6 * R, () => "land", (x, y) => (x + y) % 10 === 0);
+
+const TRACTOR = GOOD_IDS.indexOf("tractor");
 
 const found = (map: GameMap, player: number, x: number, y: number): Intent => ({
   type: "found_city",
@@ -51,420 +72,451 @@ const found = (map: GameMap, player: number, x: number, y: number): Intent => ({
   tile: tileAt(map, x, y),
 });
 
-/** Partie dont le joueur 1 a fondé sa première ville en (CX, CY), hors tour : population = POPULATION.initial, aucune étape de nourriture jouée. */
+/** Partie dont le joueur 1 a fondé sa première ville en (CX, CY), hors tour, auto-assignation éteinte : un inactif, aucune étape jouée. */
 function withCity(map: GameMap, players = 1): GameState {
   const s = createGame({ seed: 1, map, playerCount: players });
   assert.ok(applyIntent(s, found(map, 1, CX, CY), []));
+  s.players[0]!.autoAssign = false;
   return s;
 }
 
-/** Totaux du disque de contrôle d'une ville seule en (cx, cy), comptés case par case. */
-function disc(map: GameMap, cx: number, cy: number): { tiles: number; farm: number; fertility: number; water: number } {
-  const out = { tiles: 0, farm: 0, fertility: 0, water: 0 };
-  for (let dy = -R; dy <= R; dy++) {
-    for (let dx = -R; dx <= R; dx++) {
-      if (dx * dx + dy * dy > R * R) continue;
-      const t = tileAt(map, cx + dx, cy + dy);
-      out.tiles++;
-      if (map.fertility[t]! > 0) out.farm++;
-      out.fertility += map.fertility[t]!;
-      if ((map.terrain[t]! & TERRAIN_LAND) === 0) out.water++;
-    }
+const slots = (p: Player, id: ActivityId): number => slotsOf(p, ACTIVITY_DATA[ACTIVITY_IDS.indexOf(id)]!);
+
+/** Met `workers` bonshommes dans ces activités (Inactifs compris), par écriture directe, et accorde la population. */
+function assign(s: GameState, workers: Partial<Record<ActivityId, number>>): void {
+  const p = s.players[0]!;
+  for (const a of p.activities) a.workers = 0;
+  for (const [id, n] of Object.entries(workers)) {
+    const a = box(p, id as ActivityId);
+    a.workers = n;
+    if (ACTIVITY_DATA[a.id]!.hasPlaces) a.places = n;
   }
-  return out;
+  p.population = p.activities.reduce((sum, a) => sum + a.workers, 0);
 }
 
-describe("courbe de mécanisation (00-Game §6.3)", () => {
-  it("vaut 0 en 0 et S en S, pour tout exposant", () => {
-    for (let n = 1; n <= 6; n++) {
-      assert.equal(mechanizationCurve(0, n), 0, `n = ${n}`);
-      assert.equal(mechanizationCurve(S, n), S, `n = ${n}`);
-    }
+describe("places (08 §2.1)", () => {
+  it("places = floor(cases / cases par travailleur) ; le reste des cases ne sert pas", () => {
+    const p = withCity(LAND_MAP).players[0]!;
+    p.farmTiles = 3 * FARMING.tilesPerWorker - 1;
+    p.seaTiles = 3 * FISHING.tilesPerWorker;
+    p.resourceTiles[IRON_INDEX] = 2 * MINING.tilesPerWorker + 50;
+    assert.deepEqual([slots(p, "farmers"), slots(p, "fishers"), slots(p, "miners")], [2, 3, 2]);
   });
 
-  it("n = 1 est une droite : f(X) = X", () => {
-    for (const X of [0, 1, 1234, 5000, 9999, S]) assert.equal(mechanizationCurve(X, 1), X);
+  it("usine de machines : ceil(places de l'activité × ouvriers par unité / unités par ouvrier) ; 8 places, 2 tracteurs par ouvrier : 4", () => {
+    const p = withCity(LAND_MAP).players[0]!;
+    p.farmTiles = 8 * FARMING.tilesPerWorker;
+    assert.equal(slots(p, "tractor"), 4);
+    p.farmTiles = 7 * FARMING.tilesPerWorker;
+    assert.equal(slots(p, "tractor"), 4);
   });
 
-  it("valeurs calculées à la main", () => {
-    // n = 2, X = S/2 : p = 10000 → 5000 → 2500, f = 7500.
-    assert.equal(mechanizationCurve(S / 2, 2), 7500);
-    // n = 3, X = S/2 : p = 10000 → 5000 → 2500 → 1250, f = 8750.
-    assert.equal(mechanizationCurve(S / 2, 3), 8750);
-    // n = 2, X = 3333 : p = 10000 → 6667 → floor(6667 × 6667 / 10000) = floor(4444,8889) = 4444, f = 5556.
-    assert.equal(mechanizationCurve(3333, 2), 5556);
-  });
-
-  it("est croissante et reste dans 0…S", () => {
-    for (let n = 1; n <= 4; n++) {
-      let previous = 0;
-      for (let X = 0; X <= S; X++) {
-        const f = mechanizationCurve(X, n);
-        assert.ok(f >= previous && f <= S, `n = ${n}, X = ${X}`);
-        previous = f;
-      }
-    }
+  it("une boîte qui perd des places renvoie son trop-plein dans Inactifs : les bonshommes d'abord, puis les machines", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    assign(s, { farmers: 1 });
+    box(p, "farmers").machines = 3;
+    p.farmTiles = 2 * FARMING.tilesPerWorker;
+    stepEconomy(s);
+    assert.deepEqual([box(p, "farmers").workers, box(p, "farmers").machines, idlePawns(p), p.idleMachines[TRACTOR]], [0, 2, 1, 1]);
+    assert.equal(p.population, 1, "personne ne disparaît");
   });
 });
 
-describe("mécanisation et récolte (00-Game §6.2, §6.4, §6.5)", () => {
-  it("sans machine : M_base ; à m_max machines pour 1 000 travailleurs ou plus : M_max", () => {
-    for (const cfg of [FARMING, FISHING]) {
-      assert.equal(mechanization(cfg, 5000, 0), cfg.mechanizationBase);
-      const full = (5000 * cfg.maxMachinesPer1000) / 1000;
-      assert.equal(mechanization(cfg, 5000, full), cfg.mechanizationMax);
-      assert.equal(mechanization(cfg, 5000, full * 10), cfg.mechanizationMax);
-      // Aucun travailleur disponible : pas de division par zéro, M_base.
-      assert.equal(mechanization(cfg, 0, 0), cfg.mechanizationBase);
-      assert.equal(mechanization(cfg, 0, 100), cfg.mechanizationBase);
-    }
-  });
+describe("capacité de population (08 §3)", () => {
+  const base = FOOD.base + FOOD.perCity;
 
-  it("à mi-chemin de m_max : M_base + (M_max − M_base) × f(S/2) / S", () => {
-    const cfg: MechanizationConfig = { mechanizationBase: 300, mechanizationMax: 1500, maxMachinesPer1000: 100, curveExponent: 2 };
-    // 2 000 travailleurs, 100 machines = 50 pour 1 000 = la moitié de m_max : f = 7500, M = 300 + 1200 × 0,75 = 1200.
-    assert.equal(mechanization(cfg, 2000, 100), 1200);
-    // n = 1 : 300 + 1200 × 0,5 = 900.
-    assert.equal(mechanization({ ...cfg, curveExponent: 1 }, 2000, 100), 900);
-  });
-
-  it("travailleurs requis : arrondi vers le haut, pour couvrir toute la surface", () => {
-    const M = FARMING.mechanizationBase;
-    // Prémisse : 1 000 cases à M milli-cases par travailleur ne tombe pas juste, donc arrondir vers le bas laisserait des cases.
-    assert.notEqual(1_000_000 % M, 0);
-    const down = Math.floor(1_000_000 / M);
-    assert.ok(Math.floor((down * M) / 1000) < 1000, "avec l'arrondi vers le bas, la surface ne serait pas couverte");
-    const h = harvest(FARMING, 1_000_000, 0, 1000, 5000);
-    assert.equal(h.workers, down + 1);
-    assert.equal(h.area, 1000);
-    assert.equal(h.yield, 5000);
-    // Quand la division tombe juste, pas de travailleur de plus : surface = M cases → 1 000 travailleurs.
-    assert.equal(harvest(FARMING, 1_000_000, 0, M, M * 5).workers, 1000);
-  });
-
-  it("les travailleurs en trop restent inactifs ; trop peu de travailleurs : toute la population travaille", () => {
-    const rich = harvest(FARMING, 100_000, 0, 200, 1000);
-    assert.ok(rich.workers < 100_000 && rich.area === 200);
-    const poor = harvest(FARMING, 10, 0, 200, 1000);
-    assert.equal(poor.workers, 10);
-    assert.equal(poor.area, Math.floor((10 * FARMING.mechanizationBase) / 1000));
-    assert.ok(poor.area < 200);
-  });
-
-  it("blé = fertilité_totale × surface cultivée / surface_max, multiplié avant d'être divisé", () => {
-    // 10 travailleurs à M_base = 300 cultivent 3 cases sur 7.
-    const h = harvest(FARMING, 10, 0, 7, 33);
-    assert.equal(h.area, 3);
-    assert.equal(h.yield, 14); // floor(33 × 3 / 7) ; diviser d'abord donnerait floor(33 / 7) × 3 = 12
-    // Toute la surface cultivée : toute la fertilité.
-    assert.equal(harvest(FARMING, 1_000_000, 0, 7, 33).yield, 33);
-  });
-
-  it("sans surface : rien à cultiver, tous les travailleurs disponibles sont inactifs", () => {
-    for (const cfg of [FARMING, FISHING]) {
-      const h = harvest(cfg, 500, 0, 0, 0);
-      assert.deepEqual([h.workers, h.area, h.yield], [0, 0, 0]);
-    }
-  });
-
-  it("donne les mêmes résultats que le calcul de référence en rationnels exacts (BigInt), sur des milliers de cas", () => {
-    const rng = createRng(2024);
-    for (let i = 0; i < 4000; i++) {
-      const cfg = i % 2 === 0 ? FARMING : FISHING;
-      const available = i % 17 === 0 ? 0 : nextInt(rng, 2_000_000);
-      const machines = nextInt(rng, available + 1);
-      const surface = i % 13 === 0 ? 0 : nextInt(rng, 1_000_000);
-      const fertility = surface === 0 ? 0 : nextInt(rng, surface * 10 + 1);
-      const got = harvest(cfg, available, machines, surface, fertility);
-      const want = bruteHarvest(cfg, available, machines, surface, fertility);
-      assert.deepEqual(
-        { workers: got.workers, area: got.area, yield: got.yield },
-        want,
-        `cas ${i} : ${available} disponibles, ${machines} machines, surface ${surface}, fertilité ${fertility}`,
-      );
-      assert.ok(got.area <= surface, "surface cultivée ≤ surface_max");
-      assert.ok(got.workers <= available);
-      assert.ok(got.yield <= fertility);
-    }
-  });
-});
-
-describe("rendement d'une case d'eau (00-Game §6.4)", () => {
-  it("va de tileYield sans bateau à tileYieldMax avec le maximum de bateaux, en croissant", () => {
-    const fishers = 1000;
-    assert.equal(waterYieldMilli(fishers, 0), FISHING.tileYield * 1000);
-    const full = Math.ceil((fishers * FISHING.maxMachinesPer1000) / 1000);
-    assert.equal(waterYieldMilli(fishers, full), FISHING.tileYieldMax * 1000);
-    assert.equal(waterYieldMilli(fishers, full * 10), FISHING.tileYieldMax * 1000, "au-delà du maximum, plus rien ne change");
-    let previous = 0;
-    for (let boats = 0; boats <= full; boats++) {
-      const y = waterYieldMilli(fishers, boats);
-      assert.ok(y >= previous);
-      previous = y;
-    }
-    assert.equal(waterYieldMilli(0, 50), FISHING.tileYield * 1000, "sans pêcheur, pas de bateau par pêcheur");
-    // Même courbe que la mécanisation : à mi-chemin des bateaux, f vaut la même chose pour les deux.
-    const half = Math.floor(full / 2);
-    const f = machineCurve(FISHING, fishers, half);
-    assert.equal(
-      waterYieldMilli(fishers, half),
-      FISHING.tileYield * 1000 + Math.floor(((FISHING.tileYieldMax - FISHING.tileYield) * 1000 * f) / CURVE_SCALE),
-    );
-  });
-});
-
-describe("étape de nourriture d'un joueur (00-Game §4, §6)", () => {
-  it("une ville de terre cultivable : fermiers, surface, blé, nourriture, croissance", () => {
+  it("sans travailleur : base + une ville, 1 500, soit 2 bonshommes ; chaque ville ajoute 500", () => {
     const s = withCity(LAND_MAP);
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, CX, CY);
-    assert.deepEqual([p.farmTiles, p.fertilitySum, p.seaTiles], [d.farm, d.fertility, 0]);
-    const pop = p.population;
     stepEconomy(s);
-    const want = bruteHarvest(FARMING, pop, 0, d.farm, d.fertility);
-    assert.equal(p.farmers, want.workers);
-    assert.equal(p.cultivated, want.area);
-    assert.equal(p.wheat, want.yield);
-    assert.deepEqual([p.fishers, p.fished, p.fish], [0, 0, 0]);
-    assert.equal(p.food, Math.max(want.yield, FOOD.minimum));
-    assert.equal(p.farmers + p.fishers + p.idle, pop, "toute la population est fermier, pêcheur ou inactive");
-    // Croissance : la partie entière du reste est ajoutée, le reste garde le surplus de fraction.
-    const rem = (p.food - pop * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
-    assert.equal(p.population, pop + Math.trunc(rem / GROWTH_SCALE));
-    assert.equal(p.growthRemainder, rem - Math.trunc(rem / GROWTH_SCALE) * GROWTH_SCALE);
-  });
-
-  it("fermiers et pêcheurs : la part des fermiers est floor(population × pourcentage / 100), le reste pêche", () => {
-    const s = withCity(SEA_MAP);
-    const p = s.players[0]!;
-    const d = disc(SEA_MAP, CX, CY);
-    assert.ok(d.water > 0 && d.farm > 0);
-    assert.equal(p.seaTiles, d.water);
-    assert.ok(applyIntent(s, { type: "set_farm_share", player: 1, percent: 60 }, []));
-    const pop = p.population;
+    assert.deepEqual([p.food, p.capacity, p.wheat, p.fish, p.cultivated, p.fished], [base, 2, 0, 0, 0, 0]);
+    p.cityIds.push(99);
     stepEconomy(s);
-    const farmers = Math.floor((pop * 60) / 100);
-    const fishers = pop - farmers;
-    // Sans machine, M ne dépend pas du nombre de travailleurs : le report revient
-    // à ajouter aux disponibles d'un côté le surplus de l'autre (00-Game §4, étape 3).
-    const farmAlone = bruteHarvest(FARMING, farmers, 0, d.farm, d.fertility);
-    const seaAlone = bruteHarvest(FISHING, fishers, 0, d.water, d.water * FISHING.tileYield);
-    const farm = bruteHarvest(FARMING, farmers + (fishers - seaAlone.workers), 0, d.farm, d.fertility);
-    const sea = bruteHarvest(FISHING, fishers + (farmers - farmAlone.workers), 0, d.water, d.water * FISHING.tileYield);
-    assert.deepEqual([p.farmers, p.cultivated, p.wheat], [farm.workers, farm.area, farm.yield]);
-    assert.deepEqual([p.fishers, p.fished, p.fish], [sea.workers, sea.area, sea.yield]);
-    assert.equal(p.fish, FISHING.tileYield * p.fished, "chaque case de mer pêchée vaut FISHING.tileYield");
-    assert.equal(p.food, Math.max(farm.yield + sea.yield, FOOD.minimum));
-    assert.equal(p.idle, pop - farm.workers - sea.workers);
-    assert.equal(p.farmers + p.fishers + p.idle, pop);
-    assert.ok(p.fished > 0 && p.fished <= d.water);
+    assert.deepEqual([p.food, p.capacity], [base + FOOD.perCity, 2]);
   });
 
-  it("report : assez de monde pour tout travailler, les deux côtés sont pleins quel que soit le réglage", () => {
-    for (const percent of [0, 10, 50, 90, 100]) {
-      const s = withCity(SEA_MAP);
-      const p = s.players[0]!;
-      const d = disc(SEA_MAP, CX, CY);
-      p.population = 1_000_000;
-      applyIntent(s, { type: "set_farm_share", player: 1, percent }, []);
-      stepEconomy(s);
-      assert.equal(p.cultivated, d.farm, `${percent} % : tous les champs`);
-      assert.equal(p.fished, d.water, `${percent} % : toute la mer`);
-      assert.equal(p.farmers + p.fishers + p.idle, 1_000_000);
-    }
-  });
-
-  it("report : population insuffisante, le réglage décide, sans inactif", () => {
-    const s = withCity(SEA_MAP);
-    const p = s.players[0]!;
-    const d = disc(SEA_MAP, CX, CY);
-    const needFarm = bruteHarvest(FARMING, 1_000_000, 0, d.farm, d.fertility).workers;
-    const needSea = bruteHarvest(FISHING, 1_000_000, 0, d.water, d.water).workers;
-    p.population = Math.floor((needFarm + needSea) / 2);
-    applyIntent(s, { type: "set_farm_share", player: 1, percent: 30 }, []);
-    stepEconomy(s);
-    // 30 % de fermiers : moins que les champs n'en demandent ; les 70 % de pêcheurs dépassent la mer,
-    // leur surplus va aux champs. Tout le monde travaille.
-    assert.equal(p.idle, 0);
-    assert.equal(p.fishers, Math.min(needSea, p.farmers + p.fishers));
-    assert.ok(p.farmers > Math.floor((p.farmers + p.fishers) * 30 / 100));
-  });
-
-  it("sans case de mer, les pêcheurs vont aux champs (report)", () => {
+  it("un agriculteur sur une terre de fertilité 5 donne 1,5 ; un tracteur vaut un agriculteur", () => {
     const s = withCity(LAND_MAP);
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, CX, CY);
-    applyIntent(s, { type: "set_farm_share", player: 1, percent: 0 }, []);
-    const pop = p.population;
+    assert.equal(p.fertilitySum, FERTILITY.land * p.farmTiles);
+    assign(s, { farmers: 1 });
     stepEconomy(s);
-    const farm = bruteHarvest(FARMING, pop, 0, d.farm, d.fertility);
-    assert.deepEqual([p.farmers, p.fishers, p.idle], [farm.workers, 0, pop - farm.workers]);
-    applyIntent(s, { type: "set_farm_share", player: 1, percent: 100 }, []);
+    assert.deepEqual([p.cultivated, p.wheat, p.food, p.capacity, box(p, "farmers").output], [FARMING.tilesPerWorker, 1500, base + 1500, 3, 1500]);
+    box(p, "farmers").machines = 1;
     stepEconomy(s);
-    assert.equal(p.fishers, 0);
+    assert.deepEqual([p.cultivated, p.wheat, p.food, p.capacity], [2 * FARMING.tilesPerWorker, 3000, base + 3000, 5]);
   });
 
-  it("la nourriture minimale est un plancher", () => {
-    const s = withCity(LAND_MAP);
-    const p = s.players[0]!;
-    // 10 fermiers cultivent 3 cases : 3 × fertilité 5 = 15 de blé, sous le minimum.
-    p.population = 10;
-    stepEconomy(s);
-    assert.equal(p.wheat, FERTILITY.land * 3);
-    assert.ok(p.wheat + p.fish < FOOD.minimum);
-    assert.equal(p.food, FOOD.minimum);
-    // Au-dessus du minimum, la nourriture est blé + poisson : toute la zone est
-    // cultivée (assez de fermiers), et sa fertilité totale dépasse le minimum.
-    p.population = 1_000_000;
-    stepEconomy(s);
-    assert.equal(p.cultivated, p.farmTiles);
-    assert.ok(p.wheat > FOOD.minimum, `${p.wheat} ≤ ${FOOD.minimum} : la carte de test doit être assez fertile`);
-    assert.equal(p.food, p.wheat + p.fish);
-  });
-
-  it("la fertilité varie : le blé suit la somme des fertilités des cases de la zone, pas leur nombre", () => {
+  it("blé = fertilité_totale × surface / farmTiles, multiplié avant d'être divisé : il suit les fertilités de la zone, pas le nombre de cases", () => {
     const s = withCity(VARIED_MAP);
     const p = s.players[0]!;
-    const d = disc(VARIED_MAP, CX, CY);
-    assert.ok(d.farm < d.tiles, "des cases à fertilité 0 ne comptent pas dans la surface");
-    assert.deepEqual([p.farmTiles, p.fertilitySum], [d.farm, d.fertility]);
-    const pop = p.population;
+    assign(s, { farmers: 2 });
     stepEconomy(s);
-    assert.equal(p.wheat, bruteHarvest(FARMING, pop, 0, d.farm, d.fertility).yield);
+    assert.equal(p.cultivated, 600);
+    assert.equal(p.wheat, Math.floor((p.fertilitySum * 600) / p.farmTiles));
+    assert.ok(p.fertilitySum !== p.farmTiles * FERTILITY.land);
   });
 
-  it("un joueur sans ville (nomades) fait aussi l'étape : pas de terre, tous inactifs, nourriture minimale", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 2 });
-    const p = s.players[0]!;
-    p.population = 30;
-    stepEconomy(s);
-    assert.deepEqual([p.farmers, p.fishers, p.idle, p.cultivated, p.fished, p.wheat, p.fish, p.food], [0, 0, 30, 0, 0, 0, 0, FOOD.minimum]);
-    // Le joueur 2, à 0, a aussi sa croissance : l'étape tourne pour tous les joueurs.
-    const rem = FOOD.minimum * POPULATION.growthPerMillion;
-    assert.equal(s.players[1]!.population, Math.trunc(rem / GROWTH_SCALE));
-    assert.equal(s.players[1]!.growthRemainder, rem % GROWTH_SCALE);
-    assert.equal(s.players[1]!.food, FOOD.minimum);
-  });
-
-  it("applyTurn : les ordres d'abord (coût de fondation déduit), puis l'étape sur la population qui reste", () => {
+  it("la surface s'arrête à farmTiles ; sans terre : pas de blé, sans division par zéro", () => {
     const s = withCity(LAND_MAP);
-    s.players[0]!.population = foundingCost(1) + 50;
-    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, CX + CITY.expansionRadius, CY)] });
     const p = s.players[0]!;
-    assert.equal(s.cities.length, 2);
-    // Population utilisée par l'étape : ce qui reste après le coût de la deuxième ville.
-    assert.equal(p.farmers + p.fishers + p.idle, 50);
-    // Le réglage envoyé dans le tour compte tout de suite.
-    const t = withCity(LAND_MAP);
-    applyTurn(t, { turn: 1, intents: [{ type: "set_farm_share", player: 1, percent: 40 }] });
-    assert.equal(t.players[0]!.farmPercent, 40);
-    // Pas de mer sur cette carte : les 60 % de pêcheurs vont aux champs (report).
-    const all = withCity(LAND_MAP);
-    applyTurn(all, { turn: 1, intents: [] });
-    assert.equal(t.players[0]!.farmers, all.players[0]!.farmers);
-    assert.equal(t.players[0]!.farmers + t.players[0]!.idle, POPULATION.initial);
+    assign(s, { farmers: 1 });
+    p.farmTiles = 100;
+    p.fertilitySum = 500;
+    stepEconomy(s);
+    assert.deepEqual([p.cultivated, p.wheat], [0, 0], "plus de place : l'agriculteur retourne dans Inactifs");
+    box(p, "farmers").workers = 0;
+    box(p, "farmers").machines = 0;
+    p.farmTiles = 0;
+    p.fertilitySum = 0;
+    stepEconomy(s);
+    assert.equal(p.wheat, 0);
+  });
+
+  it("un pêcheur plein donne 1 ; une surface incomplète donne sa part, arrondie vers le bas", () => {
+    const s = withCity(SEA_MAP);
+    const p = s.players[0]!;
+    assert.ok(p.seaTiles >= FISHING.tilesPerWorker);
+    assign(s, { fishers: 1 });
+    stepEconomy(s);
+    assert.deepEqual([p.fished, p.fish, p.food, p.capacity, box(p, "fishers").output], [300, 1000, base + 1000, 3, 1000]);
+  });
+
+  it("capacité = ceil(nourriture / 1 000) : 2 000 donnent 2, 2 001 donnent 3", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    assign(s, { farmers: 1 });
+    // Avec une fertilité totale réglée à la main : blé = fertilitySum × 300 / farmTiles.
+    p.farmTiles = 300;
+    p.fertilitySum = 500;
+    stepEconomy(s);
+    assert.deepEqual([p.food, p.capacity], [2000, 2]);
+    p.fertilitySum = 501;
+    stepEconomy(s);
+    assert.deepEqual([p.food, p.capacity], [2001, 3]);
   });
 });
 
+describe("fer (08 §4)", () => {
+  /** Une ville sur la carte du fer, un mineur (1 000 de fer), des boîtes à ouvrir et leurs ouvriers, dans cet ordre. */
+  function factories(...boxes: [ActivityId, number][]): GameState {
+    const s = withCity(IRON_MAP);
+    for (const [id] of boxes) openBox(s, 1, id);
+    assign(s, { miners: 1, ...Object.fromEntries(boxes) });
+    return s;
+  }
 
-describe("croissance avec reste (00-Game §4.1)", () => {
-  it("rejoint exactement la population maximale (nourriture / consommation) sans s'arrêter en dessous", () => {
-    // Un joueur seul sans ville : population maximale = FOOD.minimum / foodPerHead.
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    const max = Math.floor(FOOD.minimum / POPULATION.foodPerHead);
-    let previous = 0;
-    for (let turn = 1; turn <= 10_000; turn++) {
-      applyTurn(s, { turn, intents: [] });
-      const pop = s.players[0]!.population;
-      assert.ok(pop >= previous && pop <= max, `tour ${turn} : ${pop}`);
-      previous = pop;
-    }
-    assert.equal(previous, max);
-    // Sans reste, trunc(surplus × taux / 1 000 000) vaut 0 dès que le surplus est
-    // sous 1 000 000 / taux : la population s'arrêterait à autant de personnes sous
-    // le maximum. Le test ne prouve quelque chose que si cet écart est d'au moins 2.
-    assert.ok(GROWTH_SCALE / (POPULATION.growthPerMillion * POPULATION.foodPerHead) >= 2);
-  });
-
-  it("avec une ville : rejoint exactement la fertilité totale / consommation, sans s'arrêter en dessous", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    applyTurn(s, { turn: 1, intents: [found(LAND_MAP, 1, CX, CY)] });
+  it("fer produit = min(cases de fer, travailleurs × 100) × capacité par case, pompes comprises", () => {
+    const s = withCity(IRON_MAP);
     const p = s.players[0]!;
-    const d = disc(LAND_MAP, CX, CY);
-    // Toute la surface est cultivée dès que les fermiers suffisent : nourriture = fertilité totale.
-    const max = Math.floor(d.fertility / POPULATION.foodPerHead);
-    let previous = 0;
-    for (let turn = 2; turn <= 20_000; turn++) {
-      applyTurn(s, { turn, intents: [] });
-      assert.ok(p.population >= previous, "la population ne baisse pas avant le maximum");
-      assert.ok(p.population <= max, `tour ${turn} : ${p.population} > ${max}`);
-      previous = p.population;
-    }
-    assert.equal(p.population, max);
-    // À la limite, les fermiers inutiles sont inactifs.
-    assert.equal(p.cultivated, d.farm);
-    assert.equal(p.farmers + p.idle, p.population);
-    assert.ok(p.idle > 0);
-  });
-
-  it("une population au-dessus du maximum baisse, par arrondi vers zéro (Math.trunc) : le premier départ arrive quand le reste atteint −1 000 000", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    const p = s.players[0]!;
-    // Nomades, 10 personnes au-dessus du maximum : surplus −10 par tour.
-    const start = Math.floor(FOOD.minimum / POPULATION.foodPerHead) + 10;
-    p.population = start;
-    const perTick = (FOOD.minimum - start * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
-    assert.ok(perTick < 0 && -perTick < GROWTH_SCALE);
-    const T = Math.ceil(GROWTH_SCALE / -perTick);
-    for (let k = 1; k < T; k++) {
-      stepEconomy(s);
-      assert.equal(p.population, start, `tour ${k} : floor aurait déjà retiré une personne`);
-      assert.equal(p.growthRemainder, k * perTick);
-    }
+    assign(s, { miners: 2 });
+    p.resourceTiles[IRON_INDEX] = 350;
     stepEconomy(s);
-    assert.equal(p.population, start - 1);
-    assert.equal(p.growthRemainder, T * perTick + GROWTH_SCALE, "le reste garde la fraction de personne");
-    assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE);
-  });
-
-  it("la baisse s'arrête sur la population maximale, sans la dépasser par le bas", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    const p = s.players[0]!;
-    const max = Math.floor(FOOD.minimum / POPULATION.foodPerHead);
-    p.population = max + 500;
-    for (let k = 0; k < 20_000; k++) {
-      stepEconomy(s);
-      assert.ok(p.population >= max, `tour ${k} : ${p.population}`);
-    }
-    assert.equal(p.population, max);
-  });
-
-  it("la hausse est symétrique : la première personne arrive quand le reste atteint +1 000 000", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
-    const p = s.players[0]!;
-    // Nomades, 10 personnes sous le maximum : surplus +10 par tour.
-    const start = Math.floor(FOOD.minimum / POPULATION.foodPerHead) - 10;
-    p.population = start;
-    const perTick = (FOOD.minimum - start * POPULATION.foodPerHead) * POPULATION.growthPerMillion;
-    assert.ok(perTick > 0 && perTick < GROWTH_SCALE);
-    const T = Math.ceil(GROWTH_SCALE / perTick);
-    for (let k = 1; k < T; k++) {
-      stepEconomy(s);
-      assert.equal(p.population, start);
-    }
+    assert.deepEqual([p.minedTiles, p.ironProduced, box(p, "miners").output], [200, 200 * RESOURCES.iron.capacityPerTile, 2000]);
+    box(p, "miners").machines = 1;
     stepEconomy(s);
-    assert.equal(p.population, start + 1);
+    assert.equal(p.minedTiles, 300);
+    box(p, "miners").machines = 0;
+    assign(s, { miners: 3 });
+    p.resourceTiles[IRON_INDEX] = 299;
+    stepEconomy(s);
+    assert.equal(p.minedTiles, 200, "2 places : le trop-plein retourne dans Inactifs");
   });
 
-  it("la population ne passe jamais sous 0 : le reste est alors remis à 0", () => {
-    const s = createGame({ seed: 1, map: LAND_MAP, playerCount: 1 });
+  it("assez de fer : chaque boîte a ses unités, et réserve son fer", () => {
+    const s = factories(["regulars", 4], ["militia", 3]);
     const p = s.players[0]!;
-    p.population = 2;
-    // État artificiel : un reste négatif plus grand que la population et que la croissance du tour.
-    p.growthRemainder = -(FOOD.minimum * POPULATION.growthPerMillion) - 3 * GROWTH_SCALE + 1;
     stepEconomy(s);
-    assert.equal(p.population, 0);
-    assert.equal(p.growthRemainder, 0);
+    assert.deepEqual([box(p, "regulars").output, box(p, "regulars").ironUsed, box(p, "militia").output, box(p, "militia").ironUsed], [4, 200, 3, 0]);
+    assert.deepEqual([p.ironWanted, p.ironReserved], [200, 200]);
+  });
+
+  it("manque de fer : même part pour toutes les boîtes, puis le fer que l'arrondi laisse va aux boîtes du haut", () => {
+    // 10 réguliers (500) et 5 chenillettes (1 000) demandent 1 500 pour 1 000 : 6 et 3 unités, 900 de fer. Il reste 100 :
+    // la boîte du haut prend 2 réguliers.
+    const s = factories(["regulars", 10], ["tankette", 5]);
+    const p = s.players[0]!;
+    stepEconomy(s);
+    assert.deepEqual([box(p, "regulars").output, box(p, "tankette").output], [8, 3]);
+    assert.deepEqual([p.ironWanted, p.ironProduced, p.ironReserved], [1500, 1000, 1000]);
+  });
+
+  it("une boîte d'une seule unité n'est pas à zéro si elle est assez haute : l'ordre décide", () => {
+    // Artillerie 1 (100), chenillettes 6 (1 200) : 1 300 pour 1 000. Part : 0 et 4 unités (800), il reste 200.
+    const high = factories(["artillery", 1], ["tankette", 6]);
+    stepEconomy(high);
+    assert.deepEqual([box(high.players[0]!, "artillery").output, box(high.players[0]!, "tankette").output], [1, 4]);
+    const low = factories(["tankette", 6], ["artillery", 1]);
+    stepEconomy(low);
+    assert.deepEqual([box(low.players[0]!, "artillery").output, box(low.players[0]!, "tankette").output], [0, 5]);
+  });
+
+  it("une boîte sans fer en entrée n'a pas de malus : la milice se forme sans mine", () => {
+    const s = factories(["militia", 3], ["regulars", 2]);
+    assign(s, { militia: 3, regulars: 2 });
+    stepEconomy(s);
+    const p = s.players[0]!;
+    assert.deepEqual([box(p, "militia").output, box(p, "regulars").output, p.ironProduced, p.ironWanted], [3, 0, 0, 100]);
+  });
+});
+
+describe("limites (08 §5)", () => {
+  it("usine de machines : 2 unités par ouvrier ; caserne : une division par bonhomme ; 2 ouvriers par unité pour les chars", () => {
+    const s = withCity(IRON_MAP);
+    const p = s.players[0]!;
+    for (const id of ["tractor", "militia", "infantryTank"] as const) openBox(s, 1, id);
+    assign(s, { miners: 2, tractor: 1, militia: 3, infantryTank: 3 });
+    stepEconomy(s);
+    assert.equal(machineLimit(p, TRACTOR), 2);
+    assert.equal(divisionLimit(s, p, D.militia), 3);
+    assert.equal(divisionLimit(s, p, D.infantryTank), 1, "3 ouvriers, 2 par char");
+  });
+
+  it("une boîte verrouillée ou fermée ne donne aucune limite", () => {
+    const s = withCity(IRON_MAP);
+    const p = s.players[0]!;
+    assert.equal(machineLimit(p, TRACTOR), 0);
+    assert.equal(divisionLimit(s, p, D.regulars), 0);
+  });
+
+  it("élites : plafonnées à floor(divisions d'infanterie / ELITE_TROOPS_RATIO), élites comprises, places comprises", () => {
+    assert.deepEqual([eliteCap(ELITE_TROOPS_RATIO - 1), eliteCap(ELITE_TROOPS_RATIO), eliteCap(2 * ELITE_TROOPS_RATIO + 1)], [0, 1, 2]);
+    const s = duel(false);
+    const p = s.players[0]!;
+    p.autoAssign = false;
+    openBox(s, 1, "elite");
+    openBox(s, 1, "militia");
+    assign(s, { miners: 0, elite: 3, militia: ELITE_TROOPS_RATIO - 1 });
+    for (let i = 0; i < ELITE_TROOPS_RATIO - 1; i++) put(s, 1, "militia");
+    play(s, 1);
+    assert.deepEqual([box(p, "elite").places, box(p, "elite").workers, idlePawns(p)], [0, 0, 3], "9 infanteries : aucune place, ouvriers dans Inactifs");
+    put(s, 1, "militia");
+    assert.equal(divisionLimit(s, p, D.elite), 0, "la sortie est nulle tant qu'aucun ouvrier n'est revenu");
+    box(p, "elite").output = 2;
+    assert.equal(divisionLimit(s, p, D.elite), 1, "10 infanteries : plafond 1, même avec une sortie de 2");
+  });
+});
+
+describe("apparition et disparition (08 §6)", () => {
+  it("population : un compteur par bonhomme manquant ; il arrive dans Inactifs après arrivalTurns tours", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    play(s, 1);
+    assert.deepEqual([p.capacity, p.popArrivals], [2, [1 + POPULATION.arrivalTurns]]);
+    play(s, POPULATION.arrivalTurns - 1);
+    assert.deepEqual([p.population, idlePawns(p)], [1, 1]);
+    play(s, 1);
+    assert.deepEqual([p.population, idlePawns(p)], [2, 2]);
+    assert.deepEqual(p.popArrivals, []);
+  });
+
+  it("un écart qui se referme annule le compteur le plus récent : le plus ancien continue", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    assign(s, { farmers: 1 });
+    play(s, 1);
+    play(s, 1);
+    assert.equal(p.capacity, 3);
+    assert.deepEqual(p.popArrivals, [1 + POPULATION.arrivalTurns, 1 + POPULATION.arrivalTurns]);
+    applyTurn(s, { turn: s.tick + 1, intents: [{ type: "move_pawn", player: 1, from: "farmers", to: "idle", kind: "worker", count: 1 }] });
+    play(s, 1);
+    assert.equal(p.capacity, 2);
+    assert.deepEqual(p.popArrivals, [1 + POPULATION.arrivalTurns]);
+  });
+
+  it("population en trop : un compteur par bonhomme, leaveTurns tours, puis il disparaît ; annulé si la capacité revient", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    assign(s, { idle: 4 });
+    play(s, 1);
+    assert.deepEqual(p.popLeaves, [1 + POPULATION.leaveTurns, 1 + POPULATION.leaveTurns]);
+    play(s, POPULATION.leaveTurns - 1);
+    assert.equal(p.population, 4);
+    play(s, 1);
+    assert.deepEqual([p.population, idlePawns(p), p.popLeaves], [2, 2, []]);
+
+    const t = withCity(LAND_MAP);
+    const q = t.players[0]!;
+    assign(t, { idle: 3 });
+    play(t, 1);
+    assert.equal(q.popLeaves.length, 1);
+    box(q, "farmers").workers = 1;
+    box(q, "idle").workers = 2;
+    play(t, 2);
+    assert.deepEqual(q.popLeaves, []);
+    play(t, POPULATION.leaveTurns);
+    assert.equal(q.population, 3, "personne n'est parti");
+  });
+
+  it("qui part : Inactifs d'abord, puis la boîte la plus basse (une caserne perd sa place), Blessés tout à la fin", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    openBox(s, 1, "militia");
+    assign(s, { idle: 1, hurt: 1, militia: 2 });
+    play(s, 1 + POPULATION.leaveTurns);
+    assert.deepEqual([idlePawns(p), box(p, "militia").workers, box(p, "militia").places, hurtPawns(p), p.population], [0, 1, 1, 1, 2]);
+    const t = withCity(LAND_MAP);
+    assign(t, { idle: 0, hurt: 3 });
+    play(t, 1 + POPULATION.leaveTurns);
+    assert.deepEqual([hurtPawns(t.players[0]!), t.players[0]!.population], [2, 2]);
+  });
+
+  it("machines : arrivalTurns tours après la limite, sur leur ligne d'Inactifs ; en trop : Inactifs d'abord, puis la boîte", () => {
+    const s = withCity(IRON_MAP);
+    const p = s.players[0]!;
+    openBox(s, 1, "tractor");
+    assign(s, { miners: 1, tractor: 1 });
+    play(s, GOODS_TIMING.arrivalTurns);
+    assert.equal(p.idleMachines[TRACTOR], 0);
+    play(s, 1);
+    assert.deepEqual([p.idleMachines[TRACTOR], machineCount(p, TRACTOR)], [2, 2]);
+
+    box(p, "farmers").machines = 1;
+    p.idleMachines[TRACTOR] = 1;
+    box(p, "tractor").workers = 0;
+    play(s, 1);
+    assert.deepEqual(p.machineLeaves[TRACTOR], [s.tick + GOODS_TIMING.leaveTurns, s.tick + GOODS_TIMING.leaveTurns]);
+    play(s, GOODS_TIMING.leaveTurns);
+    assert.deepEqual([p.idleMachines[TRACTOR], box(p, "farmers").machines], [0, 0]);
+  });
+
+  it("divisions : créées tout de suite dans la réserve, en formation pendant productionTurns ; la milice est quasi instantanée", () => {
+    const s = withCity(IRON_MAP);
+    const p = s.players[0]!;
+    for (const id of ["militia", "regulars"] as const) openBox(s, 1, id);
+    assign(s, { miners: 1, militia: 1, regulars: 1 });
+    play(s, 1);
+    assert.deepEqual(s.divisions.map((d) => [d.type, d.front, d.state, d.formedTick]), [
+      [D.regulars, 0, STATE_SCALE, 1 + DIVISION_DATA[D.regulars]!.productionTurns],
+      [D.militia, 0, STATE_SCALE, 1 + 1],
+    ]);
+    assert.ok(inFormation(s, s.divisions[0]!));
+    assert.equal(s.divisions.length, divisionLimit(s, p, D.regulars) + divisionLimit(s, p, D.militia));
+    play(s, 20);
+    assert.equal(s.divisions.length, 2, "la limite est atteinte");
+  });
+
+  it("divisions en trop : en formation d'abord, puis les plus abîmées, puis le plus grand identifiant ; sursis de leaveTurns tours", () => {
+    const s = withCity(LAND_MAP);
+    openBox(s, 1, "militia");
+    assign(s, { militia: 1 });
+    const healthy = put(s, 1, "militia");
+    const same = put(s, 1, "militia");
+    const worn = put(s, 1, "militia", 0, 5000);
+    const forming = put(s, 1, "militia");
+    (forming as { formedTick: number }).formedTick = 1000;
+    play(s, 1);
+    assert.deepEqual([forming, worn, same, healthy].map((d) => d.leaveTick !== 0), [true, true, true, false]);
+    play(s, DIVISION_TIMING.leaveTurns);
+    assert.deepEqual(s.divisions.map((d) => d.id), [healthy.id]);
+  });
+
+  it("une limite qui remonte annule le sursis le plus récent", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    openBox(s, 1, "militia");
+    assign(s, { militia: 2 });
+    const [a, b] = [put(s, 1, "militia"), put(s, 1, "militia")];
+    assign(s, { militia: 1 });
+    play(s, 1);
+    assert.deepEqual([a.leaveTick !== 0, b.leaveTick !== 0], [false, true]);
+    assign(s, { militia: 2 });
+    play(s, 1);
+    assert.deepEqual([a.leaveTick, b.leaveTick], [0, 0]);
+    assert.equal(p.population, 2);
+  });
+
+  it("soin hors combat, 2 % par seconde, tant qu'il y a une limite ; une division en trop ne se soigne pas", () => {
+    const s = withCity(LAND_MAP);
+    openBox(s, 1, "militia");
+    assign(s, { militia: 1 });
+    const worn = put(s, 1, "militia", 0, 5000);
+    const excess = put(s, 1, "militia", 0, 4000);
+    play(s, 10);
+    assert.equal(worn.state, 5000 + 200, "20 par tour, 200 en une seconde");
+    assert.equal(excess.leaveTick !== 0, true);
+    assert.equal(excess.state, 4000);
+  });
+
+  it("sans limite pour son type, une division abîmée ne se soigne pas", () => {
+    const s = duel();
+    const d = put(s, 1, "regulars", 0, 5000);
+    play(s, 10);
+    assert.equal(d.state, 5000);
+  });
+});
+
+describe("blessés (08 §8)", () => {
+  const killed = (type: "militia" | "tankette"): GameState => {
+    const s = duel();
+    const p = s.players[0]!;
+    openBox(s, 1, "militia");
+    box(p, "militia").workers = 2;
+    box(p, "militia").places = 2;
+    box(p, "idle").workers = 1;
+    p.population = 3;
+    war(s, 2);
+    put(s, 2, "regulars", 1);
+    if (type === "tankette") put(s, 1, "militia", 1);
+    // Posée au dernier tour du délai : avant, sa caserne la soignerait.
+    play(s, FRONTS.attackDelayTurns - 1);
+    put(s, 1, type, 1, type === "tankette" ? 5 : 30);
+    resolve(s);
+    return s;
+  };
+
+  it("une division d'infanterie détruite : un bonhomme de sa caserne passe à Blessés, et un inactif reprend sa place", () => {
+    const s = killed("militia");
+    const p = s.players[0]!;
+    assert.equal(s.divisions.some((d) => d.owner === 1), false);
+    assert.deepEqual([hurtPawns(p), box(p, "militia").workers, box(p, "militia").places, idlePawns(p), p.population], [1, 2, 2, 0, 3]);
+  });
+
+  it("sans inactif, la place reste vide", () => {
+    const s = duel();
+    const p = s.players[0]!;
+    openBox(s, 1, "militia");
+    box(p, "militia").workers = 1;
+    box(p, "militia").places = 1;
+    box(p, "idle").workers = 0;
+    p.population = 1;
+    war(s, 2);
+    put(s, 2, "regulars", 1);
+    play(s, FRONTS.attackDelayTurns - 1);
+    put(s, 1, "militia", 1, 30);
+    resolve(s);
+    assert.deepEqual([hurtPawns(p), box(p, "militia").workers, box(p, "militia").places], [1, 0, 1]);
+  });
+
+  it("une division de chars détruite ne fait aucun blessé", () => {
+    const s = killed("tankette");
+    assert.equal(s.divisions.some((d) => d.type === D.tankette), false);
+    assert.equal(hurtPawns(s.players[0]!), 0);
+  });
+
+  it("soin : min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population)) tours, calculés au démarrage", () => {
+    for (const [population, turns] of [[25, 4000], [10, 4000], [100, 1000], [1000, 100], [200_000, 1]] as const) {
+      const s = withCity(LAND_MAP);
+      const p = s.players[0]!;
+      assign(s, { hurt: 1 });
+      p.population = population;
+      stepEconomy(s);
+      assert.equal(p.hurtHealEnd, 1 + turns, `${population} bonshommes`);
+    }
+  });
+
+  it("fin du soin : le bonhomme passe dans Inactifs, puis le soin suivant démarre", () => {
+    const s = withCity(LAND_MAP);
+    const p = s.players[0]!;
+    assign(s, { idle: 98, hurt: 2 });
+    play(s, 1);
+    assert.equal(p.hurtHealEnd, 1 + 1000);
+    play(s, 999);
+    assert.equal(hurtPawns(p), 2);
+    play(s, 1);
+    assert.equal(hurtPawns(p), 1);
+    assert.ok(p.hurtHealEnd > s.tick);
   });
 });
 
@@ -502,43 +554,27 @@ describe("totaux de fertilité tenus à jour (setOwner)", () => {
     assert.equal(s.players[1]!.fertilitySum, s.players[1]!.farmTiles * FERTILITY.land);
     checkCityInvariants(s);
   });
-});
 
-describe("ordre set_farm_share", () => {
-  it("accepte les entiers de 0 à 100 et les écrit, refuse le reste sans rien changer", () => {
-    const s = withCity(LAND_MAP, 2);
-    const apply = (player: unknown, percent: unknown): boolean =>
-      applyIntent(s, { type: "set_farm_share", player, percent }, []);
-    assert.equal(s.players[0]!.farmPercent, 100, "100 par défaut");
-    for (const v of [0, 1, 37, 99, 100]) {
-      assert.ok(apply(1, v));
-      assert.equal(s.players[0]!.farmPercent, v);
+  it("le disque d'une ville seule : les totaux du joueur sont ceux des cases de sa zone", () => {
+    const s = withCity(SEA_MAP);
+    const p = s.players[0]!;
+    const out = { tiles: 0, farm: 0, fertility: 0, water: 0 };
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx * dx + dy * dy > R * R) continue;
+        const t = tileAt(SEA_MAP, CX + dx, CY + dy);
+        out.tiles++;
+        if (SEA_MAP.fertility[t]! > 0) out.farm++;
+        out.fertility += SEA_MAP.fertility[t]!;
+        if ((SEA_MAP.terrain[t]! & TERRAIN_LAND) === 0) out.water++;
+      }
     }
-    assert.equal(s.players[1]!.farmPercent, 100, "l'autre joueur n'est pas touché");
-    for (const v of [-1, 101, 50.5, "50", null, undefined, NaN, Infinity, -Infinity, true, [50], {}]) {
-      assert.ok(!apply(1, v), `${String(v)}`);
-      assert.equal(s.players[0]!.farmPercent, 100);
-    }
-    for (const player of [0, 3, 1.5, "1", null, undefined]) {
-      assert.ok(!apply(player, 50), `joueur ${String(player)}`);
-      assert.equal(s.players[0]!.farmPercent, 100);
-    }
-  });
-
-  it("change le hash quand la valeur change, et pas quand elle est refusée", () => {
-    const a = withCity(LAND_MAP);
-    const b = withCity(LAND_MAP);
-    applyTurn(a, { turn: 1, intents: [] });
-    applyTurn(b, { turn: 1, intents: [{ type: "set_farm_share", player: 1, percent: 101 }] });
-    assert.equal(hashState(b), hashState(a));
-    const c = withCity(LAND_MAP);
-    applyTurn(c, { turn: 1, intents: [{ type: "set_farm_share", player: 1, percent: 99 }] });
-    assert.notEqual(hashState(c), hashState(a));
+    assert.deepEqual([p.tileCount, p.farmTiles, p.fertilitySum, p.seaTiles], [out.tiles, out.farm, out.fertility, out.water]);
   });
 });
 
-describe("parties jouées par des joueurs simulés (population, nourriture)", () => {
-  it("garde les invariants de l'économie à chaque tour, avec croissance et surplus négatif", () => {
+describe("parties jouées par des joueurs simulés (population, activités)", () => {
+  it("garde les invariants de l'économie à chaque tour", () => {
     let maxPopulation = 0;
     const r = runScenario({
       ...DEFAULT_SCENARIO,
@@ -547,31 +583,33 @@ describe("parties jouées par des joueurs simulés (population, nourriture)", ()
         // Une ville prise change les totaux de cases d'un joueur après son étape du tour : ses résultats (cases cultivées,
         // pêchées) ne sont remis d'aplomb qu'au tour suivant (05-Fronts §13.2).
         const captured = state.events.some((e) => e.type === "city_captured");
-        // Avec FOOD.minimum à 1 500, les joueurs simulés restent sous leur
-        // nourriture : on force un surplus négatif (état artificiel) pour que la
-        // baisse soit aussi exercée.
-        // Plus que toute la nourriture que ses terres et sa mer peuvent donner.
-        if (turn === 1500) {
-          for (const p of state.players) {
-            p.population = 2 * (p.fertilitySum + p.seaTiles * FISHING.tileYieldMax + FOOD.minimum);
-          }
-        }
         for (const p of state.players) {
-          assert.ok(p.population >= 0);
-          assert.ok(Math.abs(p.growthRemainder) < GROWTH_SCALE, `reste ${p.growthRemainder}`);
-          assert.ok(captured || (p.cultivated <= p.farmTiles && p.fished <= p.seaTiles));
-          // Les joueurs simulés construisent aussi des usines (bateaux de pêche) : le rendement d'une case d'eau va de tileYield à tileYieldMax.
-          assert.ok(captured || (p.wheat <= p.fertilitySum && p.fish <= p.seaTiles * FISHING.tileYieldMax));
-          assert.ok(p.fish >= FISHING.tileYield * p.fished && p.fish <= FISHING.tileYieldMax * p.fished);
-          assert.ok(p.food >= FOOD.minimum && p.food === Math.max(p.wheat + p.fish, FOOD.minimum));
-          assert.ok(p.farmers >= 0 && p.fishers >= 0 && p.idle >= 0 && p.factoryWorkers >= 0 && p.miners >= 0);
-          if (p.farmTiles === 0) assert.equal(p.cultivated, 0);
+          const where = `joueur ${p.id}, tour ${turn}`;
+          assert.equal(p.activities[0]!.id, ACTIVITY_IDS.indexOf("idle"), where);
+          assert.equal(new Set(p.activities.map((a) => a.id)).size, p.activities.length, where);
+          assert.equal(p.activities.reduce((sum, a) => sum + a.workers, 0), p.population, `somme des bonshommes, ${where}`);
+          for (const a of p.activities) {
+            const data = ACTIVITY_DATA[a.id]!;
+            assert.ok(a.workers >= 0 && a.machines >= 0 && a.places >= 0 && a.disabled >= 0, where);
+            if (data.hasPlaces) assert.ok(a.workers <= a.places, `${data.id}, ${where}`);
+            if (data.hasSlots && !captured) assert.ok(a.workers + a.machines <= a.slots, `${data.id}, ${where}`);
+          }
+          if (p.cityIds.length === 0) continue;
+          assert.ok(p.idleMachines.every((n) => n >= 0), where);
+          assert.ok(p.ironReserved <= p.ironProduced, where);
+          assert.equal(p.capacity, Math.ceil(p.food / POPULATION.foodPerPawn), where);
+          assert.ok(captured || (p.cultivated <= p.farmTiles && p.fished <= p.seaTiles), where);
+          for (const list of [p.popArrivals, p.popLeaves, ...p.machineArrivals, ...p.machineLeaves]) {
+            assert.deepEqual(list, [...list].sort((x, y) => x - y), where);
+          }
+          ACTIVITY_DATA.forEach((a) => assert.ok(p.unlock[a.index]! <= a.unlockCost, `${a.id}, ${where}`));
           if (p.population > maxPopulation) maxPopulation = p.population;
         }
+        for (const d of state.divisions) assert.ok(d.state > 0 && d.state <= STATE_SCALE, `division ${d.id}`);
       },
     });
-    assert.ok(r.starvingPlayerTurns > 0, "le scénario doit aussi faire baisser la population");
-    assert.ok(maxPopulation > POPULATION.initial / 2, `population maximale ${maxPopulation}`);
+    assert.ok(r.starvingPlayerTurns > 0, "le scénario doit aussi faire disparaître des bonshommes");
+    assert.ok(maxPopulation > 10, `population maximale ${maxPopulation}`);
     assert.ok(r.totalPopulation > 0);
   });
 });
