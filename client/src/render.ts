@@ -8,9 +8,11 @@ import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./
 import { type Painter } from "./painter.ts";
 import { PlayerLabels, type LabelSpot } from "./playerlabels.ts";
 import { playerColor, playerDark, playerLimit, rgbCss } from "./playercolors.ts";
-import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
+import { FrontLayer, type FrontMark, type ZoneShape } from "./frontlayer.ts";
+import { type LinkUnits } from "./frontunits.ts";
 import { localPlayer, rosterName } from "./names.ts";
-import { type FrontView } from "./protocol.ts";
+import { type DivisionView, type FrontView } from "./protocol.ts";
+import { unitIconCanvas } from "./uniticons.ts";
 
 export interface MapViewHooks {
   /** Case sous la souris, ou -1 hors de la carte. */
@@ -38,6 +40,16 @@ const HATCH_WIDTH_PX = 4;
 /** Hachures des zones de front (05-Fronts §11.1) : trait de 2 px tous les 8 px, à 45°, pour voir la carte dessous. */
 const FRONT_HATCH_PERIOD_PX = 8;
 const FRONT_HATCH_WIDTH_PX = 2;
+/** Cases à l'écran au-delà desquelles les unités d'un front ne sont plus dessinées, soit environ deux cents villes (05-Fronts §11.1, provisoire). */
+const FRONT_UNITS_MAX_TILES = 240000;
+/** Taille d'une icône d'unité sur la carte, en pixels d'écran. */
+const FRONT_UNIT_PX = 32;
+/** Centre d'une unité : distance au point du front le long du segment, et écart de chaque côté du segment, en pixels d'écran. */
+const FRONT_UNIT_ALONG_PX = 22;
+const FRONT_UNIT_ACROSS_PX = 17;
+/** Rayon du petit rond d'un emplacement d'infanterie vide, en pixels d'écran. */
+const FRONT_EMPTY_PX = 3;
+
 /** Taille de la flèche d'une percée, du centre à la pointe, en pixels d'écran (14 : deux fois la première version). */
 const FRONT_RED_RGBA = [200, 30, 30, 200] as const;
 const FRONT_BLUE_RGBA = [40, 90, 210, 200] as const;
@@ -356,6 +368,16 @@ export class MapView {
     this.requestDraw();
   }
 
+  /** À rappeler quand les divisions changent : les unités du front ne sont dessinées qu'au-delà du seuil de zoom. */
+  divisionsChanged(): void {
+    if (this.showsFrontUnits()) this.requestDraw();
+  }
+
+  /** Assez près pour dessiner les unités d'un front à la place des ronds. */
+  private showsFrontUnits(): boolean {
+    return (this.cssW * this.cssH) / (this.zoom * this.zoom) <= FRONT_UNITS_MAX_TILES;
+  }
+
   /** Mode choix d'axe : `frontId` 0 pour en sortir. */
   setAxisMode(frontId: number): void {
     this.axisFront = frontId;
@@ -501,6 +523,39 @@ export class MapView {
   }
 
   /** Noms des joueurs, de taille constante à l'écran, quand la carte est assez dézoomée. Les positions restent en cache par palier de zoom. */
+  /** Les deux emplacements d'un camp sur une connexion (05-Fronts §11.1) : `sign` -1 du côté de la ville 1, 1 de l'autre. */
+  private drawFrontSide(ctx: CanvasRenderingContext2D, px: number, m: FrontMark, sign: number, player: number, units: LinkUnits): void {
+    // Perpendiculaire au segment, vers le haut de l'écran : l'infanterie est toujours du côté le plus haut.
+    const up = m.ux > 0 || (m.ux === 0 && m.uy < 0) ? 1 : -1;
+    const nx = m.uy * up;
+    const ny = -m.ux * up;
+    const x = m.x + sign * m.ux * FRONT_UNIT_ALONG_PX * px;
+    const y = m.y + sign * m.uy * FRONT_UNIT_ALONG_PX * px;
+    const across = FRONT_UNIT_ACROSS_PX * px;
+    // Les icônes regardent vers la gauche : à gauche du front, elles sont retournées pour faire face à l'adversaire.
+    const flip = sign * m.ux < 0;
+    const draw = (d: DivisionView, cx: number, cy: number): void => {
+      const info = this.mirror.military.divisions[d.type];
+      const icon = info === undefined ? null : unitIconCanvas(info.icon, d.owner);
+      if (icon === null) return;
+      const s = FRONT_UNIT_PX * px;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(flip ? -1 : 1, 1);
+      ctx.drawImage(icon, -s / 2, -s / 2, s, s);
+      ctx.restore();
+    };
+    if (units.infantry !== null) draw(units.infantry, x + nx * across, y + ny * across);
+    else if (m.active) {
+      ctx.beginPath();
+      ctx.arc(x + nx * across, y + ny * across, FRONT_EMPTY_PX * px, 0, Math.PI * 2);
+      ctx.strokeStyle = rgbCss(playerColor(player));
+      ctx.lineWidth = 2 * px;
+      ctx.stroke();
+    }
+    if (units.other !== null) draw(units.other, x - nx * across, y - ny * across);
+  }
+
   private drawPlayerLabels(ctx: CanvasRenderingContext2D): void {
     const { zoom } = this;
     if ((this.cssW * this.cssH) / (zoom * zoom) < LABEL_MIN_TILES) return;
@@ -633,14 +688,24 @@ export class MapView {
     // Taille d'une ville, aussi celle des soldats du front.
     const s0 = Math.min(6.5, Math.max(3, zoom * 1.6)) * px;
 
-    // Fronts actifs (05-Fronts §11.4) : le point d'avancement du front sur chaque connexion, et de chaque côté un rond de la
+    // Fronts actifs (05-Fronts §11.4) : le point d'avancement du front sur chaque connexion, et de loin, de chaque côté, un rond de la
     // couleur du joueur de ce côté (deux soldats qui se battent), de la taille d'une ville.
-    ctx.lineWidth = 1.5 * px;
-    for (const m of this.frontLayer.marks()) {
-      ctx.fillStyle = "#7a0c0c";
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, 2.5 * px, 0, Math.PI * 2);
-      ctx.fill();
+    // Assez près, chaque camp montre les unités de sa première ligne à la place du rond, en guerre comme en paix.
+    const units = this.showsFrontUnits() ? this.frontLayer.markUnits() : null;
+    this.frontLayer.marks().forEach((m, i) => {
+      if (m.active) {
+        ctx.fillStyle = "#7a0c0c";
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, 2.5 * px, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (units !== null) {
+        this.drawFrontSide(ctx, px, m, -1, m.player1, units[i]!.units1);
+        this.drawFrontSide(ctx, px, m, 1, m.player2, units[i]!.units2);
+        return;
+      }
+      if (!m.active) return;
+      ctx.lineWidth = 1.5 * px;
       const d = s0 + 3 * px;
       for (const [sign, player] of [[-1, m.player1], [1, m.player2]] as const) {
         ctx.beginPath();
@@ -650,7 +715,7 @@ export class MapView {
         ctx.fill();
         ctx.stroke();
       }
-    }
+    });
 
     // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
     // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.

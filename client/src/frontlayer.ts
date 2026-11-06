@@ -3,9 +3,10 @@
 // sur chaque connexion. Tout est recalculé quand les fronts changent
 // (`Mirror.frontsVersion`), pas à chaque image. Les zones sont un calcul du client seulement.
 
-import { cityPoint, connectionPoint } from "./frontgeom.ts";
+import { cityPoint, connectionPoint, frontChains } from "./frontgeom.ts";
+import { linkUnits, type LinkUnits } from "./frontunits.ts";
 import type { Mirror } from "./mirror.ts";
-import type { FrontView } from "./protocol.ts";
+import type { DivisionView, FrontView } from "./protocol.ts";
 
 /** Point d'avancement du front sur une connexion : position, sens ville 1 → ville 2, joueur de chaque ville. */
 export interface FrontMark {
@@ -15,6 +16,14 @@ export interface FrontMark {
   readonly uy: number;
   readonly player1: number;
   readonly player2: number;
+  /** Les deux joueurs sont en guerre. */
+  readonly active: boolean;
+}
+
+/** Unités d'une connexion de chaque camp, dans l'ordre de `FrontLayer.marks`. */
+export interface FrontMarkUnits {
+  readonly units1: LinkUnits;
+  readonly units2: LinkUnits;
 }
 
 /** Un masque de cases (un pixel opaque par case) et le contour de ces cases. */
@@ -29,6 +38,11 @@ export class FrontLayer {
   private active: ZoneShape | null = null;
   private single = new Map<number, ZoneShape>();
   private markList: FrontMark[] | null = null;
+  private unitList: FrontMarkUnits[] | null = null;
+  /** Connexions de chaque front le long du front, par identifiant de front. */
+  private orders = new Map<number, number[]>();
+  /** Divisions lues par `unitList` : elle est refaite quand le `Mirror` en reçoit d'autres. */
+  private unitDivisions: readonly DivisionView[] | null = null;
   private readonly mirror: Mirror;
 
   constructor(mirror: Mirror) {
@@ -43,6 +57,8 @@ export class FrontLayer {
     this.active = null;
     this.single.clear();
     this.markList = null;
+    this.unitList = null;
+    this.orders.clear();
   }
 
   /** Front dont la zone contient la case, ou undefined. */
@@ -119,8 +135,8 @@ export class FrontLayer {
   }
 
   /**
-   * Point du front de chaque connexion d'un front actif (05-Fronts §11.4), avec le sens de la ville 1 vers la ville 2
-   * (vecteur unitaire) et le joueur de chacune : le dessin place un soldat de chaque côté du point.
+   * Point du front de chaque connexion (05-Fronts §11.4), avec le sens de la ville 1 vers la ville 2 (vecteur unitaire)
+   * et le joueur de chacune : le dessin place un soldat de chaque côté du point.
    */
   marks(): FrontMark[] {
     this.sync();
@@ -129,7 +145,6 @@ export class FrontLayer {
       const cities = this.mirror.cities;
       const out: FrontMark[] = [];
       for (const f of this.mirror.fronts) {
-        if (!f.active) continue;
         f.connections.forEach((c, i) => {
           const p = connectionPoint(world, f, i);
           const a = cityPoint(world, c.city1);
@@ -142,11 +157,36 @@ export class FrontLayer {
             uy: len === 0 ? 0 : (b.y - a.y) / len,
             player1: cities[c.city1 - 1]!.player,
             player2: cities[c.city2 - 1]!.player,
+            active: f.active,
           });
         });
       }
       this.markList = out;
     }
     return this.markList;
+  }
+
+  /** Unités à montrer à chaque point de `marks()` (05-Fronts §11.1). */
+  markUnits(): FrontMarkUnits[] {
+    this.sync();
+    const { divisions, military } = this.mirror;
+    if (this.unitList === null || this.unitDivisions !== divisions) {
+      const world = this.mirror.world();
+      const cities = this.mirror.cities;
+      const out: FrontMarkUnits[] = [];
+      for (const f of this.mirror.fronts) {
+        const order = this.orders.get(f.id) ?? frontChains(world, f).flatMap((chain) => chain.order);
+        this.orders.set(f.id, order);
+        const one = linkUnits(divisions, military, f.id, f.players[0], order);
+        const two = linkUnits(divisions, military, f.id, f.players[1], order);
+        f.connections.forEach((c, i) => {
+          const firstIsOne = cities[c.city1 - 1]!.player === f.players[0];
+          out.push({ units1: (firstIsOne ? one : two)[i]!, units2: (firstIsOne ? two : one)[i]! });
+        });
+      }
+      this.unitList = out;
+      this.unitDivisions = divisions;
+    }
+    return this.unitList;
   }
 }

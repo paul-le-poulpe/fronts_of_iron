@@ -60,6 +60,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
+| `src/frontunits.ts` | unités montrées sur la carte à chaque connexion d'un front (05-Fronts §11.1) : `linkUnits`, sans DOM |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
 | `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
@@ -435,7 +436,7 @@ villes dont une paire de front change. **Zones** (`frontlayer.ts`, `render.ts`) 
 de 2 px (segments des côtés de cases qui touchent l'extérieur de la zone), en rouge pour les fronts actifs (case « Zones de
 front » du menu Carte, cochée au départ), en bleu pour un front en paix **au survol seulement** ; la zone survolée s'affiche
 toujours, même case décochée. **Soldats** : pour chaque connexion d'un front actif, le point d'avancement et un rond de la couleur du joueur de chaque côté, de la
-taille d'une ville (`render.ts`, `FrontLayer.marks`) ; la courbe de Catmull-Rom est abandonnée (05-Fronts §11.1).
+taille d'une ville (`render.ts`, `FrontLayer.marks`) ; la courbe de Catmull-Rom est abandonnée (05-Fronts §11.1). **Unités** : quand l'écran montre au plus `FRONT_UNITS_MAX_TILES` cases (`showsFrontUnits`, indépendant de la taille de la fenêtre), `drawFrontSide` dessine les icônes à la place des ronds. `linkUnits` (`frontunits.ts`) choisit l'unité de chaque emplacement, `FrontLayer.marks` couvre tous les fronts (`active` : petit point rouge et ronds seulement en guerre), `FrontLayer.markUnits` garde le résultat tant que `Mirror.divisions` et les fronts ne changent pas, `unitIconCanvas` (`uniticons.ts`) donne l'icône 32 × 32 colorée. `MapView.divisionsChanged` redemande une image, au-delà du seuil seulement.
 **Survol d'une zone de front** : contour de 5 px, fixe. **Clignotement** : `BLINK_PERIOD_MS` (1 000 ms, `blink.ts`) pour le bouton d'attaque
 actif de la fenêtre d'un front (variable CSS `--blink-period` posée au démarrage). **Percées en cours** (`MapView.drawBreakthroughs`, 05-Fronts §11.1) : pour chaque percée des deux camps (`FrontView.breakthroughs`), un trait
 rouge de 3 px le long du segment droit entre les deux villes de l'axe et une flèche de 14 px (`ARROW_PX`) au milieu, de la ville de celui

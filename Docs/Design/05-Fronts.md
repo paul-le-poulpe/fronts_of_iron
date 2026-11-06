@@ -925,6 +925,23 @@ contraire.
   du front (§11.5, petit point rouge foncé) et, de chaque côté sur le segment
   droit entre les deux villes, **un rond de la couleur du joueur de ce côté**,
   de la taille d'une ville, qui touche le point. Fronts actifs seulement.
+- **Unités** : quand l'écran montre au plus `FRONT_UNITS_MAX_TILES` cases
+  (240 000, soit environ deux cents villes, *provisoire*), les icônes 32 × 32
+  des unités de la première ligne sont dessinées, aux couleurs de leur
+  propriétaire, sur tous les fronts, **en guerre comme en paix** : elles
+  remplacent les ronds d'un front actif. En paix, le point vaut le milieu de la
+  route, sans petit point rouge. De chaque côté du point
+  d'avancement, deux emplacements côte à côte, parallèles au front et à la même
+  distance de lui : un pour l'infanterie (le plus haut à l'écran), un pour une
+  autre unité (char ou appui-feu). Les icônes des deux camps se font face et
+  gardent leur taille à tout zoom : de loin, elles peuvent se chevaucher.
+  L'infanterie prend les connexions dans l'ordre de la chaîne, tant qu'il y en
+  a ; un emplacement d'infanterie vide montre un petit rond de la couleur du
+  joueur sur un front actif (*provisoire*), rien en paix ; un autre emplacement
+  vide ne montre rien. Les autres
+  unités sont prises une par niche à tour de rôle, puis espacées régulièrement
+  le long du front. Au plus une de chaque par connexion : le reste n'est pas
+  affiché. Une division en déplacement n'est pas montrée (*provisoire*).
 - **Mode choix d'axe** (bouton « Lancer » d'une boîte de percée) : la fenêtre
   du front se ferme le temps du choix ; un clic sur la carte lance la percée
   sur la connexion du front la plus proche du clic (*provisoire*), surlignée
@@ -1623,6 +1640,8 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - nouvelle connexion créée en guerre par une fondation : 500 (§2.4) ; route
   vers un troisième joueur après une prise : 500 (§10.1) ;
 - pion : place de la barre non réservée à 100 % (§11.3) ;
+- unités sur la carte : seuil de cases à l'écran, petit rond d'un emplacement d'infanterie
+  vide, divisions en déplacement non montrées (§11.1) ;
 - interface : ordre et lettres des niches, tri des fronts de l'onglet, place
   du bouton Retour et du panneau de type, largeurs, icônes de statut
   diplomatique, de statistique et de corbeille, panneau d'un pion adverse

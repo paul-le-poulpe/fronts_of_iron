@@ -346,6 +346,7 @@ function onTick(s: Session, msg: TickMessage): void {
   view.upload(repaint);
   if (msg.cities !== null) view.refresh();
   if (msg.fronts !== null) view.frontsChanged();
+  if (msg.divisions !== null) view.divisionsChanged();
   s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
   if (msg.combats !== null) {
     s.combatIcons?.setCombats(msg.combats);
