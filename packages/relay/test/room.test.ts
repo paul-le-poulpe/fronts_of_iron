@@ -306,6 +306,33 @@ describe("couleur des joueurs", () => {
     assert.deepEqual((start as Extract<ServerMessage, { type: "start" }>).players.map((p) => p.color), [0, 5]);
   });
 
+  it("dans la salle, un joueur prend une couleur libre et tout le monde le voit", () => {
+    const room = hostedRoom();
+    room.handle("a", { type: "join", name: "Léa" });
+    const out = room.handle("a", { type: "set_color", color: 12 });
+    assert.deepEqual(colors(out, "h"), [0, 12]);
+    assert.deepEqual(colors(out, "a"), [0, 12]);
+  });
+
+  it("une couleur prise par un autre joueur est refusée", () => {
+    const room = hostedRoom();
+    room.handle("a", { type: "join", name: "Léa" });
+    const out = room.handle("a", { type: "set_color", color: 0 });
+    assert.equal(errorOf(out, "a"), "color_taken");
+    assert.equal(to(out, "h").length, 0);
+  });
+
+  it("une couleur inconnue est refusée", () => {
+    const room = hostedRoom();
+    for (const color of [-1, 20, 1.5, "3"]) assert.equal(errorOf(room.handle("h", { type: "set_color", color }), "h"), "invalid_color");
+  });
+
+  it("après le lancement, la couleur ne change plus", () => {
+    const room = hostedRoom();
+    room.handle("h", { type: "start" });
+    assert.equal(errorOf(room.handle("h", { type: "set_color", color: 3 }), "h"), "game_started");
+  });
+
   it("au-delà du nombre de couleurs, les doublons sont permis", () => {
     const room = hostedRoom();
     for (let i = 1; i < PLAYER_COLOR_COUNT; i++) room.handle(`c${i}`, { type: "join", name: `J${i}` });

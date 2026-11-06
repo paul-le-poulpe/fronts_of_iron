@@ -42,7 +42,7 @@ Depuis la racine du dépôt, après `npm install` :
 | Fichier (`client/`) | Rôle |
 | --- | --- |
 | `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau de debug, panneau de production |
-| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo, couleur du joueur), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
+| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur (avec le choix de la couleur), écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) ; `hideTip` |
@@ -159,7 +159,7 @@ par le menu de diplomatie. Les villes existent avant le premier tour, alors que 
 
 Page → Worker (`ToWorker`) :
 
-- `start { mapSeed, bots, color, stepMs? }` (solo) : génère la carte (`generateTestMap`), crée
+- `start { mapSeed, bots, colors, stepMs? }` (solo) : génère la carte (`generateTestMap`), crée
   la partie (`createGame`, graine = graine de la carte mélangée à une constante,
   `gameSeedFor`), les bots, lance l'horloge. Joueur 1 = l'humain, 2 à n = les bots.
 - `online { url, name, token }` (en ligne) : le Worker ouvre le WebSocket `url`

@@ -45,15 +45,6 @@
               </div>
             </section>
             <aside class="lb-side">
-              <div class="lb-card lb-color-card">
-                <h2 class="lb-h3">Votre couleur</h2>
-                <div class="lb-color-row">
-                  <button id="lb-color" type="button" class="lb-color-button" aria-label="Choisir votre couleur" aria-expanded="false"></button>
-                  <img id="lb-color-preview" class="lb-color-preview" alt="" />
-                  <span id="lb-color-name"></span>
-                </div>
-                <div id="lb-color-list" class="lb-color-list" hidden></div>
-              </div>
               <div class="lb-card lb-card-accent">
                 <h2 class="lb-h3">Créer une partie</h2>
                 <p class="lb-muted">Hébergée par Cloudflare. Vous en êtes l'hôte : vous choisissez la carte et lancez la partie.</p>
@@ -152,6 +143,15 @@
                 <span id="lb-room-count" class="lb-num"></span>
               </div>
               <ul id="lb-room-players" class="lb-list"></ul>
+              <div class="lb-color-panel">
+                <h2 class="lb-h3">Votre couleur</h2>
+                <div class="lb-color-row">
+                  <button id="lb-color" type="button" class="lb-color-button" aria-label="Choisir votre couleur" aria-expanded="false"></button>
+                  <img id="lb-color-preview" class="lb-color-preview" alt="" />
+                  <span id="lb-color-name"></span>
+                </div>
+                <div id="lb-color-list" class="lb-color-list" hidden></div>
+              </div>
             </section>
             <section id="lb-room-map" class="lb-panel lb-panel-body">
               <h2 class="lb-h3">Carte</h2>
@@ -245,6 +245,10 @@
             Graine de la carte
             <input id="seed" type="number" min="0" max="4294967295" step="1" value="12345" required />
           </label>
+          <div class="solo-colors-block">
+            Couleurs
+            <div id="solo-colors"></div>
+          </div>
           <button id="play" type="submit">Jouer</button>
           <button id="play-test" type="button" hidden title="Deux joueurs, villes et divisions déjà en place, économie gelée (développement seulement).">Partie de test</button>
           <div id="test-choices" hidden>

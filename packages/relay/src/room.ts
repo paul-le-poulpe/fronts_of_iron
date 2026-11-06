@@ -12,6 +12,7 @@ import {
   MAX_ONLINE_PLAYERS,
   ROOM_ERROR_TEXT,
   isMapId,
+  isPlayerColor,
   isSeed,
   isUint32,
   normalizePlayerName,
@@ -56,7 +57,7 @@ interface Member {
   readonly token: string;
   readonly name: string;
   readonly host: boolean;
-  readonly color: number;
+  color: number;
   /** Rang de 1 à n. Recalculé à chaque changement avant le lancement, figé ensuite. */
   id: number;
   /** Connexion actuelle ; `null` pour un joueur déconnecté après le lancement. */
@@ -92,6 +93,8 @@ export class Room {
     switch (msg.type) {
       case "set_map":
         return this.#setMap(conn, member, msg);
+      case "set_color":
+        return this.#setColor(conn, member, msg.color);
       case "start":
         return this.#start(conn, member);
       case "order":
@@ -227,6 +230,14 @@ export class Room {
     return this.#broadcastRoom();
   }
 
+  #setColor(conn: string, member: Member, color: number): Outgoing[] {
+    if (this.#state === "started") return [error(conn, "game_started")];
+    if (!isPlayerColor(color)) return [error(conn, "invalid_color")];
+    if (this.#members.some((m) => m !== member && m.color === color)) return [error(conn, "color_taken")];
+    member.color = color;
+    return this.#broadcastRoom();
+  }
+
   #start(conn: string, member: Member): Outgoing[] {
     if (!member.host) return [error(conn, "not_host")];
     if (this.#state === "started") return [error(conn, "game_started")];
@@ -313,6 +324,8 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
       return { type: "join", name: m.name as string, ...(m.token !== undefined ? { token: m.token as string } : {}), ...(m.color !== undefined ? { color: m.color as number } : {}) };
     case "set_map":
       return { type: "set_map", map: m.map as MapId | undefined, seed: m.seed as number | "random" | undefined };
+    case "set_color":
+      return { type: "set_color", color: m.color as number };
     case "start":
       return { type: "start" };
     case "order": {

@@ -267,26 +267,19 @@
   .lb-facts { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Couleur du joueur sur l'accueil (09-Couleurs §5) : une pastille, et un clic ouvre toutes les couleurs. */
-.lb-color-card { position: relative; }
+/* Couleur du joueur dans la salle d'attente (09-Couleurs §5) : une pastille, et un clic ouvre toutes les couleurs. */
+.lb-color-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--lb-line); }
 .lb-color-row { display: flex; align-items: center; gap: 12px; }
 .lb-color-button { width: 40px; height: 40px; flex: none; padding: 0; border: 2px solid var(--lb-ink); cursor: pointer; }
 .lb-color-button:hover { border-color: var(--lb-accent); }
 .lb-color-preview { width: 64px; height: 64px; image-rendering: pixelated; }
 .lb-color-list[hidden] { display: none; }
 .lb-color-list {
-  position: absolute;
-  z-index: 20;
-  top: 100%;
-  left: 0;
-  right: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   gap: 6px;
-  padding: 10px;
-  background: var(--lb-card);
-  border: 2px solid var(--lb-ink);
 }
 .lb-color-pick { aspect-ratio: 1; padding: 0; border: 2px solid transparent; cursor: pointer; }
-.lb-color-pick:hover { border-color: var(--lb-muted); }
+.lb-color-pick:hover:not(:disabled) { border-color: var(--lb-muted); }
+.lb-color-pick:disabled { cursor: not-allowed; opacity: 0.25; }
 .lb-color-pick.lb-color-on { border-color: var(--lb-ink); box-shadow: inset 0 0 0 2px var(--lb-card); }

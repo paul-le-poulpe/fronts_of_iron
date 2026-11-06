@@ -6,7 +6,7 @@ l'affichage : elle n'entre ni dans le moteur, ni dans le hash, ni dans les ordre
 
 **État** : implémenté. La liste du §2 est dans `client/src/playercolors.ts`, les
 icônes d'unités prennent la couleur de leur propriétaire (§4), le joueur choisit
-sa couleur sur l'accueil et le relais l'attribue (§5).
+sa couleur dans la salle d'attente et le relais l'attribue (§5).
 
 ---
 
@@ -119,26 +119,35 @@ la page.
 
 ## 5. Choix de la couleur (décidé par l'auteur, 6 novembre 2026)
 
-- Sur l'accueil, une pastille montre la couleur du joueur ; un clic ouvre toutes les
-  couleurs de la liste.
-- Le choix est gardé dans le navigateur, avec le nom du joueur.
-- Deux joueurs d'une même partie n'ont pas la même couleur tant que la liste n'est
-  pas épuisée : le premier arrivé garde la sienne, le suivant reçoit la première
-  couleur libre. Au-delà de vingt joueurs, les doublons sont permis.
+- La couleur se choisit dans la salle d'attente, pas sur l'accueil : c'est là qu'on
+  sait quelles couleurs les autres joueurs ont prises. Une pastille montre la couleur
+  du joueur ; un clic ouvre toutes les couleurs de la liste.
+- Deux joueurs d'une même salle n'ont pas la même couleur tant que la liste n'est pas
+  épuisée. Les couleurs prises sont grisées, et leur survol donne le nom du joueur.
+- En entrant dans une salle, le joueur reçoit la dernière couleur qu'il a choisie si
+  elle est libre, sinon la première libre. Au-delà de vingt joueurs, les doublons sont
+  permis.
+- La couleur ne change plus après le lancement.
+- Solo : pas de salle d'attente. L'écran de départ, où l'on règle le nombre de bots,
+  donne une ligne au joueur et une à chaque bot, avec une couleur à choisir par ligne.
+  Une couleur prise par une autre ligne n'est pas proposée.
 
 Implémentation :
 
-- `join` porte la couleur demandée (un indice de la liste, de 0 à 19). `Room` appelle
-  `pickPlayerColor` (`packages/shared`) et renvoie la couleur attribuée dans `room`
-  et `start`. Le relais ne connaît que le nombre de couleurs (`PLAYER_COLOR_COUNT`),
-  pas leurs valeurs. Une couleur invalide vaut une absence de choix, sans erreur.
-- La couleur d'un joueur parti de la salle redevient libre. À la reconnexion, la
-  couleur demandée est ignorée.
-- La salle d'attente affiche la couleur attribuée, qui peut différer de la pastille
-  de l'accueil. L'accueil ne grise pas les couleurs prises : il ne connaît pas encore
-  la partie.
+- Le dernier choix est gardé dans le navigateur (`savePlayerColor`). `join` l'envoie ;
+  `Room` appelle `pickPlayerColor` (`packages/shared`). Une valeur invalide dans `join`
+  vaut une absence de choix, sans erreur.
+- Dans la salle, `set_color` demande une couleur. Le relais répond par `room`, ou par
+  l'erreur `color_taken` (un autre joueur l'a prise entre-temps), `invalid_color` ou
+  `game_started`, affichée dans la salle.
+- `room` et `start` portent la couleur attribuée à chaque joueur. Le relais ne connaît
+  que le nombre de couleurs (`PLAYER_COLOR_COUNT`), pas leurs valeurs.
+- La couleur d'un joueur parti de la salle redevient libre. À la reconnexion, la couleur
+  demandée est ignorée.
 - `Game` met les couleurs dans `InitMessage.playerColors` ; la page les donne à
   `setPlayerColors` avant de créer le `Painter`. Hors partie, `playerColorIndex`
   retombe sur un calcul depuis l'identifiant.
-- Solo : le joueur garde sa couleur, chaque bot demande `(id × 3) modulo 20`, ce qui
-  écarte les couleurs de deux bots voisins, et reçoit la première libre si elle est prise.
+- Solo : le message `start` du Worker porte `colors`, le joueur puis les bots. Un bot
+  ajouté au formulaire reçoit par défaut `(id × 3) modulo 20`, ce qui écarte les couleurs
+  de deux bots voisins, ou la première libre si elle est prise. Seule la couleur du
+  joueur est gardée dans le navigateur.

@@ -10,10 +10,12 @@ import "./lobby.css";
 import {
   MAP_IDS,
   MAX_ONLINE_PLAYERS,
+  PLAYER_COLOR_COUNT,
   ROOM_ERROR_TEXT,
   cloudflareGamePath,
   normalizeGameName,
   normalizePlayerName,
+  pickPlayerColor,
   type ClientMessage,
   type LobbyEntry,
   type MapId,
@@ -80,25 +82,74 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 }
 
 
-// ---- accueil : couleur du joueur (09-Couleurs §5) ----
+// ---- couleur du joueur (09-Couleurs §5) ----
 
 /** Icône de l'aperçu : un char aux tons d'unité de la couleur choisie. */
 const COLOR_PREVIEW = "armament/icon-armament-medium-tank-32.png";
 
 let color = loadPlayerColor(store);
 
-/** Couleur choisie sur l'accueil : demandée au relais en entrant dans une partie, utilisée en solo. */
-export const chosenColor = (): number => color;
+/** Garde `index` comme dernière couleur choisie : demandée au relais en entrant dans une salle, proposée en solo. */
+function chooseColor(index: number): void {
+  color = index;
+  savePlayerColor(store, color);
+}
+
+// Solo : pas de salle d'attente, l'écran de départ donne une ligne au joueur et une à chaque bot.
+
+const botsInput = $<HTMLInputElement>("bots");
+const soloRows = $("solo-colors");
+/** Couleur de chaque joueur du solo : le joueur, puis les bots. */
+let soloList: number[] = [color];
+
+/** Couleurs du formulaire du solo (`ToWorker`) ; le bot d'indice `i` est le joueur `i + 1`. */
+export const soloColors = (): readonly number[] => soloList;
+
+function soloColorRow(index: number): HTMLLabelElement {
+  const row = el("label", "solo-color");
+  const swatch = el("span", "sw");
+  swatch.style.background = rgbCss(mapColor(soloList[index]!));
+  const select = el("select");
+  select.append(
+    ...PLAYER_COLORS.map((entry, i) => {
+      const option = el("option", undefined, entry.name);
+      option.value = String(i);
+      option.disabled = soloList.some((c, other) => other !== index && c === i);
+      return option;
+    }),
+  );
+  select.value = String(soloList[index]);
+  select.addEventListener("change", () => {
+    soloList[index] = Number(select.value);
+    if (index === 0) chooseColor(soloList[0]!);
+    renderSoloColors();
+  });
+  row.append(el("span", undefined, index === 0 ? "Vous" : `Bot ${index}`), swatch, select);
+  return row;
+}
+
+/** Une ligne par joueur : les bots ajoutés reçoivent une couleur libre, écartée de celle du bot précédent. */
+function renderSoloColors(): void {
+  const bots = Math.min(Number(botsInput.max), Math.max(1, Math.trunc(Number(botsInput.value)) || 1));
+  soloList.length = Math.min(soloList.length, 1 + bots);
+  for (let id = soloList.length + 1; id <= 1 + bots; id++) soloList.push(pickPlayerColor((id * 3) % PLAYER_COLOR_COUNT, soloList));
+  soloRows.replaceChildren(...soloList.map((_, i) => soloColorRow(i)));
+}
+
+botsInput.addEventListener("input", renderSoloColors);
+renderSoloColors();
 
 const colorButton = $<HTMLButtonElement>("lb-color");
 const colorList = $("lb-color-list");
+/** Couleur du joueur dans la salle, attribuée par le relais. */
+let roomColor = color;
 
 function renderColor(): void {
-  colorButton.style.background = rgbCss(mapColor(color));
-  colorButton.title = PLAYER_COLORS[color]!.name;
-  $("lb-color-name").textContent = PLAYER_COLORS[color]!.name;
-  $<HTMLImageElement>("lb-color-preview").src = colorIconUrl(COLOR_PREVIEW, color);
-  for (const [i, node] of [...colorList.children].entries()) node.classList.toggle("lb-color-on", i === color);
+  colorButton.style.background = rgbCss(mapColor(roomColor));
+  colorButton.title = PLAYER_COLORS[roomColor]!.name;
+  $("lb-color-name").textContent = PLAYER_COLORS[roomColor]!.name;
+  $<HTMLImageElement>("lb-color-preview").src = colorIconUrl(COLOR_PREVIEW, roomColor);
+  for (const [i, node] of [...colorList.children].entries()) node.classList.toggle("lb-color-on", i === roomColor);
 }
 
 function openColors(open: boolean): void {
@@ -114,9 +165,8 @@ colorList.append(
     b.setAttribute("aria-label", entry.name);
     b.style.background = rgbCss(mapColor(i));
     b.addEventListener("click", () => {
-      color = i;
-      savePlayerColor(store, color);
-      renderColor();
+      chooseColor(i);
+      send({ type: "set_color", color: i });
       openColors(false);
       colorButton.focus();
     });
@@ -242,6 +292,9 @@ export function showHome(text = "", error = false): void {
 }
 
 $("lb-solo").addEventListener("click", () => {
+  // La couleur a pu changer dans une salle d'attente.
+  soloList = [color];
+  renderSoloColors();
   $("lobby").hidden = true;
   $("app").hidden = false;
 });
@@ -480,6 +533,7 @@ function reconnect(): void {
 $("lb-room-reconnect").addEventListener("click", reconnect);
 
 function leave(): void {
+  openColors(false);
   disconnect();
   hideNotice();
   launcher?.cancel();
@@ -620,6 +674,17 @@ function playerRow(player: RoomPlayer | StartPlayer, tag: string): HTMLLIElement
   return li;
 }
 
+/** Couleur du joueur, et couleurs prises par les autres : grisées, avec le nom du joueur au survol. */
+function renderRoomColors(room: RoomMessage, mine: number | undefined): void {
+  roomColor = mine ?? roomColor;
+  renderColor();
+  for (const [i, node] of [...colorList.children].entries()) {
+    const other = room.players.find((p) => p.id !== room.you && p.color === i);
+    (node as HTMLButtonElement).disabled = other !== undefined;
+    (node as HTMLButtonElement).title = other === undefined ? PLAYER_COLORS[i]!.name : `${PLAYER_COLORS[i]!.name} : ${other.name}`;
+  }
+}
+
 function renderRoom(c: Connection, room: RoomMessage): void {
   const me = room.players.find((p) => p.id === room.you);
   const isHost = me?.host === true;
@@ -632,6 +697,7 @@ function renderRoom(c: Connection, room: RoomMessage): void {
   $("lb-room-you-host").hidden = !isHost;
   $("lb-room-host").textContent = !isHost && host !== undefined ? `Hôte : ${host.name}` : "";
 
+  renderRoomColors(room, me?.color);
   $("lb-room-count").textContent = `${num(room.players.length)} / ${MAX_ONLINE_PLAYERS}`;
   $("lb-room-players").replaceChildren(
     ...room.players.map((p) => playerRow(p, p.host ? (p.id === room.you ? "Hôte · vous" : "Hôte") : p.id === room.you ? "vous" : "")),

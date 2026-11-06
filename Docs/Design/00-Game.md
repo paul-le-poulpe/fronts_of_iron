@@ -16,7 +16,7 @@ garde qu'un résumé et y renvoie. Une règle n'est écrite qu'à un seul endroi
 | Fronts terrestres : détection, divisions, placement sur les fronts, renfort, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
 | Combat instantané et replay (§1, §2) ; ses §3 à §4 sont remplacés par `08-Population.md` | `06-Combat-Simplifie.md` |
 | Population en bonshommes, boîtes d'activités, nourriture, fer, usines, casernes, blessés, déblocage, panneau de production | `08-Population.md` (§4 ici : résumé) |
-| Couleurs des joueurs : liste, tons d'unité, icônes de remplacement, choix sur l'accueil | `09-Couleurs.md` (§11 ici : résumé) |
+| Couleurs des joueurs : liste, tons d'unité, icônes de remplacement, choix dans la salle d'attente | `09-Couleurs.md` (§11 ici : résumé) |
 
 Un fichier dont le nom finit par `-History` (par exemple `05-Fronts-History.md`)
 est un historique de discussions : il ne fait jamais foi.

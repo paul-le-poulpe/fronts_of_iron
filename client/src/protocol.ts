@@ -39,8 +39,8 @@ export type ToWorker =
       readonly mapSeed: number;
       /** Nombre de bots, 1 à 7. */
       readonly bots: number;
-      /** Couleur demandée par le joueur (`PLAYER_COLORS`). */
-      readonly color: number;
+      /** Couleurs demandées (`PLAYER_COLORS`) : le joueur, puis les bots. */
+      readonly colors: readonly number[];
       /** Durée d'un tour en ms ; 100 par défaut. Outil de développement (paramètre `?step=` de l'adresse). */
       readonly stepMs?: number;
       /** Partie de test (développement seulement) : scénario de `TEST_SCENARIOS` ; un bot, économie gelée, divisions déjà placées. */

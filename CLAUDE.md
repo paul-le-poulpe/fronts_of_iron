@@ -50,7 +50,7 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   `05-Fronts.md` et `06-Combat-Simplifie.md` qu'il liste en tête. Historique, qui
   ne fait pas foi : `00-Game-History.md`.
 - `Docs/Design/09-Couleurs.md` — couleurs des joueurs : liste provisoire, calcul des
-  tons et réglages, icônes de remplacement, choix sur l'accueil, reste à faire.
+  tons et réglages, icônes de remplacement, choix dans la salle d'attente.
 
 ---
 

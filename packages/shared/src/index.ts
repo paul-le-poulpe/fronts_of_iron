@@ -140,11 +140,14 @@ export interface TurnData {
 export type ClientMessage =
   /**
    * Entrer dans la salle. `token` : jeton d'hôte (première entrée de l'hôte) ou jeton de joueur reçu à
-   * l'arrivée (reconnexion). Avec un jeton connu, `name` et `color` sont ignorés. `color` : couleur demandée.
+   * l'arrivée (reconnexion). Avec un jeton connu, `name` et `color` sont ignorés. `color` : la dernière couleur
+   * choisie par le joueur, attribuée si elle est libre.
    */
   | { readonly type: "join"; readonly name: string; readonly token?: string; readonly color?: number }
   /** Hôte seulement, avant le lancement. `seed: "random"` : le relais tire une graine. */
   | { readonly type: "set_map"; readonly map?: MapId; readonly seed?: number | "random" }
+  /** Avant le lancement : le joueur prend une couleur libre (09-Couleurs §5). */
+  | { readonly type: "set_color"; readonly color: number }
   /** Hôte seulement : lance la partie. */
   | { readonly type: "start" }
   // ---- partie lancée ----
@@ -185,6 +188,9 @@ export type RoomErrorCode =
   | "not_host"
   | "invalid_map"
   | "invalid_seed"
+  | "invalid_color"
+  /** Couleur déjà prise par un autre joueur de la salle. */
+  | "color_taken"
   /** Le même jeton vient d'être utilisé par une autre connexion, qui remplace celle-ci. */
   | "replaced"
   /** Ordre, hash ou pause avant le lancement. */
@@ -206,6 +212,8 @@ export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
   not_host: "Seul l'hôte peut faire cela.",
   invalid_map: "Carte inconnue.",
   invalid_seed: "Graine invalide : un entier de 0 à 4 294 967 295.",
+  invalid_color: "Couleur inconnue.",
+  color_taken: "Cette couleur vient d'être prise par un autre joueur.",
   replaced: "Vous êtes connecté à cette partie depuis un autre onglet ou un autre appareil.",
   not_started: "Message refusé par le serveur : la partie n'est pas encore lancée.",
   too_many_orders: "Trop d'ordres envoyés en même temps : l'ordre est ignoré.",

@@ -73,7 +73,7 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (msg.type) {
     case "start": {
       stopAll();
-      const game = new SoloGame({ mapSeed: msg.mapSeed, bots: msg.bots, color: msg.color, ...(msg.stepMs !== undefined ? { stepMs: msg.stepMs } : {}), ...(msg.testGame !== undefined ? { testGame: msg.testGame } : {}) });
+      const game = new SoloGame({ mapSeed: msg.mapSeed, bots: msg.bots, colors: msg.colors, ...(msg.stepMs !== undefined ? { stepMs: msg.stepMs } : {}), ...(msg.testGame !== undefined ? { testGame: msg.testGame } : {}) });
       solo = game;
       post(game.init());
       nextAt = performance.now() + game.stepMs;

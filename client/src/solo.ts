@@ -22,8 +22,8 @@ export interface SoloOptions {
   readonly mapSeed: number;
   /** Nombre de bots, 1 à 7. */
   readonly bots: number;
-  /** Couleur demandée par le joueur ; absente : la première de la liste. */
-  readonly color?: number;
+  /** Couleurs demandées : le joueur, puis les bots. Une couleur absente ou prise est remplacée. */
+  readonly colors?: readonly number[];
   readonly stepMs?: number;
   /** Partie de test (`setupTestGame`, scénario de `TEST_SCENARIOS`) : économie gelée, divisions placées d'emblée. */
   readonly testGame?: string;
@@ -52,10 +52,11 @@ export class SoloGame {
       throw new Error(`nombre de bots invalide : ${options.bots}`);
     }
     this.stepMs = options.stepMs ?? DEFAULT_STEP_MS;
-    const players = [{ id: HUMAN, name: "Vous", color: pickPlayerColor(options.color, []) }];
+    const players = [{ id: HUMAN, name: "Vous", color: pickPlayerColor(options.colors?.[0], []) }];
     for (let id = HUMAN + 1; id <= 1 + options.bots; id++) {
-      // Le pas de 3 écarte les couleurs de deux bots voisins dans la liste.
-      players.push({ id, name: `Bot ${id - 1}`, color: pickPlayerColor((id * 3) % PLAYER_COLOR_COUNT, players.map((p) => p.color)) });
+      // Sans couleur demandée, le pas de 3 écarte les couleurs de deux bots voisins dans la liste.
+      const wanted = options.colors?.[id - 1] ?? (id * 3) % PLAYER_COLOR_COUNT;
+      players.push({ id, name: `Bot ${id - 1}`, color: pickPlayerColor(wanted, players.map((p) => p.color)) });
       this.bots.push(createBot(id, options.mapSeed));
     }
     this.game = new Game({ mapSeed: options.mapSeed, players, you: HUMAN, stepMs: this.stepMs, ...(options.testGame !== undefined ? { testGame: options.testGame } : {}) });
