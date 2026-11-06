@@ -105,6 +105,9 @@ let soloList: number[] = [color];
 /** Couleurs du formulaire du solo (`ToWorker`) ; le bot d'indice `i` est le joueur `i + 1`. */
 export const soloColors = (): readonly number[] => soloList;
 
+/** Pseudo du formulaire de connexion, gardé par la page ; `null` si aucun pseudo valide n'est gardé. */
+export const soloName = (): string | null => normalizePlayerName(loadPlayerName(store));
+
 function soloColorRow(index: number): HTMLLabelElement {
   const row = el("label", "solo-color");
   const swatch = el("span", "sw");

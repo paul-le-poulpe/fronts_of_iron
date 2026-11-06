@@ -49,7 +49,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/tutorial.ts` | tutoriel (`07-Tutoriel.md`) : contour bleu sur les composants `data-tuto` dont la leçon n'est pas lue, premier clic consommé qui ouvre la leçon (`#tuto`), leçons lues dans `localStorage` ; `resetTutorial`, `skipTutorial` (menu « Tutoriel ») |
 | `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : ressources (flux), forces, diplomatie, menu « Carte » ; DOM construit une fois, pas de règle |
 | `src/production.ts`, `src/production.css` | panneau de production (08-Population §11) : boîtes d'activités, pions, glisser-déposer des pions et réorganisation des boîtes, boîtes verrouillées et déblocage (DOM, pas de règle) ; styles et couleurs des boîtes (variables CSS, clair et sombre) |
-| `src/names.ts` | noms français des machines, des activités (les boîtes du panneau) et des types de division, des niches (et leurs lettres) ; symboles provisoires (texte entre crochets) des machines sans icône ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
+| `src/names.ts` | noms français des machines, des activités (les boîtes du panneau) et des types de division, des niches (et leurs lettres) ; symboles provisoires (texte entre crochets) des machines sans icône ; joueurs de la partie (`setRoster`, `localPlayer`, `rosterName` : le pseudo, ou « Bot n » en solo ; `playerName` : « Vous » pour le joueur de la page, sinon `rosterName`) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, mode placement, noms des joueurs |
@@ -404,7 +404,7 @@ il est recalculé. Sans port ou sans eau entre les ports, le chemin est vide et
 touchent jamais l'état de la partie.
 
 **Noms des joueurs** (`render.ts`, `playerlabels.ts`). Quand la carte est assez dézoomée, le nom de chaque joueur est écrit
-sur elle, par-dessus tout le reste (villes, routes, fronts), en 15 px gras, dans sa couleur de limite (`playerLimit`), avec un contour noir de 2 px. Il apparaît quand l'écran
+sur elle (`rosterName` : le joueur de la page a son pseudo, pas « Vous » ; en solo, le pseudo gardé par la page, ou « Joueur 1 » s'il n'y en a pas), par-dessus tout le reste (villes, routes, fronts), en 15 px gras, dans sa couleur de limite (`playerLimit`), avec un contour noir de 2 px. Il apparaît quand l'écran
 montre au moins `LABEL_MIN_TILES` cases (120 000, soit environ cent villes, provisoire) et garde la même taille à l'écran
 à tout zoom. Le nom va dans le plus grand territoire contigu du joueur (cases de terre reliées par les quatre côtés) : à
 la position où son rectangle ne recouvre aucune case d'un autre joueur, couvre le plus de cases de ce territoire, puis

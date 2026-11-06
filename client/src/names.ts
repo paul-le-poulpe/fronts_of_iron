@@ -75,6 +75,9 @@ export function setRoster(you: number, names: readonly string[]): void {
 /** Identifiant du joueur de cette page : 1 en solo, `you` du message de départ en ligne. */
 export const localPlayer = (): number => localId;
 
+/** Pseudo d'un joueur, sans « Vous » : le nom du message de départ. */
+export const rosterName = (id: number): string => rosterNames[id - 1] ?? `Joueur ${id}`;
+
 /** Nom d'un joueur : « Vous » pour le joueur de la page, sinon le nom du message de départ (« Bot n » en solo). */
 export const playerName = (id: number): string => (id === localId ? "Vous" : (rosterNames[id - 1] ?? `Joueur ${id}`));
 

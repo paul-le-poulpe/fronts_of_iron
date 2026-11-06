@@ -5,7 +5,7 @@
 import "./style.css";
 // Accueil et salle d'attente des parties en ligne ; le mode solo ci-dessous s'ouvre depuis l'accueil,
 // et une partie en ligne lancée par le relais est confiée à `startOnline` ci-dessous.
-import { setGameLauncher, showHome, soloColors } from "./lobby.ts";
+import { setGameLauncher, showHome, soloColors, soloName } from "./lobby.ts";
 
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter } from "./painter.ts";
@@ -206,7 +206,8 @@ function failBeforeGame(s: Session, text: string): void {
 function startGame(mapSeed: number, bots: number, testGame?: string): void {
   const s = openSession(false);
   const step = stepFromUrl();
-  s.worker.postMessage({ type: "start", mapSeed, bots, colors: soloColors(), ...(step !== undefined ? { stepMs: step } : {}), ...(testGame !== undefined ? { testGame } : {}) } satisfies ToWorker);
+  const name = soloName();
+  s.worker.postMessage({ type: "start", mapSeed, bots, colors: soloColors(), ...(name !== null ? { name } : {}), ...(step !== undefined ? { stepMs: step } : {}), ...(testGame !== undefined ? { testGame } : {}) } satisfies ToWorker);
 }
 
 /** Partie en ligne lancée par le relais : le Worker ouvre son propre WebSocket et rejoue la partie depuis le message de départ. */

@@ -9,7 +9,7 @@ import { type Painter } from "./painter.ts";
 import { PlayerLabels, type LabelSpot } from "./playerlabels.ts";
 import { playerColor, playerDark, playerLimit, rgbCss } from "./playercolors.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
-import { localPlayer, playerName } from "./names.ts";
+import { localPlayer, rosterName } from "./names.ts";
 import { type FrontView } from "./protocol.ts";
 
 export interface MapViewHooks {
@@ -520,14 +520,14 @@ export class MapView {
       const low = Math.exp((step - 0.5) / LABEL_ZOOM_STEPS);
       const boxH = Math.ceil((LABEL_FONT_PX + 2 * LABEL_STROKE_PX) / low);
       this.labelSpots = this.labels.spots((player) => ({
-        w: Math.ceil((ctx.measureText(playerName(player)).width + 2 * LABEL_STROKE_PX) / low),
+        w: Math.ceil((ctx.measureText(rosterName(player)).width + 2 * LABEL_STROKE_PX) / low),
         h: boxH,
       }));
     }
     for (const spot of this.labelSpots) {
       const x = this.tx + spot.x * zoom;
       const y = this.ty + spot.y * zoom;
-      const name = playerName(spot.player);
+      const name = rosterName(spot.player);
       ctx.strokeText(name, x, y);
       ctx.fillStyle = rgbCss(playerLimit(spot.player));
       ctx.fillText(name, x, y);

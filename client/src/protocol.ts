@@ -41,6 +41,8 @@ export type ToWorker =
       readonly bots: number;
       /** Couleurs demandées (`PLAYER_COLORS`) : le joueur, puis les bots. */
       readonly colors: readonly number[];
+      /** Pseudo gardé par la page, s'il y en a un. */
+      readonly name?: string;
       /** Durée d'un tour en ms ; 100 par défaut. Outil de développement (paramètre `?step=` de l'adresse). */
       readonly stepMs?: number;
       /** Partie de test (développement seulement) : scénario de `TEST_SCENARIOS` ; un bot, économie gelée, divisions déjà placées. */
@@ -76,7 +78,7 @@ export interface InitMessage {
   readonly playerCount: number;
   /** Identifiant du joueur de cette page : 1 (`HUMAN`) en solo, `you` du message de départ en ligne. */
   readonly you: number;
-  /** Nom de chaque joueur, `playerNames[id - 1]` : « Vous » et « Bot n » en solo, les noms du message de départ en ligne. */
+  /** Nom de chaque joueur, `playerNames[id - 1]` : le pseudo du joueur et « Bot n » en solo, les noms du message de départ en ligne. */
   readonly playerNames: readonly string[];
   /** Couleur de chaque joueur, `playerColors[id - 1]` : indice dans `PLAYER_COLORS`. */
   readonly playerColors: readonly number[];
