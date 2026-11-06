@@ -655,7 +655,6 @@ export class MapView {
     // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
     // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.
     this.drawBreakthroughs(ctx, px);
-    this.drawPlayerLabels(ctx);
 
     // Mode choix d'axe : la connexion du front la plus proche de la souris.
     if (this.axisFront !== 0 && this.axisHover !== null) {
@@ -708,6 +707,8 @@ export class MapView {
       ctx.lineWidth = 1.5 * px;
       ctx.strokeRect(x + 0.5 - side / 2, y + 0.5 - side / 2, side, side);
     }
+    // En dernier : les noms passent par-dessus les villes, les routes et les fronts.
+    this.drawPlayerLabels(ctx);
     this.onDrawn?.();
   }
 }

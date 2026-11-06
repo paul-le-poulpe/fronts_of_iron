@@ -340,7 +340,7 @@ brun-rouge (`landIron`, `IRON_TINT` à 55 %) ; sinon, celui d'une case cultivabl
 (fertilité > 0) d'un vert léger (`landFertile`, 80/255 d'opacité). **Couloirs de routes** : `Mirror.roadCorridor` marque
 les cases à moins de `ROAD_CORRIDOR_RADIUS` (5, soit 11 cases de large, provisoire) du tracé d'une route ; sur une case
 de terre d'un joueur, quand `showPlayerColor` est vrai, la peinture n'y met ni le vert léger ni les champs, pour que la
-couleur du joueur se lise carte dézoomée. Ce n'est que de l'affichage : la surface cultivée et son revenu ne changent
+couleur du joueur se lise carte dézoomée. La couleur pleine du joueur, sans le sol, a été essayée et écartée : trop vive. Ce n'est que de l'affichage : la surface cultivée et son revenu ne changent
 pas, et le moteur ne connaît pas ces couloirs. Les trois textures sont différentes de la couleur du joueur : champs en
 bandes vertes, pêche en points blancs sur l'eau bleue, mine en bandes diagonales
 sombres et orangées (provisoire, 00-Game §11). Chaque texture remplace la
@@ -404,7 +404,7 @@ il est recalculé. Sans port ou sans eau entre les ports, le chemin est vide et
 touchent jamais l'état de la partie.
 
 **Noms des joueurs** (`render.ts`, `playerlabels.ts`). Quand la carte est assez dézoomée, le nom de chaque joueur est écrit
-sur elle, en 15 px gras, dans sa couleur de limite (`playerLimit`), avec un contour noir de 2 px. Il apparaît quand l'écran
+sur elle, par-dessus tout le reste (villes, routes, fronts), en 15 px gras, dans sa couleur de limite (`playerLimit`), avec un contour noir de 2 px. Il apparaît quand l'écran
 montre au moins `LABEL_MIN_TILES` cases (120 000, soit environ cent villes, provisoire) et garde la même taille à l'écran
 à tout zoom. Le nom va dans le plus grand territoire contigu du joueur (cases de terre reliées par les quatre côtés) : à
 la position où son rectangle ne recouvre aucune case d'un autre joueur, couvre le plus de cases de ce territoire, puis
