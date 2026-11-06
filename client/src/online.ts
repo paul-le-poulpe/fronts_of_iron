@@ -2,7 +2,7 @@
 // garde (nom, jetons), textes des erreurs de la salle, liste du lobby. Testé sous
 // Node (`test/online.test.ts`). Docs/Design/03-Client.md §7, 01-Architecture §4 et §6.
 
-import { MAP_IDS, type LobbyEntry, type MapId } from "@fronts-of-iron/shared";
+import { MAP_IDS, isPlayerColor, type LobbyEntry, type MapId } from "@fronts-of-iron/shared";
 
 // ---- adresse du WebSocket ----
 
@@ -34,6 +34,7 @@ export interface KeyValueStore {
 const NAME_KEY = "foi.playerName";
 const TOKENS_KEY = "foi.tokens";
 const PASSWORD_KEY = "foi.createPassword";
+const COLOR_KEY = "foi.playerColor";
 /** Nombre de jetons gardés ; les plus anciens sont oubliés. */
 const MAX_TOKENS = 20;
 
@@ -60,6 +61,16 @@ export function loadPlayerName(store: KeyValueStore | null): string {
 
 export function savePlayerName(store: KeyValueStore | null, name: string): void {
   write(store, NAME_KEY, name);
+}
+
+/** Couleur choisie sur l'accueil ; sans valeur valide, la première de la liste. */
+export function loadPlayerColor(store: KeyValueStore | null): number {
+  const color = Number(read(store, COLOR_KEY) ?? "0");
+  return isPlayerColor(color) ? color : 0;
+}
+
+export function savePlayerColor(store: KeyValueStore | null, color: number): void {
+  write(store, COLOR_KEY, String(color));
 }
 
 /** Mot de passe de création des parties Cloudflare, gardé après une création réussie. */

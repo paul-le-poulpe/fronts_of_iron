@@ -49,6 +49,8 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   panneau de production ; fait foi et remplace les parties de `00-Game.md`,
   `05-Fronts.md` et `06-Combat-Simplifie.md` qu'il liste en tête. Historique, qui
   ne fait pas foi : `00-Game-History.md`.
+- `Docs/Design/09-Couleurs.md` — couleurs des joueurs : liste provisoire, calcul des
+  tons et réglages, icônes de remplacement, choix sur l'accueil, reste à faire.
 
 ---
 
@@ -112,6 +114,9 @@ Depuis la racine du dépôt, après `npm install` :
 - `npm run dev -w client` — le client (mode solo contre des bots) sur
   `http://localhost:5173` ; `npm run build -w client` le compile dans
   `client/dist/`. Détail : `Docs/Design/03-Client.md`.
+- `npm run icons:units -w client` — régénère `client/public/icons/units-generated/`
+  depuis `client/public/icons/armament/` (à relancer quand une icône d'unité
+  change ; `Docs/Design/09-Couleurs.md` §4).
 - `cd packages/engine && npm run bench` — temps moyen d'un tour et d'un hash
   sur la carte de test.
 - `cd packages/engine && npm run viz:sea` — visualisation pas à pas des zones

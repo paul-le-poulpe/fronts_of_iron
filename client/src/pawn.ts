@@ -6,8 +6,8 @@
 
 import "./pawn.css";
 import { defendsBreakthrough } from "./divisions.ts";
-import { icon32Path } from "./icons.ts";
 import type { DivisionView, MilitaryCatalog } from "./protocol.ts";
+import { unitIconUrl } from "./uniticons.ts";
 
 export interface ZoneOptions {
   /** Largeur disponible, px. */
@@ -160,7 +160,7 @@ function runsOf(placed: readonly Placed[], hl: ReadonlySet<number>, breakEach: b
 function pawnHtml(p: Placed, scale: number, lifted: boolean, military: MilitaryCatalog): string {
   const d = p.d;
   const info = military.divisions[d.type];
-  const src = info === undefined ? "" : `icons/${icon32Path(info.icon)}`;
+  const src = info === undefined ? "" : unitIconUrl(info.icon, d.owner);
   const y = PAWN_Y + p.line * ROW_H;
   const z = (lifted ? 1000 : 10) + p.depth;
   let h =

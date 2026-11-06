@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "icons:units": "node scripts/unit-icons.ts",
     "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.test.json"
   },
@@ -16,6 +17,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "8.3.5"
   }

@@ -27,6 +27,7 @@ import {
   gameAction,
   gameToResume,
   loadCreatePassword,
+  loadPlayerColor,
   loadPlayerName,
   loadToken,
   mapName,
@@ -37,11 +38,13 @@ import {
   NETWORK_ERROR_TEXT,
   saveCreatePassword,
   saveToken,
+  savePlayerColor,
   savePlayerName,
   wsUrl,
   type KeyValueStore,
 } from "./online.ts";
-import { playerColor, rgbCss } from "./painter.ts";
+import { mapColor, PLAYER_COLORS, rgbCss } from "./playercolors.ts";
+import { colorIconUrl, preloadUnitIcons } from "./uniticons.ts";
 import { num } from "./format.ts";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -76,6 +79,63 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   return node;
 }
 
+
+// ---- accueil : couleur du joueur (09-Couleurs §5) ----
+
+/** Icône de l'aperçu : un char aux tons d'unité de la couleur choisie. */
+const COLOR_PREVIEW = "armament/icon-armament-medium-tank-32.png";
+
+let color = loadPlayerColor(store);
+
+/** Couleur choisie sur l'accueil : demandée au relais en entrant dans une partie, utilisée en solo. */
+export const chosenColor = (): number => color;
+
+const colorButton = $<HTMLButtonElement>("lb-color");
+const colorList = $("lb-color-list");
+
+function renderColor(): void {
+  colorButton.style.background = rgbCss(mapColor(color));
+  colorButton.title = PLAYER_COLORS[color]!.name;
+  $("lb-color-name").textContent = PLAYER_COLORS[color]!.name;
+  $<HTMLImageElement>("lb-color-preview").src = colorIconUrl(COLOR_PREVIEW, color);
+  for (const [i, node] of [...colorList.children].entries()) node.classList.toggle("lb-color-on", i === color);
+}
+
+function openColors(open: boolean): void {
+  colorList.hidden = !open;
+  colorButton.setAttribute("aria-expanded", String(open));
+}
+
+colorList.append(
+  ...PLAYER_COLORS.map((entry, i) => {
+    const b = el("button", "lb-color-pick");
+    b.type = "button";
+    b.title = entry.name;
+    b.setAttribute("aria-label", entry.name);
+    b.style.background = rgbCss(mapColor(i));
+    b.addEventListener("click", () => {
+      color = i;
+      savePlayerColor(store, color);
+      renderColor();
+      openColors(false);
+      colorButton.focus();
+    });
+    return b;
+  }),
+);
+
+colorButton.addEventListener("click", () => openColors(colorList.hidden === true));
+document.addEventListener("click", (e) => {
+  const target = e.target as Node;
+  if (!colorList.hidden && !colorList.contains(target) && !colorButton.contains(target)) openColors(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !colorList.hidden) openColors(false);
+});
+
+renderColor();
+// L'aperçu reste vert tant que les PNG ne sont pas lus.
+void preloadUnitIcons().then(renderColor);
 
 // ---- accueil : liste des parties ----
 
@@ -260,7 +320,7 @@ function connect(target: Target, playerName: string, token: string | undefined, 
   current = c;
   setBusy(origin, true);
   ws.addEventListener("open", () => {
-    ws.send(JSON.stringify({ type: "join", name: playerName, ...(token !== undefined ? { token } : {}) } satisfies ClientMessage));
+    ws.send(JSON.stringify({ type: "join", name: playerName, color, ...(token !== undefined ? { token } : {}) } satisfies ClientMessage));
   });
   ws.addEventListener("message", (event) => {
     if (current !== c || typeof event.data !== "string") return;
@@ -553,7 +613,7 @@ for (const id of MAP_IDS) {
 function playerRow(player: RoomPlayer | StartPlayer, tag: string): HTMLLIElement {
   const li = el("li");
   const swatch = el("span", "lb-swatch");
-  swatch.style.background = rgbCss(playerColor(player.id));
+  swatch.style.background = rgbCss(mapColor(player.color));
   const who = el("span", "lb-who");
   who.append(swatch, el("strong", undefined, player.name));
   li.append(who, el("span", "lb-tag", tag));

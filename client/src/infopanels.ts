@@ -4,7 +4,7 @@
 // moteur envoie (`DivisionTypeInfo`, `DivisionView`). Une division n'a plus d'équipement (08 §5) : une barre de vie.
 
 import { currentAttacks, maxAttacks, statePercent, statusLabel, typeOf } from "./divisions.ts";
-import { icon32Path } from "./icons.ts";
+import { unitIconUrl } from "./uniticons.ts";
 import { nicheName, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
@@ -95,7 +95,7 @@ export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLEleme
   if (status !== null) p.append(el("div", "ip-status", status));
   // Icône du type, puis rang : le rang n'existe pas encore dans les règles (05-Fronts §16), donc 0 ; l'icône de 8 × 10 est agrandie ×2 (16 × 20).
   const icon = el("img", "ip-icon");
-  icon.src = `icons/${icon32Path(type.icon)}`;
+  icon.src = unitIconUrl(type.icon, d.owner);
   icon.alt = "";
   const rank = el("img", "ip-rank");
   rank.src = "icons/ranks/icon-rank-0.png";

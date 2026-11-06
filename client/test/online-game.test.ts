@@ -131,6 +131,7 @@ describe("démarrage", () => {
     assert.deepEqual(inits.map((i) => i.you), [1, 2, 3]);
     for (const init of inits) {
       assert.deepEqual(init.playerNames, ["Marc", "Léa", "Sam"]);
+      assert.deepEqual(init.playerColors, [0, 1, 2]);
       assert.equal(init.playerCount, 3);
       assert.equal(init.mapSeed, SEED);
     }

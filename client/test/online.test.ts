@@ -11,11 +11,13 @@ import {
   gameAction,
   gameToResume,
   httpErrorText,
+  loadPlayerColor,
   loadPlayerName,
   loadToken,
   parseLobbyList,
   parseSeedInput,
   saveToken,
+  savePlayerColor,
   savePlayerName,
   wsUrl,
   type KeyValueStore,
@@ -62,6 +64,11 @@ describe("adresse du WebSocket", () => {
 describe("nom et jetons gardés dans le navigateur", () => {
   test("le nom est gardé", () => {
     const store = memoryStore();
+    assert.equal(loadPlayerColor(store), 0);
+    savePlayerColor(store, 7);
+    assert.equal(loadPlayerColor(store), 7);
+    store.setItem("foi.playerColor", "99");
+    assert.equal(loadPlayerColor(store), 0);
     assert.equal(loadPlayerName(store), "");
     savePlayerName(store, "Marc");
     assert.equal(loadPlayerName(store), "Marc");

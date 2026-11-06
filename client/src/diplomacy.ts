@@ -14,7 +14,7 @@
 
 import { dismiss, notify } from "./notifications.ts";
 import { localPlayer, playerName } from "./names.ts";
-import { playerColor, rgbCss } from "./painter.ts";
+import { playerColor, rgbCss } from "./playercolors.ts";
 import { type DiplomacyEventView, type DiplomacyView, type DiplomaticStatusName, type HumanOrder, type ProposalView } from "./protocol.ts";
 
 const STATUS_LABELS: Readonly<Record<DiplomaticStatusName, string>> = {

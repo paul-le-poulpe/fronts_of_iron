@@ -196,7 +196,7 @@ describe("reconnexion après le lancement", () => {
     room.disconnect("b");
     const out = room.handle("b2", { type: "join", name: "", token: samToken });
     assert.deepEqual(to(out, "b2"), [
-      { type: "start", you: 3, map: "test", seed: 12345, players: [{ id: 1, name: "Marc" }, { id: 2, name: "Léa" }, { id: 3, name: "Sam" }] },
+      { type: "start", you: 3, map: "test", seed: 12345, players: [{ id: 1, name: "Marc", color: 0 }, { id: 2, name: "Léa", color: 1 }, { id: 3, name: "Sam", color: 2 }] },
       { type: "paused", paused: true },
     ]);
   });

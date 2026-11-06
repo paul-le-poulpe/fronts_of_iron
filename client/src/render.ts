@@ -5,7 +5,8 @@
 // canvas que pour la partie repeinte.
 
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
-import { type Painter, playerColor, playerDark, rgbCss } from "./painter.ts";
+import { type Painter } from "./painter.ts";
+import { playerColor, playerDark, rgbCss } from "./playercolors.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
 import { localPlayer } from "./names.ts";
 import { type FrontView } from "./protocol.ts";

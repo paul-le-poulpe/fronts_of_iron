@@ -14,35 +14,7 @@
 // de ses quatre voisines.
 
 import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND } from "./mirror.ts";
-
-export type Rgb = readonly [number, number, number];
-
-/** Couleur d'un joueur : teinte à l'angle d'or, comme la visualisation du moteur. */
-export function playerColor(player: number): Rgb {
-  return hsl((player * 137.508) % 360, 0.6, 0.55);
-}
-/** Version foncée, pour les villes et les routes. */
-export function playerDark(player: number): Rgb {
-  return hsl((player * 137.508) % 360, 0.65, 0.3);
-}
-
-/** Couleur de frontière d'un joueur : sa teinte, plus sombre que `playerColor`. */
-export function playerBorder(player: number): Rgb {
-  return hsl((player * 137.508) % 360, 0.6, 0.42);
-}
-/** Couleur de limite entre deux villes d'un même joueur : sa teinte, plus claire que `playerColor`. */
-export function playerLimit(player: number): Rgb {
-  return hsl((player * 137.508) % 360, 0.6, 0.68);
-}
-
-function hsl(h: number, s: number, l: number): Rgb {
-  const k = (n: number): number => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number): number => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
-
-export const rgbCss = (c: Rgb): string => `rgb(${c[0]},${c[1]},${c[2]})`;
+import { playerBorder, playerColor, playerLimit, type Rgb } from "./playercolors.ts";
 
 const WATER: Rgb = [111, 156, 204];
 const FIELD_DARK: Rgb = [96, 152, 52];

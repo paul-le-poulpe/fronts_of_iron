@@ -266,3 +266,27 @@
   .lb-h1-big { font-size: 34px; }
   .lb-facts { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Couleur du joueur sur l'accueil (09-Couleurs §5) : une pastille, et un clic ouvre toutes les couleurs. */
+.lb-color-card { position: relative; }
+.lb-color-row { display: flex; align-items: center; gap: 12px; }
+.lb-color-button { width: 40px; height: 40px; flex: none; padding: 0; border: 2px solid var(--lb-ink); cursor: pointer; }
+.lb-color-button:hover { border-color: var(--lb-accent); }
+.lb-color-preview { width: 64px; height: 64px; image-rendering: pixelated; }
+.lb-color-list[hidden] { display: none; }
+.lb-color-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: var(--lb-card);
+  border: 2px solid var(--lb-ink);
+}
+.lb-color-pick { aspect-ratio: 1; padding: 0; border: 2px solid transparent; cursor: pointer; }
+.lb-color-pick:hover { border-color: var(--lb-muted); }
+.lb-color-pick.lb-color-on { border-color: var(--lb-ink); box-shadow: inset 0 0 0 2px var(--lb-card); }

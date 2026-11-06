@@ -334,12 +334,12 @@ foi pour les champs) :
 
 | Sens | Message | Rôle |
 | --- | --- | --- |
-| client → relais | `join {name, token?}` | entrer dans la salle ; le jeton d'hôte, ou le jeton reçu à l'arrivée pour revenir (le nom est alors ignoré) |
+| client → relais | `join {name, token?, color?}` | entrer dans la salle ; le jeton d'hôte, ou le jeton reçu à l'arrivée pour revenir (le nom et la couleur sont alors ignorés) ; `color` : couleur demandée (09-Couleurs §5) |
 | client → relais | `set_map {map?, seed?}` | hôte seulement ; `seed` : un entier, ou `"random"` (graine tirée par l'enveloppe) |
 | client → relais | `start` | hôte seulement |
 | relais → client | `welcome {token}` | à l'arrivée d'un nouveau joueur : le jeton à garder |
-| relais → client | `room {you, players, map, seed}` | état de la salle, à chaque changement, à chaque joueur avec son propre `you` |
-| relais → client | `start {you, map, seed, players}` | message de départ, au lancement et à chaque reconnexion après le lancement |
+| relais → client | `room {you, players, map, seed}` | état de la salle, à chaque changement, à chaque joueur avec son propre `you` ; chaque joueur porte sa couleur attribuée (`color`) |
+| relais → client | `start {you, map, seed, players}` | message de départ, au lancement et à chaque reconnexion après le lancement ; chaque joueur porte sa couleur (`color`), qui n'entre pas dans le moteur |
 | relais → client | `error {code, message}` (`message` : le texte à afficher, `ROOM_ERROR_TEXT` de `packages/shared`) | `invalid_message`, `not_joined`, `already_joined`, `game_full`, `game_started`, `invalid_name`, `not_host`, `invalid_map`, `invalid_seed`, `replaced`, `not_started`, `too_many_orders` |
 | client → relais | `order {order}` | un ordre du joueur, pour le prochain tour (partie lancée) |
 | client → relais | `hash {turn, hash}` | hash de l'état après le tour `turn`, multiple de N |

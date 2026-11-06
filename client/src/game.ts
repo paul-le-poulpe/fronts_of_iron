@@ -87,7 +87,7 @@ export interface GameOptions {
   readonly mapSeed: number;
   readonly map?: MapId;
   /** Les joueurs, identifiants 1 à n sans trou, avec leur nom. */
-  readonly players: readonly { readonly id: number; readonly name: string }[];
+  readonly players: readonly { readonly id: number; readonly name: string; readonly color: number }[];
   /** Le joueur de ce client. */
   readonly you: number;
   /** Durée d'un tour en ms, envoyée à la page pour son affichage seulement. */
@@ -297,6 +297,7 @@ export class Game {
       playerCount: this.state.players.length,
       you: this.you,
       playerNames: this.options.players.map((p) => p.name),
+      playerColors: this.options.players.map((p) => p.color),
       expansionRadius: CITY.expansionRadius,
       controlRadius: CITY.controlRadius,
       stepMs: this.stepMs,

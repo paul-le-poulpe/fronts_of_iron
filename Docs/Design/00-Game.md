@@ -16,6 +16,7 @@ garde qu'un résumé et y renvoie. Une règle n'est écrite qu'à un seul endroi
 | Fronts terrestres : détection, divisions, placement sur les fronts, renfort, attaques, combat, avancée, prise de ville, encerclement, leur interface | `05-Fronts.md` (§3.8 ici : résumé) |
 | Combat instantané et replay (§1, §2) ; ses §3 à §4 sont remplacés par `08-Population.md` | `06-Combat-Simplifie.md` |
 | Population en bonshommes, boîtes d'activités, nourriture, fer, usines, casernes, blessés, déblocage, panneau de production | `08-Population.md` (§4 ici : résumé) |
+| Couleurs des joueurs : liste, tons d'unité, icônes de remplacement, choix sur l'accueil | `09-Couleurs.md` (§11 ici : résumé) |
 
 Un fichier dont le nom finit par `-History` (par exemple `05-Fronts-History.md`)
 est un historique de discussions : il ne fait jamais foi.
@@ -580,7 +581,8 @@ s'applique à toute carte.
 Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
 
 - **Couleur des joueurs** (décidé par l'auteur, 24 octobre 2026) : une teinte
-  légère sur tout le territoire, masquable. La **frontière** d'un joueur (contre
+  légère sur tout le territoire, masquable. La liste des couleurs, leur choix et
+  les tons d'unité sont dans `09-Couleurs.md`. La **frontière** d'un joueur (contre
   un autre joueur ou une terre sans propriétaire) est une case de sa couleur un
   peu plus sombre, de chaque côté : entre deux joueurs, cela fait une double
   ligne. La **limite** entre deux villes d'un même joueur est une case de sa

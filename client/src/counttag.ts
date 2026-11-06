@@ -2,8 +2,8 @@
 // comprimées de l'adversaire montrent, par niche, l'icône d'un type et le nombre total de divisions de la niche.
 // Pas de DOM hors de la fonction ; aucune règle.
 
-import { icon32Path } from "./icons.ts";
 import { type DivisionView, type MilitaryCatalog } from "./protocol.ts";
+import { unitIconUrl } from "./uniticons.ts";
 
 /**
  * `divisions` : celles d'une niche (non vide). L'icône est celle du type le plus nombreux (`"most"`, onglet des
@@ -21,7 +21,7 @@ export function countTag(military: MilitaryCatalog, divisions: readonly Division
   tag.className = "ct";
   const img = document.createElement("img");
   img.className = "ct-icon";
-  img.src = `icons/${icon32Path(military.divisions[type]!.icon)}`;
+  img.src = unitIconUrl(military.divisions[type]!.icon, divisions[0]!.owner);
   img.alt = "";
   img.draggable = false;
   const n = document.createElement("span");

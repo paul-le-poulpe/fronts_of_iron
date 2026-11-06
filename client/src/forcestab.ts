@@ -14,7 +14,7 @@ import { divisionsAt, opponentOf, sortedFronts, typeOf } from "./divisions.ts";
 import { Dnd, type DndHost } from "./dnd.ts";
 import { frontWidthIcon, hidePanel } from "./infopanels.ts";
 import { localPlayer, playerName } from "./names.ts";
-import { playerColor, rgbCss } from "./painter.ts";
+import { playerColor, rgbCss } from "./playercolors.ts";
 import { type DivisionView, type FrontView, type HumanDetail, type HumanOrder, type MilitaryCatalog, type PlayerStats } from "./protocol.ts";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {

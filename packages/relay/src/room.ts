@@ -15,6 +15,7 @@ import {
   isSeed,
   isUint32,
   normalizePlayerName,
+  pickPlayerColor,
   type ClientMessage,
   type MapId,
   type Order,
@@ -55,6 +56,7 @@ interface Member {
   readonly token: string;
   readonly name: string;
   readonly host: boolean;
+  readonly color: number;
   /** Rang de 1 à n. Recalculé à chaque changement avant le lancement, figé ensuite. */
   id: number;
   /** Connexion actuelle ; `null` pour un joueur déconnecté après le lancement. */
@@ -179,7 +181,8 @@ export class Room {
     const hostAbsent = !this.#members.some((m) => m.host);
     if (!asHost && this.#members.length >= MAX_ONLINE_PLAYERS - (hostAbsent ? 1 : 0)) return [error(conn, "game_full")];
 
-    const member: Member = { token: asHost ? this.hostToken : this.#env.newToken(), name, host: asHost, id: 0, conn };
+    const color = pickPlayerColor(msg.color, this.#members.map((m) => m.color));
+    const member: Member = { token: asHost ? this.hostToken : this.#env.newToken(), name, host: asHost, color, id: 0, conn };
     if (asHost) this.#members.unshift(member);
     else this.#members.push(member);
     this.#byConn.set(conn, member);
@@ -275,7 +278,7 @@ export class Room {
         you: member.id,
         map: this.#map,
         seed: this.#seed,
-        players: this.#members.map((m) => ({ id: m.id, name: m.name })),
+        players: this.#members.map((m) => ({ id: m.id, name: m.name, color: m.color })),
       },
     };
   }
@@ -286,7 +289,7 @@ export class Room {
 
   /** L'état de la salle à chaque joueur connecté, avec son propre `you`. */
   #broadcastRoom(): Outgoing[] {
-    const players: RoomPlayer[] = this.#members.map((m) => ({ id: m.id, name: m.name, host: m.host }));
+    const players: RoomPlayer[] = this.#members.map((m) => ({ id: m.id, name: m.name, host: m.host, color: m.color }));
     const out: Outgoing[] = [];
     for (const m of this.#members) {
       if (m.conn === null) continue;
@@ -307,7 +310,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
   switch (m.type) {
     case "join":
       if (m.token !== undefined && typeof m.token !== "string") return null;
-      return { type: "join", name: m.name as string, ...(m.token !== undefined ? { token: m.token as string } : {}) };
+      return { type: "join", name: m.name as string, ...(m.token !== undefined ? { token: m.token as string } : {}), ...(m.color !== undefined ? { color: m.color as number } : {}) };
     case "set_map":
       return { type: "set_map", map: m.map as MapId | undefined, seed: m.seed as number | "random" | undefined };
     case "start":

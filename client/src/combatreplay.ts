@@ -15,7 +15,7 @@
 
 import { compactInt } from "./format.ts";
 import type { Stats } from "./frontstats.ts";
-import { icon32Path } from "./icons.ts";
+import { unitIconUrl } from "./uniticons.ts";
 import { playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
@@ -220,7 +220,7 @@ export class CombatReplay {
       body.append(bar, stats);
       const dmg = el("div", "cr-dmg");
       root.append(dmg, stack, body);
-      return { units, variant, root, stack, icon: info === undefined ? "" : `icons/${icon32Path(info.icon)}`, name: info === undefined ? "" : unitName(info.id), fill, dmg, soft, hard };
+      return { units, variant, root, stack, icon: info === undefined ? "" : unitIconUrl(info.icon, u.owner), name: info === undefined ? "" : unitName(info.id), fill, dmg, soft, hard };
     };
 
     // Cartes : une par type, par camp et par état (en ligne, renforts en retrait, en fuite), créées à la première

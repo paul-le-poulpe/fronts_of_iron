@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_MAP, DEFAULT_SEED, MAX_ONLINE_PLAYERS, ROOM_ERROR_TEXT, type ServerMessage } from "@fronts-of-iron/shared";
+import { DEFAULT_MAP, DEFAULT_SEED, MAX_ONLINE_PLAYERS, PLAYER_COLOR_COUNT, ROOM_ERROR_TEXT, type ServerMessage } from "@fronts-of-iron/shared";
 
 import { Room, type Outgoing, type RoomEnv } from "../src/index.ts";
 
@@ -54,7 +54,7 @@ describe("salle d'attente : arrivée", () => {
     assert.deepEqual(last(out, "h"), {
       type: "room",
       you: 1,
-      players: [{ id: 1, name: "Marc", host: true }],
+      players: [{ id: 1, name: "Marc", host: true, color: 0 }],
       map: DEFAULT_MAP,
       seed: DEFAULT_SEED,
     });
@@ -262,6 +262,58 @@ describe("salle d'attente : départ d'un joueur avant le lancement", () => {
   });
 });
 
+describe("couleur des joueurs", () => {
+  /** Couleurs de la salle d'après le dernier message reçu par `conn`. */
+  function colors(out: Outgoing[], conn: string): number[] {
+    const m = last(out, conn);
+    assert.equal(m.type, "room");
+    return (m as Extract<ServerMessage, { type: "room" }>).players.map((p) => p.color);
+  }
+
+  it("un joueur reçoit la couleur demandée si elle est libre", () => {
+    const room = hostedRoom();
+    assert.deepEqual(colors(room.handle("a", { type: "join", name: "Léa", color: 7 }), "a"), [0, 7]);
+  });
+
+  it("une couleur prise est remplacée par la première libre, le premier arrivé garde la sienne", () => {
+    const room = hostedRoom();
+    assert.deepEqual(colors(room.handle("a", { type: "join", name: "Léa", color: 0 }), "a"), [0, 1]);
+  });
+
+  it("une couleur invalide vaut une absence de choix", () => {
+    for (const color of [-1, 20, 1.5, "3"]) {
+      const other = new Room(makeEnv());
+      other.handle("h", { type: "join", name: "Marc", token: other.hostToken });
+      assert.deepEqual(colors(other.handle("a", { type: "join", name: "Léa", color }), "a"), [0, 1]);
+    }
+  });
+
+  it("la couleur d'un joueur parti redevient libre", () => {
+    const room = hostedRoom();
+    room.handle("a", { type: "join", name: "Léa", color: 5 });
+    room.disconnect("a");
+    assert.deepEqual(colors(room.handle("b", { type: "join", name: "Sam", color: 5 }), "b"), [0, 5]);
+  });
+
+  it("la reconnexion garde la couleur et ignore celle demandée", () => {
+    const room = hostedRoom();
+    const token = tokenOf(room.handle("a", { type: "join", name: "Léa", color: 5 }), "a");
+    room.handle("h", { type: "start" });
+    room.disconnect("a");
+    const back = room.handle("a2", { type: "join", name: "Léa", token, color: 9 });
+    const start = to(back, "a2")[0]!;
+    assert.equal(start.type, "start");
+    assert.deepEqual((start as Extract<ServerMessage, { type: "start" }>).players.map((p) => p.color), [0, 5]);
+  });
+
+  it("au-delà du nombre de couleurs, les doublons sont permis", () => {
+    const room = hostedRoom();
+    for (let i = 1; i < PLAYER_COLOR_COUNT; i++) room.handle(`c${i}`, { type: "join", name: `J${i}` });
+    const out = room.handle("x", { type: "join", name: "Léa", color: 4 });
+    assert.equal(colors(out, "x")[PLAYER_COLOR_COUNT], 4);
+  });
+});
+
 describe("lancement", () => {
   /** Hôte, puis Léa et Sam ; Léa part ; Noé arrive. Ids au lancement : Marc 1, Sam 2, Noé 3. */
   function launched() {
@@ -275,7 +327,7 @@ describe("lancement", () => {
     return { room, out, samToken: tokenOf(sam, "b"), noeToken: tokenOf(noe, "c") };
   }
 
-  const PLAYERS = [{ id: 1, name: "Marc" }, { id: 2, name: "Sam" }, { id: 3, name: "Noé" }];
+  const PLAYERS = [{ id: 1, name: "Marc", color: 0 }, { id: 2, name: "Sam", color: 2 }, { id: 3, name: "Noé", color: 1 }];
 
   it("envoie à chacun le message de départ : graine, carte, joueurs 1..n, identifiant du destinataire", () => {
     const { room, out } = launched();
@@ -332,7 +384,7 @@ describe("lancement", () => {
   it("l'hôte peut lancer seul", () => {
     const room = hostedRoom();
     const out = room.handle("h", { type: "start" });
-    assert.deepEqual(last(out, "h"), { type: "start", you: 1, map: "test", seed: DEFAULT_SEED, players: [{ id: 1, name: "Marc" }] });
+    assert.deepEqual(last(out, "h"), { type: "start", you: 1, map: "test", seed: DEFAULT_SEED, players: [{ id: 1, name: "Marc", color: 0 }] });
   });
 });
 

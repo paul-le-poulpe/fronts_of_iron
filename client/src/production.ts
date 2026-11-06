@@ -13,8 +13,9 @@
 import "./production.css";
 import { onPress } from "./burst.ts";
 import { icon32Path } from "./icons.ts";
+import { unitIconUrl } from "./uniticons.ts";
 import { textPanel, typePanel } from "./infopanels.ts";
-import { activityName, productName, productSymbol, unitName } from "./names.ts";
+import { activityName, localPlayer, productName, productSymbol, unitName } from "./names.ts";
 import type { ActivityCatalog, ActivityInfo, ActivityView, HumanDetail, HumanOrder, MilitaryCatalog, PlayerStats } from "./protocol.ts";
 import { dec, num } from "./format.ts";
 import { RESOURCE_LEGEND } from "./render.ts";
@@ -75,8 +76,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 
 /** Image de `public/icons/<path>`. */
 function img(path: string, className: string, alt = ""): HTMLImageElement {
+  return imgUrl(`icons/${path}`, className, alt);
+}
+
+function imgUrl(url: string, className: string, alt: string): HTMLImageElement {
   const i = el("img", className);
-  i.src = `icons/${path}`;
+  i.src = url;
   i.alt = alt;
   i.draggable = false;
   return i;
@@ -318,7 +323,7 @@ export class ProductionPanel {
   private productIcon(info: ActivityInfo): HTMLElement | null {
     if (info.division !== null) {
       const t = this.military.divisions.find((x) => x.id === info.division);
-      if (t !== undefined) return img(icon32Path(t.icon), "pb-sym", unitName(t.id));
+      if (t !== undefined) return imgUrl(unitIconUrl(t.icon, localPlayer()), "pb-sym", unitName(t.id));
     }
     if (info.good !== null) return this.machineIcon(info.good, "pb-sym");
     return null;
@@ -327,7 +332,7 @@ export class ProductionPanel {
   /** Icône de 16 × 16 du produit d'une activité : le fichier 16 × 16 quand il existe, sinon le 32 × 32 réduit. */
   private smallIcon(info: ActivityInfo): HTMLElement {
     const type = this.military.divisions.find((t) => t.id === info.division);
-    if (type !== undefined) return img(type.icon, "pp-ic", unitName(type.id));
+    if (type !== undefined) return imgUrl(unitIconUrl(type.icon, localPlayer(), 16), "pp-ic", unitName(type.id));
     return info.good !== null ? this.machineIcon(info.good, "pp-ic") : el("span", "pp-ic");
   }
 

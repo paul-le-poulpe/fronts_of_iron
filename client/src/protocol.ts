@@ -39,6 +39,8 @@ export type ToWorker =
       readonly mapSeed: number;
       /** Nombre de bots, 1 à 7. */
       readonly bots: number;
+      /** Couleur demandée par le joueur (`PLAYER_COLORS`). */
+      readonly color: number;
       /** Durée d'un tour en ms ; 100 par défaut. Outil de développement (paramètre `?step=` de l'adresse). */
       readonly stepMs?: number;
       /** Partie de test (développement seulement) : scénario de `TEST_SCENARIOS` ; un bot, économie gelée, divisions déjà placées. */
@@ -76,6 +78,8 @@ export interface InitMessage {
   readonly you: number;
   /** Nom de chaque joueur, `playerNames[id - 1]` : « Vous » et « Bot n » en solo, les noms du message de départ en ligne. */
   readonly playerNames: readonly string[];
+  /** Couleur de chaque joueur, `playerColors[id - 1]` : indice dans `PLAYER_COLORS`. */
+  readonly playerColors: readonly number[];
   readonly expansionRadius: number;
   readonly controlRadius: number;
   readonly stepMs: number;

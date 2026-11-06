@@ -346,7 +346,7 @@ describe("partie Cloudflare : WebSocket", () => {
     host.send({ type: "join", name: "Marc", token: hostToken });
     await settle();
     assert.equal(host.last("welcome").token, hostToken);
-    assert.deepEqual(host.last("room"), { type: "room", you: 1, players: [{ id: 1, name: "Marc", host: true }], map: "test", seed: 12345 });
+    assert.deepEqual(host.last("room"), { type: "room", you: 1, players: [{ id: 1, name: "Marc", host: true, color: 0 }], map: "test", seed: 12345 });
     assert.deepEqual(await list(env), [
       { id, name: "Soirée du jeudi", hostName: "Marc", mode: "cloudflare", address: `/api/games/${id}/ws`, map: "test", seed: 12345, players: 1, maxPlayers: 100, state: "waiting" },
     ]);
@@ -388,7 +388,7 @@ describe("partie Cloudflare : WebSocket", () => {
     // Lancement : message de départ à chacun, état « started » listé tout de suite.
     host.send({ type: "start" });
     await settle();
-    const players = [{ id: 1, name: "Marc" }, { id: 2, name: "Sam" }];
+    const players = [{ id: 1, name: "Marc", color: 0 }, { id: 2, name: "Sam", color: 2 }];
     assert.deepEqual(host.last("start"), { type: "start", you: 1, map: "test", seed: 777, players });
     assert.deepEqual(sam.last("start"), { type: "start", you: 2, map: "test", seed: 777, players });
     assert.equal((await list(env))[0]!.state, "started");

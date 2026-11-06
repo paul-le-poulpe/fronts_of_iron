@@ -42,7 +42,7 @@ Depuis la racine du dépôt, après `npm install` :
 | Fichier (`client/`) | Rôle |
 | --- | --- |
 | `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau de debug, panneau de production |
-| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
+| `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo, couleur du joueur), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
 | `src/main.ts` | page : écran de départ, panneau, barre (villes, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) ; `hideTip` |
@@ -54,6 +54,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
 | `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, mode placement |
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
+| `src/playercolors.ts` | liste des couleurs des joueurs, variantes de carte et tons d'unité (09-Couleurs §2, §3 ; sans DOM) |
+| `src/uniticons.ts` | icônes d'unités aux couleurs du joueur : lecture des PNG de `units-generated/`, remplacement, cache (09-Couleurs §4) |
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
@@ -80,7 +82,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `test/online.test.ts` | tests sous Node de `online.ts` : adresse du WebSocket, nom et jetons gardés (stockage qui lève compris), liste du lobby |
 | `test/online-game.test.ts` | tests sous Node de `OnlineGame` branché sur un vrai relais en mémoire : même état et mêmes hashes chez trois clients, rejeu d'une reprise (un seul `tick`), désynchronisation, pause, connexion perdue |
 | `vite.config.ts` | `server.proxy` pour `/api` (`ws: true`), Worker au format module |
-| `public/icons/` | icônes provisoires (00-Game §11), servies telles quelles |
+| `public/icons/` | icônes provisoires (00-Game §11), servies telles quelles ; `units-generated/` : copies générées des icônes d'unités (09-Couleurs §4) |
+| `scripts/unit-icons.ts` | génère `public/icons/units-generated/` (`npm run icons:units -w client`) |
 
 Le moteur est importé par `@fronts-of-iron/engine` (workspace npm ; il exporte
 `src/index.ts`). Seul le Worker l'importe pour calculer ; la page n'en lit que
@@ -156,7 +159,7 @@ par le menu de diplomatie. Les villes existent avant le premier tour, alors que 
 
 Page → Worker (`ToWorker`) :
 
-- `start { mapSeed, bots, stepMs? }` (solo) : génère la carte (`generateTestMap`), crée
+- `start { mapSeed, bots, color, stepMs? }` (solo) : génère la carte (`generateTestMap`), crée
   la partie (`createGame`, graine = graine de la carte mélangée à une constante,
   `gameSeedFor`), les bots, lance l'horloge. Joueur 1 = l'humain, 2 à n = les bots.
 - `online { url, name, token }` (en ligne) : le Worker ouvre le WebSocket `url`
@@ -183,7 +186,7 @@ Worker → page (`FromWorker`) :
 - `init` (une fois) : largeur, hauteur, `terrain`, `resources`, `fertility`
   (copies, transférées : le moteur garde les siennes), nombre de joueurs, `you`
   (le joueur de la page : 1 en solo, celui du message de départ en ligne) et
-  `playerNames` (le nom de chaque joueur, indice `id - 1`), rayons
+  `playerNames` (le nom de chaque joueur, indice `id - 1`), `playerColors` (sa couleur, même indice, 09-Couleurs §5), rayons
   d'expansion et de contrôle, coût d'une ville, `stepMs`, et `catalog` (`ActivityCatalog`) : la
   configuration des activités que la page affiche (08 §2, §9) : pour chaque activité son identifiant, son genre
   (`idle`, `hurt`, `farming`, `fishing`, `mining`, `factory`, `barracks`), son parent, son coût de déblocage, ses

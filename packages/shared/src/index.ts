@@ -32,6 +32,24 @@ export const MAX_SEED = 0xffffffff;
 /** Graine d'une salle neuve (la valeur par défaut de l'écran de départ solo). Provisoire. */
 export const DEFAULT_SEED = 12345;
 
+/** Nombre de couleurs de joueur : indices de 0 à 19 de `PLAYER_COLORS` (client, 09-Couleurs §2). */
+export const PLAYER_COLOR_COUNT = 20;
+
+export function isPlayerColor(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) < PLAYER_COLOR_COUNT;
+}
+
+/**
+ * Couleur attribuée à un joueur qui demande `wanted`, quand `taken` sont déjà prises (09-Couleurs §5) : `wanted` si
+ * elle est valide et libre, sinon la première libre. Toutes prises : `wanted` si elle est valide, sinon le nombre de
+ * joueurs modulo le nombre de couleurs.
+ */
+export function pickPlayerColor(wanted: unknown, taken: readonly number[]): number {
+  if (isPlayerColor(wanted) && !taken.includes(wanted)) return wanted;
+  for (let color = 0; color < PLAYER_COLOR_COUNT; color++) if (!taken.includes(color)) return color;
+  return isPlayerColor(wanted) ? wanted : taken.length % PLAYER_COLOR_COUNT;
+}
+
 export function isMapId(value: unknown): value is MapId {
   return typeof value === "string" && (MAP_IDS as readonly string[]).includes(value);
 }
@@ -122,9 +140,9 @@ export interface TurnData {
 export type ClientMessage =
   /**
    * Entrer dans la salle. `token` : jeton d'hôte (première entrée de l'hôte) ou jeton de joueur reçu à
-   * l'arrivée (reconnexion). Avec un jeton connu, `name` est ignoré.
+   * l'arrivée (reconnexion). Avec un jeton connu, `name` et `color` sont ignorés. `color` : couleur demandée.
    */
-  | { readonly type: "join"; readonly name: string; readonly token?: string }
+  | { readonly type: "join"; readonly name: string; readonly token?: string; readonly color?: number }
   /** Hôte seulement, avant le lancement. `seed: "random"` : le relais tire une graine. */
   | { readonly type: "set_map"; readonly map?: MapId; readonly seed?: number | "random" }
   /** Hôte seulement : lance la partie. */
@@ -144,11 +162,14 @@ export interface RoomPlayer {
   readonly id: number;
   readonly name: string;
   readonly host: boolean;
+  /** Couleur attribuée par le relais (`pickPlayerColor`). */
+  readonly color: number;
 }
 
 export interface StartPlayer {
   readonly id: number;
   readonly name: string;
+  readonly color: number;
 }
 
 export type RoomErrorCode =

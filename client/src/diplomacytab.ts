@@ -6,7 +6,7 @@
 // Les lignes sont construites une fois par partie ; `update` n'écrit que des textes.
 
 import { localPlayer, playerName } from "./names.ts";
-import { playerColor, rgbCss } from "./painter.ts";
+import { playerColor, rgbCss } from "./playercolors.ts";
 import { type PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
 

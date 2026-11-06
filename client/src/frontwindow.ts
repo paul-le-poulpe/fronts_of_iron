@@ -16,7 +16,7 @@ import { coveragePercent, divisionsAt, opponentOf, statePercent, typeOf } from "
 import { Dnd, type DndHost, type ZoneView } from "./dnd.ts";
 import { attachPawnPanels, attachTextPanel, frontWidthIcon, hidePanel, motorIcon, textPanel } from "./infopanels.ts";
 import { STAT_KINDS, firstLineStats, formatStat, type FirstLineStats, type StatKind } from "./frontstats.ts";
-import { icon32Path } from "./icons.ts";
+import { unitIconUrl } from "./uniticons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals, type Totals } from "./stattotals.ts";
@@ -526,7 +526,8 @@ export class FrontWindow implements DndHost {
       const row = el("tr");
       const icon = el("td");
       const img = el("img", "fw-bt-icon");
-      img.src = `icons/${icon32Path(typeOf(m, (a[0] ?? d[0])!).icon)}`;
+      const shown = (a[0] ?? d[0])!;
+      img.src = unitIconUrl(typeOf(m, shown).icon, shown.owner);
       img.alt = "";
       icon.append(img);
       row.append(icon, cell(a), cell(d));
