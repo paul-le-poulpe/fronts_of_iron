@@ -366,7 +366,7 @@ bon : élites (nommées « forces spéciales » dans le client, décision de l'a
   apparaît aussitôt dans la réserve nationale, **en formation** pendant
   `formationTurns` tours **de son type** (§3.4 : 100 pour les réguliers, 200 pour
   les élites, 0 pour la milice, prête aussitôt). En formation, elle n'est pas
-  déplaçable (*provisoire*) ; son pion porte l'icône de statut horloge (§11.3).
+  déplaçable (*provisoire*) ; son pion porte la flèche de statut vers le haut (§11.3).
 - **Limite des élites** : `ELITE_TROOPS_RATIO` (`config/divisions.ts`, **10**, décision de l'auteur du
   1er novembre 2026 : une élite pour dix divisions d'infanterie) ;
   une division d'un type `elite` n'est créée que si
@@ -1034,22 +1034,27 @@ division » (30 octobre 2026) et la session de l'interface (31 octobre 2026).
   (bordure noire de 1 px, 2 px de remplissage), 32 px de haut, piste noire.
   Remplissage proportionnel à l'état, en pixels entiers (30 px possibles),
   couleur `hsl(état × 1,2 ; 75 % ; 45 %)` : rouge à 0 %, vert à 100 %.
-  **Pas de barre à 100 %** (division au complet). Seul mini-widget pour
-  l'instant.
+  **Pas de barre à 100 %** (division au complet). En formation, la même barre
+  montre la part écoulée de la formation au lieu de l'état : elle se remplit
+  jusqu'à ce que la division soit prête, avec les mêmes couleurs. Seul
+  mini-widget pour l'instant.
 - **Rang** : icône de 8 × 10 en taille réelle, coin **haut gauche**
   (`icons/ranks/icon-rank-N.png`, N de 0 à 7). Rang 0 : rien n'est dessiné sur
   le pion. **Le rang n'existe pas encore dans les règles** : en V1, toutes les
   divisions sont au rang 0, donc aucune icône de rang n'est dessinée sur un
   pion (§16).
 - **Statut** : icône de 16 × 16 en taille réelle, coin **bas gauche** :
-  `icons/miscellaneous/icon-clock.png` en formation ou en déplacement,
+  `icons/miscellaneous/icon-up-arrow.png` en formation,
+  `icon-down-arrow.png` pour une division en trop, qui va disparaître faute de
+  bâtiments (08 §6, prioritaire sur les autres statuts),
+  `icon-clock.png` en déplacement,
   `icon-white-flag.png` en fuite, `icon-shield.png` (bouclier) pour une
   division qui **défend une percée** (tranche de première ligne ou force de
   contre-attaque : elle reste dans sa colonne, et compte aussi dans la colonne
   « Défense » du petit tableau de la percée, §11.4). Le rang et le statut ne se
   chevauchent pas. La force qui perce n'a pas de pion dans les colonnes : elle
   est dans le petit tableau.
-- **Transparence** : avec une horloge ou un drapeau, l'icône du type est à
+- **Transparence** : en formation, en déplacement ou en fuite, l'icône du type est à
   **50 % d'opacité**. Rang, statut et barre gardent leurs couleurs. Le bouclier
   ne rend pas l'icône transparente : la division combat.
 - **Rectangle de sélection** : fond gris-bleu clair
@@ -1075,8 +1080,8 @@ de la fenêtre d'un front)
    Le rang et le statut d'un pion en dessous sont cachés ; seule sa barre
    dépasse, sur une piste opaque gris foncé.
    **Ordre** (de gauche, dessus, à droite, dessous) : les divisions les plus
-   prêtes au combat, puis les abîmées par état décroissant, puis celles à
-   horloge ou drapeau, elles aussi par état décroissant.
+   prêtes au combat, puis les abîmées par état décroissant, puis celles en
+   formation, en déplacement ou en fuite, elles aussi par état décroissant.
 3. **Trop de pions** (même à 8 px, ça ne rentre pas) : une seule icône par
    type, le pion du dessus de la pile (avec rang, statut et barre), et à côté
    le nombre de divisions du type (police de 20 px, blanc, contour noir de

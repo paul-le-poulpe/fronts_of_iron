@@ -9,7 +9,7 @@ export const POPULATION = {
   /** Nourriture consommée par un bonhomme : capacité = ceil(nourriture / foodPerPawn) (08 §3). */
   foodPerPawn: 1000,
   /** Tours avant qu'un bonhomme apparaisse dans Inactifs, quand la capacité dépasse la population (08 §6). À fixer. */
-  arrivalTurns: 50,
+  arrivalTurns: 100,
   /** Tours avant qu'un bonhomme en trop disparaisse (08 §6). À fixer. */
   leaveTurns: 100,
   /** `hurtHealTurnsTimesPop` : tours de soin d'un blessé = min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population)) (08 §8). */
@@ -18,12 +18,12 @@ export const POPULATION = {
   hurtHealMaxTurns: 4000,
 } as const;
 
-/** Délais des machines (tracteurs, bateaux de pêche, pompes), beaucoup plus courts que ceux des divisions (08 §6). À fixer. */
+/** Délais des machines (tracteurs, bateaux de pêche, pompes) : 10 s pour apparaître, 20 s pour disparaître (08 §6). */
 export const GOODS_TIMING = {
   /** Tours avant qu'une machine apparaisse dans sa ligne d'Inactifs. */
-  arrivalTurns: 10,
+  arrivalTurns: 100,
   /** Tours avant qu'une machine en trop disparaisse. */
-  leaveTurns: 20,
+  leaveTurns: 200,
 } as const;
 
 /** Nourriture (08 §3). */

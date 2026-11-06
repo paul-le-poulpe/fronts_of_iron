@@ -11,7 +11,7 @@
 
 import { movable } from "./divisions.ts";
 import { hidePanel, pawnPanel, showPawnPanel } from "./infopanels.ts";
-import { pawnOrder, renderZone, type ZoneLayout } from "./pawn.ts";
+import { FIRST_PAWN_CENTER, pawnOrder, renderZone, type ZoneLayout } from "./pawn.ts";
 import { type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 
 /** Ce que `Dnd` demande à la fenêtre ou à l'onglet qui le porte. */
@@ -318,6 +318,8 @@ export class Dnd {
     ghost.className = "dnd-ghost";
     ghost.style.width = "360px";
     document.body.append(ghost);
+    // Le fantôme remplace le curseur, comme les pions du panneau de production (`production.css`).
+    document.body.classList.add("pw-moving");
     const divisions = pawnOrder(
       ids.map((id) => this.host.division(id)!),
       this.military,
@@ -334,8 +336,8 @@ export class Dnd {
 
   private moveGhost(x: number, y: number): void {
     if (this.drag === null) return;
-    this.drag.ghost.style.left = `${x + 12}px`;
-    this.drag.ghost.style.top = `${y + 12}px`;
+    this.drag.ghost.style.left = `${x - FIRST_PAWN_CENTER.x}px`;
+    this.drag.ghost.style.top = `${y - FIRST_PAWN_CENTER.y}px`;
   }
 
   private dropTarget(x: number, y: number): HTMLElement | null {
@@ -385,6 +387,7 @@ export class Dnd {
     if (drag === null) return;
     drag.over?.classList.remove("dnd-over");
     drag.ghost.remove();
+    document.body.classList.remove("pw-moving");
     this.drag = null;
     window.removeEventListener("pointermove", this.onDragMove);
     window.removeEventListener("pointerup", this.onDragEnd);

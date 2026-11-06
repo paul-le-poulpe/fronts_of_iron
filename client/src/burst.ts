@@ -45,6 +45,16 @@ export function onPress(el: HTMLElement, action: (count: number) => void): void 
   });
 }
 
+/** Comme `onPress`, mais chaque appui vaut toujours `count`, quelles que soient les touches, et sans texte d'aide. */
+export function onFixedPress(el: HTMLElement, count: number, action: (count: number) => void): void {
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) action(count);
+  });
+  el.addEventListener("click", (e) => {
+    if (e.detail === 0) action(count);
+  });
+}
+
 // ---- texte d'aide sous la souris ----
 
 /** Écart entre le pointeur et le texte, en px. */

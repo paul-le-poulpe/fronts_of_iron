@@ -30,6 +30,7 @@ import {
   gameToResume,
   loadCreatePassword,
   loadPlayerColor,
+  loadCursorInfo,
   loadPlayerName,
   loadToken,
   mapName,
@@ -41,6 +42,7 @@ import {
   saveCreatePassword,
   saveToken,
   savePlayerColor,
+  saveCursorInfo,
   savePlayerName,
   wsUrl,
   type KeyValueStore,
@@ -107,6 +109,10 @@ export const soloColors = (): readonly number[] => soloList;
 
 /** Pseudo du formulaire de connexion, gardé par la page ; `null` si aucun pseudo valide n'est gardé. */
 export const soloName = (): string | null => normalizePlayerName(loadPlayerName(store));
+
+/** Bouton « Cursor info » : choix gardé par la page. */
+export const cursorInfoShown = (): boolean => loadCursorInfo(store);
+export const setCursorInfoShown = (shown: boolean): void => saveCursorInfo(store, shown);
 
 function soloColorRow(index: number): HTMLLabelElement {
   const row = el("label", "solo-color");

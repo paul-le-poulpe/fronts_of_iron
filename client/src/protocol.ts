@@ -9,6 +9,9 @@
  */
 export const HUMAN = 1;
 
+/** Marches de `DivisionView.formed` : une par pixel de remplissage de la barre d'un pion (`pawn.ts`). */
+export const FORMATION_STEPS = 30;
+
 /** Ordre du joueur local. Le champ `player` est écrit par le relais (règle 4 du CLAUDE.md), jamais par la page. */
 export type HumanOrder =
   | { readonly type: "found_city"; readonly tile: number }
@@ -401,13 +404,15 @@ export interface DivisionView {
   /** État, de 0 à `MilitaryCatalog.stateScale` (05-Fronts §3.3). */
   readonly state: number;
   /**
-   * `formation` (§3.5) et `moving` (§4.4) : icône horloge ; `fleeing` (§5.4) : drapeau blanc ; `ready` sinon.
+   * `formation` (§3.5) : flèche verte vers le haut ; `moving` (§4.4) : icône horloge ; `fleeing` (§5.4) : drapeau blanc ; `ready` sinon.
    * Une division de `ready` qui défend une percée (`breakthrough ≠ 0`, `line ≠ "box"`) porte l'icône bouclier.
    * Une division en déplacement est comptée à sa destination.
    */
   readonly status: "ready" | "formation" | "moving" | "fleeing";
   /** Tour où le statut prend fin (formation, déplacement, fuite) ; 0 pour `ready`. */
   readonly until: number;
+  /** Formation écoulée, de 0 à `FORMATION_STEPS` : remplit la barre du pion. 0 hors formation. */
+  readonly formed: number;
   /** Division en trop (08 §6) : tour où elle disparaît, 0 sinon. Son pion clignote jusque-là. */
   readonly leaveTick: number;
 }

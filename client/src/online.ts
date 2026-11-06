@@ -35,6 +35,7 @@ const NAME_KEY = "foi.playerName";
 const TOKENS_KEY = "foi.tokens";
 const PASSWORD_KEY = "foi.createPassword";
 const COLOR_KEY = "foi.playerColor";
+const CURSOR_INFO_KEY = "foi.cursorInfo";
 /** Nombre de jetons gardés ; les plus anciens sont oubliés. */
 const MAX_TOKENS = 20;
 
@@ -61,6 +62,15 @@ export function loadPlayerName(store: KeyValueStore | null): string {
 
 export function savePlayerName(store: KeyValueStore | null, name: string): void {
   write(store, NAME_KEY, name);
+}
+
+/** Encadré de la case survolée : affiché sans valeur gardée. */
+export function loadCursorInfo(store: KeyValueStore | null): boolean {
+  return read(store, CURSOR_INFO_KEY) !== "0";
+}
+
+export function saveCursorInfo(store: KeyValueStore | null, shown: boolean): void {
+  write(store, CURSOR_INFO_KEY, shown ? "1" : "0");
 }
 
 /** Couleur choisie sur l'accueil ; sans valeur valide, la première de la liste. */

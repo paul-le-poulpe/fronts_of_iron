@@ -186,15 +186,16 @@ bonhomme, une machine ou une division.
   chaque unité manquante. À la fin du compteur, l'unité apparaît.
   - Population : compteur `POPULATION.arrivalTurns`, le bonhomme arrive dans Inactifs.
     La limite est la capacité (§3).
-  - Machine : compteur `GOODS_TIMING.arrivalTurns`, beaucoup plus court que celui des
-    divisions, la machine arrive sur sa ligne d'Inactifs.
+  - Machine : compteur `GOODS_TIMING.arrivalTurns` (100 tours, 10 s), la machine arrive
+    sur sa ligne d'Inactifs.
   - Division : `productionTurns` de son type, sinon `DIVISION_TIMING.defaultProductionTurns`.
     Elle existe tout de suite dans la réserve nationale, en formation (`formedTick`),
     et elle apparaît dans la section FORMATION de l'onglet Forces. La **milice** est
     quasi instantanée, les autres types prennent plus de temps.
 - **Disparition** : si `existants > limite`, un compteur démarre pour chaque unité
-  en trop. Elle clignote jusqu'à la fin de son compteur, puis disparaît.
-  - Population : `POPULATION.leaveTurns`. Machine : `GOODS_TIMING.leaveTurns`.
+  en trop. Elle clignote jusqu'à la fin de son compteur, puis disparaît. Le pion d'une division
+  en trop porte aussi la flèche rouge vers le bas (05-Fronts §11.3).
+  - Population : `POPULATION.leaveTurns`. Machine : `GOODS_TIMING.leaveTurns` (200 tours, 20 s).
     Division : `DIVISION_TIMING.leaveTurns`.
 - Si l'écart se referme avant la fin d'un compteur, le compteur le plus récent est
   annulé (*provisoire*). Une unité à venir annulée n'apparaît pas, une unité en sursis
@@ -247,8 +248,10 @@ Une option du menu « Options » (§11), propre à chaque joueur, **allumée au 
 ### 7 ter. Production visée
 
 Les casernes et les usines de divisions se pensent en produit final. Deux flèches, vers le haut
-et vers le bas, tout à droite de la boîte, à droite de l'icône du produit, augmentent ou
-diminuent la production visée de 1, de 5 avec Maj, de 10 avec Ctrl. Le nombre de places suit
+et vers le bas, tout à droite de la boîte, à droite de l'icône du produit, marquées +1 et −1,
+augmentent ou diminuent la production visée de 1, de 5 avec Maj, de 10 avec Ctrl. Juste à leur
+droite, deux flèches marquées +5 et −5 changent la production visée de 5, sans touche et quelles
+que soient les touches enfoncées. Le nombre de places suit
 (`production visée × workersPerUnit`). Une place vide se remplit comme au §7, dans les deux modes,
 et les ouvriers en trop retournent dans Inactifs. La production visée ne passe pas sous 0.
 
@@ -359,7 +362,9 @@ pas. Une place de caserne ou d'usine reste, et se remplit de nouveau.
 
 Le panneau occupe environ 600 px. De haut en bas : un en-tête (population / capacité,
 fer produit et réservé), les boîtes ouvertes dans leur ordre, les boîtes supprimées, un
-séparateur en pointillé clair, puis les boîtes débloquées et les boîtes verrouillées.
+séparateur en pointillé clair, puis les boîtes débloquées et les boîtes verrouillées. À gauche de
+chaque pointillé : un petit cadenas ouvert et « Déverrouillé » au-dessus des lignes supprimées, un
+petit cadenas fermé et « Verrouillé » au-dessus des autres.
 
 **Menu « Options »** : un menu déroulant au survol, dans la barre des onglets, au-dessus du
 panneau de production. Il contient la taille des icônes de pions et l'auto-assignation (§7 bis). Deux carrés, de
@@ -370,7 +375,9 @@ menu « Options » clignote. À son ouverture, il cesse et un message à côté 
 
 **Une boîte** a un fond de couleur légère propre à son activité (par exemple vert très
 clair pour les agriculteurs) et une bordure marquée. Ligne : poignée de réorganisation,
-entrée, flèche vers la droite, zone des pions, flèche vers la droite, sortie.
+entrée, flèche vers la droite, zone des pions, flèche vers la droite, sortie. Le haut de
+l'entrée, des flèches et de la sortie est aligné sur le haut de la liste des pions, pas sur le
+milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 
 - L'**entrée** et la **sortie** sont dans la boîte, sur une petite tuile à fond clair, sans
   couleur de ressource. Sans entrée, la tuile et sa flèche disparaissent, et la colonne

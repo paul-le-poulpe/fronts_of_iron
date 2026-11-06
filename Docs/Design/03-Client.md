@@ -64,7 +64,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
 | `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, statistiques de combat et totaux des premières lignes, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
-| `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable` ; un élément `data-burst-blocked` n'envoie rien et, après un appui, l'aide ajoute son texte en rouge. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
+| `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable` ; un élément `data-burst-blocked` n'envoie rien et, après un appui, l'aide ajoute son texte en rouge. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les flèches ±1 du panneau de production (`change_production_target`). `onFixedPress(el, count, action)` : même envoi à l'appui, `count` fixe, sans touche ni texte d'aide (flèches ±5). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
 | `src/diplomacytab.ts` | onglet Diplomatie : détail de la troisième section de la barre d'informations ; liste des joueurs, clic → menu de diplomatie, survol → joueur mis en évidence sur la carte |
 | `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la deuxième section de la barre d'informations ; réserve nationale (formation, réserve), sections de front |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
@@ -482,7 +482,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     `style.css` ; mélange de 14 % dans le thème clair, 22 % dans le sombre, `html[data-theme]`). Une boîte est une grille de
     six colonnes : poignée `⋮⋮`, entrée, flèche →, colonne centrale, flèche →, sortie. Les colonnes d'entrée (64 px) et de
     sortie (76 px) ont une largeur fixe : elles sont alignées d'une boîte à l'autre ; sans entrée, la tuile et sa flèche
-    disparaissent et la colonne reste vide ;
+    disparaissent et la colonne reste vide. Grille de deux rangées : titre en haut de la colonne centrale, pions en dessous, et entrée, flèches et sortie dans la rangée des pions, alignées en haut (`.pb-center` est en `display: contents`) ;
   - **entrée et sortie** sont dans la boîte, sur une petite tuile à fond clair, sans couleur de ressource. Entrée : le fer
     réservé de l'usine ou de la caserne qui en prend (`ironUsed`, rouge quand le fer manque : unités servies
     < `floor(ouvriers / workersPerUnit)`). Sortie : `+n` et l'icône de population pour Agriculteurs et Pêcheurs (la nourriture
@@ -504,15 +504,17 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     de sa ligne d'Inactifs, puis de sa boîte ; **place vide** : case en pointillés, réglée par les flèches ;
   - **glisser des pions** (pointeur, comme `dnd.ts` pour les divisions du même type) : le survol met en surbrillance le pion sous la
     souris et tous les pions de même type (bonhomme ou machine d'un même bien) à sa droite dans la boîte, lignes du dessous
-    comprises (`groupOf`) ; un appui puis un déplacement de plus de 4 px commence le glisser (pion fantôme `×n` près de la
-    souris, pions source atténués) ; la boîte sous la souris est surlignée si elle accepte au moins un pion. Le relâchement
+    comprises (`groupOf`) ; un appui puis un déplacement de plus de 4 px commence le glisser (pion fantôme `×n` sous la
+    souris, curseur caché par `body.pw-moving`, pions source atténués) ; la boîte sous la souris est surlignée si elle accepte au moins un pion. Le relâchement
     envoie **un seul** `move_pawn { from, to, kind, good?, count }`. Les règles visibles évitent un ordre que le moteur refuserait
     (`dropCount`) : Blessés ne reçoit ni ne donne, une machine ne va que dans Inactifs ou la boîte qui la reçoit, une boîte à
     places (Agriculteurs, Pêcheurs, Mineurs) ne reçoit pas plus que ses places libres (le glisser est réduit à ce qui
     tient, rien s'il n'y a plus de place) ; les pions à venir, les places vides et les blessés ne se saisissent pas ;
-  - **réorganisation** : la poignée `⋮⋮` d'une boîte (glisser HTML5) la dépose sur une autre boîte et envoie
+  - **réorganisation** : la poignée `⋮⋮` d'une boîte (pointeur, copie `.pb-ghost` de la boîte dont le point saisi reste sous la souris, curseur caché par `body.pw-moving`) la dépose sur l'interstice le plus proche et envoie
     `set_activity_order { activity, position }` (indice de la boîte visée dans la liste des boîtes ouvertes ; Inactifs n'a pas de
     poignée et n'est pas une cible, 08 §2) ;
+  - **ligne sous la souris** : quand le panneau est reconstruit (`rebuild`), `scrollTop` de `#prod` est corrigé de l'écart de position de la ligne sous la souris (`data-line`), pour qu'elle reste au même endroit de l'écran si Inactifs ou une autre boîte change de hauteur. Limite : tout en haut du panneau, `scrollTop` ne passe pas sous 0, donc une boîte du dessus qui rétrécit fait encore monter la ligne ; tout en bas, de même si le contenu raccourcit ;
+  - **une erreur dans `ProductionPanel.update` coupe la fin de `onTick`** (`InfoBar.update`, diplomatie, notifications, résultats des ordres) : `refreshNumbers` ne lit que les `.pl[data-lock]`, car une boîte débloquée ou supprimée n'a pas de `data-lock` ;
   - **boîtes verrouillées**, sous un séparateur, très pâles : l'icône de ce qui est débloqué, le cadenas (`miscellaneous/icon-padlock-closed.png`), un
     petit trait, le symbole de la boîte parente (son produit, ou son bonhomme pour Agriculteurs, Pêcheurs et Mineurs), puis une
     barre de progression (« progression / coût » à gauche, nom de la boîte à droite) ; triées par progression décroissante (`lockedOrder`), le panneau défile vers le
@@ -706,7 +708,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   transmet à `FrontWindow.drop` (interface `DropWindow`, passée au constructeur), et `ForcesTab.dragging` appelle `FrontWindow.externalDrag` (classes `dragging ext` :
   les zones de dépose s'affichent, pas la zone de retour). Les sections sont
   reconstruites seulement si leur contenu change. La sélection y est simple (l'interrupteur « Sélection avancée » est dans la fenêtre d'un front).
-  Une division en formation montre l'horloge (statut `formation`, jusqu'à `formedTick`) ; une division en trop (`leaveTick`) clignote.
+  Une division en formation montre la flèche verte vers le haut (statut `formation`, jusqu'à `formedTick`) et sa barre se remplit (`DivisionView.formed`, 30 marches, calculé depuis `formedTick` et `productionTurns`) ; une division en trop (`leaveTick`) clignote et montre la flèche rouge vers le bas.
 - **Sélection et glisser-déposer** (`dnd.ts`, 05-Fronts §11.4) : une `ZoneView` regroupe les rangées d'une zone (une ligne d'un front, la
   réserve nationale) ; chaque rangée est un conteneur passé à `renderZone`, qui renvoie `groups` (ids par type, dans l'ordre de la pile) ; le pion
   sous la souris est lu dans l'événement (`.pz-pawn[data-id]`, le navigateur connaît l'ordre d'empilement des piles). Un redessin
@@ -716,7 +718,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   donne l'aperçu (du début du groupe jusqu'au pion), le clic prend la sélection et lance le glisser. Mode avancé : premier clic = `anchor`
   (rectangle sur la division), la souris dessine l'aperçu jusqu'au pion survolé dans la même zone (`range` : ordre de lecture des rangées de
   la zone), second clic = sélection figée ; un clic sur un pion sélectionné lance le glisser. Seules les divisions `ready` ou `fleeing` sont
-  prises (`movable`). Glisser : pion fantôme (`.dnd-ghost`, `renderZone` des divisions prises), cible = l'élément le plus proche portant
+  prises (`movable`). Glisser : pion fantôme (`.dnd-ghost`, `renderZone` des divisions prises) dont le premier pion est centré sous la souris, curseur caché par `body.pw-moving`, cible = l'élément le plus proche portant
   `data-drop` sous le pointeur (`dnd-over` : contour clair, choix de la page), `DndHost.drop` envoie les ordres ; Échap abandonne. Un glisser
   sans mouvement (moins de 4 px) ne dépose rien.
 - **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
@@ -796,7 +798,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   en bas à droite de la vue de la carte, à gauche du panneau de production quand il est
   ouvert (`right: calc(12px + var(--prod-offset))`), `pointer-events: none`. Coordonnées,
   terrain et altitude, fertilité, fer, aluminium, propriétaire, ville, écrits par
-  `showHover` (`main.ts`) ; affiché seulement quand la souris est sur une case.
+  `showHover` (`main.ts`) ; affiché seulement quand la souris est sur une case et que le
+  petit bouton « Cursor info » (`#cursor-info`, à droite de `#bar`, en dessous de l'encadré) est allumé. Le choix est gardé
+  par la page (`foi.cursorInfo`).
 - **Onglet Diplomatie** (`diplomacytab.ts`, sixième section de la barre d'informations, juste à droite de
   Forces) : bouton « Diplomatie » sans chiffre ni mini-barre ; détail : tableau des joueurs (couleur, nom,
   population, villes), le joueur local en gras. Les lignes sont construites une fois par partie et

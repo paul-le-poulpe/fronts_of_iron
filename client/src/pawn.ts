@@ -2,11 +2,11 @@
 // (Docs/Design/05-Fronts.md §11.3). Ce module ne choisit pas la sélection, ne gère ni le
 // glisser-déposer ni les panneaux de survol : il dessine ce qu'on lui donne et rend les
 // positions. Chaque pion porte `data-id` (identifiant de la division). Une division en trop
-// (`leaveTick`, 08 §6) clignote jusqu'à sa disparition.
+// (`leaveTick`, 08 §6) clignote jusqu'à sa disparition et porte la flèche rouge vers le bas.
 
 import "./pawn.css";
 import { defendsBreakthrough } from "./divisions.ts";
-import type { DivisionView, MilitaryCatalog } from "./protocol.ts";
+import { FORMATION_STEPS, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 import { unitIconUrl } from "./uniticons.ts";
 
 export interface ZoneOptions {
@@ -78,6 +78,8 @@ const ROW_H = SEL_HEIGHT + 2; // le rectangle ne touche pas le bord de la rangé
 const PAWN_Y = (ROW_H - PAWN) / 2;
 /** Marge à gauche et à droite : le rectangle de sélection dépasse du premier / dernier pion de 3 px. */
 const INSET = SEL_MARGIN + 1;
+/** Centre du premier pion d'une zone, en px depuis son coin : le glisser le pose sous la souris. */
+export const FIRST_PAWN_CENTER = { x: INSET + PAWN / 2, y: PAWN_Y + PAWN / 2 } as const;
 /** Largeur du rectangle élargi au survol, en multiple de la largeur de la zone. */
 const EXPAND = 1.5;
 
@@ -120,7 +122,13 @@ interface Run {
   line: number;
 }
 
-const widthOf = (d: DivisionView, scale: number): number => PAWN + (d.state < scale ? BAR_GAP + BAR_W : 0);
+/** Remplissage de la barre, de 0 à 1 : la formation écoulée, sinon l'état. Sans barre (division prête au complet) : `null`. */
+function barPart(d: DivisionView, scale: number): number | null {
+  if (d.status === "formation") return d.formed / FORMATION_STEPS;
+  return d.state < scale ? Math.max(0, d.state) / scale : null;
+}
+
+const widthOf = (d: DivisionView, scale: number): number => PAWN + (barPart(d, scale) !== null ? BAR_GAP + BAR_W : 0);
 
 const sum = (a: readonly number[]): number => {
   let s = 0;
@@ -169,17 +177,21 @@ function pawnHtml(p: Placed, scale: number, lifted: boolean, military: MilitaryC
     `<img class="pz-icon" src="${src}" alt="" draggable="false">`;
   const rank = rankOf(d);
   if (rank > 0) h += `<img class="pz-rank" src="icons/ranks/icon-rank-${rank}.png" alt="" draggable="false">`;
-  if (d.status === "formation" || d.status === "moving") {
+  if (d.leaveTick !== 0) {
+    h += `<img class="pz-status" src="icons/miscellaneous/icon-down-arrow.png" alt="" draggable="false">`;
+  } else if (d.status === "formation") {
+    h += `<img class="pz-status" src="icons/miscellaneous/icon-up-arrow.png" alt="" draggable="false">`;
+  } else if (d.status === "moving") {
     h += `<img class="pz-status" src="icons/miscellaneous/icon-clock.png" alt="" draggable="false">`;
   } else if (d.status === "fleeing") {
     h += `<img class="pz-status" src="icons/miscellaneous/icon-white-flag.png" alt="" draggable="false">`;
   } else if (defendsBreakthrough(d)) {
     h += `<img class="pz-status" src="icons/miscellaneous/icon-shield.png" alt="" draggable="false">`;
   }
-  if (d.state < scale) {
-    const state = Math.max(0, d.state);
-    const fill = Math.round((BAR_FILL * state) / scale);
-    const hue = Math.round((120 * state) / scale);
+  const part = barPart(d, scale);
+  if (part !== null) {
+    const fill = Math.round(BAR_FILL * part);
+    const hue = Math.round(120 * part);
     h += `<div class="pz-bar"><div class="pz-fill" style="height:${fill}px;background:hsl(${hue},75%,45%)"></div></div>`;
   }
   return h + "</div>";

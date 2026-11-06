@@ -598,7 +598,8 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   cultivables, décochée) et « Zones de front » (hachures rouges des fronts actifs,
   cochée ; `05-Fronts.md` §11.1). D'autres vues pourront s'y ajouter (relief, par
   exemple). Les informations de la case survolée sont dans un encadré en bas à
-  droite de la vue de la carte, affiché quand la souris est sur une case.
+  droite de la vue de la carte, affiché quand la souris est sur une case, si le
+  bouton « Cursor info » de la barre du bas est allumé.
   Pendant le mode « Créer une ville » (§3.3), une liste de vues est affichée
   d'office, même décochées (précision de l'auteur, 24 octobre 2026) : pour
   l'instant les trois premières (pas « Icônes d'usine »). C'est temporaire : à la sortie du mode, la carte revient

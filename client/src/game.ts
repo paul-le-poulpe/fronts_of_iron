@@ -67,6 +67,7 @@ import { isMapId, type MapId, type TurnData } from "@fronts-of-iron/shared";
 
 import {
   type DiplomacyView,
+  FORMATION_STEPS,
   type ActivityCatalog,
   type ActivityView,
   type CombatView,
@@ -230,8 +231,15 @@ export function divisionView(state: GameState, d: Division): DivisionView {
     state: stateOf(d),
     status,
     until: status === "formation" ? d.formedTick : status === "moving" ? d.arrivalTick : status === "fleeing" ? d.fleeUntilTick : 0,
+    formed: status === "formation" ? formedSteps(state, d) : 0,
     leaveTick: d.leaveTick,
   };
+}
+
+/** Part écoulée de la formation : elle a commencé `productionTurns` tours avant `formedTick`. */
+function formedSteps(state: GameState, d: Division): number {
+  const total = DIVISION_DATA[d.type]!.productionTurns;
+  return Math.max(0, Math.floor((FORMATION_STEPS * (total - (d.formedTick - (state.tick + 1)))) / total));
 }
 
 export const DEFAULT_STEP_MS = 100;

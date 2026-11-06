@@ -5,7 +5,7 @@
 import "./style.css";
 // Accueil et salle d'attente des parties en ligne ; le mode solo ci-dessous s'ouvre depuis l'accueil,
 // et une partie en ligne lancée par le relais est confiée à `startOnline` ci-dessous.
-import { setGameLauncher, showHome, soloColors, soloName } from "./lobby.ts";
+import { cursorInfoShown, setCursorInfoShown, setGameLauncher, showHome, soloColors, soloName } from "./lobby.ts";
 
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter } from "./painter.ts";
@@ -591,10 +591,19 @@ $("quit").addEventListener("click", () => {
 
 // ---- case survolée ----
 
+let cursorInfo = cursorInfoShown();
+$("cursor-info").setAttribute("aria-pressed", String(cursorInfo));
+$("cursor-info").addEventListener("click", () => {
+  cursorInfo = !cursorInfo;
+  setCursorInfoShown(cursorInfo);
+  $("cursor-info").setAttribute("aria-pressed", String(cursorInfo));
+  if (!cursorInfo) $("hover-box").hidden = true;
+});
+
 function showHover(tile: number): void {
   const m = session?.mirror;
   if (!m) return;
-  $("hover-box").hidden = tile < 0;
+  $("hover-box").hidden = tile < 0 || !cursorInfo;
   if (tile >= 0) {
     const w = m.width;
     const b = m.terrain[tile]!;

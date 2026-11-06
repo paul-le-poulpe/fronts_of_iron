@@ -11,7 +11,7 @@
 // ordre qui vient de partir retient la reconstruction jusqu'à ce que l'état change (`holdKey`) ou `HOLD_MS` passe.
 
 import "./production.css";
-import { onPress } from "./burst.ts";
+import { BURST_SHIFT, onFixedPress, onPress } from "./burst.ts";
 import { icon32Path } from "./icons.ts";
 import { unitIconUrl } from "./uniticons.ts";
 import { textPanel, typePanel } from "./infopanels.ts";
@@ -67,6 +67,18 @@ interface PawnDrag {
   over: HTMLElement | null;
 }
 
+/** Réorganisation d'une boîte par sa poignée (08 §2). `ghost` est `null` tant que la souris n'a pas bougé de `DRAG_PX`. */
+interface BoxDrag {
+  readonly act: string;
+  readonly box: HTMLElement;
+  readonly x: number;
+  readonly y: number;
+  /** Point saisi, en px depuis le coin de la boîte : il reste sous la souris. */
+  readonly grabX: number;
+  readonly grabY: number;
+  ghost: HTMLElement | null;
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -108,11 +120,13 @@ export class ProductionPanel {
   private holdKey = "";
   private holdUntil = 0;
   private pawnDrag: PawnDrag | null = null;
-  private boxDrag: string | null = null;
+  private boxDrag: BoxDrag | null = null;
   /** Trait de l'interstice visé pendant la réorganisation des boîtes. */
   private readonly gapMark = el("div", "pb-gap");
   /** Interstice visé : la boîte glissée ira avant la boîte de cet indice ; -1 : aucun. */
   private gap = -1;
+  /** Dernière position de la souris sur le panneau, `null` hors du panneau. */
+  private pointer: { readonly x: number; readonly y: number } | null = null;
   private selected: HTMLElement[] = [];
   /** Cases qui montrent la croix transparente : ce qu'un clic changerait (08 §7 bis). */
   private previewed: HTMLElement[] = [];
@@ -173,8 +187,9 @@ export class ProductionPanel {
 
     this.list = el("div", "pp-list");
     root.append(summary, this.list);
+    root.addEventListener("pointermove", (e) => (this.pointer = { x: e.clientX, y: e.clientY }));
+    root.addEventListener("pointerleave", () => (this.pointer = null));
     this.installPawnDrag();
-    this.installBoxDrop();
   }
 
   /** Option du menu « Options » (08 §11) : deux carrés, 16 × 16 et 32 × 32, le sélectionné en bleu, puis « Icônes ». */
@@ -283,8 +298,28 @@ export class ProductionPanel {
     const gone = others.filter((a) => this.lockState(a, d) === "gone").map((a) => this.lockedBox(a, d));
     const locked = others.filter((a) => this.lockState(a, d) !== "gone").map((a) => this.lockedBox(a, d));
     // Un séparateur en pointillé clair entre chaque groupe qui existe : ouvertes, supprimées, pas encore ouvertes.
-    const parts = [gone, locked].filter((p) => p.length > 0).flatMap((p) => [el("div", "pp-sep"), ...p]);
+    const separator = (icon: string, text: string): HTMLElement => {
+      const sep = el("div", "pp-sep");
+      sep.append(img(icon, "pp-ic"), el("span", undefined, text), el("i", "pp-sep-line"));
+      return sep;
+    };
+    const parts = [
+      ...(gone.length > 0 ? [separator("miscellaneous/icon-padlock-open.png", "Déverrouillé"), ...gone] : []),
+      ...(locked.length > 0 ? [separator("miscellaneous/icon-padlock-closed.png", "Verrouillé"), ...locked] : []),
+    ];
+    const anchor = this.lineUnderPointer();
     this.list.replaceChildren(...boxes, ...parts);
+    // Une boîte au-dessus a pu changer de hauteur : le défilement compense pour que la ligne sous la souris ne bouge pas.
+    const line = anchor === null ? null : this.list.querySelector<HTMLElement>(`[data-line="${anchor.id}"]`);
+    if (anchor !== null && line !== null) this.root.scrollTop += line.getBoundingClientRect().top - anchor.top;
+  }
+
+  /** La ligne sous la souris et sa position à l'écran, ou `null`. */
+  private lineUnderPointer(): { readonly id: string; readonly top: number } | null {
+    if (this.pointer === null) return null;
+    const line = document.elementFromPoint(this.pointer.x, this.pointer.y)?.closest<HTMLElement>("[data-line]") ?? null;
+    if (line === null || !this.list.contains(line)) return null;
+    return { id: line.dataset["line"]!, top: line.getBoundingClientRect().top };
   }
 
   /**
@@ -375,6 +410,7 @@ export class ProductionPanel {
     const kind = info.kind;
     const box = el("section", "pb");
     box.dataset["act"] = a.id;
+    box.dataset["line"] = a.id;
     box.dataset["kind"] = kind;
     box.dataset["tuto"] = "prod-box";
 
@@ -382,14 +418,13 @@ export class ProductionPanel {
     const grip = el("span", "pb-grip");
     if (a.id !== "idle") {
       grip.textContent = "⋮⋮";
-      grip.draggable = true;
       grip.title = "Glisser pour changer la priorité de la ligne.";
       this.bindGrip(grip, box, a.id);
     }
 
     // Entrée : fer des usines et casernes qui en prennent (08 §4). Sans entrée, la colonne reste vide.
     const input = el("div", "pb-in");
-    const arrowIn = el("span", "pb-arrow");
+    const arrowIn = el("span", "pb-arrow pb-arrow-in");
     if (info.ironPerUnit > 0) {
       const tile = el("div", "pb-tile");
       tile.dataset["in"] = a.id;
@@ -420,7 +455,7 @@ export class ProductionPanel {
 
     // Sortie : capacité, fer, ou « existants / limite » (08 §11).
     const output = el("div", "pb-out");
-    const arrowOut = el("span", "pb-arrow");
+    const arrowOut = el("span", "pb-arrow pb-arrow-out");
     if (kind !== "idle" && kind !== "hurt") {
       const tile = el("div", "pb-tile");
       tile.dataset["out"] = a.id;
@@ -434,7 +469,7 @@ export class ProductionPanel {
     }
 
     // Croix tout à droite : supprime la ligne (08 §9). Agriculteurs, Pêcheurs, Mineurs, Inactifs et Blessés n'en ont pas.
-    const close = el("span");
+    const close = el("span", "pb-end");
     if (kind === "factory" || kind === "barracks") {
       const b = el("button", "pb-close");
       b.type = "button";
@@ -452,16 +487,22 @@ export class ProductionPanel {
     return box;
   }
 
-  /** Flèches de la production visée (08 §7 ter) : ±1, ±5 avec Maj, ±10 avec Ctrl (burst.ts). */
+  /** Flèches de la production visée (08 §7 ter) : ±1, ±5 avec Maj, ±10 avec Ctrl (burst.ts) ; à côté, ±5 sans touche. */
   private targetArrows(activity: string): HTMLElement {
     const box = el("div", "pb-steps");
-    for (const [shape, sign, title] of [["pb-step-up", 1, "Augmenter la production visée"], ["pb-step-down", -1, "Diminuer la production visée"]] as const) {
-      const b = el("button", `pb-step ${shape}`);
-      b.type = "button";
-      b.setAttribute("aria-label", title);
-      b.title = `${title} (Maj : 5, Ctrl : 10)`;
-      onPress(b, (n) => this.order({ type: "change_production_target", activity, delta: sign * n }));
-      box.append(b);
+    for (const [shape, sign, mark, title] of [["pb-step-up", 1, "+", "Augmenter la production visée"], ["pb-step-down", -1, "−", "Diminuer la production visée"]] as const) {
+      const change = (n: number): void => this.order({ type: "change_production_target", activity, delta: sign * n });
+      const one = el("button", `pb-step ${shape}`, `${mark}1`);
+      one.type = "button";
+      one.setAttribute("aria-label", title);
+      one.title = `${title} (Maj : 5, Ctrl : 10)`;
+      onPress(one, change);
+      const five = el("button", `pb-step ${shape}`, `${mark}5`);
+      five.type = "button";
+      five.setAttribute("aria-label", `${title} de 5`);
+      five.title = `${title} de 5`;
+      onFixedPress(five, BURST_SHIFT, change);
+      box.append(one, five);
     }
     return box;
   }
@@ -528,6 +569,7 @@ export class ProductionPanel {
   private lockedBox(info: ActivityInfo, d: HumanDetail): HTMLElement {
     const state = this.lockState(info, d);
     const row = el("section", `pl pl-${state}`);
+    row.dataset["line"] = info.id;
     if (state !== "locked") {
       // Boîte débloquée, ou supprimée : un clic la met dans la liste ; la première fois, avec son panneau d'information (08 §9).
       const button = el("span", "pl-name pl-open", activityName(info.id));
@@ -756,7 +798,8 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` 
       const bar = c.querySelector<HTMLElement>(".pw-bar");
       if (bar) bar.style.width = `${Math.max(0, Math.min(100, Math.round(((total - (end - d.tick)) * 100) / total)))}%`;
     }
-    for (const row of this.list.querySelectorAll<HTMLElement>(".pl")) {
+    // `data-lock` : seulement les boîtes verrouillées ; les boîtes débloquées ou supprimées n'ont pas de barre à écrire.
+    for (const row of this.list.querySelectorAll<HTMLElement>(".pl[data-lock]")) {
       const c = this.catalog.activities[Number(row.dataset["lock"])]!;
       this.writeLocked(row, c, d.unlock[c.index]!);
     }
@@ -949,22 +992,67 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` 
   // ---- réorganisation des boîtes par la poignée (08 §2) ----
 
   private bindGrip(grip: HTMLElement, box: HTMLElement, act: string): void {
-    grip.addEventListener("dragstart", (e) => {
-      this.boxDrag = act;
-      e.dataTransfer?.setData("text/plain", "fronts-of-iron");
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setDragImage(box, 10, 10);
-      }
-      box.classList.add("pb-dragging");
-    });
-    grip.addEventListener("dragend", () => {
-      this.boxDrag = null;
-      box.classList.remove("pb-dragging");
-      this.hideGap();
-      this.refresh();
+    grip.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || this.boxDrag !== null) return;
+      e.preventDefault();
+      const r = box.getBoundingClientRect();
+      this.boxDrag = { act, box, x: e.clientX, y: e.clientY, grabX: e.clientX - r.left, grabY: e.clientY - r.top, ghost: null };
+      window.addEventListener("pointermove", this.onBoxMove);
+      window.addEventListener("pointerup", this.onBoxUp);
+      window.addEventListener("pointercancel", this.endBoxDrag);
     });
   }
+
+  private readonly onBoxMove = (e: PointerEvent): void => {
+    const drag = this.boxDrag;
+    if (drag === null) return;
+    if (drag.ghost === null) {
+      if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) <= DRAG_PX) return;
+      drag.ghost = el("div", "pb-ghost");
+      drag.ghost.classList.toggle("pp-big", this.root.classList.contains("pp-big"));
+      drag.ghost.style.width = `${drag.box.offsetWidth}px`;
+      drag.ghost.append(drag.box.cloneNode(true));
+      document.body.append(drag.ghost);
+      document.body.classList.add("pw-moving");
+      drag.box.classList.add("pb-dragging");
+    }
+    drag.ghost.style.left = `${e.clientX - drag.grabX}px`;
+    drag.ghost.style.top = `${e.clientY - drag.grabY}px`;
+    const r = this.list.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+      this.hideGap();
+      return;
+    }
+    // Le trait suit l'interstice le plus proche, même au-dessus d'une boîte.
+    const { gap, at } = this.nearestGap(e.clientY);
+    this.gap = gap;
+    this.gapMark.style.top = `${at - r.top - 2}px`;
+    this.list.append(this.gapMark);
+  };
+
+  private readonly onBoxUp = (): void => {
+    const drag = this.boxDrag;
+    if (drag === null) return;
+    const gap = this.gap;
+    const from = [...this.list.querySelectorAll<HTMLElement>(".pb")].findIndex((b) => b === drag.box);
+    this.endBoxDrag();
+    // `position` est l'indice final : la boîte glissée quitte d'abord sa place. Les deux interstices qui la bordent ne la déplacent pas.
+    if (gap >= 0 && gap !== from && gap !== from + 1) this.order({ type: "set_activity_order", activity: drag.act, position: gap > from ? gap - 1 : gap });
+  };
+
+  private readonly endBoxDrag = (): void => {
+    const drag = this.boxDrag;
+    if (drag === null) return;
+    drag.ghost?.remove();
+    document.body.classList.remove("pw-moving");
+    drag.box.classList.remove("pb-dragging");
+    this.boxDrag = null;
+    this.hideGap();
+    window.removeEventListener("pointermove", this.onBoxMove);
+    window.removeEventListener("pointerup", this.onBoxUp);
+    window.removeEventListener("pointercancel", this.endBoxDrag);
+    this.refresh();
+  };
 
   /** L'interstice le plus proche de `y` (08 §11) : `gap` est l'indice de la boîte qui suit, jamais avant Inactifs. */
   private nearestGap(y: number): { gap: number; at: number } {
@@ -980,32 +1068,5 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` 
   private hideGap(): void {
     this.gap = -1;
     this.gapMark.remove();
-  }
-
-  /** Dépose sur tout le panneau : le trait suit l'interstice le plus proche, même au-dessus d'une boîte. */
-  private installBoxDrop(): void {
-    this.list.addEventListener("dragover", (e) => {
-      if (this.boxDrag === null) return;
-      e.preventDefault();
-      const { gap, at } = this.nearestGap(e.clientY);
-      this.gap = gap;
-      this.gapMark.style.top = `${at - this.list.getBoundingClientRect().top - 2}px`;
-      this.list.append(this.gapMark);
-    });
-    this.list.addEventListener("dragleave", (e) => {
-      if (!this.list.contains(e.relatedTarget as Node | null)) this.hideGap();
-    });
-    this.list.addEventListener("drop", (e) => {
-      if (this.boxDrag === null || this.gap < 0) return;
-      e.preventDefault();
-      const boxes = [...this.list.querySelectorAll<HTMLElement>(".pb")];
-      const from = boxes.findIndex((b) => b.dataset["act"] === this.boxDrag);
-      const gap = this.gap;
-      const dragged = this.boxDrag;
-      this.boxDrag = null;
-      this.hideGap();
-      // `position` est l'indice final : la boîte glissée quitte d'abord sa place. Les deux interstices qui la bordent ne la déplacent pas.
-      if (gap !== from && gap !== from + 1) this.order({ type: "set_activity_order", activity: dragged, position: gap > from ? gap - 1 : gap });
-    });
   }
 }

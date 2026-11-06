@@ -2,7 +2,7 @@
 // nationale en deux sections, formation puis réserve (de vrais pions, un groupe par type), puis une section par front
 // (fronts en guerre active, puis en paix, du plus long au plus court : statut diplomatique, et par niche une icône et
 // le nombre de divisions). Les divisions ne se créent ni ne se suppriment par ordre : elles suivent les limites des
-// usines et des casernes (08 §6) ; une division en formation montre l'horloge, une division en trop clignote.
+// usines et des casernes (08 §6) ; une division en formation montre la flèche vers le haut, une division en trop clignote et montre la flèche vers le bas.
 //
 // La page n'applique aucune règle : elle affiche ce que le moteur envoie (`DivisionView`, `PlayerStats`,
 // `HumanDetail`) et envoie des ordres (`move_division`). La sélection est simple (un clic, §11.4) :
@@ -164,7 +164,7 @@ export class ForcesTab implements DndHost {
   private drawReserve(): void {
     const me = localPlayer();
     const mine = divisionsAt(this.divisions, 0, me);
-    const key = mine.map((d) => `${d.id}:${d.state}:${d.status}:${d.leaveTick}`).join(",") + `|${this.reserveZone.clientWidth}`;
+    const key = mine.map((d) => `${d.id}:${d.state}:${d.status}:${d.formed}:${d.leaveTick}`).join(",") + `|${this.reserveZone.clientWidth}`;
     if (key === this.reserveKey) return;
     this.reserveKey = key;
     this.dnd.zone("form", true, true).set([{ el: this.formationZone, divisions: mine.filter((d) => d.status === "formation") }]);
