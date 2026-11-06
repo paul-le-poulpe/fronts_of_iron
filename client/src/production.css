@@ -1,0 +1,207 @@
+/* Panneau de production (Docs/Design/08-Population.md §11) : boîtes d'activités, pions, boîtes verrouillées.
+   Les couleurs passent par des variables, clair et sombre (html[data-theme], theme.ts), à partir des --occ-* de style.css. */
+
+:root {
+  --pp-card: #ffffff;
+  --pp-ink: #1d232b;
+  --pp-line: #d5d2ca;
+  --pp-mix: 14%;
+  --pp-tile: #f7f5ef;
+  --pp-tile-ink: #1d232b;
+  --pp-cell: rgba(255, 255, 255, 0.7);
+  --pp-cell-line: rgba(0, 0, 0, 0.18);
+  --pp-bad: #b3372c;
+  --pp-pale: #ecebe6;
+  --pp-pale-ink: #8a8d93;
+  --pp-vacant: rgba(0, 0, 0, 0.06);
+}
+html[data-theme="dark"] {
+  --pp-card: #1f242b;
+  --pp-ink: #e6e8eb;
+  --pp-line: #3a414b;
+  --pp-mix: 22%;
+  --pp-tile: #d9d6cc;
+  --pp-tile-ink: #1d232b;
+  --pp-cell: rgba(0, 0, 0, 0.3);
+  --pp-cell-line: rgba(255, 255, 255, 0.25);
+  --pp-bad: #e0665b;
+  --pp-pale: #2a3038;
+  --pp-pale-ink: #8a9099;
+  --pp-vacant: rgba(255, 255, 255, 0.06);
+}
+
+#prod.pp { background: var(--pp-card); color: var(--pp-ink); }
+
+/* Taille des pions : icône et case, 16 × 16 par défaut, 32 × 32 avec l'option « Icônes » du menu « Options ». */
+.pp, .pw-ghost { --pw-icon: 16px; --pw-cell: 22px; }
+.pp.pp-big, .pw-ghost.pp-big { --pw-icon: 32px; --pw-cell: 38px; }
+
+/* En-tête : population / capacité, fer réservé / produit. */
+/* En-tête : deux boîtes côte à côte, sans séparation visuelle. À droite, les messages. */
+.pp-summary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--pp-line); }
+.pp-box { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-note { padding: 4px 8px; border: 2px solid var(--accent); border-radius: 8px; background: var(--pp-pale); color: var(--pp-ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; animation: pl-blink var(--blink-period, 1000ms) steps(1, end) infinite; }
+.pp-note[hidden] { display: none; }
+.pp-line { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border: 0; background: none; color: inherit; font: inherit; text-align: left; font-size: 14px; }
+.pp-link { cursor: pointer; }
+/* Option du menu « Options » : deux carrés exclusifs, le sélectionné en bleu, puis son texte. */
+.pp-options { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; }
+.pp-check { cursor: pointer; }
+.pp-options .pp-size { flex: none; padding: 0; border: 1px solid var(--pp-ink); border-radius: 2px; background: transparent; cursor: pointer; }
+.pp-options .pp-size-16 { width: 16px; height: 16px; }
+.pp-options .pp-size-32 { width: 32px; height: 32px; }
+.pp-options .pp-size.on { background: var(--accent); border-color: var(--accent); }
+.pp-link:hover { background: color-mix(in srgb, var(--pp-ink) 8%, transparent); }
+.pp-bad { color: var(--pp-bad); }
+.pp-pop { flex-wrap: wrap; font-size: 24px; font-weight: 700; }
+.pp-malus { font-size: 14px; }
+.pp-ic32 { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+.pp-help { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-size: 10px; font-weight: 700; cursor: help; }
+.pp-ic { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
+.pp-list { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
+.pp-sep { height: 0; border-top: 1px dashed var(--pp-line); margin: 4px 0; }
+
+/* Une boîte : poignée, entrée, flèche, colonne centrale, flèche, sortie. Colonnes d'entrée et de sortie de largeur fixe,
+   alignées d'une boîte à l'autre ; vides sans entrée. Chaque genre d'activité a sa couleur (--box-c). */
+.pb {
+  --box-c: var(--occ-idle);
+  display: grid;
+  grid-template-columns: 14px 88px 28px minmax(0, 1fr) 28px 132px 18px;
+  align-items: center;
+  column-gap: 4px;
+  padding: 6px 8px 6px 4px;
+  border: 2px solid var(--box-c);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--box-c) var(--pp-mix), var(--pp-card));
+}
+.pb[data-kind="hurt"] { --box-c: #6b6b6b; }
+.pb[data-kind="farming"] { --box-c: var(--occ-farm); }
+.pb[data-kind="fishing"] { --box-c: var(--occ-fish); }
+.pb[data-kind="mining"] { --box-c: var(--occ-mine); }
+.pb[data-kind="factory"] { --box-c: var(--occ-factory); }
+.pb[data-kind="barracks"] { --box-c: var(--occ-soldier); }
+.pb.pb-dragging { opacity: 0.5; }
+/* Interstice visé pendant la réorganisation des boîtes. */
+.pb-gap { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+.pb.pb-over { outline: 2px solid var(--accent); outline-offset: 1px; background: color-mix(in srgb, var(--accent) 16%, var(--pp-card)); }
+
+.pb-grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; align-self: start; padding-top: 2px; }
+/* Flèche entre l'entrée, les pions et la sortie : tracée, épaisse. */
+.pb-arrow.on::before { content: ""; display: block; width: 28px; height: 24px; background: var(--muted); clip-path: polygon(0 28%, 58% 28%, 58% 0, 100% 50%, 58% 100%, 58% 72%, 0 72%); }
+
+/* Entrée et sortie : petite tuile à fond clair, sans couleur de ressource. */
+.pb-in, .pb-out { display: flex; align-items: center; min-height: 28px; }
+.pb-in { justify-content: flex-end; }
+.pb-tile {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 3px 6px; border-radius: 5px; border: 1px solid var(--pp-cell-line);
+  background: var(--pp-tile); color: var(--pp-tile-ink);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Flèches de la production visée : tout à droite de la boîte. */
+.pb-out { gap: 3px; }
+.pb-steps { display: flex; flex-direction: column; gap: 1px; flex: none; }
+.pb-step { display: flex; align-items: center; justify-content: center; width: 24px; height: 20px; padding: 0; border: 1px solid var(--pp-cell-line); border-radius: 3px; background: var(--pp-tile); color: var(--pp-tile-ink); cursor: pointer; }
+.pb-step::before { content: ""; width: 12px; height: 9px; background: currentColor; }
+.pb-step-up::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.pb-step-down::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.pb-tile.pb-bad { color: var(--pp-bad); }
+.pb-tile-ic, .pb-sym { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
+.pb-tile .pb-sym { width: 20px; height: 20px; }
+/* Toutes les boîtes : icônes d'entrée et de sortie en 32 × 32. */
+.pb .pb-tile-ic, .pb .pb-tile .pb-sym { width: 32px; height: 32px; }
+
+/* Colonne centrale : titre et places au-dessus des pions, sans cadre intérieur. */
+.pb-center { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pb-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pb-title { font-size: 14px; }
+.pb-places { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pb-lock { display: inline-flex; align-items: center; color: var(--muted); cursor: help; }
+.pb-open-lock { width: 16px; height: 16px; image-rendering: pixelated; }
+
+/* Pions : case et icône selon l'option « Icônes » ; la boîte grandit vers le bas. */
+.pb-pawns { display: flex; flex-direction: column; gap: 2px; min-height: var(--pw-cell); }
+.pb-row { display: flex; flex-wrap: wrap; gap: 2px; }
+.pw {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--pw-cell); height: var(--pw-cell); flex: none; border-radius: 4px;
+  background: var(--pp-cell); border: 1px solid var(--pp-cell-line);
+  cursor: grab; user-select: none; touch-action: none;
+}
+.pw-ic { width: var(--pw-icon); height: var(--pw-icon); image-rendering: pixelated; pointer-events: none; }
+.pw .sym { font-size: 9px; padding: 0; border: 0; }
+.pw[data-sel="0"] { cursor: default; }
+.pw-sel { outline: 2px solid var(--accent); outline-offset: -1px; background: color-mix(in srgb, var(--accent) 25%, var(--pp-cell)); }
+.pw-drag { opacity: 0.35; }
+/* À venir : contour et barre de compteur. */
+.pw-coming { border: 1px dashed var(--accent); opacity: 0.8; cursor: default; }
+.pw-coming .pw-ic { opacity: 0.55; }
+.pw-bar { position: absolute; left: 1px; bottom: 1px; height: 3px; width: 0; border-radius: 1px; background: var(--accent); pointer-events: none; }
+/* En sursis : clignote (blink.ts pose --blink-period). */
+.pw-leaving { animation: pw-blink var(--blink-period, 1000ms) steps(1, end) infinite; }
+@keyframes pw-blink { 50% { opacity: 0.2; } }
+/* Poste vacant : case en pointillés avec l'icône du bonhomme attendu. */
+.pw-empty { background: var(--pp-vacant); border: 1px dashed var(--pp-cell-line); cursor: default; }
+.pw-empty .pw-ic { opacity: 0.25; filter: grayscale(1); }
+/* Jauge de la prochaine place : le bas est visible, le haut est transparent. */
+.pw-gauge { clip-path: inset(calc(100% - var(--gauge, 0%)) 0 0 0); }
+/* Auto-assignation : la croix rouge d'un poste désactivé, à 50 % sur ce qu'un clic changerait. */
+.pw[data-vac] { cursor: pointer; }
+.pw-cross { display: none; position: absolute; left: 50%; top: 50%; width: var(--pw-icon); height: var(--pw-icon); transform: translate(-50%, -50%); image-rendering: pixelated; pointer-events: none; }
+.pw-off .pw-cross { display: block; }
+.pw-would .pw-cross { display: block; opacity: 0.5; }
+.pw-ghost {
+  position: fixed; z-index: 300; transform: translate(calc(var(--pw-cell) / -2), calc(var(--pw-cell) / -2)); pointer-events: none; display: flex; align-items: center; gap: 4px;
+  padding: 2px 6px 2px 2px; border-radius: 6px; background: var(--pp-card); color: var(--pp-ink);
+  border: 1px solid var(--pp-cell-line); box-shadow: 0 2px 8px #0006; opacity: 0.92; font-size: 13px;
+}
+/* Pendant un glisser de pions, l'icône des pions remplace le curseur. */
+body.pw-moving, body.pw-moving * { cursor: none !important; }
+.pw-ghost .pw-sel { outline: none; }
+
+/* Boîtes verrouillées : très pâles. De gauche à droite : ce qui est débloqué, cadenas, séparateur, ce qui débloque, barre de progression. */
+.pl {
+  display: grid; grid-template-columns: 24px 16px 12px 24px minmax(0, 1fr); align-items: center; column-gap: 6px;
+  padding: 4px 8px; border: 1px solid var(--pp-line); border-radius: 8px;
+  background: var(--pp-pale); color: var(--pp-pale-ink); opacity: 0.8;
+}
+.pl .pb-sym { width: 24px; height: 24px; opacity: 0.7; }
+.pl-bar { position: relative; height: 22px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--pp-ink) 6%, transparent); }
+.pl-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.pl-name, .pl-num { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-size: 12px; color: var(--pp-ink); opacity: 0.75; }
+.pl-name { right: 6px; }
+.pl-num { left: 6px; font-variant-numeric: tabular-nums; }
+.pl-lock { width: 16px; height: 16px; image-rendering: pixelated; opacity: 0.6; }
+.pl-sep { height: 2px; background: currentColor; opacity: 0.5; }
+
+/* Ligne débloquée : clignote en bleu en tête des lignes verrouillées. Ligne supprimée : en bas, cliquable. */
+.pl-new, .pl-gone { grid-template-columns: 24px minmax(0, 1fr) auto; cursor: pointer; }
+.pl-new { opacity: 1; border: 2px solid var(--accent); animation: pl-blink var(--blink-period, 1000ms) steps(1, end) infinite; }
+@keyframes pl-blink { 50% { background: color-mix(in srgb, var(--accent) 45%, var(--pp-card)); } }
+.pl-gone:hover { opacity: 1; }
+.pl-open { position: static; font-weight: 700; }
+.pl-state { font-size: 12px; }
+/* Croix de suppression d'une ligne, tout à droite. */
+.pb-close { display: flex; padding: 0; border: 0; background: none; cursor: pointer; }
+.pb-close-ic { width: 16px; height: 16px; image-rendering: pixelated; }
+/* Panneau d'information d'une ligne débloquée : à gauche du panneau de production. */
+.pp-info { position: fixed; z-index: 400; top: 80px; right: calc(var(--panel-w, 0px) + var(--prod-w) + 16px); width: 300px; padding: 10px; border-radius: 8px; border: 2px solid var(--accent); background: var(--t-panel); color: var(--t-fg); box-shadow: 0 4px 16px #0006; }
+.pp-info .ip { position: static; box-shadow: none; border: 0; padding: 0; max-width: none; background: none; }
+.pp-info-ok { display: block; margin: 10px 0 0 auto; padding: 4px 14px; cursor: pointer; }
+
+/* Infobulles construites (cadenas ouvert, boîtes verrouillées). */
+.pt { display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
+.pt-title { font-weight: 700; }
+.pt-row { display: grid; grid-template-columns: 1fr 80px auto; align-items: center; gap: 6px; }
+.pt-bar { height: 6px; border-radius: 3px; background: #8884; overflow: hidden; }
+.pt-bar i { display: block; height: 100%; background: var(--accent, #2b5fa5); }
+.pt-num { font-variant-numeric: tabular-nums; font-size: 12px; }
+.pt-note { font-size: 12px; opacity: 0.85; }
+.pt-replace { display: flex; align-items: center; gap: 6px; }
+.pt.pt-food { display: grid; grid-template-columns: auto auto auto; column-gap: 10px; row-gap: 4px; align-items: center; font-size: 18px; }
+.pt-food-l { display: flex; align-items: center; gap: 4px; }
+/* Icônes de 32 × 32 réduites à 16 : lissées, le mode pixel sauterait une ligne sur deux. */
+.tip-iron .pp-ic { image-rendering: auto; }
+.pt-figures { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-variant-numeric: tabular-nums; }
+.pt-map { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
+.pt-map .legend-swatch { flex: none; }

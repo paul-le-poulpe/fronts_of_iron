@@ -11,7 +11,7 @@
 // histogrammes sont tenus à jour case par case.
 
 import { computeFrontZones, type GeomWorld } from "./frontgeom.ts";
-import type { DivisionView, FactoryCatalog, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
+import type { ActivityCatalog, DivisionView, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
 import { RoadPaths } from "./roadpaths.ts";
 
 export const TERRAIN_LAND = 0x80;
@@ -28,15 +28,6 @@ export interface MirrorCity {
   readonly tile: number;
   readonly port: boolean;
   readonly group: number;
-}
-
-/** L'usine d'une ville, telle que la carte la dessine. */
-export interface FactoryMark {
-  /** Identifiant du type d'usine (`FactoryCatalog.factoryTypes[i].id`). */
-  readonly type: string;
-  readonly level: number;
-  /** Bien qui a le plus de lignes construites dans l'usine : son icône la représente (`dominantGood`). */
-  readonly good: string;
 }
 
 /** Ce que comptent les rayons d'exploitation : les cases des champs, de la mer ou du fer. */
@@ -70,7 +61,7 @@ export class Mirror {
   readonly seaThreshold: Int32Array;
   /** Même chose pour les cases de fer exploitées (la mine). */
   readonly ironThreshold: Int32Array;
-  readonly catalog: FactoryCatalog;
+  readonly catalog: ActivityCatalog;
   readonly military: MilitaryCatalog;
   /** Tous les fronts (05-Fronts), par identifiant, tels que le dernier message les donne. */
   fronts: readonly FrontView[] = [];
@@ -81,9 +72,7 @@ export class Mirror {
   /** Paires de villes `a × 65536 + b` (a < b) reliées par une connexion d'un front actif : double ligne rouge de la carte. */
   private activePairs = new Set<number>();
   private zoneCache: { version: number; zones: Uint16Array } | null = null;
-  /** Usines de tous les joueurs, par identifiant de ville. */
-  factoryMarks = new Map<number, FactoryMark>();
-  /** Détail des usines du joueur humain, au dernier tour. */
+  /** Activités du joueur humain (panneau de production), au dernier tour. */
   detail: HumanDetail | null = null;
   /** Cases de côte la plus proche de chaque ville à port, par identifiant de ville ; la case de la ville si aucune. */
   private readonly portTiles = new Map<number, number>();
@@ -226,14 +215,6 @@ export class Mirror {
     }
     for (const cap of msg.captured) this.countZone(cap.city, +1);
     if (msg.roads !== null) this.roads = msg.roads;
-    if (msg.factoryMarks !== null) {
-      const f = msg.factoryMarks;
-      this.factoryMarks = new Map();
-      for (let i = 0; i < f.length; i += 4) {
-        const type = this.catalog.factoryTypes[f[i + 1]!]!;
-        this.factoryMarks.set(f[i]!, { type: type.id, level: f[i + 2]!, good: type.tree[f[i + 3]!]!.good });
-      }
-    }
     this.detail = msg.human;
 
     const tiles = msg.tiles;

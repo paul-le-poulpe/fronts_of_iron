@@ -1,33 +1,37 @@
 // Bots du mode solo. Ce ne sont pas des règles du jeu : ce code lit l'état et
-// produit des ordres `found_city` et `set_farm_share`, comme le ferait un
-// joueur, et le moteur les valide comme les autres. Ils ne servent qu'à donner
-// un adversaire pour tester le client.
+// produit des ordres `found_city` et `move_pawn`, comme le ferait un joueur, et
+// le moteur les valide comme les autres. Ils ne servent qu'à donner un
+// adversaire pour tester le client (stratégie minimale, pour le débogage) :
+// les inactifs vont d'abord aux Agriculteurs, puis aux Mineurs, puis à la
+// caserne de milice ; la ville suivante est fondée quand les inactifs en
+// paient le coût.
 //
 // Déterministes : le hasard vient de `createRng` / `nextInt` du moteur, graine =
 // graine des bots mélangée à l'identifiant du joueur. Même graine, même état,
 // mêmes ordres (un rejeu de partie reste possible).
 
 import {
+  activityOf,
+  ACTIVITY_DATA,
+  ACTIVITY_IDS,
   CITY,
   createRng,
-  FARMING,
-  foundingCost,
+  foundingCostPawns,
+  idlePawns,
   isLand,
   nextInt,
+  slotsOf,
   type GameState,
   type Intent,
+  type Player,
   type Rng,
 } from "@fronts-of-iron/engine";
 
-/** Population à partir de laquelle un bot tente de fonder une ville, s'il peut aussi en payer le coût (`foundingCost`). */
-export const EXPAND_MIN_POPULATION = 400;
 /** Tours entre deux tentatives d'expansion, plus un délai tiré entre 0 et `EXPAND_JITTER` − 1. */
 export const EXPAND_EVERY_TURNS = 15;
 export const EXPAND_JITTER = 10;
-/** Tours entre deux révisions de la part de fermiers. */
-export const FARM_REVIEW_EVERY_TURNS = 30;
-/** Écart minimal (points de pourcentage) entre la part actuelle et la cible pour envoyer un ordre. */
-export const FARM_REVIEW_MIN_GAP = 5;
+/** Tours entre deux affectations des inactifs. */
+export const ASSIGN_EVERY_TURNS = 10;
 /** Délai maximal avant la première ville, en tours : les bots ne jouent pas tous au tour 1. */
 export const FIRST_CITY_MAX_DELAY = 30;
 /** Cases candidates comparées pour choisir une ville. */
@@ -41,11 +45,20 @@ export interface Bot {
   step(state: GameState, out: Intent[]): void;
 }
 
+/** Places libres d'une activité à places calculées ; infini pour une caserne. */
+function roomOf(p: Player, id: string): number {
+  const index = ACTIVITY_IDS.indexOf(id as (typeof ACTIVITY_IDS)[number]);
+  const a = activityOf(p, index);
+  if (a === undefined) return 0;
+  const data = ACTIVITY_DATA[index]!;
+  return data.hasPlaces ? Infinity : slotsOf(p, data) - a.workers - a.machines;
+}
+
 export function createBot(player: number, botSeed: number): Bot {
   const rng = createRng(((botSeed >>> 0) ^ Math.imul(player, 0x9e3779b1)) >>> 0);
   let nextFirstCityTurn = 1 + nextInt(rng, FIRST_CITY_MAX_DELAY);
   let nextExpandTurn = 0;
-  let nextFarmReviewTurn = FARM_REVIEW_EVERY_TURNS;
+  let nextAssignTurn = ASSIGN_EVERY_TURNS;
 
   return {
     player,
@@ -62,35 +75,32 @@ export function createBot(player: number, botSeed: number): Bot {
         return;
       }
 
-      // Expansion seulement quand la surface cultivée atteint la moitié de la surface cultivable (surface_max).
-      const halfFarmed = 2 * me.cultivated >= me.farmTiles;
-      if (turn >= nextExpandTurn && halfFarmed && me.population - me.hurt >= Math.max(EXPAND_MIN_POPULATION, foundingCost(me.cityIds.length))) {
+      if (turn < nextAssignTurn) return;
+      nextAssignTurn = turn + ASSIGN_EVERY_TURNS;
+      if (activityOf(me, ACTIVITY_IDS.indexOf("militia")) === undefined) out.push({ type: "open_activity", player, activity: "militia" });
+      let idle = idlePawns(me);
+      const send = (to: "farmers" | "miners" | "militia"): void => {
+        const n = Math.min(idle, roomOf(me, to));
+        if (n < 1) return;
+        out.push({ type: "move_pawn", player, from: "idle", to, kind: "worker", count: n });
+        idle -= n;
+      };
+      // Agriculture d'abord ; la ville suivante quand la moitié de la surface cultivable est cultivée et que les inactifs
+      // en paient le coût ; puis les mines et la milice.
+      send("farmers");
+      const cost = foundingCostPawns(me.cityIds.length);
+      if (turn >= nextExpandTurn && 2 * me.cultivated >= me.farmTiles && idle >= cost) {
         nextExpandTurn = turn + EXPAND_EVERY_TURNS + nextInt(rng, EXPAND_JITTER);
         const tile = bestCandidate(state, rng, me.cityIds);
-        if (tile >= 0) out.push({ type: "found_city", player, tile });
-      }
-
-      if (turn >= nextFarmReviewTurn) {
-        nextFarmReviewTurn = turn + FARM_REVIEW_EVERY_TURNS;
-        const target = farmShareTarget(me.population, me.farmTiles, me.seaTiles);
-        if (Math.abs(target - me.farmPercent) >= FARM_REVIEW_MIN_GAP) {
-          out.push({ type: "set_farm_share", player, percent: target });
+        if (tile >= 0) {
+          out.push({ type: "found_city", player, tile });
+          idle -= cost;
         }
       }
+      send("miners");
+      send("militia");
     },
   };
-}
-
-/**
- * Part de fermiers (0 à 100) qui occupe juste toute la surface cultivable sans
- * mécanisation (`FARMING.mechanizationBase` millièmes de case par fermier), le
- * reste partant à la pêche. Sans eau : 100. Sans terre fertile : 0 s'il y a de l'eau.
- */
-export function farmShareTarget(population: number, farmTiles: number, seaTiles: number): number {
-  if (seaTiles === 0 || population <= 0) return 100;
-  if (farmTiles === 0) return 0;
-  const needed = Math.ceil((farmTiles * 1000) / FARMING.mechanizationBase);
-  return Math.min(100, Math.ceil((100 * needed) / population));
 }
 
 /**

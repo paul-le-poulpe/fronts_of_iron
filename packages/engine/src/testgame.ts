@@ -1,12 +1,14 @@
 // État de départ de la partie de test (outil de développement, Docs/Design/01-Architecture.md §9 bis). Appelée une fois
-// juste après `createGame` avec `freezeEconomy` : fonde les villes des deux joueurs, remplit les stocks par écriture
-// directe, puis crée et place les divisions par les ordres du moteur. Ce ne sont pas des règles du jeu.
+// juste après `createGame` avec `freezeEconomy` : fonde les villes des deux joueurs, ouvre toutes les activités et remplit
+// les casernes et les usines par écriture directe pour que leurs limites couvrent les divisions, crée les divisions
+// directement, puis les place par les ordres de déplacement. Ce ne sont pas des règles du jeu.
 //
 // Déterministe (règle 2) : aucun hasard, cases parcourues dans un ordre fixé.
 
-import { ARMAMENT, CITY, ELITE_TROOPS_RATIO, TEST_GAME, TEST_SCENARIOS, type TestScenarioId } from "./config.ts";
-import { foundCity, foundingCost } from "./cities.ts";
-import { WIDTH_SCALE, DIVISION_DATA, DIVISION_IDS, MEN, countSoldiers, type Division } from "./divisions.ts";
+import { ACTIVITY_DATA, DIVISION_ACTIVITY, IDLE, activityOf, openActivity } from "./activities.ts";
+import { CITY, ELITE_TROOPS_RATIO, TEST_GAME, TEST_SCENARIOS, type TestScenarioId } from "./config.ts";
+import { foundCity, foundingCostPawns } from "./cities.ts";
+import { WIDTH_SCALE, DIVISION_DATA, DIVISION_IDS, addDivision, type Division } from "./divisions.ts";
 import { applyIntent } from "./intents.ts";
 import { isLand } from "./map.ts";
 import { computeRoads } from "./roads.ts";
@@ -141,8 +143,10 @@ export function setupTestGame(state: GameState, scenario: TestScenarioId = "full
   const changed: number[] = [];
   for (const { player, tile } of plan.seq) {
     const p = state.players[player]!;
-    // Les villes se paient en population : le stock est refait plus bas.
-    p.population = Math.max(p.population, foundingCost(p.cityIds.length) + p.hurt + 1);
+    // Les villes se paient en bonshommes inactifs : les effectifs sont refaits plus bas.
+    const idle = activityOf(p, IDLE)!;
+    idle.workers = Math.max(idle.workers, foundingCostPawns(p.cityIds.length));
+    p.population = idle.workers;
     if (!foundCity(state, p.id, tile, changed)) throw new Error(`partie de test : ville refusée en ${tile} (joueur ${p.id})`);
   }
   if (state.fronts.length === 0) throw new Error("partie de test : aucun front entre les deux joueurs");
@@ -173,33 +177,29 @@ export function setupTestGame(state: GameState, scenario: TestScenarioId = "full
   }
   const wanted = [...frontPart, ...reservePart];
 
-  // Stocks (écriture directe) : divisions complètes, composants facultatifs compris, plus la réserve de renfort.
-  const factor = (100 + TEST_GAME.reservePercent) / 100;
+  // Activités : toutes ouvertes, casernes et usines remplies pour que leur limite couvre les divisions voulues de leur type
+  // (l'économie gelée sert chaque boîte sans limite de fer).
+  const perType = new Array<number>(DIVISION_IDS.length).fill(0);
+  for (const e of wanted) perType[typeIndex(e.division)] = perType[typeIndex(e.division)]! + e.count;
   for (const p of state.players) {
-    let men = 0;
-    const armament = new Array<number>(Object.keys(ARMAMENT.types).length).fill(0);
-    for (const e of wanted) {
-      const data = DIVISION_DATA[typeIndex(e.division)]!;
-      for (const c of data.components) {
-        if (c.resource === MEN) men += c.count * e.count;
-        else armament[c.resource] = armament[c.resource]! + c.count * e.count;
-      }
+    for (const data of ACTIVITY_DATA) {
+      openActivity(p, data.index);
+      p.unlock[data.index] = data.unlockCost;
     }
-    p.idle = Math.ceil(men * factor);
-    armament.forEach((n, i) => (p.armamentReserve[i] = Math.ceil(n * factor)));
+    perType.forEach((count, t) => {
+      const a = activityOf(p, DIVISION_ACTIVITY[t]!)!;
+      a.workers = count * ACTIVITY_DATA[a.id]!.workersPerUnit;
+      if (ACTIVITY_DATA[a.id]!.hasPlaces) a.places = a.workers;
+    });
+    activityOf(p, IDLE)!.workers = 0;
   }
 
-  // 3. Divisions : `create_division` par le chemin normal des ordres, joueur par joueur, celles des fronts d'abord.
+  // 3. Divisions : créées directement, joueur par joueur, celles des fronts d'abord. Sans formation : un ordre de
+  // déplacement serait refusé pendant la formation.
   const made: Division[][] = [[], []];
   for (const p of state.players) {
     for (const e of wanted) {
-      for (let k = 0; k < e.count; k++) {
-        order(state, { type: "create_division", player: p.id, division: e.division }, `création ${e.division}, joueur ${p.id}`);
-        const d = state.divisions[state.divisions.length - 1]!;
-        // Pas de formation : un ordre de déplacement serait refusé pendant la formation.
-        (d as { formedTick: number }).formedTick = 0; // en lecture seule pour les règles, écrit ici seulement
-        made[p.id - 1]!.push(d);
-      }
+      for (let k = 0; k < e.count; k++) made[p.id - 1]!.push(addDivision(state, p.id, typeIndex(e.division), 0));
     }
   }
 
@@ -236,11 +236,10 @@ export function setupTestGame(state: GameState, scenario: TestScenarioId = "full
     }
   }
 
-  // 6. Population : les hommes des stocks et des divisions, sans surplus de fondation.
-  countSoldiers(state);
+  // 6. Population : les bonshommes des casernes et des usines, sans surplus de fondation.
   for (const p of state.players) {
-    p.hurt = 0;
-    p.population = p.idle + p.soldiers;
+    p.population = 0;
+    for (const a of p.activities) p.population += a.workers;
   }
 
   return {

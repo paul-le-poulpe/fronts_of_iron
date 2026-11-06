@@ -3,7 +3,8 @@
 // entièrement déduit des villes, et `events` et `combats`, que rien ne lit dans le moteur.
 
 import { isUint32 } from "./bits.ts";
-import { ARMAMENT, CITY, GOODS, MAX_PLAYERS, type FactoryTypeId, type ProductId } from "./config.ts";
+import { ACTIVITY_COUNT, ACTIVITY_DATA, createActivities, GOOD_COUNT, type Activity } from "./activities.ts";
+import { CITY, MAX_PLAYERS } from "./config.ts";
 import type { DiplomacyEvent, Proposal } from "./diplomacy.ts";
 import type { Box, Breakthrough } from "./breakthroughs.ts";
 import type { CombatRecord } from "./combat.ts";
@@ -14,150 +15,72 @@ import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { createRoadNetwork, type RoadNetwork } from "./roads.ts";
 
-/** Échelle des productivités (`Player.goodsLineRatio`…) : 100 % s'écrit 10 000. Aussi celle des restes de production. */
-export const RATIO_SCALE = 10_000;
-
-/** Les lignes d'un même bien dans une usine, réglées ensemble (00-Game §8.1). */
-export interface LineGroup {
-  readonly good: ProductId;
-  /** Nombre de lignes de ce bien dans l'usine (≥ 1). */
-  lines: number;
-  /** Lignes activées par le joueur, 0 à `lines`. Les premières du groupe sont les actives. */
-  active: number;
-  /**
-   * Lignes qui tournent au dernier tour, 0 à `active` : les actives, sauf les lignes de tracteurs, bateaux ou pompes en
-   * trop, dont la production à 100 % couvre déjà la demande (00-Game §8.2). Elles tournent toutes à la même
-   * productivité de sa catégorie (`Player.goodsLineRatio` ou `armLineRatio`).
-   */
-  running: number;
-  /** Tours-lignes comptés vers la prochaine ligne automatique (00-Game §8.2, biens seulement), de 0 à `FACTORY.growthTurns` exclu. */
-  growth: number;
-}
-
-/** L'usine d'une ville (00-Game §8). Une seule par ville : voir 02-Engine §7. */
-export interface Factory {
-  readonly city: number;
-  readonly type: FactoryTypeId;
-  /** Groupes de lignes, dans l'ordre de priorité du joueur au sein de la ville (00-Game §8.1). */
-  readonly groups: LineGroup[];
-  /**
-   * Un compteur par nœud de l'arbre du type d'usine (même indice) : somme, sur les
-   * tours, du nombre de lignes de ce bien qui tournent dans cette usine, pondéré par la productivité, plafonnée à
-   * `FACTORY.unlockTurns` (00-Game §8.2).
-   */
-  readonly progress: number[];
-  /** Fraction de progression de chaque nœud, sur l'échelle `RATIO_SCALE` (0 à `RATIO_SCALE` − 1). */
-  readonly progressRemainder: number[];
-}
+export type { Activity } from "./activities.ts";
 
 export interface Player {
   /** 1 à MAX_PLAYERS ; c'est la valeur écrite dans `owner`. */
   readonly id: number;
   /** Nombre de cases dont `owner` vaut `id`. Tenu à jour par `setOwner`. */
   tileCount: number;
-  /** Population totale du joueur, en personnes (00-Game §4). 0 au départ. */
+  /**
+   * Population totale du joueur, en bonshommes (08 §1) : la somme des bonshommes de toutes les activités, Inactifs et
+   * Blessés compris. 0 au départ.
+   */
   population: number;
-  /** Fraction de personne gagnée ou perdue, en millionièmes de personne, de signe quelconque ; |reste| < 1 000 000 en fin de tour (00-Game §4.1). */
-  growthRemainder: number;
-  /** Part de la population (hors usines) qui va aux fermiers, entier 0 à 100 ; le reste va aux pêcheurs (00-Game §4). 100 au départ. */
-  farmPercent: number;
   /** Identifiant de la capitale, 0 = pas encore de ville (00-Game §3.4). */
   capital: number;
   /** Identifiants des villes du joueur, dans l'ordre de fondation. */
   readonly cityIds: number[];
   /** Pour chaque ressource (ordre de RESOURCES) : nombre de cases du joueur qui la portent. Tenu à jour par `setOwner`. */
   readonly resourceTiles: number[];
-  /** `surface_max` (00-Game §6.1) : nombre de cases de fertilité > 0 que possède le joueur. Tenu à jour par `setOwner`. */
+  /** Nombre de cases de fertilité > 0 que possède le joueur. Tenu à jour par `setOwner`. */
   farmTiles: number;
-  /** `fertilité_totale` (00-Game §6.1) : somme des fertilités des cases du joueur. Tenu à jour par `setOwner`. */
+  /** Somme des fertilités des cases du joueur. Tenu à jour par `setOwner`. */
   fertilitySum: number;
-  /** Nombre de cases d'eau (mer et lacs) que possède le joueur : la surface de pêche maximale (00-Game §6.4). Tenu à jour par `setOwner`. */
+  /** Nombre de cases d'eau (mer et lacs) que possède le joueur : la surface de pêche maximale. Tenu à jour par `setOwner`. */
   seaTiles: number;
-  // Résultats du dernier tour (economy.ts), calculés sur la population du début de l'étape. 0 avant le premier tour.
-  /** Fermiers qui travaillent (≤ fermiers disponibles). */
-  farmers: number;
-  /** Pêcheurs qui travaillent (≤ pêcheurs disponibles). */
-  fishers: number;
-  /** Population inactive : fermiers et pêcheurs disponibles sans surface à travailler. */
-  idle: number;
-  /** Surface cultivée, en cases (≤ farmTiles). */
-  cultivated: number;
-  /** Mécanisation de l'agriculture (00-Game §6.2) : surface par fermier, en millièmes de case. */
-  farmMechanization: number;
-  /** Surface pêchée, en cases (≤ seaTiles). */
-  fished: number;
-  /** Mécanisation de la pêche (00-Game §6.4) : surface par pêcheur, en millièmes de case. */
-  fishMechanization: number;
+  /**
+   * Activités ouvertes (08 §2), de haut en bas : l'ordre est la priorité du fer et des disparitions. Inactifs est
+   * toujours la première, Blessés y figure aussi. Une activité débloquée est ajoutée à la fin.
+   */
+  readonly activities: Activity[];
+  /** Progression de déblocage de chaque activité (indice de `ACTIVITY_IDS`), en tours d'ouvrier servi, plafonnée au coût (08 §9). */
+  readonly unlock: number[];
+  /** 1 pour une activité déjà ouverte une fois dans la partie, par indice (08 §9). Sinon, débloquée, elle attend un clic. */
+  readonly everOpened: number[];
+  /** Machines disponibles dans Inactifs, par bien (ordre de `GOODS`). */
+  readonly idleMachines: number[];
+  /** Tours de fin des bonshommes à venir, triés (08 §6). */
+  readonly popArrivals: number[];
+  /** Tours de fin des bonshommes en sursis, triés. */
+  readonly popLeaves: number[];
+  /** Tours de fin des machines à venir, par bien, triés. */
+  readonly machineArrivals: number[][];
+  /** Tours de fin des machines en sursis, par bien, triés. */
+  readonly machineLeaves: number[][];
+  /** Fin du soin du blessé en cours, 0 si aucun (08 §8). */
+  hurtHealEnd: number;
+  /** Auto-assignation (08 §7 bis) : bonshommes et machines se placent seuls, de haut en bas. Allumée au départ. */
+  autoAssign: boolean;
+  // Résultats du dernier tour (economy.ts). 0 avant le premier tour.
+  /** Capacité de population : ceil(nourriture / foodPerPawn) (08 §3). */
+  capacity: number;
+  /** Nourriture : `FOOD.base` + `FOOD.perCity` × villes + blé + poisson (08 §3). */
+  food: number;
   wheat: number;
   fish: number;
-  /** Nourriture du tour : max(blé + poisson, FOOD.minimum). */
-  food: number;
-  /**
-   * Usines du joueur, une par ville. L'ordre du tableau est l'ordre de priorité des
-   * villes pour le remplissage des lignes (00-Game §4, §8.1).
-   */
-  readonly factories: Factory[];
-  /** Biens produits au dernier tour, dans l'ordre des clés de `GOODS` : lus par les usines et affichés (00-Game §12). */
-  readonly goods: number[];
-  /**
-   * Biens effectifs, dans l'ordre des clés de `GOODS` : les machines que la mécanisation utilise au tour suivant (00-Game §12).
-   * Monte tout de suite à `goods` ; baisse vers `goods` par paliers (`GOODS_DECAY`).
-   */
-  readonly goodsEffective: number[];
-  /**
-   * Demande de chaque bien au dernier tour, dans l'ordre des clés de `GOODS` : les
-   * machines d'une mécanisation totale (00-Game §6.2, §8.2). La croissance
-   * automatique des lignes s'arrête quand la production la couvre.
-   */
-  readonly goodsDemand: number[];
-  /** Réserve de chaque type d'armement, dans l'ordre des clés de `ARMAMENT.types` (00-Game §8.3). */
-  readonly armamentReserve: number[];
-  /** Reste de la baisse de l'excès de chaque réserve, sur l'échelle `CURVE_SCALE` (0 si pas d'excès). */
-  readonly armamentRemainder: number[];
-  /** Reste de la production de chaque type d'armement, en 3 600es d'exemplaire × `RATIO_SCALE` (00-Game §8.3). */
-  readonly armamentProductionRemainder: number[];
-  /** Reste de la production de chaque bien, dans l'ordre des clés de `GOODS`, sur l'échelle `RATIO_SCALE` (00-Game §8). */
-  readonly goodsRemainder: number[];
-  /** Ouvriers employés par les lignes au dernier tour : demandés × productivité. */
-  factoryWorkers: number;
-  /** Fer demandé par les lignes qui tournent au dernier tour. */
-  ironDemanded: number;
-  /** Fer consommé au dernier tour : demandé × productivité (≤ extrait). */
-  ironConsumed: number;
-  /** min(1, fer extrait / fer demandé), sur l'échelle `RATIO_SCALE` (00-Game §8). */
-  goodsIronRatio: number;
-  /** min(1, ouvriers disponibles / ouvriers demandés), sur l'échelle `RATIO_SCALE`. */
-  goodsWorkerRatio: number;
-  /** Productivité des lignes de biens : min des deux ratios précédents. */
-  goodsLineRatio: number;
-  /** Mêmes trois ratios pour l'armement, sur le fer et les ouvriers que les biens ont laissés (00-Game §8). */
-  armIronRatio: number;
-  armWorkerRatio: number;
-  armLineRatio: number;
-  /** Mineurs de fer au dernier tour. */
-  miners: number;
-  /** Cases de fer exploitées au dernier tour (00-Game §7, `cases_exploitées`). */
+  /** Surface cultivée, en cases. */
+  cultivated: number;
+  /** Surface pêchée, en cases. */
+  fished: number;
+  /** Cases de fer exploitées. */
   minedTiles: number;
-  /** Mécanisation de l'extraction (00-Game §7) : cases de fer par mineur, en millièmes de case. */
-  mineMechanization: number;
-  /** Fer extrait au dernier tour : celui que les mineurs disponibles tirent des cases de fer, au plus la demande des lignes. */
-  ironExtracted: number;
-  /** Mobilisation forcée (05-Fronts §4.3) : le renfort des divisions passe avant les emplois. Éteinte au départ. */
-  forcedMobilization: boolean;
-  /**
-   * Soldats : hommes de toutes les divisions du joueur (00-Game §4, point 5 ; 05-Fronts §3).
-   * Ils sont comptés dans `population` (ils mangent) mais ne travaillent pas : la
-   * répartition du §4 de 00-Game se fait sur `population − soldiers`. Recomptés par
-   * `countSoldiers` (divisions.ts).
-   */
-  soldiers: number;
-  /**
-   * Blessés (00-Game §4.2) : hommes perdus en combat. Comptés dans `population` (ils mangent et occupent des places de
-   * `population_max`), mais ni emploi, ni recrutement, mobilisation forcée comprise. Ils ne remontent que par les pertes
-   * au combat (`applyLoss`) ; chaque tour `healHurt` (economy.ts) en fait disparaître.
-   * Toujours ≤ max(0, population − soldiers).
-   */
-  hurt: number;
+  /** Fer produit par les mineurs (08 §4). */
+  ironProduced: number;
+  /** Fer réservé par les usines et les casernes servies. */
+  ironReserved: number;
+  /** Fer que demandent les usines et les casernes (08 §4) : au-delà du fer produit, le malus s'applique. */
+  ironWanted: number;
   /**
    * Éliminé (05-Fronts §10.3) : sa dernière ville a été prise. Il n'a plus de division, et le moteur ignore ses ordres et
    * les ordres diplomatiques qui le visent. Ne revient jamais à `false`.
@@ -233,8 +156,9 @@ export interface GameState {
    */
   readonly events: DiplomacyEvent[];
   /**
-   * Économie gelée (partie de test, 01-Architecture §9 bis) : `applyTurn` saute la croissance de la population, la nourriture,
-   * la production des usines et la fondation de villes. Fixé à la création par `GameSetup.freezeEconomy`, jamais changé.
+   * Économie gelée (partie de test, 01-Architecture §9 bis) : `applyTurn` saute les compteurs de population, de machines et
+   * de divisions, le déblocage et la fondation de villes ; seul le soin continue (08 §8, §5). Fixé à la création par
+   * `GameSetup.freezeEconomy`, jamais changé.
    */
   readonly economyFrozen: boolean;
   /** Numéro du dernier tour appliqué ; 0 avant le premier. */
@@ -270,48 +194,32 @@ export function createGame(setup: GameSetup): GameState {
       id,
       tileCount: 0,
       population: 0,
-      growthRemainder: 0,
-      farmPercent: 100,
       capital: 0,
       cityIds: [],
       resourceTiles: new Array<number>(RESOURCE_COUNT).fill(0),
       farmTiles: 0,
       fertilitySum: 0,
       seaTiles: 0,
-      farmers: 0,
-      fishers: 0,
-      idle: 0,
-      cultivated: 0,
-      farmMechanization: 0,
-      fished: 0,
-      fishMechanization: 0,
+      activities: createActivities(),
+      unlock: new Array<number>(ACTIVITY_COUNT).fill(0),
+      everOpened: ACTIVITY_DATA.map((a) => (a.startOrder >= 0 ? 1 : 0)),
+      idleMachines: new Array<number>(GOOD_COUNT).fill(0),
+      popArrivals: [],
+      popLeaves: [],
+      machineArrivals: Array.from({ length: GOOD_COUNT }, () => [] as number[]),
+      machineLeaves: Array.from({ length: GOOD_COUNT }, () => [] as number[]),
+      hurtHealEnd: 0,
+      autoAssign: true,
+      capacity: 0,
+      food: 0,
       wheat: 0,
       fish: 0,
-      food: 0,
-      factories: [],
-      goods: new Array<number>(Object.keys(GOODS).length).fill(0),
-      goodsEffective: new Array<number>(Object.keys(GOODS).length).fill(0),
-      goodsDemand: new Array<number>(Object.keys(GOODS).length).fill(0),
-      armamentReserve: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
-      armamentProductionRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
-      goodsRemainder: new Array<number>(Object.keys(GOODS).length).fill(0),
-      armamentRemainder: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0),
-      factoryWorkers: 0,
-      ironDemanded: 0,
-      ironConsumed: 0,
-      goodsIronRatio: RATIO_SCALE,
-      goodsWorkerRatio: RATIO_SCALE,
-      goodsLineRatio: RATIO_SCALE,
-      armIronRatio: RATIO_SCALE,
-      armWorkerRatio: RATIO_SCALE,
-      armLineRatio: RATIO_SCALE,
-      miners: 0,
+      cultivated: 0,
+      fished: 0,
       minedTiles: 0,
-      mineMechanization: 0,
-      ironExtracted: 0,
-      forcedMobilization: false,
-      soldiers: 0,
-      hurt: 0,
+      ironProduced: 0,
+      ironReserved: 0,
+      ironWanted: 0,
       defeated: false,
     });
   }

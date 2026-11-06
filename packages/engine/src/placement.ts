@@ -1,104 +1,40 @@
-// Divisions hors du combat (Docs/Design/05-Fronts.md §3.5, §4, §5.3, §5.4) :
-// création, suppression, déplacement, renfort, arrivées, rangement des lignes,
-// échange et fuite. Tout est en entiers ; divisions parcourues par identifiant,
-// fronts par identifiant, niches dans l'ordre de `NICHES` (règle 2 du CLAUDE.md).
+// Divisions hors du combat (Docs/Design/05-Fronts.md §4, §5.3, §5.4 ; 08-Population.md §8) :
+// déplacement, arrivées, rangement des lignes, échange, fuite, divisions détruites. Tout est en entiers ; divisions
+// parcourues par identifiant, fronts par identifiant, niches dans l'ordre de `NICHES` (règle 2 du CLAUDE.md).
 
 import { FRONTS } from "./config.ts";
+import { woundPawn } from "./activities.ts";
 import {
   DIVISION_DATA,
-  DIVISION_IDS,
   INFANTRY_NICHE,
   LINE_BOX,
   LINE_FIRST,
   LINE_RAPID,
   LINE_SECOND,
-  MEN,
   NICHE_TYPES,
   STATE_SCALE,
   byChoice,
-  countSoldiers,
   currentTurn,
   dataOf,
-  eliteAllowed,
-  emptyDivision,
   inFormation,
-  isDivisionId,
   isEmpty,
   isFleeing,
   isMoving,
-  nicheCounts,
   stateOf,
-  trimExcess,
   type Division,
 } from "./divisions.ts";
 import { frontById, frontWidth, inCombat, sideIndex, type Front } from "./fronts.ts";
-import type { GameState, Player } from "./state.ts";
+import type { GameState } from "./state.ts";
 
 /** Délai d'un déplacement, en tours (05-Fronts §4.4). */
 const transferTurns = (): number => FRONTS.transferRounds * FRONTS.combatTurns;
 
-// ---- ordres (05-Fronts §3.5, §5.2) ----
-
-/**
- * `create_division` (05-Fronts §3.5) : valide seulement si le stock d'armement et
- * les inactifs suffisent à remplir ses composants requis. Les composants optionnels
- * partent de 0 et arrivent par le renfort (§4.3). Les hommes ne sont pris que parmi
- * les inactifs, même en mobilisation forcée (provisoire). La division apparaît
- * aussitôt dans la réserve nationale, en formation.
- */
-export function createDivision(state: GameState, player: number, type: unknown): boolean {
-  if (!isDivisionId(type)) return false;
-  const p = state.players[player - 1]!;
-  const data = DIVISION_DATA[DIVISION_IDS.indexOf(type)]!;
-  const { elites, total } = nicheCounts(state, player, data);
-  if (!eliteAllowed(data, elites, total)) return false;
-  const required = data.components.filter((c) => c.required);
-  for (const c of required) {
-    const has = c.resource === MEN ? p.idle : p.armamentReserve[c.resource]!;
-    if (has < c.count) return false;
-  }
-  for (const c of required) {
-    if (c.resource === MEN) p.idle -= c.count;
-    else p.armamentReserve[c.resource] = p.armamentReserve[c.resource]! - c.count;
-  }
-  const turn = currentTurn(state);
-  state.divisions.push({
-    id: state.nextDivisionId++,
-    owner: player,
-    type: data.index,
-    counts: data.components.map((c) => (c.required ? c.count : 0)),
-    front: 0,
-    line: LINE_SECOND,
-    box: 0,
-    breakthrough: 0,
-    btEngaged: 0,
-    engaged: 0,
-    arrivalTick: 0,
-    formedTick: turn + data.formationTurns,
-    fleeUntilTick: 0,
-  });
-  p.soldiers += data.menComponent < 0 ? 0 : data.components[data.menComponent]!.count;
-  return true;
-}
+// ---- ordres (05-Fronts §5.2) ----
 
 function ownDivision(state: GameState, player: number, id: unknown): Division | undefined {
   if (!Number.isInteger(id)) return undefined;
   const d = state.divisions.find((x) => x.id === id);
   return d !== undefined && d.owner === player ? d : undefined;
-}
-
-/**
- * `delete_division` (05-Fronts §3.5) : une division de la réserve nationale, ni en
- * déplacement ni en formation (provisoire). Hommes et équipement rendus sans délai.
- */
-export function deleteDivision(state: GameState, player: number, id: unknown): boolean {
-  const d = ownDivision(state, player, id);
-  if (d === undefined || d.front !== 0 || isMoving(d) || inFormation(state, d)) return false;
-  const p = state.players[player - 1]!;
-  p.soldiers -= dataOf(d).menComponent < 0 ? 0 : d.counts[dataOf(d).menComponent]!;
-  emptyDivision(p, d);
-  state.divisions = state.divisions.filter((x) => x !== d);
-  return true;
 }
 
 const LINES: Readonly<Record<string, number>> = { first: LINE_FIRST, second: LINE_SECOND, rapid: LINE_RAPID, box: LINE_BOX };
@@ -155,129 +91,7 @@ export function moveDivisions(state: GameState, player: number, ids: unknown, fr
   return moved;
 }
 
-export function setForcedMobilization(state: GameState, player: number, enabled: unknown): boolean {
-  if (typeof enabled !== "boolean") return false;
-  state.players[player - 1]!.forcedMobilization = enabled;
-  return true;
-}
-
-// ---- renfort (05-Fronts §4.3) ----
-
-/**
- * Partage `stock` entre des besoins (05-Fronts §4.3, provisoire) : part égale
- * plafonnée au besoin de chacun, le surplus repartagé entre ceux qui en manquent
- * encore ; parties entières, une unité de plus aux premiers de la liste (plus
- * petits identifiants) pour le reste. Renvoie ce que chacun reçoit.
- */
-export function shareEqually(stock: number, needs: readonly number[]): number[] {
-  const out = needs.map(() => 0);
-  let left = stock;
-  let open = needs.map((_, i) => i).filter((i) => needs[i]! > 0);
-  while (left > 0 && open.length > 0) {
-    const share = Math.floor(left / open.length);
-    if (share === 0) {
-      for (let k = 0; k < left; k++) out[open[k]!] = out[open[k]!]! + 1;
-      break;
-    }
-    for (const i of open) {
-      const give = Math.min(share, needs[i]! - out[i]!);
-      out[i] = out[i]! + give;
-      left -= give;
-    }
-    open = open.filter((i) => out[i]! < needs[i]!);
-  }
-  return out;
-}
-
-/**
- * Une division peut-elle recevoir du renfort ? Ni en déplacement, ni en fuite, ni engagée dans une percée, ni en
- * première ligne d'un front en combat (05-Fronts §4.3, §4.6).
- */
-function reinforceable(state: GameState, d: Division, fighting: ReadonlySet<number>): boolean {
-  if (isMoving(d) || isFleeing(state, d) || d.breakthrough !== 0) return false;
-  return !(d.front !== 0 && d.line === LINE_FIRST && fighting.has(d.front));
-}
-
-/** Plus gros gain d'un composant en un round : `reinforcePercentPerRound` % de son effectif complet, au moins 1 (entiers). */
-function reinforceStep(full: number): number {
-  return Math.max(1, Math.ceil((full * FRONTS.reinforcePercentPerRound) / 100));
-}
-
-/**
- * Renfort des divisions de `player` (05-Fronts §4.3) : ressource par ressource,
- * le stock est partagé à parts égales entre les divisions qui en ont besoin, chaque
- * composant ne regagnant par round que `reinforceStep` exemplaires ; hors des
- * tours multiples de `combatTurns`, rien n'est donné. Les
- * hommes viennent de `men` (inactifs, ou toute la population hors soldats en
- * mobilisation forcée). L'excédent créé retourne au stock (§3.2). Renvoie les
- * hommes ajoutés aux divisions, net de l'excédent rendu.
- */
-function reinforcePlayer(state: GameState, p: Player, men: number, fighting: ReadonlySet<number>): number {
-  if (currentTurn(state) % FRONTS.combatTurns !== 0) return 0;
-  const divs = state.divisions.filter((d) => d.owner === p.id && reinforceable(state, d, fighting));
-  if (divs.length === 0) return 0;
-  let before = 0;
-  for (const d of divs) before += menCount(d);
-  const resources = new Set<number>();
-  for (const d of divs) for (const c of dataOf(d).components) resources.add(c.resource);
-  for (const r of [...resources].sort((a, b) => a - b)) {
-    const slots: { d: Division; i: number }[] = [];
-    const needs: number[] = [];
-    for (const d of divs) {
-      dataOf(d).components.forEach((c, i) => {
-        if (c.resource !== r) return;
-        slots.push({ d, i });
-        needs.push(Math.min(c.count - d.counts[i]!, reinforceStep(c.count)));
-      });
-    }
-    const stock = r === MEN ? men : p.armamentReserve[r]!;
-    const given = shareEqually(stock, needs);
-    let total = 0;
-    slots.forEach((s, k) => {
-      s.d.counts[s.i] = s.d.counts[s.i]! + given[k]!;
-      total += given[k]!;
-    });
-    if (r !== MEN) p.armamentReserve[r] = p.armamentReserve[r]! - total;
-  }
-  for (const d of divs) trimExcess(p, d);
-  let after = 0;
-  for (const d of divs) after += menCount(d);
-  return after - before;
-}
-
-function menCount(d: Division): number {
-  const k = dataOf(d).menComponent;
-  return k < 0 ? 0 : d.counts[k]!;
-}
-
-function fightingFronts(state: GameState): Set<number> {
-  const out = new Set<number>();
-  for (const f of state.fronts) if (inCombat(state, f)) out.add(f.id);
-  return out;
-}
-
-/** Mobilisation forcée (05-Fronts §4.3) : avant l'économie, les hommes des divisions passent avant les emplois. */
-export function reinforceBeforeEconomy(state: GameState): void {
-  const fighting = fightingFronts(state);
-  for (const p of state.players) {
-    if (!p.forcedMobilization) continue;
-    reinforcePlayer(state, p, Math.max(0, p.population - p.soldiers - p.hurt), fighting);
-    countSoldiers(state);
-  }
-}
-
-/** Après l'économie : les hommes viennent des inactifs (05-Fronts §4.3). */
-export function reinforceAfterEconomy(state: GameState): void {
-  const fighting = fightingFronts(state);
-  for (const p of state.players) {
-    if (p.forcedMobilization) continue;
-    const used = reinforcePlayer(state, p, p.idle, fighting);
-    p.idle -= Math.max(0, used);
-  }
-  countSoldiers(state);
-}
-
-// ---- arrivées, excédent, lignes (05-Fronts §3.2, §4.2, §4.4) ----
+// ---- arrivées, divisions détruites, lignes (05-Fronts §4.2, §4.4) ----
 
 /** Divisions arrivées à destination à ce tour. */
 export function applyArrivals(state: GameState): void {
@@ -285,18 +99,20 @@ export function applyArrivals(state: GameState): void {
   for (const d of state.divisions) if (d.arrivalTick !== 0 && d.arrivalTick <= turn) d.arrivalTick = 0;
 }
 
-/** Excédent de toutes les divisions rendu au stock (05-Fronts §3.2, provisoire : sans délai, à chaque tour). */
-export function trimAll(state: GameState): void {
-  for (const d of state.divisions) trimExcess(state.players[d.owner - 1]!, d);
-}
-
 /**
- * Divisions détruites (état 0 %, 05-Fronts §3.3) retirées de l'état. Provisoire : ce qui leur reste est perdu. Seules les
- * divisions de `hit`, celles qui viennent de subir des pertes au combat, peuvent l'être : une division vidée autrement
- * (fondation d'une ville, `removeSoldiers`) reste et se reconstitue par le renfort.
+ * Divisions détruites (barre de vie à 0, 08 §5, provisoire) retirées de l'état. Seules les divisions de `hit`, celles qui
+ * viennent de subir des pertes, peuvent l'être. Une division d'infanterie détruite fait passer un bonhomme de sa caserne
+ * à Blessés, et un inactif remplit la place s'il y en a un (08 §8) ; chars et appui-feu : aucun blessé, la division se
+ * reforme tant que la limite le permet.
  */
 export function removeDestroyed(state: GameState, hit: readonly Division[]): void {
-  if (hit.some(isEmpty)) state.divisions = state.divisions.filter((d) => !(hit.includes(d) && isEmpty(d)));
+  const dead = hit.filter(isEmpty);
+  if (dead.length === 0) return;
+  const gone = new Set(dead.map((d) => d.id));
+  state.divisions = state.divisions.filter((d) => !gone.has(d.id));
+  for (const d of dead) {
+    if (DIVISION_DATA[d.type]!.niche === INFANTRY_NICHE) woundPawn(state.players[d.owner - 1]!, d.type);
+  }
 }
 
 /** Divisions d'un camp d'un front, sur place (pas en déplacement), par identifiant croissant. */

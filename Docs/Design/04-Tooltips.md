@@ -1,13 +1,13 @@
 # Infobulles des icônes — feuille de route
 
-Chaque icône du jeu (arme, bien, ressource, métier, type d'usine) aura à terme
+Chaque icône du jeu (machine, ressource, métier, activité, type de division) aura à terme
 sa propre infobulle construite (`setTip` de `client/src/tooltip.ts`, contenus
 dans `client/src/goodtips.ts`). Mécanisme et affichage : 03-Client.md
 (« Infobulles construites »). Ce document liste ce qui existe et ce qui reste.
 
 Aucune infobulle n'invente de règle : elle affiche des valeurs du catalogue
 (envoyé une fois) et des statistiques du dernier tour, calculées par le moteur.
-Tant que 00-Game ne décrit pas l'usage d'une chose (les armes, par exemple),
+Tant qu'un document de règles (00-Game, 08-Population) ne décrit pas l'usage d'une chose,
 son infobulle ne dit que ce qui est écrit.
 
 ## Forme commune
@@ -17,15 +17,14 @@ Modèle : l'infobulle du tracteur (validée par l'auteur, 24 octobre 2026).
 1. Titre : le nom de la chose.
 2. Une phrase : à quoi elle sert, en termes de mécanisme.
 3. Section « règles » : les valeurs fixes de la configuration qui donnent son
-   effet (par exemple, surface par fermier sans tracteur et au maximum).
+   effet (par exemple, cases par travailleur, boîte qui reçoit la machine).
 4. Section « Votre nation » : les nombres du dernier tour, avec des barres.
 
 Couleurs des barres :
 - **vert** (`--ok`) : remplissage d'une jauge d'effet (part du gain possible
-  atteinte). Chaque barre a un libellé à gauche ; la jauge des machines est
-  l'engrenage (`public/icons/miscellaneous/misc-gear-stolen.png`) suivi de
-  « Mécanisation » ;
-- **couleur du métier** concerné, celle du détail Population (`--occ-farm`,
+  atteinte). Chaque barre a un libellé à gauche ; les machines n'ont plus de jauge de
+  mécanisation (une machine vaut un travailleur, 08 §3) ;
+- **couleur du métier** concerné, celle des boîtes du panneau de production (`--occ-farm`,
   `--occ-fish`, `--occ-mine`, `--occ-factory`, `--occ-idle`) : la barre de ce
   que ce métier produit ou travaille (surface cultivée, surface pêchée, cases de
   fer exploitées).
@@ -34,26 +33,20 @@ Couleurs des barres :
 
 | Icône | Contenu | Barres |
 | --- | --- | --- |
-| `[tracteur]` | surface par fermier sans tracteur / au maximum ; fermiers, tracteurs utilisés / d'une mécanisation totale | jauge verte surface par fermier ; surface cultivée / cultivable (`--occ-farm`) |
-| `[bateau de pêche]` | surface par pêcheur sans bateau / au maximum, rendement d'une case d'eau sans bateau / au maximum ; pêcheurs, bateaux utilisés / d'une mécanisation totale | jauge verte surface par pêcheur ; surface pêchée / pêchable (`--occ-fish`) |
-| `[pompe à vapeur]` | texte : valable pour tous les minerais, répartition proportionnelle aux mineurs (00-Game §7) ; cases par mineur sans pompe / au maximum ; mineurs, pompes utilisées / d'une mécanisation totale | jauge verte cases par mineur ; cases de fer exploitées / cases de fer (`--occ-mine`) |
+| `[tracteur]` | une machine vaut un agriculteur (même place, même sortie, sans conducteur) ; cases par travailleur, boîte qui la reçoit, usine et fer par machine ; agriculteurs, machines possédées / limite | surface cultivée / cultivable (`--occ-farm`) |
+| `[bateau de pêche]` | idem pour un pêcheur ; boîte Pêcheurs | surface pêchée / pêchable (`--occ-fish`) |
+| `[pompe à vapeur]` | idem pour un mineur ; boîte Mineurs | cases de fer exploitées / cases de fer (`--occ-mine`) |
 
-Ces trois infobulles sont posées sur chaque symbole du bien dans la barre
-d'informations (détail Ressources) et dans le panneau de production.
+Ces trois infobulles sont posées sur chaque symbole de machine dans l'onglet Ressources de la barre
+d'informations (`attachGoodTip`). Les pions de machine du panneau de production, les tuiles de sortie
+et les boîtes ont chacun un `title` (nom, ce qu'il montre, comment le glisser).
 
-Types d'usine, dans le menu « Inaugurer une usine » (validé par l'auteur sur
-maquette, 25 octobre 2026) : au survol d'un choix, l'**arbre de progression**
-du type, à droite du menu. Forme différente du modèle du tracteur : en-tête
-« \<type\> : arbre de progression », puis l'arbre en liste indentée, traits en
-coude, une icône et un nom par bien, la racine en gras avec « production de
-base ». Pas de règle ni de nombre : la condition de déblocage est la même
-partout (`FACTORY.unlockTurns`), l'afficher n'apprend rien. Détail :
-03-Client.md (« Inaugurer une usine »).
-
-Panneau de production : toute icône de bien (ligne en production, ligne
-verrouillée ou « aucune ligne », icône de l'usine dans l'en-tête de ville) qui
-n'a pas d'infobulle construite porte un `title` avec son nom (`productName`,
-par exemple « char de cavalerie »).
+Panneau de production (08 §11, nouvelles infobulles construites) :
+- **cadenas ouvert** d'une boîte parente : les boîtes qu'elle débloque, la barre de progression de chacune et le
+  nombre d'ouvriers servis en fer qui la fait avancer ;
+- **boîte verrouillée** : sa progression, comment elle avance (ouvriers servis de la boîte parente), le temps restant
+  à ce rythme, ou la raison de l'arrêt (parent verrouillé, aucun ouvrier servi) ;
+- **camembert du fer** (onglet Ressources) : une rangée par activité qui réserve du fer.
 
 ## À faire
 
@@ -61,41 +54,25 @@ Ordre proposé ; le contenu exact de chacune est à valider avec l'auteur comme
 pour le tracteur.
 
 ### Ressources
-- `[fer]` (détail Ressources, panneau de production) : à quoi sert le fer (les
-  lignes en consomment), capacité par case ; fer extrait / demandé, capacité.
-- Blé et poisson (lignes Agriculture et Pêche du détail Nourriture, pas encore
-  d'icône) : nourriture, population maximale (00-Game §4.1).
+- `[fer]` (onglet Ressources, en-tête du panneau de production) : à quoi sert le fer (les
+  usines et les casernes en réservent), fer par case ; fer réservé / produit (08 §4).
+- Nourriture (tuile de sortie d'Agriculteurs et de Pêcheurs) : capacité de population apportée (08 §3).
 
 ### Métiers (icônes de `public/icons/population/`)
-- Ouvriers d'usine, mineurs, fermiers, pêcheurs, inactifs (détail Population) :
-  ce que fait le métier, comment il est rempli (00-Game §4 : lignes d'abord,
-  puis fermiers et pêcheurs, puis inactifs), nombre et part.
-- Soldats et blessés (`pop-soldier`, `pop-hurt`, détail Population) : fait, un
-  `title` sur le nom de la ligne (`infobar.ts`), textes validés par l'auteur.
-  Soldats : hommes des divisions, ils mangent mais ne travaillent pas, une
-  famine ne les retire jamais. Blessés : hommes blessés au combat, ils mangent
-  et occupent des places de population maximale, ne travaillent pas et ne sont
-  pas recrutés, un petit nombre disparaît chaque seconde (00-Game §4.2 ; le plancher
-  `hurtMinimum` n'est pas écrit dans le texte, pour ne pas dupliquer la valeur).
-- `pop-sailor`, `pop-fisherman-beard` : fichiers présents, pas
-  encore utilisés ; pas d'infobulle avant que le métier existe.
+- Pions du panneau de production (`pop-default`, `pop-farmer`, `pop-fisherman`, `pop-miner`, `pop-worker`,
+  `pop-soldier`, `pop-hurt`) : un `title` générique est posé (bonhomme, état, comment le glisser). Une infobulle construite
+  par métier (ce qu'il fait, nombre et part) reste à valider avec l'auteur.
+- Blessés (`pop-hurt`) : soignés un à la fois, puis ils retournent dans Inactifs (08 §8) ; la durée de soin n'est pas écrite
+  dans le texte, pour ne pas dupliquer la valeur.
+- `pop-sailor`, `pop-fisherman-beard` : fichiers présents, pas encore utilisés.
 
-### Armement
-- `[fusil]`, `[mitrailleuse]`, `[artillerie]`, `[canon anti-aérien]`,
-  `[canon anti-char]` (détail Armement, panneau de production) : stock, stock
-  cible, production par tour, baisse de l'excès (00-Game §8.3). L'usage des
-  armes n'est pas décrit dans 00-Game : rien d'autre tant qu'il ne l'est pas.
-
-### Types d'usine
-- Menu « Inaugurer une usine » : fait (arbre de progression, ci-dessus).
-- En-tête de section du panneau de production (nom du type) : pas encore
-  d'infobulle ; l'arbre de progression pourrait y être repris, avec l'état de
-  déblocage de cette usine.
+### Activités
+- Nom d'une boîte du panneau de production : pas encore d'infobulle construite ; elle pourrait reprendre l'entrée, la
+  sortie et les ouvriers par unité de la configuration (`ActivityInfo`).
 
 ### Unités militaires
-- Fait : au survol du nom d'une unité dans le panneau d'un front, un `title` (description de l'unité, sinon de son équipement ;
-  population, équipement, largeurs, attaques, PV, motorisé). Pas encore d'infobulle construite avec barres : à valider avec l'auteur.
+- Fait : au survol du nom d'une unité dans le panneau d'un front, un `title` (description de l'unité ;
+  largeurs, attaques, PV, motorisé). Plus d'équipement (08 §5). Pas encore d'infobulle construite avec barres : à valider avec l'auteur.
 
 ### Autres
-- `⇄` (Ressources, flux) et `▣` (Armement, stock) sur la barre : rien de plus
-  que le `title` actuel tant qu'ils ne sont que des titres de section.
+- `⇄` (Ressources, flux) sur la barre : rien de plus que le `title` actuel tant qu'il n'est qu'un titre de section.

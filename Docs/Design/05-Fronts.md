@@ -16,6 +16,11 @@ garde qu'un résumé. Règles décidées avec l'auteur les 29 et 30 octobre 2026
   **boîtes de percée** (§4.6) et la **percée** (§7.2).
 - **Branche `Simpler-Combat`** : `06-Combat-Simplifie.md` remplace §3.5, §5,
   §6, §7.1 et §7.2 là où il les contredit (combat instantané, usines d'unités).
+- **Branche `Human-Style-Pop`** : `08-Population.md` remplace §3.2, §3.3, §3.5, §4.3, §4.5
+  et le bouton de recrutement et la corbeille de §11.2 : une division n'a plus de composants
+  d'équipement mais une barre de vie, elle vient d'une usine ou d'une caserne, et le renfort et
+  la mobilisation forcée n'existent plus. Les mentions d'hommes et d'équipement des autres
+  paragraphes se lisent comme des pertes d'état.
 - **Hors périmètre** : fronts aériens et maritimes, avions, barrage
   d'artillerie, bots (§16).
 

@@ -1,18 +1,10 @@
-// Types de division et niches des fronts terrestres (Docs/Design/05-Fronts.md §3).
+// Types de division et niches des fronts terrestres (Docs/Design/05-Fronts.md §3, 08-Population.md §5).
 // Valeurs de l'auteur, validées le 31 octobre 2026 (05-Fronts §3.4).
 //
-// UNE DIVISION est un stock d'hommes et d'armement, créé par le joueur. Son type
-// est une liste de COMPOSANTS : les hommes (`"men"`), ou un type d'armement de
-// `armament.ts`, chacun en `count` exemplaires dans une division complète.
-// - `required` : le taux de soldats de la division est le plus petit taux de ses
-//   composants requis ; aucun composant ne dépasse ce taux (l'excédent retourne
-//   au stock national, 05-Fronts §3.2).
-// - `weight` : poids dans l'état de la division (05-Fronts §3.3). La somme des
-//   poids n'a pas à valoir 100.
-// - `softAttack`, `hardAttack`, `airAttack` : apport du composant complet aux
-//   attaques de la division ; à moitié présent, la moitié.
-// - `lossMultiplier` : part des pertes de la division que subit ce composant
-//   (05-Fronts §6.2) ; absent = 1.
+// UNE DIVISION n'a pas d'équipement : une barre de vie (`Division.state`, 0 à `STATE_SCALE`). Chaque entrée de `DIVISIONS`
+// est la seule définition de son unité :
+// - `softAttack`, `hardAttack`, `airAttack` : attaques d'une division pleine, multipliées par son état (08 §5) ;
+// - `production` : sa boîte d'activités, usine ou caserne. Le moteur en déduit la boîte (`src/activities.ts`).
 //
 // LARGEURS en liaisons (une liaison = une connexion d'un front).
 // MULTIPLICATEURS : écrits en décimal, DEUX DÉCIMALES AU PLUS. Le moteur les
@@ -20,28 +12,36 @@
 // APPUI-FEU (antichar, antiaérien, artillerie) : reçoit des dégâts directs, selon sa
 // largeur engagée (05-Fronts §6.3) ; `hitPoints`, `defenseHitPointsMultiplier` et
 // `armorPercent` y sont lus comme pour les niches principales.
-// DESCRIPTION absente : celle de l'armement du premier composant d'armement.
+// DESCRIPTION absente : le client n'affiche rien.
 // Le NOM affiché de chaque type est dans le client (`client/src/names.ts`).
 
-import type { ArmamentId } from "./armament.ts";
+import { UNLOCK } from "./activities.ts";
 
-export interface DivisionComponentConfig {
-  /** Les hommes (population), ou un type d'armement. */
-  readonly resource: "men" | ArmamentId;
-  /** Exemplaires dans une division complète. */
-  readonly count: number;
-  readonly required: boolean;
-  readonly weight: number;
+const U = UNLOCK.turns;
+
+/** La boîte d'activités d'une unité (08 §2, §4, §9). Fer et ouvriers : valeurs d'essai, à fixer avec l'auteur. */
+export interface DivisionProductionConfig {
+  /** `barracks` : infanterie, ses bonshommes en sont les soldats et deviennent des blessés. `factory` : le reste. */
+  readonly building: "factory" | "barracks";
+  /** Activité parente : sa production servie en fer débloque celle-ci. `null` : pas de parent. */
+  readonly parent: string | null;
+  /** Coût de déblocage, en tours d'un ouvrier servi du parent ; 0 : débloquée dès le départ, le joueur l'ouvre d'un clic. */
+  readonly unlockCost: number;
+  /** `unlockCost` est une population totale, et non du temps : atteinte une fois, elle reste acquise (08 §9). Le parent est alors Inactifs. */
+  readonly unlockByPopulation?: boolean;
+  /** Ouvriers par division. */
+  readonly workersPerUnit: number;
+  /** Fer réservé par division. */
+  readonly ironPerUnit: number;
+}
+
+export interface DivisionConfig {
+  /** Attaques d'une division pleine. */
   readonly softAttack: number;
   readonly hardAttack: number;
   /** L'aérien n'existe pas encore : lue par rien. */
   readonly airAttack: number;
-  /** Décimal, deux décimales au plus. Absent : 1. */
-  readonly lossMultiplier?: number;
-}
-
-export interface DivisionConfig {
-  readonly components: readonly DivisionComponentConfig[];
+  readonly production: DivisionProductionConfig;
   /** Icône : chemin sous `client/public/icons/`. */
   readonly icon: string;
   readonly description?: string;
@@ -49,9 +49,9 @@ export interface DivisionConfig {
   readonly frontWidth: number;
   /** Largeur de percée, en liaisons (V2 ; sans effet en V1). */
   readonly breakthroughWidth: number;
-  /** Durée de formation d'une division créée, en tours (100 = 10 s) ; 0 : aucune formation (05-Fronts §3.5). */
-  readonly formationTurns: number;
-  /** Type limité par `ELITE_TROOPS_RATIO` : absent = non (05-Fronts §3.5). */
+  /** Tours de formation d'une division produite (100 = 10 s) ; absent : `DIVISION_TIMING.defaultProductionTurns` (08 §6). */
+  readonly productionTurns?: number;
+  /** Type limité par `ELITE_TROOPS_RATIO` : absent = non (08 §5). */
   readonly elite?: boolean;
   /** PV d'une division complète : perte = dégâts / PV (05-Fronts §6.2). */
   readonly hitPoints: number;
@@ -68,39 +68,36 @@ export interface DivisionConfig {
   readonly movement: "foot" | "motorized";
 }
 
-const men = (count: number, weight: number, lossMultiplier?: number): DivisionComponentConfig => ({
-  resource: "men",
-  count,
-  required: true,
-  weight,
-  softAttack: 0,
-  hardAttack: 0,
-  airAttack: 0,
-  ...(lossMultiplier === undefined ? {} : { lossMultiplier }),
-});
+/** Délais des divisions (08 §6). Valeurs d'essai, à fixer. */
+export const DIVISION_TIMING = {
+  /** Tours de formation d'une division dont le type n'a pas de `productionTurns`. */
+  defaultProductionTurns: 300,
+  /** Tours avant qu'une division en trop disparaisse. */
+  leaveTurns: 100,
+} as const;
+
+/** Soin des divisions (06-Combat-Simplifie §3.6, 08 §5). */
+export const COMBAT = {
+  /** Part de la barre de vie regagnée par seconde, hors combat, toutes les divisions en même temps (provisoire). */
+  healPercentPerSecond: 2,
+  /** Tours par seconde, pour convertir `healPercentPerSecond` en gain par tour. */
+  turnsPerSecond: 10,
+} as const;
 
 /**
- * Elite Troops Ratio : une division d'élite ne peut être créée que si le nombre
- * de divisions d'infanterie après sa création (élites comprises) est au moins ce
- * multiple du nombre d'élites après sa création, soit `ratio × (élites + 1) ≤
- * infanterie + 1`. 10 : les élites sont au plus 10 % de l'infanterie. Ne vérifié
- * qu'à la création (05-Fronts §3.5).
+ * Elite Troops Ratio : la limite de la caserne d'élites est aussi plafonnée à
+ * `floor(divisions d'infanterie du joueur / ratio)`, élites comprises (08 §5). 10 : les élites sont au plus 10 % de l'infanterie.
  */
 export const ELITE_TROOPS_RATIO = 10;
 
 export const DIVISIONS = {
   regulars: {
-    components: [
-      men(1000, 2),
-      { resource: "rifle", count: 1000, required: true, weight: 2, softAttack: 1000, hardAttack: 100, airAttack: 0 },
-      // Servies par les 1 000 hommes de la division, sans homme de plus.
-      { resource: "machineGun", count: 100, required: false, weight: 1, softAttack: 500, hardAttack: 0, airAttack: 0 },
-    ],
+    softAttack: 1500, hardAttack: 100, airAttack: 0,
+    production: { building: "barracks", parent: "militia", unlockCost: U, workersPerUnit: 1, ironPerUnit: 50 },
     icon: "armament/icon-inf-regulars.png",
-    description: "La base de toutes vos armées. Elle devra recevoir de l'équipement supplémentaire pour être vraiment efficace : canons, mitrailleuses, etc.",
+    description: "La base de toutes vos armées. Elle aura besoin d'appui-feu pour être vraiment efficace : artillerie, canons antichars, etc.",
     frontWidth: 1,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 50000,
     defenseHitPointsMultiplier: 2,
     attackMultiplier: 0.5,
@@ -110,15 +107,11 @@ export const DIVISIONS = {
     movement: "foot",
   },
   tankette: {
-    // 10 hommes par char : 5 à bord, 5 à l'entretien.
-    components: [
-      men(500, 1, 0.5),
-      { resource: "tankette", count: 50, required: true, weight: 1, softAttack: 2500, hardAttack: 500, airAttack: 0 },
-    ],
+    softAttack: 2500, hardAttack: 500, airAttack: 0,
+    production: { building: "factory", parent: "tractor", unlockCost: U, workersPerUnit: 1, ironPerUnit: 200 },
     icon: "armament/armament-tankette.png",
     frontWidth: 2,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 50000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 1,
@@ -128,14 +121,11 @@ export const DIVISIONS = {
     movement: "foot",
   },
   antiTank: {
-    components: [
-      men(500, 1),
-      { resource: "antiTankGun", count: 100, required: true, weight: 1, softAttack: 0, hardAttack: 5000, airAttack: 0 },
-    ],
+    softAttack: 0, hardAttack: 5000, airAttack: 0,
+    production: { building: "factory", parent: "artillery", unlockCost: U, workersPerUnit: 1, ironPerUnit: 80 },
     icon: "armament/armament-AT-gun.png",
     frontWidth: 3,
     breakthroughWidth: 5,
-    formationTurns: 100,
     hitPoints: 50000,
     defenseHitPointsMultiplier: 2,
     attackMultiplier: 0.2,
@@ -145,14 +135,11 @@ export const DIVISIONS = {
     movement: "foot",
   },
   antiAir: {
-    components: [
-      men(500, 1),
-      { resource: "antiAirGun", count: 100, required: true, weight: 1, softAttack: 1000, hardAttack: 0, airAttack: 5000 },
-    ],
+    softAttack: 1000, hardAttack: 0, airAttack: 5000,
+    production: { building: "factory", parent: "regulars", unlockCost: U, workersPerUnit: 1, ironPerUnit: 80 },
     icon: "armament/armament-AA-gun.png",
     frontWidth: 3,
     breakthroughWidth: 5,
-    formationTurns: 100,
     hitPoints: 50000,
     defenseHitPointsMultiplier: 2,
     attackMultiplier: 0.2,
@@ -162,14 +149,11 @@ export const DIVISIONS = {
     movement: "foot",
   },
   artillery: {
-    components: [
-      men(500, 1),
-      { resource: "artillery", count: 50, required: true, weight: 1, softAttack: 2500, hardAttack: 250, airAttack: 0 },
-    ],
+    softAttack: 2500, hardAttack: 250, airAttack: 0,
+    production: { building: "factory", parent: "regulars", unlockCost: U / 2, workersPerUnit: 1, ironPerUnit: 100 },
     icon: "armament/armament-artillery.png",
     frontWidth: 3,
     breakthroughWidth: 5,
-    formationTurns: 100,
     hitPoints: 50000,
     defenseHitPointsMultiplier: 2,
     attackMultiplier: 1,
@@ -179,16 +163,13 @@ export const DIVISIONS = {
     movement: "foot",
   },
   militia: {
-    // Moitié moins de fusils, pas de mitrailleuse.
-    components: [
-      men(1000, 2),
-      { resource: "rifle", count: 500, required: true, weight: 2, softAttack: 600, hardAttack: 20, airAttack: 0 },
-    ],
+    softAttack: 600, hardAttack: 20, airAttack: 0,
+    production: { building: "barracks", parent: "idle", unlockCost: 10, unlockByPopulation: true, workersPerUnit: 1, ironPerUnit: 0 },
     icon: "armament/icon-inf-milicia.png",
     description: "Des hommes avec quelques fusils. Mieux que rien.",
     frontWidth: 1,
     breakthroughWidth: 1,
-    formationTurns: 0,
+    productionTurns: 1,
     hitPoints: 40000,
     defenseHitPointsMultiplier: 2,
     attackMultiplier: 0.3,
@@ -198,17 +179,13 @@ export const DIVISIONS = {
     movement: "foot",
   },
   elite: {
-    components: [
-      men(1000, 2),
-      { resource: "rifle", count: 1500, required: true, weight: 2, softAttack: 1000, hardAttack: 200, airAttack: 0 },
-      // Servies par les 1 000 hommes de la division, sans homme de plus.
-      { resource: "machineGun", count: 300, required: false, weight: 1, softAttack: 1000, hardAttack: 0, airAttack: 0 },
-    ],
+    softAttack: 2000, hardAttack: 200, airAttack: 0,
+    production: { building: "barracks", parent: "regulars", unlockCost: U, workersPerUnit: 1, ironPerUnit: 100 },
     icon: "armament/icon-inf-elite.png",
     description: `La crème de la crème. Limités à ${Math.floor((200 + ELITE_TROOPS_RATIO) / (2 * ELITE_TROOPS_RATIO))} % de votre infanterie totale.`,
     frontWidth: 1,
     breakthroughWidth: 1,
-    formationTurns: 200,
+    productionTurns: 600,
     elite: true,
     hitPoints: 70000,
     defenseHitPointsMultiplier: 2,
@@ -221,14 +198,11 @@ export const DIVISIONS = {
   // Chars (valeurs de l'auteur, 1er novembre 2026) : 10 hommes par char, comme la tankette.
   // Description absente : celle de l'armement.
   infantryTank: {
-    components: [
-      men(400, 1, 0.5),
-      { resource: "infantryTank", count: 40, required: true, weight: 1, softAttack: 4000, hardAttack: 1500, airAttack: 0 },
-    ],
+    softAttack: 4000, hardAttack: 1500, airAttack: 0,
+    production: { building: "factory", parent: "tankette", unlockCost: U, workersPerUnit: 2, ironPerUnit: 400 },
     icon: "armament/icon-armament-infantry-tank-32.png",
     frontWidth: 2,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 250000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 1,
@@ -238,14 +212,11 @@ export const DIVISIONS = {
     movement: "foot",
   },
   cruiserTank: {
-    components: [
-      men(500, 1, 0.5),
-      { resource: "cruiserTank", count: 50, required: true, weight: 1, softAttack: 3000, hardAttack: 1000, airAttack: 0 },
-    ],
+    softAttack: 3000, hardAttack: 1000, airAttack: 0,
+    production: { building: "factory", parent: "tankette", unlockCost: U, workersPerUnit: 2, ironPerUnit: 300 },
     icon: "armament/icon-armament-cruiser-tank-32.png",
     frontWidth: 2,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 100000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 1,
@@ -255,14 +226,11 @@ export const DIVISIONS = {
     movement: "motorized",
   },
   mediumTank: {
-    components: [
-      men(400, 1, 0.5),
-      { resource: "mediumTank", count: 40, required: true, weight: 1, softAttack: 3000, hardAttack: 1750, airAttack: 0 },
-    ],
+    softAttack: 3000, hardAttack: 1750, airAttack: 0,
+    production: { building: "factory", parent: "cruiserTank", unlockCost: U, workersPerUnit: 2, ironPerUnit: 400 },
     icon: "armament/icon-armament-medium-tank-32.png",
     frontWidth: 2,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 200000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 1,
@@ -274,14 +242,11 @@ export const DIVISIONS = {
   // Appui-feu sur châssis blindé et chenillé (valeurs de l'auteur, 1er novembre 2026) : mêmes effectifs que les
   // variantes à pied. Largeur en première ligne 5, largeur de percée 1. Description absente : celle de l'armement.
   selfPropelledArtillery: {
-    components: [
-      men(500, 1),
-      { resource: "selfPropelledArtilleryGun", count: 50, required: true, weight: 1, softAttack: 3000, hardAttack: 0, airAttack: 0 },
-    ],
+    softAttack: 3000, hardAttack: 0, airAttack: 0,
+    production: { building: "factory", parent: "artillery", unlockCost: U, workersPerUnit: 2, ironPerUnit: 200 },
     icon: "armament/icon-armament-armored-SPART-32.png",
     frontWidth: 3,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 100000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 1,
@@ -291,14 +256,11 @@ export const DIVISIONS = {
     movement: "motorized",
   },
   armoredAntiTank: {
-    components: [
-      men(500, 1),
-      { resource: "armoredAntiTankGun", count: 100, required: true, weight: 1, softAttack: 0, hardAttack: 10000, airAttack: 0 },
-    ],
+    softAttack: 0, hardAttack: 10000, airAttack: 0,
+    production: { building: "factory", parent: "antiTank", unlockCost: U, workersPerUnit: 2, ironPerUnit: 200 },
     icon: "armament/icon-armament-armored-AT-32.png",
     frontWidth: 3,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 200000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 0.8,
@@ -308,14 +270,11 @@ export const DIVISIONS = {
     movement: "motorized",
   },
   selfPropelledAntiAir: {
-    components: [
-      men(500, 1),
-      { resource: "selfPropelledAntiAirGun", count: 100, required: true, weight: 1, softAttack: 2000, hardAttack: 0, airAttack: 10000 },
-    ],
+    softAttack: 2000, hardAttack: 0, airAttack: 10000,
+    production: { building: "factory", parent: "antiAir", unlockCost: U, workersPerUnit: 2, ironPerUnit: 150 },
     icon: "armament/icon-armament-SPAA-32.png",
     frontWidth: 3,
     breakthroughWidth: 1,
-    formationTurns: 100,
     hitPoints: 100000,
     defenseHitPointsMultiplier: 1,
     attackMultiplier: 0.8,

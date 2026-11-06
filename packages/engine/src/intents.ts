@@ -2,32 +2,22 @@
 // contenu peut être n'importe quoi. Chaque champ est vérifié avant usage ; un
 // ordre invalide est ignoré, donc ignoré par tous les clients de la même façon.
 //
-// Les règles viennent de Docs/Design/00-Game.md. Ordres pour l'instant : fonder
-// une ville (§3.3), régler la part fermiers / pêcheurs (§4, §9), et les ordres des
-// usines (§8, §9) : construire une usine, supprimer une usine, créer une ligne, régler les lignes
-// actives, changer les priorités, et les ordres de diplomatie (§1, §9) : déclarer
-// la guerre, proposer un pacte, rompre un pacte, proposer la paix, répondre à une
-// proposition, et les ordres des fronts (05-Fronts §5.2) : créer, supprimer,
-// déplacer une division, mobilisation forcée, attaque sur tout le front, percée. Les autres actions du joueur n'ont pas encore de règle écrite et
-// n'ont donc pas d'ordre.
+// Les règles viennent de Docs/Design/00-Game.md et 08-Population.md. Ordres : fonder une ville (00-Game §3.3, 08 §10),
+// déplacer des bonshommes ou des machines entre les activités, réordonner les activités, retirer une place vide de
+// caserne (08 §10), les ordres de diplomatie (00-Game §1, §9) : déclarer la guerre, proposer un pacte, rompre un
+// pacte, proposer la paix, répondre à une proposition, et les ordres des fronts (05-Fronts §5.2) : déplacer une
+// division, attaque sur tout le front, percée. Les divisions ne se créent ni ne se suppriment par ordre : elles
+// suivent les limites des usines et des casernes (08 §6). Les autres actions du joueur n'ont pas encore de règle écrite
+// et n'ont donc pas d'ordre.
 
-import type { FactoryTypeId, ProductId } from "./config.ts";
+import type { ActivityId, GoodId } from "./config.ts";
 import { foundCity } from "./cities.ts";
 import { STATUS_NEUTRAL, STATUS_WAR, answerProposal, breakPact, declareWar, propose, statusOf } from "./diplomacy.ts";
 import { endWar, startWar } from "./fronts.ts";
 import { startFrontAttack, stopFrontAttack } from "./attacks.ts";
 import { cancelBreakthrough, startBreakthrough } from "./breakthroughs.ts";
-import { createDivision, deleteDivision, moveDivisions, setForcedMobilization } from "./placement.ts";
-import {
-  buildFactory,
-  createLine,
-  deleteFactory,
-  isFactoryTypeId,
-  isProductId,
-  setActiveLines,
-  setCityPriority,
-  setLinePriority,
-} from "./factories.ts";
+import { moveDivisions } from "./placement.ts";
+import { changeProductionTarget, closeActivity, movePawn, openActivityOrder, setActivityOrder, setAutoAssign, setDisabledSlots } from "./activities.ts";
 import { isPlayerId, type GameState } from "./state.ts";
 
 /** Fonder une ville du joueur sur la case `tile` (00-Game §3.3). */
@@ -39,68 +29,59 @@ export interface FoundCityIntent {
 }
 
 /**
- * Régler la part de la population (hors usines) qui devient fermiers ; le reste
- * devient pêcheurs (00-Game §4, §9). Format provisoire : le format du réglage
- * n'est pas décidé (00-Game §13).
+ * Déplacer `count` bonshommes (`kind: "worker"`) ou machines de `good` (`kind: "machine"`) de l'activité `from` à l'activité
+ * `to` (08 §10).
  */
-export interface SetFarmShareIntent {
-  readonly type: "set_farm_share";
+export interface MovePawnIntent {
+  readonly type: "move_pawn";
   /** Écrit par le serveur. */
   readonly player: number;
-  /** Entier 0 à 100 : pourcentage de fermiers. */
-  readonly percent: number;
-}
-
-/** Construire l'usine d'un type dans une ville du joueur (00-Game §8, §9). */
-export interface BuildFactoryIntent {
-  readonly type: "build_factory";
-  /** Écrit par le serveur. */
-  readonly player: number;
-  /** Identifiant de la ville. */
-  readonly city: number;
-  readonly factoryType: FactoryTypeId;
-}
-
-/** Supprimer l'usine d'une ville du joueur, avec toutes ses lignes (00-Game §8, §9). */
-export interface DeleteFactoryIntent {
-  readonly type: "delete_factory";
-  readonly player: number;
-  readonly city: number;
-}
-
-/** Créer une ligne d'un bien dans l'usine d'une ville (00-Game §8.2, §9). */
-export interface CreateLineIntent {
-  readonly type: "create_line";
-  readonly player: number;
-  readonly city: number;
-  readonly good: ProductId;
-}
-
-/** Régler le nombre de lignes actives d'un bien dans l'usine d'une ville (00-Game §8.1, §9). */
-export interface SetActiveLinesIntent {
-  readonly type: "set_active_lines";
-  readonly player: number;
-  readonly city: number;
-  readonly good: ProductId;
-  /** Entier de 0 au nombre de lignes de ce bien. */
+  readonly from: ActivityId;
+  readonly to: ActivityId;
+  readonly kind: "worker" | "machine";
+  /** Pour une machine. */
+  readonly good?: GoodId;
+  /** Entier ≥ 1. */
   readonly count: number;
 }
 
-/** Changer la priorité d'une ville avec son usine : `position` 0 = remplie en premier (00-Game §8.1). */
-export interface SetCityPriorityIntent {
-  readonly type: "set_city_priority";
+/** Réordonner les activités (08 §2) : l'activité prend la position `position` (1 à nombre d'activités ouvertes − 1 ; Inactifs reste en haut). */
+export interface SetActivityOrderIntent {
+  readonly type: "set_activity_order";
   readonly player: number;
-  readonly city: number;
+  readonly activity: ActivityId;
   readonly position: number;
 }
 
-/** Changer la priorité d'un groupe de lignes au sein de l'usine de sa ville (00-Game §8.1). */
-export interface SetLinePriorityIntent {
-  readonly type: "set_line_priority";
+/** Allumer ou éteindre l'auto-assignation (08 §7 bis). */
+export interface SetAutoAssignIntent {
+  readonly type: "set_auto_assign";
   readonly player: number;
-  readonly city: number;
-  readonly good: ProductId;
-  readonly position: number;
+  readonly enabled: boolean;
+}
+
+/** Fixer le nombre de postes vacants désactivés d'une activité, comptés depuis la droite (08 §7 bis). */
+export interface SetDisabledSlotsIntent {
+  readonly type: "set_disabled_slots";
+  readonly player: number;
+  readonly activity: ActivityId;
+  readonly count: number;
+}
+
+/** Changer la production visée d'une caserne ou d'une usine de divisions (08 §7 ter). */
+export interface ChangeProductionTargetIntent {
+  readonly type: "change_production_target";
+  readonly player: number;
+  readonly activity: ActivityId;
+  /** Entier non nul : unités à ajouter ou à retirer. */
+  readonly delta: number;
+}
+
+/** Ouvrir une boîte débloquée ou supprimée, ou supprimer une usine ou une caserne (08 §9). */
+export interface ActivityOpenIntent {
+  readonly type: "open_activity" | "close_activity";
+  readonly player: number;
+  readonly activity: ActivityId;
 }
 
 /** Déclarer la guerre à un joueur avec qui le statut est neutre (00-Game §1). */
@@ -142,20 +123,6 @@ export interface AnswerProposalIntent {
   readonly accept: boolean;
 }
 
-/** Créer une division d'un type (05-Fronts §3.5) : `division` est une clé de `DIVISIONS`. */
-export interface CreateDivisionIntent {
-  readonly type: "create_division";
-  readonly player: number;
-  readonly division: string;
-}
-
-/** Supprimer une division de la réserve nationale (05-Fronts §3.5). */
-export interface DeleteDivisionIntent {
-  readonly type: "delete_division";
-  readonly player: number;
-  readonly id: number;
-}
-
 /**
  * Déplacer des divisions (05-Fronts §4.4, §4.6, §5.2) : `front` 0 pour la réserve
  * nationale ; `line` absente : seconde ligne ; `box` avec `line: "box"` : une boîte
@@ -186,13 +153,6 @@ export interface CancelBreakthroughIntent {
   readonly id: number;
 }
 
-/** Mobilisation forcée du joueur (05-Fronts §4.3). */
-export interface SetForcedMobilizationIntent {
-  readonly type: "set_forced_mobilization";
-  readonly player: number;
-  readonly enabled: boolean;
-}
-
 /** Lancer ou arrêter l'attaque sur tout le front (05-Fronts §5). */
 export interface FrontAttackIntent {
   readonly type: "start_front_attack" | "stop_front_attack";
@@ -201,21 +161,17 @@ export interface FrontAttackIntent {
 }
 
 export type Intent =
-  | CreateDivisionIntent
-  | DeleteDivisionIntent
   | MoveDivisionIntent
   | StartBreakthroughIntent
   | CancelBreakthroughIntent
-  | SetForcedMobilizationIntent
   | FrontAttackIntent
   | FoundCityIntent
-  | SetFarmShareIntent
-  | BuildFactoryIntent
-  | DeleteFactoryIntent
-  | CreateLineIntent
-  | SetActiveLinesIntent
-  | SetCityPriorityIntent
-  | SetLinePriorityIntent
+  | MovePawnIntent
+  | SetActivityOrderIntent
+  | SetAutoAssignIntent
+  | SetDisabledSlotsIntent
+  | ChangeProductionTargetIntent
+  | ActivityOpenIntent
   | DeclareWarIntent
   | ProposePactIntent
   | BreakPactIntent
@@ -235,38 +191,20 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
       // Économie gelée : pas de fondation de ville (01-Architecture §9 bis).
       if (state.economyFrozen) return false;
       return applyFoundCity(state, player, fields["tile"], changed);
-    case "set_farm_share":
-      return applySetFarmShare(state, player, fields["percent"]);
-    case "build_factory": {
-      const { city, factoryType } = fields;
-      return Number.isInteger(city) && isFactoryTypeId(factoryType) && buildFactory(state, player, city as number, factoryType);
-    }
-    case "delete_factory": {
-      const { city } = fields;
-      return Number.isInteger(city) && deleteFactory(state, player, city as number);
-    }
-    case "create_line": {
-      const { city, good } = fields;
-      return Number.isInteger(city) && isProductId(good) && createLine(state, player, city as number, good);
-    }
-    case "set_active_lines": {
-      const { city, good, count } = fields;
-      return (
-        Number.isInteger(city) && isProductId(good) && Number.isInteger(count) &&
-        setActiveLines(state, player, city as number, good, count as number)
-      );
-    }
-    case "set_city_priority": {
-      const { city, position } = fields;
-      return Number.isInteger(city) && Number.isInteger(position) && setCityPriority(state, player, city as number, position as number);
-    }
-    case "set_line_priority": {
-      const { city, good, position } = fields;
-      return (
-        Number.isInteger(city) && isProductId(good) && Number.isInteger(position) &&
-        setLinePriority(state, player, city as number, good, position as number)
-      );
-    }
+    case "move_pawn":
+      return movePawn(state, player, fields["from"], fields["to"], fields["kind"], fields["good"], fields["count"]);
+    case "set_activity_order":
+      return setActivityOrder(state, player, fields["activity"], fields["position"]);
+    case "set_auto_assign":
+      return setAutoAssign(state, player, fields["enabled"]);
+    case "set_disabled_slots":
+      return setDisabledSlots(state, player, fields["activity"], fields["count"]);
+    case "open_activity":
+      return openActivityOrder(state, player, fields["activity"]);
+    case "close_activity":
+      return closeActivity(state, player, fields["activity"]);
+    case "change_production_target":
+      return changeProductionTarget(state, player, fields["activity"], fields["delta"]);
     case "declare_war": {
       const ok = declareWar(state, player, fields["target"]);
       if (ok) startWar(state, player, fields["target"] as number);
@@ -286,18 +224,12 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
       if (ok && wasWar && statusOf(state, player, from as number) === STATUS_NEUTRAL) endWar(state, player, from as number);
       return ok;
     }
-    case "create_division":
-      return createDivision(state, player, fields["division"]);
-    case "delete_division":
-      return deleteDivision(state, player, fields["id"]);
     case "move_division":
       return moveDivisions(state, player, fields["ids"], fields["front"], fields["line"], fields["box"]);
     case "start_breakthrough":
       return startBreakthrough(state, player, fields["box"], fields["city1"], fields["city2"]);
     case "cancel_breakthrough":
       return cancelBreakthrough(state, player, fields["id"]);
-    case "set_forced_mobilization":
-      return setForcedMobilization(state, player, fields["enabled"]);
     case "start_front_attack":
       return startFrontAttack(state, player, fields["front"]);
     case "stop_front_attack":
@@ -312,12 +244,4 @@ function applyFoundCity(state: GameState, player: number, tile: unknown, changed
   const t = tile as number;
   if (t < 0 || t >= state.owner.length) return false;
   return foundCity(state, player, t, changed);
-}
-
-function applySetFarmShare(state: GameState, player: number, percent: unknown): boolean {
-  if (!Number.isInteger(percent)) return false;
-  const p = percent as number;
-  if (p < 0 || p > 100) return false;
-  state.players[player - 1]!.farmPercent = p;
-  return true;
 }

@@ -1,62 +1,19 @@
-// Biens (00-Game §5, §8, §12) : des machines, un flux consommé dans le tour
-// suivant. L'ordre des clés de GOODS est l'ordre des cases de `Player.goods`.
+// Machines (08 §3, §5) : le tracteur vaut un travailleur dans Agriculteurs, le bateau de pêche dans Pêcheurs, la pompe
+// à vapeur dans Mineurs. L'ordre des clés de GOODS est l'ordre des cases de `Player.idleMachines`, des compteurs de
+// machines et du hash. Les ouvriers et le fer d'une machine sont dans l'usine correspondante (`activities.ts`).
 
-/**
- * Réglages communs à un bien ou à un type d'armement (00-Game §8, §8.3). La production est propre à chacun : par tour
- * pour un bien (`GoodConfig`), par seconde pour l'armement (`ArmamentConfig`, armament.ts).
- */
-export interface ProductConfig {
-  /** Ouvriers employés par une ligne remplie : 200 pour commencer (4 × 50, décision de l'auteur, 24 octobre 2026), quel que soit le bien (00-Game §8, §13). */
-  readonly workersPerLine: number;
-  /** Fer consommé par tour par une ligne remplie (00-Game §8) ; une case de fer en extrait `RESOURCES.iron.capacityPerTile` (10). */
-  readonly ironPerLine: number;
-  /** Icône : chemin sous `client/public/icons/`, par exemple `goods/goods-tractor-outline.png`. Absent : la page affiche un symbole texte. Sans effet sur la simulation. */
+/** Un type de machine. Sans effet sur la simulation. */
+export interface GoodConfig {
+  /** Icône : chemin sous `client/public/icons/`. Absent : la page affiche un symbole texte. */
   readonly icon?: string;
-  /** Description affichée au survol de l'icône (vue des usines ; page des fronts pour une unité sans description propre, `config/units.ts`). Sans effet sur la simulation. */
+  /** Description affichée au survol de l'icône. */
   readonly description?: string;
 }
 
-/** Un bien : un flux, produit à chaque tour. */
-export interface GoodConfig extends ProductConfig {
-  /** Quantité produite par tour par une ligne remplie. */
-  readonly productionPerLine: number;
-}
-
-/**
- * Baisse de la valeur effective d'un bien vers la valeur produite (00-Game §12) :
- * elle monte tout de suite à la production, et baisse seulement quand le tour est
- * un multiple de `everyTurns`, du plus grand de `minUnits` et de `percent` % de la
- * valeur effective (arrondi vers le bas), sans passer sous la production.
- * Valeurs de l'auteur (1er novembre 2026).
- */
-export const GOODS_DECAY = {
-  /** Intervalle des baisses, en tours : 10 tours = 1 seconde. */
-  everyTurns: 10,
-  /** Baisse minimale, en unités. */
-  minUnits: 1,
-  /** Baisse en pourcentage de la valeur effective. */
-  percent: 1,
-} as const;
-
-/**
- * Valeurs d'essai : 30 machines par tour et par ligne (à 1 000 fermiers,
- * `FARMING.maxMachinesPer1000` = 100 demande 100 tracteurs pour la pleine
- * mécanisation). Tracteur et pompe à vapeur : 10, valeurs de l'auteur
- * (25 octobre 2026 ; 30 avant).
- */
 export const GOODS = {
-  tractor: {
-    productionPerLine: 10, workersPerLine: 200, ironPerLine: 50,
-    icon: "goods/goods-tractor-outline.png",
-  },
-  fishingBoat: {
-    productionPerLine: 30, workersPerLine: 200, ironPerLine: 60,
-    icon: "goods/goods-fishing-boat.png",
-  },
-  miningMachine: {
-    productionPerLine: 10, workersPerLine: 200, ironPerLine: 20,
-    icon: "goods/goods-mining-pump.png",
-  },
+  tractor: { icon: "goods/goods-tractor-outline.png" },
+  fishingBoat: { icon: "goods/goods-fishing-boat.png" },
+  miningMachine: { icon: "goods/goods-mining-pump.png" },
 } as const satisfies Record<string, GoodConfig>;
 
 export type GoodId = keyof typeof GOODS;

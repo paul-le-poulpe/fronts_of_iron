@@ -1,12 +1,11 @@
-// Divisions, en entiers (Docs/Design/05-Fronts.md §3). `config/divisions.ts`
+// Divisions, en entiers (Docs/Design/05-Fronts.md §3, 08-Population.md §5, §13). `config/divisions.ts`
 // donne les valeurs de l'auteur, avec des multiplicateurs décimaux (deux décimales
 // au plus) ; ce fichier les convertit une fois en entiers à l'échelle 100, et
-// fournit les calculs d'une division : taux, état, excédent, attaques, pertes.
+// fournit les calculs d'une division : état, attaques, pertes, création.
 // Aucun calcul en virgule flottante après la conversion (règle 2 du CLAUDE.md).
 
-import { ARMAMENT, DIVISIONS, ELITE_TROOPS_RATIO, NICHES, type DivisionConfig, type DivisionId, type NicheId } from "./config.ts";
-import { nextInt } from "./rng.ts";
-import type { GameState, Player } from "./state.ts";
+import { DIVISIONS, DIVISION_TIMING, ELITE_TROOPS_RATIO, NICHES, type DivisionConfig, type DivisionId, type NicheId } from "./config.ts";
+import type { GameState } from "./state.ts";
 
 /** Échelle des multiplicateurs : 0,5 s'écrit 50. */
 export const MULT_SCALE = 100;
@@ -14,11 +13,8 @@ export const MULT_SCALE = 100;
 export const WIDTH_SCALE = 1000;
 /** Échelle de l'état d'une division : 10 000 = 100 %. */
 export const STATE_SCALE = 10000;
-/** Échelle des fractions de pertes (`f`, 05-Fronts §6.2) : 1 000 000 = toute la division. */
+/** Échelle des fractions de pertes (`f`, 05-Fronts §6.2) : 1 000 000 = toute la barre de vie. */
 export const LOSS_SCALE = 1000000;
-
-/** Ressource d'un composant : les hommes. Les autres valeurs sont des indices de `ARMAMENT.types`. */
-export const MEN = -1;
 
 /** Où est une division sur un front (05-Fronts §4.1, §4.6), valeurs de `Division.line`. */
 export const LINE_FIRST = 0;
@@ -28,14 +24,14 @@ export const LINE_RAPID = 2;
 /** Boîte de percée `Division.box` (05-Fronts §4.6). */
 export const LINE_BOX = 3;
 
-/** Une division (05-Fronts §3, §13.1). Tous ses champs entrent dans le hash. */
+/** Une division (05-Fronts §3, 08 §13). Tous ses champs entrent dans le hash. */
 export interface Division {
   readonly id: number;
   readonly owner: number;
   /** Indice du type (ordre des clés de `DIVISIONS`). */
   readonly type: number;
-  /** Exemplaires présents par composant, dans l'ordre de `components`. */
-  readonly counts: number[];
+  /** Barre de vie, de 0 à `STATE_SCALE` (08 §5). À 0, la division est détruite. */
+  state: number;
   /** Front où elle est, ou vers lequel elle va ; 0 : réserve nationale. */
   front: number;
   /** `LINE_FIRST`, `LINE_SECOND`, `LINE_RAPID` ou `LINE_BOX` ; `LINE_SECOND` dans la réserve. En déplacement : la ligne demandée. */
@@ -53,23 +49,12 @@ export interface Division {
   engaged: number;
   /** En déplacement : tour d'arrivée (`front` est la destination) ; 0 sinon. */
   arrivalTick: number;
-  /** Tour de fin de formation (05-Fronts §3.5). */
+  /** Tour de fin de formation (08 §6) : la division existe dès sa création, mais ne peut pas être déplacée avant. */
   readonly formedTick: number;
   /** En fuite jusqu'à ce tour exclu (05-Fronts §5.4) ; 0 si elle n'a jamais fui. */
   fleeUntilTick: number;
-}
-
-export interface ComponentData {
-  /** `MEN` ou indice de `ARMAMENT.types`. */
-  readonly resource: number;
-  readonly count: number;
-  readonly required: boolean;
-  readonly weight: number;
-  readonly softAttack: number;
-  readonly hardAttack: number;
-  readonly airAttack: number;
-  /** Échelle 100. */
-  readonly lossMultiplier: number;
+  /** Division en trop (08 §6) : tour où elle disparaît ; 0 si elle n'est pas en sursis. Elle clignote jusque-là. */
+  leaveTick: number;
 }
 
 /** Un type de division, en entiers. */
@@ -81,16 +66,16 @@ export interface DivisionData {
   /** Rang dans sa niche : 0 est le meilleur type. */
   readonly rank: number;
   readonly support: boolean;
-  readonly components: readonly ComponentData[];
-  readonly weightSum: number;
-  /** Indice du composant des hommes, -1 s'il n'y en a pas. */
-  readonly menComponent: number;
+  /** Somme des attaques de tous les composants d'une division pleine (08 §5), millièmes de point. */
+  readonly softAttack: number;
+  readonly hardAttack: number;
+  readonly airAttack: number;
   /** Largeur de première ligne, en millièmes de liaison. */
   readonly width: number;
   readonly breakthroughWidth: number;
-  /** Durée de formation, en tours ; 0 : aucune. */
-  readonly formationTurns: number;
-  /** Limité par `ELITE_TROOPS_RATIO` à la création. */
+  /** Tours de formation d'une division produite. */
+  readonly productionTurns: number;
+  /** Limité par `ELITE_TROOPS_RATIO` (08 §5). */
   readonly elite: boolean;
   readonly hitPoints: number;
   /** Échelle 100. */
@@ -109,7 +94,6 @@ export function toScale100(x: number): number {
 
 export const DIVISION_IDS = Object.keys(DIVISIONS) as DivisionId[];
 export const NICHE_IDS = Object.keys(NICHES) as NicheId[];
-const ARMAMENT_KEYS: readonly string[] = Object.keys(ARMAMENT.types);
 
 /** Types de chaque niche, par indice, du meilleur au moins bon. */
 export const NICHE_TYPES: readonly (readonly number[])[] = NICHE_IDS.map((n) => NICHES[n].types.map((t) => DIVISION_IDS.indexOf(t)));
@@ -119,28 +103,18 @@ export const INFANTRY_NICHE = NICHE_IDS.indexOf("infantry");
 export const DIVISION_DATA: readonly DivisionData[] = DIVISION_IDS.map((id, index) => {
   const d: DivisionConfig = DIVISIONS[id];
   const niche = NICHE_TYPES.findIndex((types) => types.includes(index));
-  const components: ComponentData[] = d.components.map((c) => ({
-    resource: c.resource === "men" ? MEN : ARMAMENT_KEYS.indexOf(c.resource),
-    count: c.count,
-    required: c.required,
-    weight: c.weight,
-    softAttack: c.softAttack,
-    hardAttack: c.hardAttack,
-    airAttack: c.airAttack,
-    lossMultiplier: toScale100(c.lossMultiplier ?? 1),
-  }));
   return {
     id,
     index,
     niche,
     rank: NICHE_TYPES[niche]!.indexOf(index),
     support: NICHES[NICHE_IDS[niche]!].support,
-    components,
-    weightSum: components.reduce((s, c) => s + c.weight, 0),
-    menComponent: components.findIndex((c) => c.resource === MEN),
+    softAttack: d.softAttack,
+    hardAttack: d.hardAttack,
+    airAttack: d.airAttack,
     width: d.frontWidth * WIDTH_SCALE,
     breakthroughWidth: d.breakthroughWidth * WIDTH_SCALE,
-    formationTurns: d.formationTurns,
+    productionTurns: d.productionTurns ?? DIVISION_TIMING.defaultProductionTurns,
     elite: d.elite === true,
     hitPoints: d.hitPoints,
     defenseHitPointsMultiplier: toScale100(d.defenseHitPointsMultiplier),
@@ -158,25 +132,22 @@ export function isDivisionId(v: unknown): v is DivisionId {
 
 export const dataOf = (d: Division): DivisionData => DIVISION_DATA[d.type]!;
 
-/**
- * Peut-on créer une division du type, vu le nombre d'élites ? (05-Fronts §3.5) Un type qui n'est pas d'élite : oui.
- * Sinon `ELITE_TROOPS_RATIO × (élites + 1) ≤ divisions de la niche + 1`, comptées chez ce joueur, en formation ou non.
- * `elites` et `total` : élites et divisions de la niche du type, avant la création.
- */
-export const eliteAllowed = (data: DivisionData, elites: number, total: number): boolean =>
-  !data.elite || ELITE_TROOPS_RATIO * (elites + 1) <= total + 1;
-
-/** Élites et divisions de la niche du type (celle des élites) que le joueur a déjà : de quoi appliquer `eliteAllowed`. */
-export function nicheCounts(state: GameState, player: number, data: DivisionData): { elites: number; total: number } {
-  let elites = 0;
-  let total = 0;
-  for (const d of state.divisions) {
-    if (d.owner !== player || dataOf(d).niche !== data.niche) continue;
-    total++;
-    if (dataOf(d).elite) elites++;
-  }
-  return { elites, total };
+/** Divisions du joueur d'un type, en formation, en sursis ou non. */
+export function divisionCount(state: GameState, player: number, type: number): number {
+  let n = 0;
+  for (const d of state.divisions) if (d.owner === player && d.type === type) n++;
+  return n;
 }
+
+/** Divisions d'infanterie du joueur, élites comprises : la base du plafond des élites (08 §5). */
+export function infantryCount(state: GameState, player: number): number {
+  let n = 0;
+  for (const d of state.divisions) if (d.owner === player && DIVISION_DATA[d.type]!.niche === INFANTRY_NICHE) n++;
+  return n;
+}
+
+/** Plafond de la limite des élites (08 §5) : `floor(divisions d'infanterie / ELITE_TROOPS_RATIO)`. */
+export const eliteCap = (infantry: number): number => Math.floor(infantry / ELITE_TROOPS_RATIO);
 
 /** Numéro du tour en cours de calcul (`state.tick` n'avance qu'à la fin d'`applyTurn`). */
 export const currentTurn = (state: GameState): number => state.tick + 1;
@@ -185,192 +156,65 @@ export const inFormation = (state: GameState, d: Division): boolean => currentTu
 export const isMoving = (d: Division): boolean => d.arrivalTick !== 0;
 export const isFleeing = (state: GameState, d: Division): boolean => currentTurn(state) < d.fleeUntilTick;
 
-/** Hommes de la division. */
-export function menOf(d: Division): number {
-  const k = dataOf(d).menComponent;
-  return k < 0 ? 0 : d.counts[k]!;
+/** État de la division (08 §5), de 0 à `STATE_SCALE` : sa barre de vie. */
+export const stateOf = (d: Division): number => d.state;
+
+/** Une division à 0 % est détruite (08 §5, provisoire). */
+export const isEmpty = (d: Division): boolean => d.state <= 0;
+
+/** Crée une division pleine dans la réserve nationale, en formation jusqu'à `formedTick`. Renvoie la division. */
+export function addDivision(state: GameState, owner: number, type: number, formedTick: number): Division {
+  const d: Division = {
+    id: state.nextDivisionId++,
+    owner,
+    type,
+    state: STATE_SCALE,
+    front: 0,
+    line: LINE_SECOND,
+    box: 0,
+    breakthrough: 0,
+    btEngaged: 0,
+    engaged: 0,
+    arrivalTick: 0,
+    formedTick,
+    fleeUntilTick: 0,
+    leaveTick: 0,
+  };
+  state.divisions.push(d);
+  return d;
 }
 
 /**
- * État de la division (05-Fronts §3.3), de 0 à `STATE_SCALE` :
- * Σ (weight × présents / count) / Σ weight, chaque terme arrondi vers le bas.
- */
-export function stateOf(d: Division): number {
-  const data = dataOf(d);
-  if (data.weightSum === 0) return 0;
-  let num = 0;
-  data.components.forEach((c, i) => {
-    num += Math.floor((c.weight * d.counts[i]! * STATE_SCALE) / c.count);
-  });
-  return Math.floor(num / data.weightSum);
-}
-
-/** Une division à 0 % est détruite (05-Fronts §3.3) : aucun composant de poids non nul n'a d'exemplaire. */
-export function isEmpty(d: Division): boolean {
-  const data = dataOf(d);
-  return data.components.every((c, i) => c.weight === 0 || d.counts[i] === 0);
-}
-
-/** Ajoute `n` exemplaires de la ressource `resource` au stock du joueur (hommes : rien à faire, ils ne sont plus soldats). */
-function giveToStock(player: Player, resource: number, n: number): void {
-  if (n <= 0 || resource === MEN) return;
-  player.armamentReserve[resource] = player.armamentReserve[resource]! + n;
-}
-
-/**
- * Pas d'excédent (05-Fronts §3.2) : aucun composant ne dépasse le taux de soldats,
- * le plus petit taux des composants requis. Ce qui dépasse retourne au stock
- * national (hommes : à la population, `Player.soldiers` est recompté par
- * `countSoldiers`). Le plafond d'un composant est `floor(p_j × count / c_j)`, `j`
- * le composant requis le plus limitant ; refait jusqu'à ce que rien ne change, un
- * arrondi pouvant faire passer un autre composant requis sous le taux.
- */
-export function trimExcess(player: Player, d: Division): void {
-  const data = dataOf(d);
-  for (;;) {
-    let j = -1;
-    data.components.forEach((c, i) => {
-      if (!c.required) return;
-      if (j < 0 || d.counts[i]! * data.components[j]!.count < d.counts[j]! * c.count) j = i;
-    });
-    if (j < 0) return;
-    const pj = d.counts[j]!;
-    const cj = data.components[j]!.count;
-    let changed = false;
-    data.components.forEach((c, i) => {
-      const cap = Math.floor((pj * c.count) / cj);
-      if (d.counts[i]! > cap) {
-        giveToStock(player, c.resource, d.counts[i]! - cap);
-        d.counts[i] = cap;
-        changed = true;
-      }
-    });
-    if (!changed) return;
-  }
-}
-
-/** Rend tout le contenu d'une division au stock national (suppression, 05-Fronts §3.5). */
-export function emptyDivision(player: Player, d: Division): void {
-  dataOf(d).components.forEach((c, i) => {
-    giveToStock(player, c.resource, d.counts[i]!);
-    d.counts[i] = 0;
-  });
-}
-
-/**
- * Attaques d'une division engagée (05-Fronts §6.1), en millièmes de point :
- * part engagée × Σ (attaque du composant × taux) × multiplicateur. `mult` à
+ * Attaques d'une division engagée (05-Fronts §6.1, 08 §5), en millièmes de point :
+ * part engagée × (somme des attaques de ses composants) × état × multiplicateur. `mult` à
  * l'échelle 100 (100 : aucun multiplicateur). `engaged` : largeur engagée dans ce
  * combat (première ligne par défaut ; dans une percée, `btEngaged`), rapportée à la
  * largeur de la division dans ce combat (`width`, sa largeur de première ligne par défaut ;
  * `breakthroughWidth` pour la force qui perce et la force de contre-attaque, 05-Fronts §7.2).
  */
 export function attackOf(d: Division, mult: number, engaged: number = d.engaged, width: number = dataOf(d).width): { soft: number; hard: number } {
+  if (d.state <= 0) return { soft: 0, hard: 0 };
   const data = dataOf(d);
-  let soft = 0;
-  let hard = 0;
-  data.components.forEach((c, i) => {
-    const p = d.counts[i]!;
-    if (p === 0) return;
-    // e / largeur × attaque × p / count × mult / 100, en millièmes : × 1 000 / 100 = × 10.
-    const den = width * c.count;
-    soft += Math.floor((engaged * c.softAttack * p * mult * 10) / den);
-    hard += Math.floor((engaged * c.hardAttack * p * mult * 10) / den);
-  });
-  return { soft, hard };
+  // e / largeur × attaque × état / STATE_SCALE × mult / 100, en millièmes : × 1 000 / 100 = × 10.
+  const den = width * STATE_SCALE;
+  return {
+    soft: Math.floor((engaged * data.softAttack * d.state * mult * 10) / den),
+    hard: Math.floor((engaged * data.hardAttack * d.state * mult * 10) / den),
+  };
 }
 
 /**
- * Pertes de la division pour une fraction `f` de la division complète, à l'échelle
- * `LOSS_SCALE` (05-Fronts §6.2, point 5) : chaque composant perd
- * `f × lossMultiplier × count` exemplaires, en pertes tirées (05-Fronts §1) :
- * partie entière toujours perdue, un exemplaire de plus si `nextInt(rng, q) < reste`.
- * Composants dans l'ordre de `components`. Les hommes perdus ne sont plus soldats : ils
- * deviennent des blessés du joueur (00-Game §4.2) ; l'équipement perdu disparaît.
- * Renvoie le nombre d'hommes perdus.
+ * Pertes de la division pour une fraction `f` de sa barre de vie, à l'échelle `LOSS_SCALE` (05-Fronts §6.2, 08 §13) :
+ * `state` perd `f × STATE_SCALE / LOSS_SCALE`, arrondi vers le bas, sans tirage. Renvoie l'état perdu.
  */
-export function applyLoss(state: GameState, d: Division, f: number): number {
-  if (f <= 0) return 0;
-  const q = LOSS_SCALE * MULT_SCALE;
-  const menComponent = dataOf(d).menComponent;
-  let men = 0;
-  dataOf(d).components.forEach((c, i) => {
-    const has = d.counts[i]!;
-    if (has === 0) return;
-    const p = f * c.lossMultiplier * c.count;
-    let lost = Math.floor(p / q);
-    const r = p % q;
-    if (r > 0 && nextInt(state.rng, q) < r) lost++;
-    const taken = Math.min(has, lost);
-    d.counts[i] = has - taken;
-    if (i === menComponent) {
-      state.players[d.owner - 1]!.hurt += taken;
-      men = taken;
-    }
-  });
-  return men;
-}
-
-/**
- * Retire `n` hommes aux divisions du joueur (00-Game §3.3, fondation d'une ville payée en partie par les soldats) : le
- * même ratio `n / soldats` à toutes, en entiers. Chaque division perd d'abord `floor(n × hommes / soldats)` ; les hommes
- * restants vont un par un aux plus grands restes, puis aux plus petits indices (divisions dans l'ordre de `state.divisions`).
- * Les composants qui dépassent le nouveau taux de soldats retournent au stock (`trimExcess`). Ces hommes quittent la
- * population avec le coût de la ville : ils ne deviennent pas blessés. Une division vidée n'est pas détruite (seul le
- * combat détruit, `removeDestroyed`) : elle reste, vide, et se reconstitue par le renfort. `n` est borné aux soldats du joueur.
- */
-export function removeSoldiers(state: GameState, playerId: number, n: number): void {
-  const divs = state.divisions.filter((d) => d.owner === playerId && menOf(d) > 0);
-  let total = 0;
-  for (const d of divs) total += menOf(d);
-  const amount = Math.min(n, total);
-  if (amount <= 0) return;
-  const take = divs.map((d) => Math.floor((amount * menOf(d)) / total));
-  const rest = divs.map((d) => (amount * menOf(d)) % total);
-  let left = amount - take.reduce((a, b) => a + b, 0);
-  const order = divs.map((_, k) => k).sort((a, b) => rest[b]! - rest[a]! || a - b);
-  for (const k of order) {
-    if (left === 0) break;
-    take[k] = take[k]! + 1;
-    left--;
-  }
-  const player = state.players[playerId - 1]!;
-  divs.forEach((d, k) => {
-    d.counts[dataOf(d).menComponent] = menOf(d) - take[k]!;
-    trimExcess(player, d);
-  });
-  countSoldiers(state);
+export function applyLoss(d: Division, f: number): number {
+  if (f <= 0 || d.state <= 0) return 0;
+  const lost = Math.min(d.state, Math.floor((f * STATE_SCALE) / LOSS_SCALE));
+  d.state -= lost;
+  return lost;
 }
 
 /** Ordre de choix d'une ligne (05-Fronts §4.2) : meilleur état, puis meilleur type de la niche, puis plus petit identifiant. */
 export function byChoice(a: Division, b: Division): number {
   return stateOf(b) - stateOf(a) || dataOf(a).rank - dataOf(b).rank || a.id - b.id;
-}
-
-/** Soldats : hommes de toutes les divisions du joueur (00-Game §4, point 5), recomptés pour chaque joueur. */
-export function countSoldiers(state: GameState): void {
-  for (const p of state.players) p.soldiers = 0;
-  for (const d of state.divisions) state.players[d.owner - 1]!.soldiers += menOf(d);
-}
-
-/** Armement dans les divisions du joueur, par type d'armement (ordre des clés de `ARMAMENT.types`). Compte dans le stock qui décline (05-Fronts §4.5). */
-export function divisionEquipment(state: GameState, playerId: number): number[] {
-  const out = new Array<number>(ARMAMENT_KEYS.length).fill(0);
-  for (const d of state.divisions) {
-    if (d.owner !== playerId) continue;
-    dataOf(d).components.forEach((c, i) => {
-      if (c.resource !== MEN) out[c.resource] = out[c.resource]! + d.counts[i]!;
-    });
-  }
-  return out;
-}
-
-/** Armement que les divisions du joueur auraient à effectif complet, par type d'armement (même ordre que `divisionEquipment`). */
-export function divisionEquipmentFull(state: GameState, playerId: number): number[] {
-  const out = new Array<number>(ARMAMENT_KEYS.length).fill(0);
-  for (const d of state.divisions) {
-    if (d.owner !== playerId) continue;
-    for (const c of dataOf(d).components) if (c.resource !== MEN) out[c.resource] = out[c.resource]! + c.count;
-  }
-  return out;
 }

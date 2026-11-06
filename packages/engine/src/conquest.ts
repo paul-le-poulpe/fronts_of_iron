@@ -4,9 +4,9 @@
 import { CITY, FRONTS } from "./config.ts";
 import { endBreakthrough } from "./breakthroughs.ts";
 import { computeGroups } from "./cities.ts";
-import { LINE_FIRST, LOSS_SCALE, applyLoss, countSoldiers, dataOf, type Division } from "./divisions.ts";
+import { LINE_FIRST, LOSS_SCALE, applyLoss, dataOf, type Division } from "./divisions.ts";
 import { ROUTE, updateFronts } from "./fronts.ts";
-import { removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
+import { removeDestroyed, sideDivisions } from "./placement.ts";
 import { setOwner, type GameState } from "./state.ts";
 
 /**
@@ -16,7 +16,7 @@ import { setOwner, type GameState } from "./state.ts";
  * 2. la ville et sa zone passent à l'attaquant ; groupes recalculés ;
  * 3. fronts recalculés, avec la position `capturePercent` sur les nouvelles connexions.
  * 4. si c'était sa dernière ville, le défenseur est éliminé (05-Fronts §10.3).
- * Choix provisoires (05-Fronts §15) : l'usine de la ville est détruite ; si c'était la
+ * Choix provisoire (05-Fronts §15) : si c'était la
  * capitale du défenseur, sa ville de plus petit identifiant devient sa capitale.
  */
 export function captureCity(
@@ -48,16 +48,15 @@ export function captureCity(
     }
     if (encircled === 0) continue;
     // Pertes sur la première ligne de B seulement, connexions comptées avant la prise : f de l'état, × part engagée,
-    // composant par composant avec le lossMultiplier (provisoire), en pertes tirées.
+    // sur sa barre de vie.
     const f = Math.floor((encircled * FRONTS.encirclementLossPercent * LOSS_SCALE) / (front.connections.length * 100));
     for (const d of sideDivisions(state, front, defender)) {
       if (d.line !== LINE_FIRST || d.engaged === 0) continue;
-      applyLoss(state, d, Math.floor((f * d.engaged) / dataOf(d).width));
+      applyLoss(d, Math.floor((f * d.engaged) / dataOf(d).width));
       hit.push(d);
       touched++;
     }
   }
-  trimAll(state);
   removeDestroyed(state, hit);
 
   if (touched > 0) state.events.push({ type: "encirclement", from: attacker, to: defender, city: cityId, divisions: touched, turn: state.tick + 1 });
@@ -81,8 +80,6 @@ export function captureCity(
   if (at < 0) at = won.cityIds.length;
   won.cityIds.splice(at, 0, cityId);
   if (lost.capital === cityId) lost.capital = lost.cityIds[0] ?? 0;
-  const factory = lost.factories.findIndex((f) => f.city === cityId);
-  if (factory >= 0) lost.factories.splice(factory, 1);
   computeGroups(state);
   state.events.push({ type: "city_captured", from: attacker, to: defender, city: cityId, turn: state.tick + 1 });
 
@@ -104,6 +101,5 @@ function eliminatePlayer(state: GameState, player: number, by: number): void {
   state.boxes = state.boxes.filter((b) => b.owner !== player);
   state.divisions = state.divisions.filter((d) => d.owner !== player);
   state.proposals = state.proposals.filter((p) => p.from !== player && p.to !== player);
-  countSoldiers(state);
   state.events.push({ type: "player_eliminated", from: by, to: player, turn: state.tick + 1 });
 }

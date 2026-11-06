@@ -6,9 +6,8 @@
 
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter, playerColor, playerDark, rgbCss } from "./painter.ts";
-import { productIconPath } from "./icons.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
-import { factoryInitial, localPlayer } from "./names.ts";
+import { localPlayer } from "./names.ts";
 import { type FrontView } from "./protocol.ts";
 
 export interface MapViewHooks {
@@ -31,17 +30,6 @@ const FRONT_HATCH_WIDTH_PX = 2;
 /** Taille de la flèche d'une percée, du centre à la pointe, en pixels d'écran (14 : deux fois la première version). */
 const FRONT_RED_RGBA = [200, 30, 30, 200] as const;
 const FRONT_BLUE_RGBA = [40, 90, 210, 200] as const;
-/** Logo d'usine sur la carte, en pixels d'écran : icône de 16, 1 de fond gris clair autour, puis un cadre noir de 1. */
-const FACTORY_ICON_PX = 16;
-const FACTORY_LOGO_PX = FACTORY_ICON_PX + 4;
-const FACTORY_LOGO_BG = "#ececec";
-const FACTORY_LOGO_FRAME = "#000";
-/** Au-delà du tiers du rayon de contrôle (en pixels d'écran), le logo est remplacé par un carré de 5 px : bordure sombre de 1, intérieur gris. */
-const FACTORY_LOGO_MAX_RADIUS_SHARE = 3;
-const FACTORY_DOT_PX = 5;
-const FACTORY_DOT_BG = "#9a9a9a";
-const FACTORY_DOT_FRAME = "#3a3a3a";
-
 type Rgba = readonly [number, number, number, number];
 
 /** Hachures d'une vue du menu Carte : un masque de cases, une couleur, un sens des bandes. */
@@ -73,16 +61,10 @@ export class MapView {
   placement = false;
   /** Raison pour laquelle on ne peut pas fonder une ville sur cette case, ou null si c'est permis. */
   placementCheck: (tile: number) => string | null = () => null;
-  /** Mode « Inaugurer une usine » armé : la zone survolée est colorée. */
-  factoryMode = false;
-  /** Ville dont la zone contient la case, et `ok` si on peut y inaugurer l'usine ; ville 0 : aucune zone. */
-  factoryCheck: (tile: number) => { city: number; ok: boolean } = () => ({ city: 0, ok: false });
   /** Vue « Fertilité » du menu Carte : hachures vertes sur les cases cultivables. */
   showFertility = false;
   /** Vue « Ressources naturelles » du menu Carte : hachures rouge foncé sur les cases de fer, bleues sur celles d'aluminium. */
   showIron = false;
-  /** Case « Icônes d'usine » du menu Carte : logos des usines à côté des villes. */
-  showFactoryLogos = true;
   /** Case « Zones de front » du menu Carte (05-Fronts §11.1) : hachures rouges des fronts actifs. */
   showFrontZones = true;
   /** Mode choix d'axe (05-Fronts §11.1) : front dont on choisit la connexion (0 : hors du mode), et la connexion visée par la souris. */
@@ -121,10 +103,6 @@ export class MapView {
   /** Calque des hachures, à la taille du canvas : un masque à la caméra, rempli du motif. */
   private readonly hatch: HTMLCanvasElement;
   private readonly hatchCtx: CanvasRenderingContext2D;
-  /** Zones de ville colorées pour le mode usine, par « ville:ok » ; vidé quand les zones changent. */
-  private readonly zoneLayers = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number }>();
-  /** Icônes des biens déjà demandées, par chemin ; un chargement fini redessine la carte. */
-  private readonly logos = new Map<string, HTMLImageElement>();
   private cssW = 1;
   private cssH = 1;
   private dpr = 1;
@@ -339,7 +317,7 @@ export class MapView {
     const frontChanged = front !== this.hoverFront;
     this.hoverFront = front;
     if (frontChanged) this.hooks.onHoverFront?.(front);
-    if (this.placement || this.factoryMode || this.axisFront !== 0 || frontChanged) this.requestDraw();
+    if (this.placement || this.axisFront !== 0 || frontChanged) this.requestDraw();
   }
 
   /** Met en évidence la zone du front `front` comme au survol (0 : retire) : la liste des fronts de l'onglet des forces. */
@@ -364,30 +342,15 @@ export class MapView {
   setAxisMode(frontId: number): void {
     this.axisFront = frontId;
     this.axisHover = null;
-    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || frontId !== 0);
+    this.canvas.classList.toggle("placing", this.placement || frontId !== 0);
     this.requestDraw();
   }
 
-  /** À rappeler quand un mode (placement, usine), les villes ou les usines changent. */
+  /** À rappeler quand un mode (placement) ou les villes changent. */
   refresh(): void {
-    this.canvas.classList.toggle("placing", this.placement || this.factoryMode || this.axisFront !== 0);
-    this.zoneLayers.clear();
+    this.canvas.classList.toggle("placing", this.placement || this.axisFront !== 0);
     this.highlightMask = null;
     this.requestDraw();
-  }
-
-  /** Icône d'un bien pour le logo d'une usine, une fois chargée ; `null` avant, ou si le bien n'a pas d'icône. */
-  private logo(good: string): HTMLImageElement | null {
-    const path = productIconPath(good);
-    if (path === undefined) return null;
-    let img = this.logos.get(path);
-    if (img === undefined) {
-      img = new Image();
-      img.addEventListener("load", () => this.requestDraw());
-      img.src = `icons/${path}`;
-      this.logos.set(path, img);
-    }
-    return img.complete && img.naturalWidth > 0 ? img : null;
   }
 
   /** Hachure en blanc la zone de la ville `city` (0 : retire la mise en évidence). */
@@ -404,42 +367,6 @@ export class MapView {
     this.highlightedPlayer = player;
     this.playerMask = null;
     this.requestDraw();
-  }
-
-  /** Calque des cases de la zone de la ville `city`, vert ou rouge, avec la position de son coin dans la carte. */
-  private zoneLayer(city: number, ok: boolean): { canvas: HTMLCanvasElement; x: number; y: number } {
-    const key = `${city}:${ok ? 1 : 0}`;
-    const cached = this.zoneLayers.get(key);
-    if (cached) return cached;
-    const m = this.mirror;
-    const r = m.controlRadius;
-    const ct = m.cities[city - 1]!.tile;
-    const cx = ct % m.width;
-    const cy = (ct - cx) / m.width;
-    const x0 = Math.max(0, cx - r);
-    const y0 = Math.max(0, cy - r);
-    const x1 = Math.min(m.width - 1, cx + r);
-    const y1 = Math.min(m.height - 1, cy + r);
-    const canvas = document.createElement("canvas");
-    canvas.width = x1 - x0 + 1;
-    canvas.height = y1 - y0 + 1;
-    const lctx = canvas.getContext("2d");
-    if (lctx === null) throw new Error("canvas 2D indisponible");
-    const img = new ImageData(canvas.width, canvas.height);
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        if (m.tileCity[y * m.width + x] !== city) continue;
-        const i = ((y - y0) * canvas.width + (x - x0)) * 4;
-        img.data[i] = ok ? 40 : 220;
-        img.data[i + 1] = ok ? 200 : 50;
-        img.data[i + 2] = ok ? 70 : 40;
-        img.data[i + 3] = 120;
-      }
-    }
-    lctx.putImageData(img, 0, 0);
-    const layer = { canvas, x: x0, y: y0 };
-    this.zoneLayers.set(key, layer);
-    return layer;
   }
 
   /**
@@ -584,17 +511,6 @@ export class MapView {
     const cy = (t: number): number => Math.floor(t / w) + 0.5;
     const cities = mirror.cities;
 
-    // Mode usine : la zone de la ville survolée, verte si elle peut recevoir l'usine, rouge sinon.
-    if (this.factoryMode && this.hoverTile >= 0) {
-      const target = this.factoryCheck(this.hoverTile);
-      if (target.city > 0) {
-        const layer = this.zoneLayer(target.city, target.ok);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(layer.canvas, layer.x, layer.y);
-        ctx.imageSmoothingEnabled = zoom < 1;
-      }
-    }
-
     // Mode placement : rayon de contrôle qu'aurait une ville sur la case survolée.
     if (this.placement && this.hoverTile >= 0) {
       const t = this.hoverTile;
@@ -700,9 +616,8 @@ export class MapView {
       const x = cx(city.tile);
       const y = cy(city.tile);
       const capital = mirror.stats[city.player - 1]?.capital === city.id;
-      // Une ville qui porte une usine est dessinée plus grande, selon son niveau (00-Game §3.7).
-      const factory = mirror.factoryMarks.get(city.id);
-      const s = factory ? s0 * (1 + Math.min(factory.level, 10) * 0.08) : s0;
+      // Plus de ville agrandie par une usine : il n'y a pas d'usine sur la carte (08 §2).
+      const s = s0;
       ctx.strokeStyle = "#fff";
       ctx.fillStyle = rgbCss(playerDark(city.player));
       ctx.beginPath();
@@ -710,42 +625,6 @@ export class MapView {
       else ctx.arc(x, y, s, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      // Logo de l'usine à côté de la ville : l'icône de son bien dominant sur un fond gris clair
-      // cerclé de noir (les icônes ont souvent un contour noir) ; l'initiale du type tant qu'elle n'est pas chargée.
-      if (factory && this.showFactoryLogos) {
-        // Dessiné en pixels de l'écran, coin aligné sur un pixel entier : bords nets, 20 px à tout zoom (5 px quand le logo est remplacé par un carré).
-        const u = Math.max(1, Math.round(k));
-        const side = FACTORY_LOGO_PX * u;
-        const dx = Math.round((x + s * 1.1) * zoom * k + this.tx * k);
-        const dy = Math.round((y - s * 1.1) * zoom * k + this.ty * k) - side;
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        if (FACTORY_LOGO_PX * FACTORY_LOGO_MAX_RADIUS_SHARE > mirror.controlRadius * zoom) {
-          // Carte trop dézoomée : le logo couvrirait plus du tiers de la zone de la ville.
-          const dot = FACTORY_DOT_PX * u;
-          ctx.fillStyle = FACTORY_DOT_FRAME;
-          ctx.fillRect(dx, dy + side - dot, dot, dot);
-          ctx.fillStyle = FACTORY_DOT_BG;
-          ctx.fillRect(dx + u, dy + side - dot + u, dot - 2 * u, dot - 2 * u);
-        } else {
-          ctx.fillStyle = FACTORY_LOGO_FRAME;
-          ctx.fillRect(dx, dy, side, side);
-          ctx.fillStyle = FACTORY_LOGO_BG;
-          ctx.fillRect(dx + u, dy + u, side - 2 * u, side - 2 * u);
-          const logo = this.logo(factory.good);
-          if (logo !== null) {
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(logo, dx + 2 * u, dy + 2 * u, FACTORY_ICON_PX * u, FACTORY_ICON_PX * u);
-          } else {
-            ctx.fillStyle = FACTORY_LOGO_FRAME;
-            ctx.font = `bold ${side * 0.6}px system-ui, sans-serif`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(factoryInitial(factory.type), dx + side / 2, dy + side / 2 + side * 0.04);
-          }
-        }
-        ctx.restore();
-      }
       if (city.port) {
         const pt = mirror.portTile(city.id);
         const off = pt === city.tile ? s * 1.4 : 0;

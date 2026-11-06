@@ -24,8 +24,8 @@ export interface FirstLineStats {
 /**
  * Statistiques des divisions engagées en première ligne d'un camp (celles que le moteur fait combattre : première ligne,
  * largeur engagée > 0, pas en déplacement).
- * - Attaques : ce qui tombe réellement sur l'adversaire, comme `attackOf` : pour chaque composant, part engagée de la
- *   division (`engaged` / largeur de première ligne) × attaque × taux de présence, en points. `attacking` : ce camp a lancé
+ * - Attaques : ce qui tombe réellement sur l'adversaire, comme `attackOf` : part engagée de la division
+ *   (`engaged` / largeur de première ligne) × attaque × état (08 §5), en points. `attacking` : ce camp a lancé
  *   l'attaque sur tout le front, donc `attackMultiplier` du type s'applique ; sinon l'attaque est celle par défaut.
  * - PV : `hitPoints` du type × état de la division, sans multiplicateur de défense, et seulement pour les niches principales
  *   (les niches d'appui-feu n'ont pas de PV affichés).
@@ -43,13 +43,11 @@ export function firstLineStats(military: MilitaryCatalog, divisions: readonly Di
     if (i === undefined) continue;
     const mult = attacking ? type.attackMultiplier : 100;
     const width = type.frontWidth * WIDTH_SCALE;
-    type.components.forEach((c, k) => {
-      const p = d.counts[k]!;
-      if (p === 0 || width === 0 || c.count === 0) return;
-      const den = width * c.count;
-      soft[i]! += Math.floor((d.engaged * c.softAttack * p * mult * 10) / den);
-      hard[i]! += Math.floor((d.engaged * c.hardAttack * p * mult * 10) / den);
-    });
+    if (d.state > 0 && width > 0) {
+      const den = width * military.stateScale;
+      soft[i]! += Math.floor((d.engaged * type.softAttack * d.state * mult * 10) / den);
+      hard[i]! += Math.floor((d.engaged * type.hardAttack * d.state * mult * 10) / den);
+    }
     if (!type.support) hp[i]! += (type.hitPoints * d.state) / military.stateScale;
   }
   const rows: Stats[] = military.niches.map((_, i) => ({ soft: Math.round(soft[i]! / 1000), hard: Math.round(hard[i]! / 1000), hp: Math.round(hp[i]!) }));

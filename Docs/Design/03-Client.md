@@ -44,38 +44,38 @@ Depuis la racine du dépôt, après `npm install` :
 | `index.html`, `src/style.css` | page : accueil et salles en ligne (`#lobby`), écran de départ du solo, barre d'informations, carte, barre de boutons, panneau de debug, panneau de production |
 | `src/lobby.ts`, `src/lobby.css` | accueil (liste des parties, créer, rejoindre, solo), salle d'attente de l'hôte et d'un joueur, écran d'attente « Partie lancée » ; connexion WebSocket au relais jusqu'au message de départ, puis `main.ts` prend la partie en charge (§7). Palette et polices de la maquette de l'auteur (Barlow), tout sous `#lobby` |
 | `src/online.ts` | parties en ligne sans DOM : adresse du WebSocket (`wsUrl`), nom et jetons dans `localStorage`, textes des erreurs, lecture de la liste du lobby, action proposée par partie |
-| `src/main.ts` | page : écran de départ, panneau, barre (villes, usines, production), survol, messages ; crée le Worker (solo ou en ligne) |
+| `src/main.ts` | page : écran de départ, panneau, barre (villes, production), survol, messages ; crée le Worker (solo ou en ligne) |
 | `src/tooltip.ts` | infobulles : encadré affiché 120 ms après le survol de tout élément qui a un `title` (le `title` est déplacé dans `data-tip`, le navigateur n'affiche plus le sien) ; curseur flèche sur ces éléments, pas le curseur de texte (`style.css`) ; `hideTip` |
 | `src/tutorial.ts` | tutoriel (`07-Tutoriel.md`) : contour bleu sur les composants `data-tuto` dont la leçon n'est pas lue, premier clic consommé qui ouvre la leçon (`#tuto`), leçons lues dans `localStorage` ; `resetTutorial`, `skipTutorial` (menu « Tutoriel ») |
-| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : population, nourriture, ressources (flux), armement (stock), forces, diplomatie, menu « Carte » ; DOM construit une fois, pas de règle |
-| `src/production.ts` | panneau de production (00-Game §8.1) : sections par ville, curseurs, priorités par glisser-déposer, déblocage, réserves (DOM, pas de règle) |
-| `src/names.ts` | noms français et symboles provisoires (texte entre crochets) des biens, de l'armement et des types d'usine ; noms des types de division, des niches (et leurs lettres) et de l'équipement des divisions ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
+| `src/infobar.ts` | barre d'informations en haut de l'écran (00-Game §11) : ressources (flux), forces, diplomatie, menu « Carte » ; DOM construit une fois, pas de règle |
+| `src/production.ts`, `src/production.css` | panneau de production (08-Population §11) : boîtes d'activités, pions, glisser-déposer des pions et réorganisation des boîtes, boîtes verrouillées et déblocage (DOM, pas de règle) ; styles et couleurs des boîtes (variables CSS, clair et sombre) |
+| `src/names.ts` | noms français des machines, des activités (les boîtes du panneau) et des types de division, des niches (et leurs lettres) ; symboles provisoires (texte entre crochets) des machines sans icône ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
-| `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, logos d'usine, modes placement et usine |
+| `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, mode placement |
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
-| `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), usines, fronts et leurs zones (sans DOM) |
+| `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
 | `src/frontstats.ts` | statistiques de combat d'une première ligne (05-Fronts §11.4) : attaques anti-infanterie et anti-armure (formules de `attackOf`, multiplicateur d'attaque si le camp attaque sur tout le front) et PV (niches principales, × état), par niche et au total ; nombres courts (pas de DOM) |
 | `src/frontwindow.ts` | fenêtre d'un front (05-Fronts §11.4) : bandeau (titre, « Sélection avancée », attaque, retour, fermeture), capsules des deux camps, rangées par niche, statistiques de combat et totaux des premières lignes, zones comprimées de l'adversaire, zone de retour, zone des avions (DOM construit une fois, pas de règle) |
 | `src/burst.ts`, `src/burst.css` | envoi en rafale : `onPress(el, action)` envoie l'ordre à l'appui (`pointerdown`, pas au `click`, qu'un bouton reconstruit entre-temps ne reçoit jamais), 5 fois avec Maj, 10 fois avec Ctrl ; texte d'aide (« Shift + 5 », « Ctrl + 10 ») qui suit la souris sur tout élément marqué `data-burst` sans la classe `unavailable` ; un élément `data-burst-blocked` n'envoie rien et, après un appui, l'aide ajoute son texte en rouge. Utilisé par le menu « + » de l'onglet des forces (`create_division`) et par les boutons « + » du panneau de production (`create_line`). Le relais refuse au-delà de `MAX_ORDERS_PER_TURN` (20) ordres par tour et par joueur : l'excédent est perdu et la page affiche le message d'erreur |
-| `src/diplomacytab.ts` | onglet Diplomatie : détail de la sixième section de la barre d'informations ; liste des joueurs, clic → menu de diplomatie, survol → joueur mis en évidence sur la carte |
-| `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la cinquième section de la barre d'informations ; bouton « + », corbeille, réserve nationale, sections de front, menu « + » |
+| `src/diplomacytab.ts` | onglet Diplomatie : détail de la troisième section de la barre d'informations ; liste des joueurs, clic → menu de diplomatie, survol → joueur mis en évidence sur la carte |
+| `src/forcestab.ts` | onglet des forces (05-Fronts §11.2) : détail de la deuxième section de la barre d'informations ; réserve nationale (formation, réserve), sections de front |
 | `src/dnd.ts` | sélection et glisser-déposer des pions (§11.4), commun à la fenêtre d'un front et à l'onglet des forces : survol, un clic, deux clics, pion fantôme, dépose sur un élément `data-drop` |
-| `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales, « supportable » et « créable » du menu « + », couverture d'un front, rangement des fronts |
-| `src/infopanels.ts` | panneaux de survol (§11.7) : panneau d'un type (menu « + ») et panneau d'un pion, posés sur `document.body` |
+| `src/divisions.ts` | ce que l'interface lit des divisions, sans DOM : état affiché, attaques actuelles et maximales (somme des composants × état), couverture d'un front, rangement des fronts |
+| `src/infopanels.ts` | panneaux de survol (§11.7) : panneau d'un type et panneau d'un pion, posés sur `document.body` |
 | `src/counttag.ts` | une icône et un nombre (sections de front de l'onglet, zones comprimées de l'adversaire) |
-| `src/pawn.ts`, `src/pawn.css` | pion d'une division et disposition d'une zone (§11.3) : `renderZone`, `pawnOrder` ; ne gère ni la sélection ni les panneaux |
+| `src/pawn.ts`, `src/pawn.css` | pion d'une division et disposition d'une zone (§11.3) : `renderZone`, `pawnOrder` ; une division en trop (`leaveTick`) clignote ; ne gère ni la sélection ni les panneaux |
 | `src/theme.ts`, `src/forces.css` | thèmes clair et sombre de la fenêtre d'un front et de l'onglet des forces (§11.8) ; styles de ces deux panneaux, du menu « + », du glisser et des panneaux de survol |
 | `src/protocol.ts` | types des messages page ↔ Worker |
 | `src/engine.worker.ts` | Web Worker : reçoit les messages de la page, choisit la source de tours (solo ou en ligne), tient l'horloge du solo, ouvre le vrai WebSocket |
 | `src/game.ts` | `Game`, « la partie » : moteur du client, application d'un tour (`applyTurn`, `advance`), fabrication des messages de la page ; indépendante de la source (sans DOM, sans `self`) |
 | `src/solo.ts` | `SoloGame`, source de tours locale : `Game` + relais (`Room`) + bots (sans DOM, sans `self`) |
 | `src/online-game.ts` | `OnlineGame`, source de tours WebSocket : ordres, tours, hashes, pause, fin de partie ; le transport est fourni (sans `WebSocket`, sans `self`) |
-| `src/bots.ts` | bots (§5) |
+| `src/bots.ts` | bots (§5), stratégie minimale pour le débogage |
 | `test/solo.test.ts`, `test/fronts.test.ts` | tests sous Node : partie solo, copie de la page, peinture ; géométrie des fronts, message des fronts, double ligne rouge, prise d'une ville |
 | `test/online.test.ts` | tests sous Node de `online.ts` : adresse du WebSocket, nom et jetons gardés (stockage qui lève compris), liste du lobby |
 | `test/online-game.test.ts` | tests sous Node de `OnlineGame` branché sur un vrai relais en mémoire : même état et mêmes hashes chez trois clients, rejeu d'une reprise (un seul `tick`), désynchronisation, pause, connexion perdue |
@@ -135,12 +135,11 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 
 | Bouton | Action |
 | --- | --- |
-| « +1 000 population » | `population += 1000` (jamais sous 0) |
-| « + armement » | ajoute à la réserve du joueur de quoi équiper 10 divisions de chaque type (`DIVISIONS` : l'armement de chaque composant) ; message `addArmament` |
-| « Armer les bots » | chaque bot reçoit 50 000 personnes et 3 lots d'armement (de quoi équiper 30 divisions de chaque type) ; message `armBots`. Les bots ne produisent pas d'armement : sans cela, aucun bot n'a de troupes. Pour essayer les fronts : fonder une ville près d'un bot, armer les bots, déclarer la guerre par le menu de diplomatie, ouvrir le front |
+| « +10 bonshommes » | 10 bonshommes de plus dans Inactifs du joueur (`population` aussi) ; message `addPopulation` |
+| « Renforcer les bots » | chaque bot reçoit 3 bonshommes dans Inactifs ; message `armBots`. Pour essayer les fronts : fonder une ville près d'un bot, déclarer la guerre par le menu de diplomatie, ouvrir le front |
 | « Thème : clair / sombre » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
 
-Les quatre boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
+Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
 
 ### Partie de test
 
@@ -165,20 +164,19 @@ Page → Worker (`ToWorker`) :
   `join {name, token}`. Le message de départ du relais donne la carte, la
   graine, les joueurs et `you` : la partie est créée de la même façon chez
   tous (`new Game`, même graine de partie qu'en solo).
-- `order { id, order }` : `found_city { tile }`, `set_farm_share { percent }`, ou un
-  ordre d'usine : `build_factory { city, factoryType }`, `delete_factory { city }`, `create_line { city,
-  good }`, `set_active_lines { city, good, count }`, `set_city_priority { city,
-  position }`, `set_line_priority { city, good, position }` (02-Engine §4), ou un
+- `order { id, order }` : `found_city { tile }`, ou un ordre de pions (08 §10) : `move_pawn { from, to, kind, good?, count }`
+  (`from` et `to` sont des identifiants d'activité, `kind` `"worker"` ou `"machine"`, `good` pour une machine),
+  `set_activity_order { activity, position }`, `change_production_target { activity, delta }` (02-Engine §4), ou un
   ordre de diplomatie : `declare_war { target }`, `propose_pact { target }`,
   `break_pact { target }`, `propose_peace { target }`, `answer_proposal { from,
   accept }`. Les chaînes ne sont pas vérifiées par la page : le moteur les vérifie.
 - `pause { paused }` (solo : le relais local ; en ligne : demande à l'hôte, que le relais refuse à un autre joueur).
-- `order` accepte aussi les ordres des fronts (05-Fronts §5.2, 02-Engine §4) : `create_division { division }` (clé d'un type de `DIVISIONS`),
-  `delete_division { id }`, `move_division { ids, front, line?, box? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne ;
+- `order` accepte aussi les ordres des fronts (05-Fronts §5.2, 02-Engine §4) : `move_division { ids, front, line?, box? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne ;
   `line` : `first`, `second`, `rapid` ou `box` ; `box` : boîte de percée, 0 pour en créer une),
-  `set_forced_mobilization { enabled }`, `start_front_attack { front }`, `stop_front_attack { front }`,
-  `start_breakthrough { box, city1, city2 }`, `cancel_breakthrough { id }`.
-- `debug { action: "addPopulation" | "addArmament" | "armBots", amount }` (voir §3).
+  `start_front_attack { front }`, `stop_front_attack { front }`,
+  `start_breakthrough { box, city1, city2 }`, `cancel_breakthrough { id }`. Les divisions ne se créent ni ne se
+  suppriment par ordre (08 §6).
+- `debug { action: "addPopulation" | "armBots", amount }` (voir §3).
 
 Worker → page (`FromWorker`) :
 
@@ -186,15 +184,15 @@ Worker → page (`FromWorker`) :
   (copies, transférées : le moteur garde les siennes), nombre de joueurs, `you`
   (le joueur de la page : 1 en solo, celui du message de départ en ligne) et
   `playerNames` (le nom de chaque joueur, indice `id - 1`), rayons
-  d'expansion et de contrôle, coût d'une ville, `stepMs`, et `catalog` : la
-  configuration des usines que la page affiche (types d'usine et leur arbre,
-  `unlockTurns`, identifiants des biens et des armements, production,
-  ouvriers et fer par ligne, par produit), lue dans le moteur par `factoryCatalog()` (`solo.ts`) ;
-  `catalog.economy` : les réglages que la barre d'informations utilise
-  (consommation par tête, nourriture minimale, `maxMachinesPer1000` de chaque
-  machine, déclin de l'armement en pourcent) ; `military` (`MilitaryCatalog`) : les types de division
-  (clé, indice, niche, rang dans la niche, composants avec leur quantité, leur poids et leurs attaques, icône,
-  description, largeur de front, durée de formation, type d'élite, PV, multiplicateurs, blindage, motorisation), les niches et leurs types,
+  d'expansion et de contrôle, coût d'une ville, `stepMs`, et `catalog` (`ActivityCatalog`) : la
+  configuration des activités que la page affiche (08 §2, §9) : pour chaque activité son identifiant, son genre
+  (`idle`, `hurt`, `farming`, `fishing`, `mining`, `factory`, `barracks`), son parent, son coût de déblocage, ses
+  ouvriers et son fer par unité, son bien ou son type de division, ses cases par travailleur ; les identifiants et
+  les icônes des machines ; les délais d'apparition et de disparition (population, machines, divisions) ; la nourriture
+  par bonhomme, la nourriture minimale, le fer par case et le rendement d'une case d'eau. Lue dans le moteur par
+  `activityCatalog()` (`game.ts`), sans règle recopiée dans la page ; `military` (`MilitaryCatalog`) : les types de division
+  (clé, indice, niche, rang dans la niche, attaques d'une division pleine (somme des composants), icône,
+  description, largeur de front, `productionTurns`, type d'élite, PV, multiplicateurs, blindage, motorisation), les niches et leurs types,
   `eliteTroopsRatio`, et les délais (tours entre deux rounds, déplacement) et l'échelle de l'état, lus dans
   `config/divisions.ts` et `config/fronts.ts` par `militaryCatalog()` (`solo.ts`).
 - `tick`, à chaque tour :
@@ -204,18 +202,17 @@ Worker → page (`FromWorker`) :
   - `cities` et `roads` : listes complètes, **seulement** si une ville a été
     fondée pendant ce tour (c'est le seul cas où les villes, ports, groupes et
     routes changent) ; sinon `null` ;
-  - `factoryMarks` : les usines de tous les joueurs, quatre nombres chacune [ville,
-    indice du type, niveau, indice dans l'arbre du bien dominant (`dominantGood`,
-    `names.ts` : le plus de lignes construites)], **seulement** si elles ont changé depuis le tour
-    précédent (`SoloGame` compare une chaîne), sinon `null` ;
-  - `human` : le détail des usines du joueur local (`you`), à chaque tour (quelques dizaines
-    de nombres) : pour chaque usine, ses groupes `{ good, lines, active, filled }`
-    et ses compteurs de déblocage ; biens produits, réserves d'armement, réserves
-    cibles, capacité de fer, fer requis (somme des lignes actives × fer par ligne) ;
-  - `players` : par joueur, population, fermiers, pêcheurs, inactifs,
-    nourriture, blé, poisson, surface cultivée et max, surface pêchée et max,
-    `farmPercent`, capitale, nombre de villes, ouvriers d'usine, mineurs, cases
-    de fer exploitées, fer extrait ;
+  - `human` : les activités du joueur local (`you`), à chaque tour (quelques dizaines de nombres) :
+    `activities` (dans l'ordre du joueur : bonshommes, machines, places, places de la boîte (`slots`), sortie,
+    fer réservé, et pour une usine ou une caserne les existants et la limite effective, élites plafonnées),
+    `unlock` (progression de chaque activité), `served` (ouvriers servis en fer de chaque activité : la vitesse de
+    déblocage de ses enfants), `idleMachines`, les compteurs d'apparition et de sursis (`popArrivals`, `popLeaves`,
+    `machineArrivals`, `machineLeaves` : des tours de fin, triés), `hurtHealEnd`, la capacité de population, le
+    fer produit et le fer réservé ; `tick` donne le tour courant, pour lire les compteurs ;
+  - `players` : par joueur, population, capacité, bonshommes d'Inactifs, de Blessés, d'Agriculteurs, de Pêcheurs, de
+    Mineurs et de casernes (`soldiers`), nombre de divisions, nourriture, blé, poisson, surface cultivée, surface
+    pêchée, cases de fer exploitées, cases de fer, fertiles et d'eau, fer produit et réservé, machines possédées et
+    limites, capitale, nombre de villes, `defeated`, coût de la prochaine ville en bonshommes ;
   - `results` : pour chaque ordre du joueur local dans le tour, `applied` vrai ou faux
     (`id` : l'identifiant que la page avait donné à l'ordre, rendu dans l'ordre d'envoi) ;
   - `diplomacy`, **à chaque tour** (`SoloGame.diplomacyView`, quelques dizaines
@@ -228,14 +225,15 @@ Worker → page (`FromWorker`) :
     mêmes champs que `DiplomacyEvent`, 02-Engine §4). Pas d'envoi « seulement si
     changé » : c'est petit, et la liste est la source des cartes de proposition (§7) ;
   - `fronts` : tous les fronts à plat (`FrontView` : joueurs, groupes, `active`, connexions avec leur position,
-    et pour chaque camp `frontAttack`, l'attaque sur tout le front, et `lastLossByNiche`, les hommes perdus par sa première
-    ligne au dernier round, par niche), ou `null` si rien n'a changé depuis le dernier
+    et pour chaque camp `frontAttack`, l'attaque sur tout le front, et `lastLossByNiche`, l'état perdu par sa première
+    ligne au dernier round, par niche, à l'échelle `stateScale`), ou `null` si rien n'a changé depuis le dernier
     envoi. `SoloGame` les reconstruit à chaque round de combat (`combatTurns`), quand le joueur donne un ordre et quand
     des villes changent, et compare le JSON au dernier envoyé ; les positions changent à chaque round.
     Pas de brouillard de guerre : les fronts de tous les joueurs, pas seulement ceux du joueur 1 ;
   - `divisions` : toutes les divisions de tous les joueurs, par identifiant (`DivisionView` : propriétaire, type,
-    quantités par composant, front (0 : réserve nationale), ligne, largeur engagée en millièmes de liaison, état sur
-    `stateScale`, statut `ready`, `formation`, `moving` ou `fleeing`, tour de fin du statut), ou `null` si rien n'a changé ;
+    front (0 : réserve nationale), ligne, largeur engagée en millièmes de liaison, état sur
+    `stateScale`, statut `ready`, `formation`, `moving` ou `fleeing`, tour de fin du statut, `leaveTick` : le tour où
+    une division en trop disparaît, 0 sinon), ou `null` si rien n'a changé ;
     `Mirror.divisions` garde le dernier tableau, le même objet tant qu'il ne change pas ;
   - `captured` : les villes prises pendant le tour (`{ city, from, to }`). Une ville prise
     change de joueur sans que `tileCity` change : `cities` est alors renvoyé, avec les paires
@@ -244,10 +242,6 @@ Worker → page (`FromWorker`) :
   - `eliminated` : les joueurs éliminés pendant le tour (`{ player, by }`, événement `player_eliminated` du moteur) ;
     vide après un rejeu. `players[i].defeated` dit, à chaque tour, si un joueur est éliminé (la page en tire l'état de
     spectateur, même après un rejeu) ;
-  - `players` porte aussi `soldiers`, `hurt` (blessés, 00-Game §4.2 : `population` les compte, le total affiché les retire),
-    `forcedMobilization`, `divisionEquipment` (armement
-    des divisions du joueur, par type d'armement dans l'ordre de `armamentIds`) et
-    `divisionEquipmentFull` (le même armement à effectif complet) ;
   - `perf` : durées en ms dans le Worker (bots, `applyTurn`, fabrication du
     message).
 - `paused { paused }` : état de la pause (la réponse du relais, solo comme en ligne).
@@ -268,7 +262,7 @@ depuis le début (`turns`). `OnlineGame` applique tous les tours sauf le dernier
 avec `Game.advance` (moteur seul, aucun message) et le dernier avec
 `Game.applyTurn(…, { full: true })` : la page reçoit un seul `tick` qui porte
 tout ce que les messages sautés auraient apporté (toutes les cases de
-`tileCity`, les villes et routes, les usines, les fronts), et aucun événement du
+`tileCity`, les villes et routes, les fronts), et aucun événement du
 passé (`results`, `captured`, `encircled`, `failedBreakthroughs` et `events`
 de la diplomatie sont vides). Un seul hash est envoyé : celui du dernier
 multiple de N atteint pendant le rejeu.
@@ -282,12 +276,10 @@ fondation, `tileCity` n'a pas pu changer.
 
 **`results`.** `applyTurn` ne dit pas quels ordres ont été appliqués. `SoloGame`
 le lit dans l'état : une fondation est appliquée si une ville du joueur 1 est
-apparue sur cette case pendant le tour ; un réglage, si `farmPercent` vaut la
-valeur demandée. Ordres d'usine : une usine est construite si la ville n'en avait
-pas avant le tour et en a une du bon type ; une ligne est créée si le nombre de
-lignes du groupe a augmenté (état d'avant relevé seulement quand il y a un ordre
-humain) ; un réglage de lignes actives, si `active` vaut `count` ; une priorité,
-si la ville (ou le groupe) est à la position demandée. La page affiche un message
+apparue sur cette case pendant le tour. Ordres de pions : le compte des pions de l'arrivée (bonshommes, places ou
+machines) a changé depuis l'état d'avant le tour, relevé seulement quand il y a un ordre humain (approximation si
+plusieurs ordres du même tour visent la même activité) ; un ordre de position, si l'activité est à la position
+demandée ; le retrait d'une place, si les places de la caserne ont baissé. La page affiche un message
 pour un ordre non appliqué. Ordres de diplomatie : appliqué si `state.events` (vidé
 au début du tour) contient l'événement attendu pour ce joueur (`war_declared`,
 `pact_broken`, `proposal_sent` du bon genre, ou `proposal_accepted` /
@@ -297,7 +289,7 @@ au début du tour) contient l'événement attendu pour ce joueur (`war_declared`
 ## 5. Les bots (`src/bots.ts`)
 
 Ce ne sont pas des règles du jeu : un bot lit l'état et envoie des ordres
-`found_city` et `set_farm_share`, que le moteur valide comme ceux de l'humain.
+`found_city` et `move_pawn`, que le moteur valide comme ceux de l'humain. Stratégie minimale, pour le débogage.
 Chacun a son générateur (`createRng`, graine = graine de la carte mélangée à son
 identifiant), donc deux parties de mêmes réglages envoient les mêmes ordres.
 
@@ -305,27 +297,21 @@ identifiant), donc deux parties de mêmes réglages envoient les mêmes ordres.
   au hasard sur la carte jusqu'à en avoir 5 de terre, de fertilité > 0 et sans
   ville (`tileCity === 0`), et prend celle qui a le plus de cases fertiles libres
   dans son rayon de contrôle.
-- **Expansion** : tous les 15 à 24 tours, si la population est ≥ 400
-  (`EXPAND_MIN_POPULATION`) et au coût de la ville suivante, et si sa surface
-  cultivée atteint la moitié de sa surface cultivable (`2 × cultivated ≥
-  farmTiles`, valeurs du dernier tour), il tire des cases dans le rayon d'expansion d'une de
-  ses villes (ville tirée au hasard à chaque tirage), garde celles qui sont de
-  terre fertile et libre, et prend celle qui a le plus de cases fertiles libres.
-  Les conditions sont vérifiées chez le bot avant d'envoyer : pas d'ordre perdu.
-- **Part de fermiers** : tous les 30 tours, il vise la part qui occupe juste
-  toute sa surface cultivable sans machine (`ceil(surface_max × 1000 /
-  FARMING.mechanizationBase)` fermiers), le reste allant à la pêche ; 100 % sans
-  case d'eau. Il n'envoie un ordre que si l'écart avec la part actuelle est
-  d'au moins 5 points.
+- **Affectation** : tous les 10 tours (`ASSIGN_EVERY_TURNS`), les bonshommes d'Inactifs vont d'abord dans
+  Agriculteurs (jusqu'aux places libres), puis, après l'éventuelle fondation, dans Mineurs, puis dans la caserne de
+  milice (sans limite de places). Un seul `move_pawn` par destination, avec `count`.
+- **Expansion** : au plus tous les 15 à 24 tours, si la surface cultivée atteint la moitié de la surface cultivable
+  (`2 × cultivated ≥ farmTiles`, valeurs du dernier tour) et que les inactifs restants paient le coût de la ville
+  suivante (`foundingCostPawns`), il tire des cases dans le rayon d'expansion d'une de ses villes (ville tirée au
+  hasard à chaque tirage), garde celles qui sont de terre fertile et libre, et prend celle qui a le plus de cases
+  fertiles libres. Les conditions sont vérifiées chez le bot avant d'envoyer : pas d'ordre perdu.
 
 Les bots n'envoient **aucun ordre de diplomatie** et ne répondent à aucune
 proposition (IA reportée, 00-Game §1.1) : une proposition faite à un bot expire
 après `DIPLOMACY.proposalTurns` tours.
 
-Les constantes sont en tête de `bots.ts`. Avec elles, les bots dépensent leur
-population aussi vite qu'elle croît (une ville coûte 100 habitants) : leur
-population reste proche de 400 et leur nombre de villes ne dépend que de la
-cadence d'expansion (environ 45 villes chacun après 4 000 tours).
+Les constantes sont en tête de `bots.ts`. Les bots ne produisent ni machines ni divisions autres que la milice : sans
+renfort (« Renforcer les bots » du panneau de debug), leur armée reste celle que leur population permet.
 
 ## 6. Affichage
 
@@ -415,24 +401,10 @@ carte, puis routes (ligne brisée le long de `mirror.roadTiles`, trait plein fon
 entre deux villes d'un même joueur, pointillé gris sinon), villes (point ; étoile pour la capitale ; carré bleu de
 port sur la case de côte de la zone la plus proche de la ville, ou à côté de la
 ville si c'est la sienne), puis, en mode placement, le rayon d'expansion des
-villes du joueur et la case survolée. Une ville qui porte une usine est dessinée
-plus grande (`1 + 0,08 × niveau`, niveau plafonné à 10 : 00-Game §3.7) et son
-logo, l'icône de son bien dominant (`FactoryMark.good`, 16 px) sur un fond gris clair
-de 18 px cerclé de noir (1 px), soit 20 px d'écran à tout zoom, est à côté d'elle (l'initiale du type
-tant que l'image n'est pas chargée : `MapView.logo`, un `Image` par chemin,
-qui redessine la carte à son chargement ; 00-Game §8). Quand le logo (20 px) dépasse le tiers du rayon de contrôle en pixels d'écran
-(`20 × 3 > controlRadius × zoom`, soit un zoom sous 2,4 avec un rayon de 25 cases), il est remplacé
-par un carré de 5 px à bordure sombre (`FACTORY_DOT_*` : bordure `#3a3a3a`, intérieur `#9a9a9a`), posé au même coin. Dans le panneau de
-production, la même icône précède le nom de l'usine. En mode usine, la zone de la ville survolée est
-colorée, verte si la ville est au joueur et sans usine, rouge sinon
-(`zoneLayer` : un petit calque par ville et par couleur, vidé quand les zones ou
-les usines changent). Survoler la section d'une usine dans le panneau de
-production met en évidence la ville : `ProductionPanel` appelle
-`MapView.highlightCity(ville)` à l'entrée du pointeur (0 à la sortie, et à chaque
-reconstruction du panneau, qui détruit les sections), et `draw` hachure en blanc
-(bandes « / », même `drawHatch` que les vues) les cases dont `tileCity` est cette
-ville, au-dessus des vues et sous les routes et les villes ; le masque de la zone
-est recalculé à chaque changement de ville ou de zones. Une image n'est dessinée que si quelque chose a changé
+villes du joueur et la case survolée. Il n'y a pas d'usine sur la carte (08 §2) : ni logo, ni ville agrandie, ni mode
+usine. `MapView.highlightCity(ville)` hachure en blanc (bandes « / », même `drawHatch` que les vues) les cases dont `tileCity`
+est cette ville, au-dessus des vues et sous les routes et les villes ; le masque de la zone est recalculé à chaque changement
+de ville ou de zones. Une image n'est dessinée que si quelque chose a changé
 (`requestAnimationFrame`).
 
 **Fronts** (05-Fronts §11). `Mirror` garde les `FrontView` (`fronts`, `frontsVersion`), les paires de villes des
@@ -467,16 +439,15 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (12345 par défaut), « Jouer ».
 - **Barre de boutons**, en bas (00-Game §1) : « Créer une ville », suivi du
   coût de la prochaine ville (`foundingCost`, mis à jour à chaque tour) avec
-  l'icône de population neutre ; caché tant que le joueur n'a pas de capitale
+  l'icône de population neutre, puis « / » et l'icône de ville ; le coût est en bonshommes (08 §10) ; caché tant que le joueur n'a pas de capitale
   (première ville gratuite). Active le mode
   placement (échap : quitte ; l'ouverture d'un détail de la barre d'informations
   ou du menu « Carte » aussi). Sans ville : rien de particulier, toute terre libre
   est valide. Avec des villes : le rayon d'expansion de chacune est dessiné ; la
   case survolée est verte si la fondation respecte 00-Game §3.3 (terre,
-  `tileCity === 0`, dans le rayon d'expansion d'une ville du joueur, population ≥
-  coût) et rouge sinon, avec la raison dans la barre. En mode placement, les
-  vues de `PLACEMENT_MAP_OPTIONS` sont affichées (pas `factories`, dont la case règle
-  `MapView.showFactoryLogos` : logos d'usine, cochée au départ ; dont les hachures de
+  `tileCity === 0`, dans le rayon d'expansion d'une ville du joueur, inactifs ≥
+  coût en bonshommes, 08 §10) et rouge sinon, avec la raison dans la barre. En mode placement, les
+  vues de `PLACEMENT_MAP_OPTIONS` sont affichées (dont les hachures de
   fertilité, voir le menu « Carte »), le rayon de contrôle qu'aurait la ville est dessiné autour de la case
   survolée, et la barre donne le nombre de cases cultivables que cette ville
   prendrait (`Mirror.fertileTilesFor` : libres, ou plus proches d'elle que de
@@ -485,151 +456,80 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   l'applique pas (`results`), la page affiche « Ville non fondée : le moteur a
   refusé l'ordre ». La page copie les conditions pour colorer la case ; **le
   moteur reste l'autorité** et vérifie à nouveau.
-- **« Inaugurer une usine »** (00-Game §1) : un clic déplie vers le haut le menu
-  des types d'usine (un choix par entrée de `catalog.factoryTypes`, avec l'icône
-  de sa racine, ou son symbole provisoire, par exemple `[fusil]`). Au survol d'un
-  choix, l'**arbre de progression** du type s'affiche à droite du menu, bords bas
-  alignés (`attachFactoryTreeTip`, `goodtips.ts`) : en-tête « \<type\> : arbre de
-  progression », puis un nœud par entrée de `tree` sous son `parent`, reliés par
-  des traits en coude ; la racine en gras avec « production de base ». Chaque
-  nœud porte l'icône du bien, ou un carré en pointillés s'il n'en a pas (le
-  symbole texte répéterait le nom). Pas de condition de déblocage : elle est la
-  même pour tous les nœuds (`FACTORY.unlockTurns`, décision de l'auteur,
-  25 octobre 2026). Les types dont le joueur a déjà une usine sont grisés à
-  l'ouverture du menu (une usine par type, 00-Game §8). Le choix arme le bouton
-  et ferme le menu. En survolant la zone d'une ville du joueur qui n'a pas
-  d'usine, la zone est verte ; ailleurs, rouge (autre joueur, ville qui a déjà une
-  usine, hors de toute zone), avec la raison dans la barre. Un clic sur une zone
-  verte envoie `build_factory` et désarme le bouton ; un clic sur une zone rouge
-  affiche la raison et n'envoie rien. Échap désarme et ferme le menu. Armer
-  l'un des deux modes (ville, usine) quitte l'autre.
-- **« Production »** : ouvre ou ferme le panneau de production (`production.ts`),
-  posé sur le bord droit de la carte, ouvert au début de chaque partie (auteur, 4 novembre 2026) :
-  - en haut, deux lignes (auteur, 4 novembre 2026), 14 px : icône d'ouvrier puis
-    « Ouvriers suffisants » en vert, ou « Ouvriers insuffisants » suivi du malus
-    « −n % de production » en gras rouge ; même chose pour le fer (« Fer
-    suffisant » / « Fer insuffisant »). Le malus est celui de la catégorie la plus
-    touchée : 100 % moins `goodsWorkerRatio` ou `armWorkerRatio` (fer :
-    `goodsIronRatio`, `armIronRatio`), le plus grand des deux ; l'infobulle donne
-    les deux. Chaque ligne est un bouton (curseur main) : un clic ouvre l'onglet
-    Population (ouvriers) ou Ressources (flux) (fer) de la barre d'informations
-    (`InfoBar.openTab`) ;
-  - une section par ville qui a une usine, dans l'ordre de priorité. En-tête
-    (auteur, 4 novembre 2026) : la poignée puis, en gras, le nom propre du type
-    (`FACTORY_NAMES` dans `names.ts` : manufacture d'armes, chantier naval, usine
-    mécanique ; le même nom est dans le menu « Inaugurer une usine ») ; ni le numéro
-    de la ville, ni l'icône du bien dominant (chaque ligne a déjà la sienne), ni le
-    niveau. La poignée
-    `⋮⋮` à glisser change la priorité de la ville (`set_city_priority`, position
-    = indice de la section sur laquelle on dépose) ; une croix `×` discrète en
-    haut à droite de la section (`.fdelete`) demande confirmation (`window.confirm`,
-    avec le nom du type et le nombre de lignes perdues), puis envoie
-    `delete_factory` ;
-  - dans la section, une ligne par bien : poignée (`set_line_priority`, au sein de
-    la section seulement), puis sur la première ligne, pour les lignes remplies
-    au dernier tour : fer consommé au total (lignes remplies × `ironPerLine`),
-    icône du fer, →, production totale (lignes remplies × `productionPerLine` du
-    catalogue : par tour pour un bien, par minute pour un type d'armement),
-    suivie de son unité en gris (« /mn » ou « /tour », auteur, 4 novembre 2026),
-    icône du bien ; curseur de 0 à `lines`, « actives / total ». Sur la seconde
-    ligne (auteur, 1er novembre 2026) : ouvriers employés en gras (`workers` du
-    groupe, somme des coûts par rang calculée par le moteur, 00-Game §8.1)
-    suivis de l'icône d'ouvrier (`population/pop-worker.png`) et de « (X/ligne) »,
-    la moyenne par ligne remplie (`workers / filled`, arrondie ; sans ligne
-    remplie, `workersPerLine`) ; pour un type
-    d'armement, « approprié pour : » le nombre de divisions de référence que
-    le stock cible des **lignes actives** du groupe équipe, en gras, et l'icône de la division :
-    `⌊ ⌊ active × productionPerLine × stockSeconds ÷ 3600 ⌋ ÷ exemplaires par division ⌋`,
-    la formule du stock cible de l'onglet « Armement » (00-Game §8.3) appliquée
-    aux lignes actives (réglées par le joueur), pas à toutes les lignes construites. Division de référence
-    (`FactoryCatalog.equipUnit`, calculée dans `game.ts`) : les réguliers s'ils
-    utilisent l'armement (fusils, mitrailleuses), sinon la première division de
-    `DIVISIONS` qui l'utilise. Les biens n'ont pas ce second bloc. Plus de
-    nombre de lignes remplies ni de raison du manque sur cette ligne ;
-    l'infobulle donne le coût d'une ligne : ouvriers de la 1re ligne et
-    minimum (`workersPerLine`, `workersFloor`), fer, produits. L'ordre `set_active_lines` part au
-    relâchement du curseur. Contour des sections et séparations entre lignes :
-    même trait, 2 px (`--fsec-line`, `style.css`) ;
-  - un bien verrouillé de l'arbre (pas encore créé et dont le parent n'a pas
-    `unlockTurns` tours-lignes) : `[parent]`, « compteur / unlockTurns », barre qui se remplit,
-    cadenas (`icons/miscellaneous/misc-padlock.png`), `[bien]` ;
-  - une ligne par bien de l'arbre : en production, un bouton + à côté du curseur
-    envoie `create_line` (une ligne de plus, à la main) ; il est bloqué (grisé,
-    classe `blocked`, `data-burst-blocked`) tant que le réglage est sous le nombre
-    de lignes (`active < lines`) : un appui n'envoie rien et ajoute « Ligne
-    inactive. Impossible d'agrandir. » en rouge sous « Shift + 5 / Ctrl + 10 » dans
-    l'aide de `burst.ts`, jusqu'à ce que la souris quitte le bouton ; pour une machine,
-    une jauge de croissance automatique dessous, précédée de l'icône `misc-up-lighter.png` (les boutons +
-    portent `misc-plus-lighter.png`, dans `icons/miscellaneous/`) (`growth / growthTurns` en tours-lignes, ou
-    « demande couverte » quand `demandMet`, 00-Game §8.2) et un trait noir sur
-    le curseur à `usefulLines / lines` : lignes utiles, calculées par
-    `SoloGame.humanDetail` dans l'ordre de remplissage du moteur
-    (`ceil((goodsDemand − production des groupes d'avant) / productionPerLine)`,
-    borné à `lines`). Le curseur (`input.lines-slider`, piste native
-    transparente) est à `active`, le maximum réglé par le joueur ; dessous, une
-    piste grise et une barre bleue (`.slider-fill`) de longueur
-    `min(running, active, usefulLines)` : les lignes qui tournent (`LineGroupView.running`). Quand les lignes
-    en service (`min(active, usefulLines)`) dépassent les lignes qui tournent,
-    une barre rouge (`.slider-short`) couvre l'écart et un
-    trait rouge (`.short-mark`) marque les lignes qui tournent ; sans écart,
-    ni l'un ni l'autre (auteur, 1er novembre 2026). Depuis le malus de production
-    (00-Game §8, 4 novembre 2026), un manque de fer ou d'ouvriers ne retire plus de ligne :
-    l'écart n'existe plus qu'en cas d'écart entre `usefulLines` du client et la sélection du moteur. Quand le réglage du joueur
-    dépasse les lignes utiles (`active > usefulLines`, la demande est couverte), une
-    barre verte (`.slider-slack`) va des lignes en service au réglage. L'infobulle
-    du curseur (`data-bar`) explique chaque cas : « toutes les lignes en service ne tournent pas » (rouge), « le besoin est inférieur à la production cible » (vert). Barre et traits
-    sont placés entre les centres extrêmes du pouce (7 px de chaque côté). Le
-    compte affiche « en service · max réglé / lignes ». Débloqué sans
-    ligne, un bouton + crée la première ; verrouillé, la flèche de
-    progression. Plus de bouton « Ajouter une ligne » ni de liste ;
-  - **Malus de production** (auteur, 4 novembre 2026) : sur chaque ligne de groupe, le nombre à gauche de
-    l'icône du fer (`LineGroupView.ironObtained`, fer obtenu) est **toujours en gras** et **en rouge** quand
-    le ratio du fer de la catégorie du groupe est sous `ratioScale` (`goodsIronRatio` pour un bien, `armIronRatio` pour
-    l'armement) ; le nombre à gauche de l'icône d'ouvrier (`workersObtained`) est en rouge quand le ratio des
-    ouvriers de sa catégorie l'est. Le nombre de produits de la ligne est multiplié par le `…LineRatio` de sa catégorie. Le malus des
-    ouvriers n'est affiché nulle part ailleurs. Les priorités (glisser-déposer) restent à l'écran mais ne servent plus
-    (00-Game §8.1, à supprimer plus tard) ;
-  - en bas, les réserves d'armement (réserve et stock cible).
-  Le panneau n'est reconstruit que quand sa structure change (usines, groupes,
-  lignes, biens débloqués), et jamais pendant un glisser ou un réglage de curseur
-  (ni pendant 500 ms après, le temps que le moteur applique l'ordre) ; entre deux
-  reconstructions, seuls les nombres sont mis à jour.
+- **« Production »** : ouvre ou ferme le panneau de production (`production.ts`, `production.css`, 08-Population §11),
+  posé sur le bord droit de la carte, ouvert au début de chaque partie, large d'environ 600 px (`--prod-w`). De haut en bas :
+  - **l'en-tête** : « population / capacité » (icône `pop-default`), et « fer réservé / fer produit » (icône du lingot ; un clic
+    ouvre l'onglet Ressources de la barre d'informations, `InfoBar.openTab`) ;
+  - **les boîtes ouvertes**, dans l'ordre du joueur (`HumanDetail.activities`), chacune sur un fond légèrement coloré
+    propre à son genre d'activité et une bordure marquée (variable `--box-c` posée par `data-kind`, tirée des `--occ-*` de
+    `style.css` ; mélange de 14 % dans le thème clair, 22 % dans le sombre, `html[data-theme]`). Une boîte est une grille de
+    six colonnes : poignée `⋮⋮`, entrée, flèche →, colonne centrale, flèche →, sortie. Les colonnes d'entrée (64 px) et de
+    sortie (76 px) ont une largeur fixe : elles sont alignées d'une boîte à l'autre ; sans entrée, la tuile et sa flèche
+    disparaissent et la colonne reste vide ;
+  - **entrée et sortie** sont dans la boîte, sur une petite tuile à fond clair, sans couleur de ressource. Entrée : le fer
+    réservé de l'usine ou de la caserne qui en prend (`ironUsed`, rouge quand le fer manque : unités servies
+    < `floor(ouvriers / workersPerUnit)`). Sortie : `+n` et l'icône de population pour Agriculteurs et Pêcheurs (la nourriture
+    de la boîte ÷ `foodPerPawn`, une décimale), `+n` et le lingot pour Mineurs, « existants / limite » et l'icône du
+    produit (machine ou division) pour une usine ou une caserne. Inactifs et Blessés n'ont pas de sortie ;
+  - **la colonne centrale** : le titre (`activityName`) et le nombre de places (« 3 / 5 places » ; casernes : « bonshommes /
+    places » ; usines : les ouvriers) au-dessus des pions, sans cadre intérieur ; sur une boîte parente dont un enfant reste
+    verrouillé, un petit cadenas ouvert (`icon-padlock-open.png`, `data-tuto="prod-parent"`) dont **seul le survol** montre les enfants et leur
+    barre de progression (`setTip`, `childrenTip`) ;
+  - **les pions** : case de 22 px, icône de 16 × 16 de `icons/population/` (`pop-default` pour les inactifs, `pop-farmer`, `pop-fisherman`,
+    `pop-miner`, `pop-worker`, `pop-soldier`, `pop-hurt`) pour un bonhomme, icône du bien (`catalog.icons`) pour une machine ;
+    trop de pions pour une ligne : ils passent à la ligne et la boîte grandit vers le bas. Les bonshommes d'abord, puis les
+    machines que la boîte reçoit (Agriculteurs, Pêcheurs, Mineurs), puis, dans une caserne, les places vides. Inactifs :
+    une ligne de population puis une ligne par type de machine présent, sans libellé. **États** : normal ; **à venir**
+    (`popArrivals`, `machineArrivals`) à la fin de la ligne d'Inactifs, contour en tirets et barre de compteur qui avance
+    avec le tour (`data-end`, `data-total`) ; **en sursis**, clignotement (`--blink-period`, `blink.ts`) : la page déduit les
+    pions de 08 §6 à partir du nombre de compteurs (`popLeaves`, `machineLeaves`) : la population part de la boîte la plus
+    basse vers le haut, après Inactifs, Blessés tout à la fin, les derniers pions de chaque boîte d'abord ; une machine part
+    de sa ligne d'Inactifs, puis de sa boîte ; **place vide** : case en pointillés, réglée par les flèches ;
+  - **glisser des pions** (pointeur, comme `dnd.ts` pour les divisions du même type) : le survol met en surbrillance le pion sous la
+    souris et tous les pions de même type (bonhomme ou machine d'un même bien) à sa droite dans la boîte, lignes du dessous
+    comprises (`groupOf`) ; un appui puis un déplacement de plus de 4 px commence le glisser (pion fantôme `×n` près de la
+    souris, pions source atténués) ; la boîte sous la souris est surlignée si elle accepte au moins un pion. Le relâchement
+    envoie **un seul** `move_pawn { from, to, kind, good?, count }`. Les règles visibles évitent un ordre que le moteur refuserait
+    (`dropCount`) : Blessés ne reçoit ni ne donne, une machine ne va que dans Inactifs ou la boîte qui la reçoit, une boîte à
+    places (Agriculteurs, Pêcheurs, Mineurs) ne reçoit pas plus que ses places libres (le glisser est réduit à ce qui
+    tient, rien s'il n'y a plus de place) ; les pions à venir, les places vides et les blessés ne se saisissent pas ;
+  - **réorganisation** : la poignée `⋮⋮` d'une boîte (glisser HTML5) la dépose sur une autre boîte et envoie
+    `set_activity_order { activity, position }` (indice de la boîte visée dans la liste des boîtes ouvertes ; Inactifs n'a pas de
+    poignée et n'est pas une cible, 08 §2) ;
+  - **boîtes verrouillées**, sous un séparateur, très pâles : l'icône de ce qui est débloqué, le cadenas (`miscellaneous/icon-padlock-closed.png`), un
+    petit trait, le symbole de la boîte parente (son produit, ou son bonhomme pour Agriculteurs, Pêcheurs et Mineurs), puis une
+    barre de progression (« progression / coût » à gauche, nom de la boîte à droite) ; triées par progression décroissante (`lockedOrder`), le panneau défile vers le
+    bas ; le survol donne l'explication (`lockedTip` : la progression gagne chaque tour le nombre d'ouvriers de la boîte parente
+    servis en fer, `HumanDetail.served`, et le temps restant à ce rythme). Une boîte débloquée rejoint le bas des boîtes
+    ouvertes.
+  Le panneau n'est reconstruit que quand sa structure change (`structureKey` : pions, places, boîtes ouvertes, ordre des boîtes
+  verrouillées, nombre de compteurs), et jamais pendant un glisser de pions ou de boîte. Après un ordre, la reconstruction est
+  retenue jusqu'à ce que la clé change (le moteur a répondu) ou que `HOLD_MS` (500 ms) passe : pas de retour fugitif à l'ancien
+  état. Entre deux reconstructions, seuls les nombres (sorties, tuiles, barres des compteurs et du déblocage) sont mis à jour.
 - **« Tutoriel »**, à droite de « Production » : un clic déplie vers le haut un
   menu de deux choix, « Revoir le tutoriel » (toutes les leçons à lire) et
   « Passer le tutoriel » (toutes lues, plus aucun contour). Un appui en dehors
-  ou Échap ferme le menu ; l'ouvrir ferme celui des usines. Mécanisme et
+  ou Échap ferme le menu. Mécanisme et
   leçons : `07-Tutoriel.md`.
 - **Barre d'informations**, en haut de l'écran de jeu (00-Game §11, `infobar.ts`) :
-  44 px de haut, six boutons séparés par un trait (le sixième, Diplomatie, n'a ni chiffre ni mini-barre) ; chacun a une ligne de
+  44 px de haut, trois boutons séparés par un trait (le troisième, Diplomatie, n'a ni chiffre ni mini-barre) ; chacun a une ligne de
   chiffres et, juste dessous, une **mini-barre** (10 px, `.ib-mini`) : la barre
   la plus pertinente de son détail, mise à jour par `head` à chaque tour, détail
-  ouvert ou non. Population : la barre empilée de toutes les occupations, avec
-  leurs couleurs. Nourriture : la même jauge que la ligne « Population » du détail : la
-  population (vert plein), la population que la nourriture du tour fait vivre
-  (vert hachuré) et le maximum si toutes les cases étaient travaillées (gris),
-  à l'échelle du plus grand des trois.
+  ouvert ou non. Les onglets Population, Nourriture et Armement n'existent plus (08 §11). Ressources (flux) : la barre du
+  fer, **orange** (`.ib-track.iron`, comme dans le détail), à l'échelle du plus grand du fer produit et du fer réservé :
+  orange clair jusqu'au fer produit, orange jusqu'au fer réservé. Provisoire : elle deviendra une vue agrégée de toutes les
+  ressources (hors machines), à définir. Fronts : part des fronts du joueur qui sont actifs (vert).
   **Largeur fixe** (auteur, 4 novembre 2026) : les nombres qui changent à
-  chaque tour (population, variation, maximum, nourriture, surplus, nombre de
-  divisions) ont une largeur minimale en `ch` (`fixedWidth`), un peu plus que
+  chaque tour (nombre de divisions) ont une largeur minimale en `ch` (`fixedWidth`), un peu plus que
   leur texte le plus long avec la notation de `num` (« 99,9K », « +99,9K »,
   « / 99,9K ») : les boutons ne changent pas de largeur quand les chiffres changent.
-  Ressources (flux) : la barre du fer, **orange** (`.ib-track.iron`, comme dans
-  le détail), à l'échelle du plus grand de la capacité et du fer demandé :
-  orange clair jusqu'à la capacité (le fer encore disponible), orange pour le
-  fer consommé, **hachures rouges** pour le fer demandé non obtenu, jusqu'au
-  demandé même au-delà de la capacité. Provisoire : elle deviendra une vue agrégée de toutes les ressources
-  (hors biens produits), à définir, car elle doit couvrir plusieurs types autres
-  que le fer. Armement : tous les types additionnés, mêmes couleurs et même
-  échelle que les lignes du détail (fronts, stock, hachures au-delà de la cible,
-  trait de la cible). Fronts : part des fronts du joueur qui sont actifs
-  (vert). Le survol d'un
+  Le survol d'un
   bouton (auteur, 4 novembre 2026 ; le clic aussi, pour le clavier) déplie son détail
   juste sous la barre, par-dessus le haut de la carte, aligné sur le bord gauche du
   bouton ; la souris sortie du bouton et du détail le replie après 200 ms
   (`CLOSE_DELAY_MS`, le temps de passer de l'un à l'autre ; y revenir annule). Pendant un
-  geste commencé dans le détail (`Section.busy` : glisser de l'onglet des forces, curseur
-  de la part de fermiers tenu), le repli attend la fin du geste. Un détail ouvert par le
-  programme (« ← Retour » d'un front, ligne de l'en-tête du panneau de production) reste
+  geste commencé dans le détail (`Section.busy` : glisser de l'onglet des forces), le repli attend la fin du geste. Un détail ouvert par le
+  programme (« ← Retour » d'un front, ligne du fer de l'en-tête du panneau de production) reste
   ouvert jusqu'à ce que la souris y entre puis en sorte, ou qu'un autre bouton soit
   survolé. Chaque ouverture appelle `InfoBar.onOpen`, que `main.ts` branche sur la sortie
   du mode « Créer une ville ». Le menu « Carte » se comporte de la même façon. Un seul détail
@@ -640,20 +540,18 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   (`InfoBar.place`, appelé par les boutons « Production » et « Panneau de debug »). Le DOM est construit une fois par partie ; chaque tour,
   `InfoBar.update` écrit seulement des textes et des largeurs (la barre, et le
   détail ouvert ; un détail replié est mis à jour à l'ouverture). Les barres
-  **vertes** sont des flux (production du tour), les barres **bleues** des stocks.
+  **vertes** sont des flux.
   Les icônes sont des textes provisoires entre crochets (`[fer]`…), `⇄` pour les
-  flux, `▣` pour le stock, sauf la population et les trois machines : images
+  flux, sauf la population et les trois machines : images
   16 × 16 de `public/icons/` (00-Game §11), affichées à 16 px sans lissage
   (`image-rendering: pixelated`) ; `pop-default` sur l'onglet, une icône par
   occupation dans son détail. Les machines tirent la leur de `icon` dans
   `config/goods.ts` (voir ci-dessous).
-  **Icônes en 32 px (essai)** : dans l'interface des usines (onglet Production,
-  menu « Inaugurer une usine » et son arbre de progression au survol) et dans l'onglet militaire (tableau des unités et
-  combats), les icônes de biens, d'armement et d'unités sont affichées à 32 px
-  (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; les lignes de l'armement
-  (stock) de la barre d'informations aussi ; la barre du haut et
+  **Icônes en 32 px (essai)** : dans l'onglet militaire (tableau des unités et
+  combats), les icônes de machines et d'unités sont affichées à 32 px
+  (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; la barre du haut et
   les autres infobulles restent à 16 px. `icons.ts` (`ICONS_32`) associe aux icônes
-  d'armement AA, AT, artillerie et chenillette leur fichier dessiné en 32 × 32 (les trois
+  de division AA, AT, artillerie et chenillette leur fichier dessiné en 32 × 32 (les trois
   chars n'existent qu'en 32 × 32) ; les autres sont
   les fichiers 16 × 16 agrandis sans lissage. Provisoire : à terme, un bien aura
   ses deux versions dessinées.
@@ -701,174 +599,41 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   sont pas modifiées : à la sortie du mode, la carte revient aux vues cochées.
   **Infobulles** (`tooltip.ts`, encadré en 14 px, pas l'infobulle du
   navigateur, trop lente) : chaque nombre a un `title` qui nomme ses valeurs dans l'ordre
-  d'écriture, avec les mêmes séparateurs, en un mot chacune : « Actuelle /
-  nourrie / potentielle », « Stock / cible · par tour ». Sur la barre, l'infobulle
-  est celle du bouton entier. Même règle dans le panneau de debug (« Cultivées /
-  cultivables ») et le panneau de production (« En service · réglé / lignes »).
+  d'écriture, avec les mêmes séparateurs, en un mot chacune : « Réservé / produit »,
+  « Possédées / limite ». Sur la barre, l'infobulle est celle du bouton entier. Même règle dans le panneau de debug
+  (« Cultivées / cultivables »).
   **Infobulles construites** (`setTip(el, build)` de `tooltip.ts`) : `build`
   renvoie un contenu (titre, sections, barres) au lieu d'un texte ; il est appelé
   à l'affichage, puis à chaque tour tant que l'encadré est affiché (`refreshTip`,
   appelé par `main.ts` après la barre d'informations). Encadré de 340 px, en 13 px
-  (largeur du contenu pour l'arbre de progression). `setTip(el, build, beside)` :
-  l'encadré est placé à droite de `beside` au lieu de sous `el` (menu « Inaugurer
-  une usine »).
-  Les contenus des biens sont dans `goodtips.ts` (`attachGoodTip(el, bien)`, posé
-  sur chaque `[bien]` de la barre d'informations et du panneau de production, et
-  sur l'engrenage `misc-gear-stolen.png` (`gearIcon`, `infobar.ts`) à droite de
-  Mineurs, Fermiers et Pêcheurs dans l'onglet Population, et après Agriculture et
-  Pêche dans l'onglet Nourriture : il montre l'infobulle de la machine du métier,
-  dont le titre porte l'icône de la machine).
-  Feuille de route de toutes les icônes : `04-Tooltips.md`. Les trois
-  **machines** (tracteur, bateau de pêche, pompe à vapeur) ont la même infobulle,
-  décrite par une entrée de `MACHINE_TIPS` (noms, libellés, ce qu'on lit dans
-  les statistiques, couleur de la barre) :
-  titre ; une phrase (la machine augmente la surface que travaille chaque
-  fermier, pêcheur ou mineur, donc moins de travailleurs pour la même surface ;
-  les bateaux augmentent aussi le rendement d'une case d'eau) ; la surface par
-  travailleur sans machine et à pleine mécanisation (`economy.mechanization[bien]`,
-  avec le rapport tiré de `machinesPer1000[bien]`) ; pour les bateaux, le
-  rendement d'une case d'eau sans bateau et au maximum (`economy.waterYield`) ;
-  « Votre nation · travailleurs · machines utilisées / machines d'une
-  mécanisation totale », une jauge verte précédée de l'engrenage
-  (`miscellaneous/misc-gear-stolen.png`, 16 px, `.ib-img`) et de
-  « Mécanisation », la mécanisation du dernier tour
-  (`stats.mechanization[bien]`, copié de `Player.farmMechanization`,
-  `fishMechanization`, `mineMechanization`), de la valeur sans machine (vide) à
-  la valeur maximale (pleine), la valeur écrite au bout ; jauge et barre sont dans
-  une grille libellé | barre | valeur (`.tip-bars`), bords gauches alignés, la
-  jauge prenant aussi la colonne de valeur ; puis une barre de la
-  couleur du métier dans le détail Population : « Surface cultivée » cultivées /
-  cultivables (`--occ-farm`), « Surface pêchée » pêchées / cases d'eau
-  (`--occ-fish`), « Cases exploitées » cases de fer exploitées / cases de fer
-  (`--occ-mine`, `stats.ironTiles`). La jauge montre un effet commun à tous les
-  travailleurs (00-Game §6.2 : une seule mécanisation pour tous), pas une part
-  de travailleurs équipés. `stats.machinesUsed` est lu par `SoloGame` dans
-  `goodsEffective` **avant** `applyTurn` : ce sont les machines que l'étape a utilisées
-  (la valeur effective, 00-Game §12), celles qui donnent la jauge, pas celles
-  produites pendant le tour (`goods`, que les lignes de machines du détail Ressources affichent).
-  1. **Population** : « Population n  ±v  / max ». `v` est la croissance du
-     tour (population − somme des occupations, qui est la population au début du
-     tour : une fondation de ville, qui retire des habitants avant l'étape, n'y
-     compte pas), verte si positive, rouge si négative. `max` = nourriture ÷
-     `foodPerHead`. Détail : une barre empilée de la population par occupation
-     (ouvriers d'usine, mineurs, fermiers, pêcheurs, inactifs), puis une ligne par
-     occupation : couleur, nom, rectangle proportionnel, « n · x % ». Les parts
-     sont rapportées à la somme des occupations. Sur les lignes fermiers et
-     pêcheurs, une zone hachurée de la couleur du métier suit le remplissage :
-     les personnes qui manquent pour travailler toute la surface avec la
-     mécanisation actuelle, `⌈cases × 1000 ÷ M⌉ − travailleurs` (le requis de
-     `harvest`). Remplissage et hachuré ont la même échelle : si la moitié des
-     cases est travaillée, les deux ont la même largeur. L'échelle des barres
-     est la population, élargie (pour toutes les lignes) quand un hachuré la
-     dépasserait.
-  2. **Nourriture** : « Nourriture f /tour  s », `s` = nourriture − population ×
-     `foodPerHead`, coloré. Détail : une jauge Population en trois sections,
-     « actuelle / max / tout exploité » : population (vert), `food /
-     foodPerHead` (vert hachuré), `foodPotential / foodPerHead` (gris plein très clair),
-     à l'échelle du plus grand des trois. `foodPotential` est calculé par
-     `SoloGame` : `max(FOOD.minimum, fertilitySum + floor(seaTiles ×
-     waterYieldMilli(pêcheurs, bateaux) / 1000))`. Puis Agriculture (blé ·
-     cultivé / cases cultivables, barre couleur blé) et Pêche (poisson · pêché /
-     cases d'eau, barre bleue), à une échelle commune, la plus grande production
-     atteinte ou possible. Sous le remplissage, des hachures de la même couleur
-     montrent la production maximale (toute la surface travaillée) :
-     `stats.wheatMax` = `fertilitySum`, `stats.fishMax` = `floor(seaTiles ×
-     waterYieldMilli(pêcheurs, bateaux) / 1000)`, calculés par `SoloGame`. Le
-     texte donne « produit / maximum · cases travaillées / cases » ;
-     Importations et Exportations grisées
-     (« à venir ») ; une ligne Consommation : minimum garanti et surplus.
-     Icônes des libellés (`iconLabel`) : `pop-sailor` pour Importations et
-     Exportations, en attendant une icône du commerce. Agriculture et Pêche
-     n'ont plus l'icône du métier seule : elles portent le **rendement par
-     travailleur**, « n [nourriture] / [métier] » (`yieldLabel`,
-     `miscellaneous/misc-food-ham.png` puis `pop-farmer` ou `pop-fisherman`), pour
-     comparer champs et mer selon les machines possédées. `n` = mécanisation du
-     dernier tour (`stats.mechanization.tractor` ou `.fishingBoat`, millièmes de
-     case par travailleur) × production maximale ÷ cases (`wheatMax / farmTiles`,
-     `fishMax / seaTiles`), deux décimales au plus, 0 sans case : c'est ce que
-     rapporte un travailleur de plus tant que la surface n'est pas toute
-     travaillée. Aucun nouveau champ du moteur ni du message. L'infobulle
-     (réécrite à chaque tour) nomme les deux facteurs et leurs valeurs :
-     mécanisation (cases par travailleur, selon les tracteurs ou les bateaux
-     possédés) et fertilité moyenne d'une case (rendement moyen d'une case d'eau
-     pour la pêche). Le texte contient des retours à la ligne : `#tip:not(.rich)`
-     est en `white-space: pre-line`.
-     Entre Pêche et Importations, le **curseur de la part de fermiers** (il était
-     dans le panneau latéral) : « Agriculture versus pêche », curseur de 0 à 100, valeur
-     en % de fermiers ; la piste est jaune (`--occ-farm`) à gauche du curseur et
-     bleue (`--occ-fish`) à droite, coupée au curseur par la variable CSS `--p`
-     que `infobar.ts` met à jour ; puis la note du report (00-Game §4 : le réglage ne compte que si la
-     population manque). L'ordre `set_farm_share` part au relâchement (`change`)
-     par le rappel `onFarmShare` du constructeur de `InfoBar` ; le curseur n'est
-     pas réécrit par les tours tant qu'il est tenu (`farmSliderActive`, remis à
-     faux aussi sur `pointerup`, `pointercancel` et `blur` : un clic sans
-     déplacement n'envoie pas `change`). Il est mis à jour à l'ouverture du
-     détail et à chaque tour tant qu'il est ouvert.
-  3. **Ressources (flux)** : rien dans la barre que le titre. Détail, barres vertes :
-     *Fer* : échelle = le plus grand de la capacité (`ironCapacity`) et du fer demandé
-     (`ironDemanded`, des lignes qui tournent : une ligne écartée parce que la demande de son bien est atteinte ne
-     demande pas de fer). Orange clair (`.ib-front`) jusqu'à la capacité ; orange = fer consommé au
-     dernier tour (`PlayerStats.ironConsumed`) ; de là jusqu'au demandé, **hachuré rouge**
-     (`.ib-gap`, même motif que l'infobulle). Une échelle sur la seule capacité coupait les hachures quand la
-     demande la dépassait. *Aluminium* :
-     ligne grisée « à venir » (aucune règle ne l'extrait). Les deux lignes
-     ont leur icône (`goods/goods-iron-ingot.png`, `goods/goods-aluminium-ingot.png`), suivie dans la case du
-     libellé de l'icône camembert (`miscellaneous/icon-pie-chart.png`, `pieIcon`), au même endroit que l'engrenage
-     de l'onglet Nourriture. **Infobulle du camembert du fer** (`setTip`, `InfoBar.ironTip`) : titre « fer
-     consommé, fer manquant, malus armement en % », plus « malus biens » seulement s'il est sous 100 %
-     (malus = 1 − `armLineRatio` ou `goodsLineRatio`) ; puis une rangée par produit qui demande
-     du fer, du plus gros au plus petit : icône du produit (`productIcon`), barre en deux parties (fer obtenu
-     orange, demandé non obtenu hachuré rouge, `.tip-ibar`), puis « obtenu / demandé ». Toutes les barres ont la
-     même échelle : le plus grand total demandé occupe toute la largeur. Camembert de l'aluminium : grisé,
-     infobulle « Aucune consommation ».
-     *Tracteurs*, *bateaux de pêche*,
-     *pompes à vapeur* : à la place du camembert, l'engrenage `gearIcon(bien)`, qui ouvre la même infobulle que
-     dans l'onglet Nourriture ; vert = machines disponibles (`goods`, produites au tour
-     précédent), barre pleine = machines d'une mécanisation totale,
-     `stats.fullMachines`, recopié de `Player.goodsDemand` du moteur (la
-     demande qui arrête aussi la croissance automatique des lignes, 00-Game
-     §8.2 ; pour les tracteurs et les bateaux, celle des fermiers et pêcheurs répartis). 0 : barre vide, et « n produits · inutilisés » s'il y en a. Une
-     ligne de légende.
-  4. **Armement (stock)** : rien dans la barre que le titre. Détail : une ligne par
-     type d'armement qui a des lignes, un stock ou de l'équipement sur les fronts, barre de gauche à droite :
-     **jaune foncé** = l'équipement des unités des fronts, déployé et en route (`PlayerStats.divisionEquipment`),
-     **bleu** = stock, **hachures rouges** = au-delà du stock cible ; trait fin = stock cible (`reserveMax`),
-     échelle = max(1,5 × cible, stock + fronts) pour que cette zone se voie ;
-     **graduations** (`graduations` dans `infobar.ts`, classes `.ib-grad`, `.ib-tick`) : des traits sombres dans la barre, de 0 à
-     la fin de l'échelle, un par division de référence, c'est-à-dire tous les `equipUnit[type].count` exemplaires (les
-     réguliers pour l'infanterie, comme l'indication « approprié pour » de l'onglet Production) ; trait épais toutes les
-     5 graduations. Ils comptent aussi l'équipement des fronts (à gauche). Quand deux traits seraient à moins de
-     8 px, un trait vaut 2, 5, 10, 20, 50… divisions ; l'infobulle du nom de la ligne dit ce que vaut un trait. Les traits
-     sont refaits seulement quand l'échelle ou la largeur de la barre change (la mini-barre n'en a pas) ;
-     texte de droite en colonnes fixes (`.ib-eq`) : « n équipé » (`divisionEquipment`), puis « n en stock » en
-     bleu si le stock couvre ce qui manque aux divisions pour être complètes
-     (`stock ≥ divisionEquipmentFull − divisionEquipment`), sinon « n requis » en rouge
-     (`divisionEquipmentFull`) ; puis « n/min », la production par minute. Le stock, la cible et le requis sont dans
-     l'infobulle de la ligne. Légende : l'excès disparaît à
-     `armamentDecayPercent` % par tour ; l'équipement des fronts compte dans le stock, mais seul
-     l'équipement non déployé décline (05-Fronts §4.6).
-  5. **Forces** (cinquième position, juste à droite d'Armement ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
+  (largeur du contenu). `setTip(el, build, beside)` : l'encadré est placé à droite de `beside`
+  au lieu de sous `el`.
+  Les contenus des machines sont dans `goodtips.ts` (`attachGoodTip(el, bien)`, posé
+  sur chaque `[bien]` de l'onglet Ressources). Feuille de route de toutes les icônes : `04-Tooltips.md`. Les trois
+  **machines** (tracteur, bateau de pêche, pompe à vapeur) ont la même infobulle, décrite par une entrée de
+  `MACHINE_TIPS` (noms, ce qu'on lit dans les statistiques, couleur de la barre) : titre ; une phrase (une machine vaut un
+  travailleur : même place dans sa boîte, même sortie, sans personne pour l'actionner, elle libère un bonhomme) ; les règles
+  lues dans le catalogue (cases par travailleur ou machine, boîte qui la reçoit, usine et fer par machine) ; « Votre nation ·
+  travailleurs · machines possédées / limite » et une barre de la couleur du métier : « Surface cultivée » cultivées /
+  cultivables (`--occ-farm`), « Surface pêchée » pêchées / cases d'eau (`--occ-fish`), « Cases exploitées » cases de fer
+  exploitées / cases de fer (`--occ-mine`).
+  1. **Ressources (flux)** : rien dans la barre que le titre et la mini-barre du fer. Détail, barres vertes :
+     *Fer* : échelle = le plus grand du fer produit (`HumanDetail.ironProduced`) et du fer réservé (`ironReserved`) ; orange clair
+     (`.ib-front`) jusqu'au fer produit, orange jusqu'au fer réservé ; texte « réservé / produit ». *Aluminium* : ligne grisée
+     « à venir » (aucune règle ne l'extrait). Les deux lignes ont leur icône (`goods/goods-iron-ingot.png`,
+     `goods/goods-aluminium-ingot.png`), suivie dans la case du libellé de l'icône camembert
+     (`miscellaneous/icon-pie-chart.png`, `pieIcon`). **Infobulle du camembert du fer** (`setTip`, `InfoBar.ironTip`) : titre
+     « fer réservé, fer produit » ; puis une rangée par activité qui réserve du fer, de la plus grosse à la plus petite : nom de
+     l'activité, barre orange, fer réservé ; toutes les barres ont la même échelle. Camembert de l'aluminium : grisé, infobulle
+     « Aucune consommation ». *Tracteurs*, *bateaux de pêche*, *pompes à vapeur* : l'icône de la machine (infobulle de
+     `goodtips.ts`), une barre verte « possédées / limite » (`PlayerStats.machines`, `machineLimits`, 08 §5) et ce texte.
+     Une ligne de légende (fer réservé, fer produit).
+  2. **Forces** (deuxième position, juste à droite de Ressources ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
      (§ « Onglet des forces » ci-dessous). Le volet (`.ib-pane.forces`) a la classe `themed` : fond et couleurs de son thème.
-  L'onglet **Population** a une ligne **Soldats** (icône `pop-soldier`) avant les inactifs, qui sont en dernier, même en mobilisation forcée, et un
-  interrupteur standard rouge « **MOBILISATION FORCÉE** » (texte rouge, gras, majuscules, éteint au départ) qui envoie
-  `set_forced_mobilization` ; l'interrupteur n'est pas réécrit par les tours pendant 600 ms après un clic. La croissance
-  affichée tient compte des soldats.
-  **Blessés** (00-Game §4.2) : dernière ligne de l'onglet (icône `pop-hurt`, noir `--occ-hurt`), après les inactifs, avec
-  son segment noir à la fin de la barre ; son nombre n'a pas de part (les parts des autres lignes sont calculées sans lui).
-  Le total de population (bouton de la barre, panneau de debug `s-pop`, onglet Diplomatie) est `population − hurt`, et la
-  croissance affichée est celle de ce total. Le panneau de debug a une ligne « Blessés » (`s-hurt`). La jauge « Population »
-  de l'onglet Nourriture (et sa mini-barre) a un segment noir tout à gauche, de 0 à `hurt`, puis le vert jusqu'à
-  `population` ; son texte est « population sans blessés + blessés / nourrie / potentielle ». Le maximum nourri compte
-  les places des blessés. Les bots (`bots.ts`) et `foundingProblem` (`main.ts`) testent `population − hurt`
-  contre le coût d'une ville.
+  3. **Diplomatie** (troisième position, `diplomacytab.ts`).
 
-  Calculé côté page à partir des messages : la croissance du tour, le maximum de
-  population, le surplus, les parts par occupation, les machines d'une
-  mécanisation totale, l'échelle et la zone hachurée de l'armement, la production
-  d'armement par minute, à une décimale (lignes qui tournent × `productionPerLine`
-  du catalogue, qui vaut `productionPerHour` pour l'armement, ÷ 60). Lu tel
-  quel du moteur : tout le reste. Seul `ironRequired` est ajouté au message par
-  `SoloGame.humanDetail` (la page n'a pas le fer par ligne).
+  Calculé côté page à partir des messages : les barres du fer et des machines, les durées restantes des compteurs, les pions
+  en sursis (déduits de 08 §6), les temps de déblocage restants. Lu tel quel du moteur : tout le reste.
 - **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste
   des fronts, par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de diplomatie ; hors zone,
   un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie), ou par une section de l'onglet des forces (avec le bouton
@@ -905,8 +670,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   `pointerdown` et `click` ; il n'est refait que si `fronts` ou `divisions` (objets du `Mirror`) ont changé ou si la fenêtre change de taille
   (`ResizeObserver`). Dépose : sur une ligne du joueur ou la réaction rapide, `move_division { ids, front, line }` ; sur la zone de retour, `move_division` vers la
   réserve ; les divisions déjà à leur destination sont filtrées.
-- **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la cinquième section de la barre d'informations. Barre du haut : le « + »
-  (moitié gauche) et la corbeille (moitié droite, `data-drop="trash"`, visible pendant un glisser seulement ; fond rouge clair `#f4b6b6`, corbeille noire). Le « + » porte le texte « RECRUTEMENT » (`.fx-plus-lab`, bleu `--t-blue` ; fond du bouton `--t-recruit-bg`, bleu clair). Réserve nationale en deux sections (`resSection`) :
+- **Onglet des forces** (`forcestab.ts`, 05-Fronts §11.2), le détail de la deuxième section de la barre d'informations. Plus de bouton « RECRUTEMENT », de menu « + » ni de corbeille (08 §11) : les divisions apparaissent quand une usine ou une caserne en a la limite (08 §6). Réserve nationale en deux sections (`resSection`) :
   « FORMATION » (divisions `status === "formation"`, zone `"form"`) au-dessus de « RÉSERVE » (toutes les autres divisions de la réserve, zone `"res"`, seule
   section avec `data-drop="reserve"`) ; le libellé est un `.fx-mlab` (même style que les lettres du menu « + »), premier enfant de la section donc
   sous la zone des pions, couleur `--t-res-ink`. Dans chaque section, de vrais
@@ -925,12 +689,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   transmet à `FrontWindow.drop` (interface `DropWindow`, passée au constructeur), et `ForcesTab.dragging` appelle `FrontWindow.externalDrag` (classes `dragging ext` :
   les zones de dépose s'affichent, pas la zone de retour). Les sections sont
   reconstruites seulement si leur contenu change. La sélection y est simple (l'interrupteur « Sélection avancée » est dans la fenêtre d'un front).
-  **Menu « + »** : sous le bouton, une ligne par niche (fond de la niche, lettres à droite), les types côte à côte, du moins prioritaire au plus prioritaire
-  (`NICHES[].types` parcouru à l'envers ; icône de 32 px et
-  « actuel / supportable », `supportable` de `divisions.ts` : pour chaque composant requis, (divisions + stock) / quantité, le plus petit ;
-  hommes : soldats + inactifs ; « actuel » en rouge s'il dépasse) ; type que l'on ne peut pas créer (`creatable`, copie de la condition du
-  moteur : inactifs et stock remplissent tous les composants ; et `eliteAllowed` de `divisions.ts`, copie de la limite des élites) à 50 % de transparence, clic sans effet ; un clic crée une division
-  (`create_division`) et le menu reste ouvert ; clic en dehors, Échap ou repli du volet le ferme ; survol d'un type : panneau de type.
+  Une division en formation montre l'horloge (statut `formation`, jusqu'à `formedTick`) ; une division en trop (`leaveTick`) clignote.
 - **Sélection et glisser-déposer** (`dnd.ts`, 05-Fronts §11.4) : une `ZoneView` regroupe les rangées d'une zone (une ligne d'un front, la
   réserve nationale) ; chaque rangée est un conteneur passé à `renderZone`, qui renvoie `groups` (ids par type, dans l'ordre de la pile) ; le pion
   sous la souris est lu dans l'événement (`.pz-pawn[data-id]`, le navigateur connaît l'ordre d'empilement des piles). Un redessin
@@ -960,11 +719,11 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
 - **Élimination** (`eliminated`, 05-Fronts §10.3 et §11.6) : une carte pour chaque joueur autre que l'éliminé (60 s),
   qui annonce le mode résistance « pas encore implémenté » ; pour l'éliminé, la fenêtre `#defeat` au centre de la carte
   (« Continuer en spectateur » ou « Quitter la partie »). `setSpectator` (`main.ts`), appelée à chaque tour d'après
-  `players[you].defeated`, affiche le bandeau `#spectator-badge`, désactive « Créer une ville » et « Inaugurer une usine »,
-  désarme les outils et supprime le menu de diplomatie au clic ; l'onglet Diplomatie ajoute « (éliminé) » (ligne grisée, ni clic ni mise en évidence). Les bots
+  `players[you].defeated`, affiche le bandeau `#spectator-badge`, désactive « Créer une ville »,
+  désarme l'outil et supprime le menu de diplomatie au clic ; l'onglet Diplomatie ajoute « (éliminé) » (ligne grisée, ni clic ni mise en évidence). Les bots
   éliminés ne jouent plus (`bots.ts`).
 - **Menu de diplomatie** (`diplomacy.ts`, 00-Game §1). Quand aucun outil n'est armé
-  (ni « Créer une ville » ni « Inaugurer une usine »), un clic sans glisser sur une
+  (pas « Créer une ville »), un clic sans glisser sur une
   case dont `Mirror.ownerOf` est un autre joueur ouvre un petit menu à côté de la
   souris (`#dip-menu`, position `fixed`, coin haut gauche à 8 px de la souris, ramené
   dans la fenêtre). Une case d'eau de la zone d'une ville compte comme territoire de
@@ -1013,8 +772,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   répondent pas, durée de vie des propositions à fixer (02-Engine §7, point 33).
 - **Panneau de debug** (`#panel`, auteur, 4 novembre 2026) : caché au départ ; le bouton
   « Panneau de debug », dernier élément de la barre de boutons (en bas à droite), l'ouvre ou le ferme
-  (`aria-pressed`). Fermé, sa colonne a une largeur nulle et la carte prend la place. Contenu : population,
-  fermiers, pêcheurs, inactifs, blessés, nourriture, villes, cultivé / max, pêché / max du joueur ; bloc
+  (`aria-pressed`). Fermé, sa colonne a une largeur nulle et la carte prend la place. Contenu : population / capacité,
+  agriculteurs, pêcheurs, inactifs, blessés, nourriture, villes, cultivé / max, pêché / max du joueur ; bloc
   développement (durées mesurées, pause, quitter). La liste des joueurs est dans l'onglet Diplomatie.
 - **Case survolée** (`#hover-box`, dans `#stage`, auteur, 4 novembre 2026) : petit encadré
   en bas à droite de la vue de la carte, à gauche du panneau de production quand il est
@@ -1157,18 +916,15 @@ Comportement de `OnlineGame` :
   la page).
 - Hash de l'état envoyé au serveur (01-Architecture §3) : sans objet en solo, fait en ligne.
 - Routes maritimes : pas de règle, donc pas d'ordre ni d'interface.
-- Bots et usines : les bots ne construisent pas d'usine (rien ne les y oblige ; une
-  usine retire des travailleurs aux champs). Seul l'humain en a.
+- Bots : ils ne produisent ni machines ni divisions autres que la milice (stratégie minimale, §5).
 - Icônes : un sous-dossier de `public/icons/` par famille : `population/`,
   `goods/` (machines), `armament/` (vide) et `miscellaneous/` (divers :
-  `misc-gear-stolen.png`, l'engrenage de la jauge de mécanisation des
-  infobulles de machines, chemin écrit dans `goodtips.ts`). Le nom du fichier d'un bien ou d'un type
-  d'armement est le champ `icon` de sa section dans `config/goods.ts` ou
-  `config/armament.ts` (chemin relatif à `public/icons/`, facultatif) ; le moteur
-  ne s'en sert pas. `solo.ts` le met dans `FactoryCatalog.icons`, `main.ts` le
+  `icon-padlock-closed.png`, le cadenas des boîtes verrouillées, et `icon-padlock-open.png`). Le nom du fichier d'une machine est
+  le champ `icon` de sa section dans `config/goods.ts` (chemin relatif à
+  `public/icons/`, facultatif) ; le moteur ne s'en sert pas. `activityCatalog()` le met dans `ActivityCatalog.icons`, `main.ts` le
   donne à `icons.ts` (`setProductIcons`) avant la construction des panneaux, et
   `productIcon(id)` renvoie l'image, ou le texte entre crochets de `names.ts`
-  quand le bien n'a pas d'icône. Les types d'usine, le fer et les icônes de la
+  quand le bien n'a pas d'icône. Le fer et les icônes de la
   population sont encore à part (texte provisoire ou chemin écrit dans le code).
   Les noms de ville (« Ville n° N ») sont leur identifiant.
 - Build pour Cloudflare : fait (01-Architecture §6, Client, point 4).
@@ -1186,19 +942,12 @@ Comportement de `OnlineGame` :
   guerre déjà déclarée ou une proposition déjà présente donnerait « appliqué »
   alors que l'ordre a été ignoré. Il lit les événements du tour, qui n'existent que
   si l'ordre a eu un effet (02-Engine §4).
-- **Compter le fer requis sur toutes les lignes actives** : depuis que la
-  production d'un bien s'arrête à sa demande (00-Game §8.2), des lignes actives
-  ne tournent pas volontairement. Comptées dans le requis, elles faisaient
-  apparaître du rouge (« manque ») dans la barre du fer alors que rien ne
-  manquait. `ironRequired` compte les lignes en service. Corrigé le 24 octobre
-  2026.
-
-- **Un curseur du panneau de production cliqué sans être déplacé** : le
-  navigateur n'envoie pas `change`. Si seul `change` remet `sliderActive` à faux,
-  le panneau croit un réglage en cours et ne se reconstruit plus jamais (nouvelle
-  usine absente, curseur bloqué à son ancien maximum). `production.ts` le remet
-  aussi à faux sur `pointerup`, `pointercancel` et `blur`. Corrigé le 24 octobre
-  2026.
+- **Reconstruire le panneau de production à chaque tour** : un glisser de pions ou de boîte en cours serait détruit toutes les
+  100 ms, et un ordre qui vient de partir ferait réapparaître l'ancien état. `ProductionPanel.update` compare une clé de
+  structure, ne reconstruit pas pendant un glisser (`pawnDrag`, `boxDrag`) et retient la reconstruction après un ordre jusqu'à ce
+  que la clé change ou que `HOLD_MS` passe. Le tutoriel consomme le `pointerdown` d'un composant non lu, pas le glisser qui suit.
+- **Envoyer un glisser de pions plus gros que les places libres** : le moteur refuse tout l'ordre (08 §10). La page réduit le
+  glisser à ce qui tient (`dropCount`) ; Blessés ne reçoit ni ne donne, et une machine hors de sa boîte n'est pas une cible.
 - **Reconstruire la fenêtre d'un front ou l'onglet des forces à chaque message** : un bouton remplacé entre le `pointerdown` et le `click`
   perd le clic ; `FrontWindow` ne remplace que le contenu des rangées et des textes, et seulement si `fronts` ou `divisions` ont changé ;
   `ForcesTab` compare une clé (identifiants, états, largeur).
@@ -1229,13 +978,6 @@ Comportement de `OnlineGame` :
   est dans un seul.
 - **Un `constructor(private x)` ou un `enum`** : refusés par `erasableSyntaxOnly`,
   et par Node quand les tests exécutent le TypeScript directement.
-- **Reconstruire le panneau de production à chaque tour** : un curseur ou un
-  glisser en cours serait détruit toutes les 100 ms. `ProductionPanel.update`
-  compare une clé de structure et ne reconstruit pas pendant une interaction.
-- **Glisser-déposer sans filtre** : une ligne ne doit pas sortir de la section de
-  sa ville, une ville ne doit pas être déposée sur une ligne. `production.ts`
-  garde le type de glisser en cours et ignore les dépôts d'un autre type ; le
-  moteur refuserait de toute façon une position hors bornes.
 - **Compter le fer comme terre cultivable côté page** : la page lit `fertility` de `init`,
   donc le fer y est à 0. Le rayon de la mine et celui des champs ne comptent pas
   les mêmes cases (`Mirror.kindsOf`).
@@ -1251,7 +993,7 @@ Comportement de `OnlineGame` :
 - **Importer `lobby.ts` ou `main.ts` depuis un test** : ils lisent `document` à
   l'import. Ce qui se teste sous Node est dans `online.ts` (sans DOM).
 - **Un `tick` sauté sans le dernier en `full`** : pour un rejeu, la page n'a pas
-  reçu les `tiles`, `cities`, `factoryMarks` ni `fronts` des tours sautés, qui ne
+  reçu les `tiles`, `cities` ni `fronts` des tours sautés, qui ne
   sont envoyés que quand ils changent. `Game.applyTurn(…, { full: true })` les
   envoie tous ; toute donnée « seulement si changée » ajoutée à `tick` doit
   être forcée dans ce cas.

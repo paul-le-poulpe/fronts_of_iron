@@ -3,10 +3,9 @@
 import { expireProposals } from "./diplomacy.ts";
 import { combatRound, resolveFrontAttacks } from "./combat.ts";
 import { FRONTS } from "./config.ts";
-import { countSoldiers } from "./divisions.ts";
 import { stepEconomy } from "./economy.ts";
 import { applyIntent, type Intent } from "./intents.ts";
-import { applyArrivals, arrangeAll, reinforceAfterEconomy, reinforceBeforeEconomy, swapAtRest, trimAll } from "./placement.ts";
+import { applyArrivals, arrangeAll, swapAtRest } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 export interface Turn {
@@ -18,7 +17,7 @@ export interface Turn {
 
 /**
  * Applique les ordres du tour dans l'ordre, ignore les ordres invalides, calcule
- * l'étape de population et de nourriture de chaque joueur (economy.ts), puis
+ * l'étape de l'économie de chaque joueur (economy.ts), puis
  * passe `state.tick` au numéro du tour. Renvoie les cases dont le propriétaire
  * a été écrit pendant le tour, chacune une fois, dans l'ordre de leur première
  * modification. Vide `state.events` au début, et le remplit des événements du tour
@@ -36,17 +35,12 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   const intents: readonly unknown[] = Array.isArray(turn.intents) ? turn.intents : [];
   for (const intent of intents) applyIntent(state, intent, changed);
   expireProposals(state);
-  // Ordre du tour (05-Fronts §13.2, provisoire) : ordres ; renfort en mobilisation forcée ; économie (population,
-  // nourriture, croissance, pour chaque joueur dans l'ordre des identifiants) ; renfort parmi les inactifs ;
-  // arrivées ; excédents ; rangement des lignes ; échange hors combat ; attaques sur tout le front arrivées à leur
-  // tour, résolues en entier (06-Combat-Simplifie §1) ; round des percées et prises de villes.
-  countSoldiers(state);
-  reinforceBeforeEconomy(state);
+  // Ordre du tour (05-Fronts §13.2, 08 §13, provisoire) : ordres ; économie (places, capacité, fer, déblocage,
+  // apparitions et disparitions, soin ; pour chaque joueur dans l'ordre des identifiants) ; arrivées ; rangement des
+  // lignes ; échange hors combat ; attaques sur tout le front arrivées à leur tour, résolues en entier
+  // (06-Combat-Simplifie §1) ; round des percées et prises de villes.
   stepEconomy(state);
-  reinforceAfterEconomy(state);
   applyArrivals(state);
-  trimAll(state);
-  countSoldiers(state);
   arrangeAll(state);
   swapAtRest(state);
   resolveFrontAttacks(state, changed);

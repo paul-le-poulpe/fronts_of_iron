@@ -1,11 +1,11 @@
 // Panneaux de survol (05-Fronts §11.7) : le panneau d'un type de division (menu « + ») et le panneau d'un pion
 // (fenêtre d'un front, onglet des forces). Un seul panneau est affiché à la fois, posé sur `document.body`
 // (position fixe : aucun conteneur à défilement ne le coupe). La page n'applique aucune règle : elle écrit ce que le
-// moteur envoie (`DivisionTypeInfo`, `DivisionView`).
+// moteur envoie (`DivisionTypeInfo`, `DivisionView`). Une division n'a plus d'équipement (08 §5) : une barre de vie.
 
 import { currentAttacks, maxAttacks, statePercent, statusLabel, typeOf } from "./divisions.ts";
-import { icon32Path, productIconPath } from "./icons.ts";
-import { equipmentName, nicheName, unitName } from "./names.ts";
+import { icon32Path } from "./icons.ts";
+import { nicheName, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
 
@@ -16,16 +16,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   if (className) e.className = className;
   if (text !== undefined) e.textContent = text;
   return e;
-}
-
-/** Symbole de 32 × 32 px d'un composant : les hommes ou un type d'armement (version 32 × 32 si elle existe, sinon la 16 × 16 agrandie). */
-function equipmentIcon(resource: string): HTMLElement {
-  const path = resource === "men" ? "population/pop-soldier.png" : productIconPath(resource);
-  if (path === undefined) return el("span", "ip-sq");
-  const img = el("img", "ip-icon");
-  img.src = `icons/${icon32Path(path)}`;
-  img.alt = "";
-  return img;
 }
 
 /** Une ligne : symbole, libellé, valeur à droite. */
@@ -82,13 +72,11 @@ function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
   p.append(line(motorIcon(type.motorized), "Déplacement", type.motorized ? "Motorisé" : "À pied"));
 }
 
-/** Panneau d'un type (menu « + ») : description, équipement requis, statistiques non nulles. */
+/** Panneau d'un type de division : description, attaques d'une division pleine, statistiques non nulles. */
 export function typePanel(type: DivisionTypeInfo): HTMLElement {
   const p = el("div", "ip");
   p.append(head(type));
   if (type.description !== "") p.append(el("div", "ip-desc", type.description));
-  p.append(el("div", "ip-sep"));
-  for (const c of type.components) p.append(line(equipmentIcon(c.resource), equipmentName(c.resource), num(c.count)));
   p.append(el("div", "ip-sep"));
   const a = maxAttacks(type);
   if (a.soft > 0) p.append(stat("Attaque anti-infanterie", num(a.soft)));
@@ -98,7 +86,7 @@ export function typePanel(type: DivisionTypeInfo): HTMLElement {
   return p;
 }
 
-/** Panneau d'un pion : icône et rang, nom et niche, description, équipement actuel / requis, état, attaques actuelles / maximales, puis les statistiques du type. */
+/** Panneau d'un pion : icône et rang, nom et niche, description, état, attaques actuelles / maximales, puis les statistiques du type. */
 export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLElement {
   const type = typeOf(military, d);
   const p = el("div", "ip");
@@ -115,10 +103,8 @@ export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLEleme
   p.append(head(type, icon, rank));
   if (type.description !== "") p.append(el("div", "ip-desc", type.description));
   p.append(el("div", "ip-sep"));
-  type.components.forEach((c, i) => p.append(line(equipmentIcon(c.resource), equipmentName(c.resource), `${num(d.counts[i]!)} / ${num(c.count)}`)));
-  p.append(el("div", "ip-sep"));
   p.append(stat("État", `${statePercent(military, d)} %`));
-  const now = currentAttacks(type, d);
+  const now = currentAttacks(type, d, military.stateScale);
   const max = maxAttacks(type);
   if (max.soft > 0) p.append(stat("Attaque anti-infanterie", `${num(now.soft)} / ${num(max.soft)}`));
   if (max.hard > 0) p.append(stat("Attaque antiblindée", `${num(now.hard)} / ${num(max.hard)}`));

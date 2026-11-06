@@ -35,9 +35,10 @@ Aucune leçon n'invente de règle : elle explique ce qui est écrit dans
   composant, ou au-dessus s'il n'y a pas la place. Fermé par « Compris », Échap,
   un appui ailleurs (cet appui-là n'est pas consommé), un redimensionnement de
   la fenêtre ou un défilement. L'infobulle de survol est cachée à l'ouverture.
-- **Un id pour plusieurs composants** : tous les engrenages portent `gear`, tous
-  les camemberts `pie`. Ils pulsent ensemble ; lire la leçon sur l'un les éteint
-  tous.
+- **Un id pour plusieurs composants** : tous les camemberts portent `pie`, toutes les boîtes
+  du panneau de production `prod-box`, tous les pions `prod-pawn`. Ils pulsent ensemble ; lire la
+  leçon sur l'un les éteint tous. Les ids s'emboîtent : un pion est dans une boîte, et sa leçon passe
+  avant celle de la boîte.
 - **Menu « Tutoriel »** (barre de boutons, à droite de « Production ») :
   « Revoir le tutoriel » remet toutes les leçons à lire, « Passer le tutoriel »
   les marque toutes lues.
@@ -55,20 +56,15 @@ Les textes sont courts : une ou deux phrases. Tous sont provisoires, à relire.
 
 | Id | Composant | Source |
 | --- | --- | --- |
-| `found` | bouton « Créer une ville » | 00-Game §3.2, §3.3 |
-| `factory` | bouton « Inaugurer une usine » | 00-Game §1, §8 |
-| `production` | bouton « Production » | 00-Game §8.1 |
-| `prod-slider` | curseur de chaque rangée de bien (panneau de production) | 00-Game §8.1, §8.2 |
-| `prod-plus` | boutons « + » (panneau de production) | 00-Game §8.2 ; 03-Client §2 (`burst.ts`, Maj et Ctrl) et §7 (ligne inactive) |
-| `prod-growth` | jauge de croissance d'une rangée de machine (panneau de production) | 00-Game §8.2 (croissance automatique, arrêt à la demande) |
-| `prod-locked` | rangée d'un bien verrouillé (panneau de production) | 00-Game §8.2 (déblocage) |
-| `tab-pop` | onglet Population | 00-Game §4, §4.1 |
-| `tab-food` | onglet Nourriture | 00-Game §4.1, §5 |
-| `tab-flow` | onglet Ressources (flux) | 00-Game §5 |
-| `tab-stock` | onglet Armement (stock) | 00-Game §8.3 |
+| `found` | bouton « Créer une ville » | 00-Game §3.2, §3.3 ; 08 §10 (coût en bonshommes d'Inactifs) |
+| `production` | bouton « Production » | 08 §11 |
+| `prod-box` | chaque boîte d'activité (panneau de production) | 08 §2 (ordre et priorité), §11 (entrée, sortie, poignée) |
+| `prod-pawn` | chaque pion saisissable d'une boîte | 08 §6 (à venir, en sursis), §7 (places vides), §11 (glisser) |
+| `prod-parent` | cadenas ouvert d'une boîte parente | 08 §9, §11 |
+| `prod-locked` | boîte verrouillée | 08 §9, §11 |
+| `tab-flow` | onglet Ressources (flux) | 08 §4 (fer), §5 (limite des machines) |
 | `tab-forces` | onglet Forces | 05-Fronts §11.2 |
 | `tab-diplomacy` | onglet Diplomatie | 00-Game §1 (Diplomatie) |
-| `gear` | engrenages des onglets Population, Nourriture, Ressources | 04-Tooltips (machines), 00-Game §5 |
 | `pie` | camemberts du fer et de l'aluminium (onglet Ressources) | 03-Client §7 (infobulle du camembert) |
 | `attack` | bouton « Attaque sur tout le front » (fenêtre d'un front) | 06-Combat-Simplifie §1 |
 | `lines` | titres « Première ligne » et « Seconde ligne » du joueur | 05-Fronts §4.2 |
@@ -83,19 +79,38 @@ La leçon de l'infanterie dit qu'elle défend mieux qu'elle n'attaque
 (précision de l'auteur, 4 novembre 2026) : c'est l'effet des valeurs de
 05-Fronts §3.4, pas une règle de plus.
 
-Pas de leçon sur les PV (simples, décision de l'auteur, 4 novembre 2026), ni sur les lignes « Ouvriers / Fer suffisants » du panneau de production (auteur, 4 novembre 2026), ni sur le menu « Carte » (cases à cocher qui se lisent seules) ni sur
+Pas de leçon sur les PV (simples, décision de l'auteur, 4 novembre 2026), ni sur l'en-tête du panneau de production (population / capacité, fer réservé / produit), ni sur le menu « Carte » (cases à cocher qui se lisent seules) ni sur
 le bouton « Tutoriel » (la première pression ouvrirait une leçon au lieu du
 menu qui sert à passer le tutoriel).
 
-Les leçons `factory` et `production` décrivent les usines à lignes actuelles :
-à réécrire quand les usines d'unités de `06-Combat-Simplifie.md` seront
-implémentées.
+Retirées avec les éléments qui disparaissent (08, 5 novembre 2026) : `factory` (bouton « Inaugurer une usine »),
+`prod-slider`, `prod-plus`, `prod-growth` (lignes d'usine), `tab-pop`, `tab-food`, `tab-stock` (onglets Population,
+Nourriture, Armement) et `gear` (engrenages de mécanisation). Les leçons des boîtes, des pions et du déblocage sont
+nouvelles : textes à relire avec l'auteur.
 
 ## Provisoire
 
 - Couleur du contour (`--tuto`, `#1e88e5`) et durée de la pulsation (1,6 s).
 - Textes de toutes les leçons.
 - Choix des composants marqués.
+
+## À expliquer aux joueurs
+
+Points de jeu à couvrir quand le tutoriel sera repris. Les quatre premiers n'ont pas de leçon.
+
+- Les flèches de production visée des casernes et des usines d'armement, avec Maj et Ctrl.
+- Les croix sur les ouvriers et les machines, et la réactivation par un clic sur une croix.
+- Les lignes débloquées qui clignotent, la croix qui supprime une ligne et sa remise en liste.
+- La priorité entre les lignes : une ligne qui a de la place prend les ouvriers des lignes plus basses.
+- Le menu « Options » et la taille des icônes. Une infobulle le montre déjà au passage en petites
+  icônes, à 50 de population (`08-Population.md` §11).
+
+## Auto-assignation pendant le tutoriel (prévu)
+
+- Au début d'une partie avec le tutoriel, l'auto-assignation est désactivée pour le joueur.
+- Quand sa population dépasse un seuil, à fixer, une petite fenêtre lui explique l'auto-assignation.
+- Pour l'instant, et pour les joueurs qui désactivent le tutoriel, elle est activée par défaut
+  (`08-Population.md` §7 bis).
 
 ## Pas fait
 
@@ -105,7 +120,7 @@ implémentées.
 - **Conteneurs en `overflow: hidden`** : ils coupent l'`outline` qui dépasse.
   Cas par cas : `outline-offset` négatif.
 - **Ordre des leçons** : tous les composants marqués visibles pulsent en même
-  temps (neuf au début d'une partie : trois boutons, six onglets ; douze
+  temps (sept au début d'une partie : deux boutons, trois onglets, les boîtes et leurs pions ; douze
   éléments à la première ouverture d'une fenêtre de front). Un
   prérequis par leçon (« ne pulse qu'une fois X lue ») est possible si c'est trop
   chargé.

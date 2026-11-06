@@ -26,72 +26,50 @@ const LESSONS: Readonly<Record<string, Lesson>> = {
     title: "Créer une ville",
     body: [
       "Une ville contrôle les cases autour d'elle. Cliquez ici, puis sur une case de terre libre.",
-      "La première ville est gratuite. Les suivantes coûtent de la population et se posent dans le rayon d'expansion d'une des vôtres.",
-    ],
-  },
-  factory: {
-    title: "Inaugurer une usine",
-    body: [
-      "Choisissez un type d'usine, puis cliquez sur une de vos villes sans usine.",
-      "Une usine transforme des ressources en biens ou en armement. Une seule par type.",
+      "La première ville est gratuite. Les suivantes coûtent des bonshommes d'Inactifs et se posent dans le rayon d'expansion d'une des vôtres.",
     ],
   },
   production: {
     title: "Production",
-    body: ["Ouvre ou ferme le panneau de vos usines : une section par usine, une rangée par bien."],
+    body: ["Ouvre ou ferme le panneau de production."],
   },
-  // Panneau de production (production.ts).
-  "prod-slider": {
-    title: "Lignes de production",
+  // Panneau de production (production.ts, 08-Population.md §11).
+  "prod-box": {
+    title: "Ligne de production",
     body: [
-      "Le curseur règle le nombre de lignes actives. Seules les lignes actives emploient des ouvriers et consomment du fer.",
+      "Le fer consommé est à gauche, ce qui est produit à droite.",
+      "Les bonshommes vont d'abord aux lignes du haut, et les disparitions commencent par celles du bas. S'il manque du fer, toutes les lignes perdent la même part de leur production. Glissez la poignée ⋮⋮ pour changer l'ordre.",
     ],
   },
-  "prod-plus": {
-    title: "Ajouter une ligne",
-    body: ["Crée une ligne de ce bien (Maj : 5, Ctrl : 10). Impossible tant que des lignes sont inactives."],
-  },
-  "prod-growth": {
-    title: "Croissance des lignes",
+  "prod-pawn": {
+    title: "Pions",
     body: [
-      "Les lignes de machines s'ajoutent seules : la jauge avance quand toutes les lignes tournent, plus vite avec plus de lignes.",
-      "Elle s'arrête quand la production couvre la demande.",
+      "Un pion est un bonhomme ou une machine. Avec l'auto-assignation, ils se placent seuls de haut en bas : cliquez sur un poste pour le désactiver, avec ceux à sa droite. Sans elle, glissez un pion sur une autre ligne : il part avec ceux du même type à sa droite.",
+      "Contour et barre : à venir. Clignotant : en trop, il va disparaître. Case en pointillés : poste vacant.",
     ],
+  },
+  "prod-parent": {
+    title: "Lignes à débloquer",
+    body: ["Survolez le cadenas pour voir ce que cette ligne débloque."],
   },
   "prod-locked": {
-    title: "Bien verrouillé",
-    body: ["Il se débloque quand le bien de gauche a assez produit. Plus de lignes de ce bien, déblocage plus rapide."],
+    title: "Ligne verrouillée",
+    body: ["Se débloque quand la barre est pleine. Plus il y a d'ouvriers dans la ligne du symbole devant la barre, plus c'est rapide."],
   },
   // Onglets de la barre d'informations (infobar.ts).
-  "tab-pop": {
-    title: "Population",
-    body: ["Elle grandit tant que la nourriture suffit. À chaque tour, elle est répartie entre les métiers."],
-  },
-  "tab-food": {
-    title: "Nourriture",
-    body: ["Blé et poisson, produits à chaque tour et jamais stockés. Elle fixe la population maximale."],
-  },
   "tab-flow": {
     title: "Ressources",
-    body: ["Ressources et biens sont produits et consommés dans le même tour, sans stock."],
-  },
-  "tab-stock": {
-    title: "Armement",
-    body: ["Seul l'armement se stocke, dans une réserve nationale. Vos divisions y prennent leur équipement."],
+    body: ["Le fer des mineurs, réservé par les usines et les casernes servies, et les machines possédées sur leur limite. Rien ne se stocke."],
   },
   "tab-forces": {
     title: "Forces",
-    body: ["Toutes vos divisions. « + » en recrute ; glissez un pion sur un front pour l'y envoyer."],
+    body: ["Toutes vos divisions. Elles apparaissent quand une usine ou une caserne en a la limite ; glissez un pion sur un front pour l'y envoyer."],
   },
   "tab-diplomacy": {
     title: "Diplomatie",
     body: ["Cliquez sur un joueur pour changer de statut avec lui. Le combat n'est possible qu'en guerre."],
   },
   // Symboles à infobulle (infobar.ts).
-  gear: {
-    title: "Machine",
-    body: ["La machine de ce métier augmente ce que travaille chaque travailleur. Survolez l'engrenage pour le détail."],
-  },
   pie: {
     title: "Répartition",
     body: ["Part de cette ressource prise par chaque produit. Survolez le camembert pour le détail."],

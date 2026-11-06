@@ -572,7 +572,7 @@ export class FrontWindow implements DndHost {
       }
       // Quatrième ligne : les pertes du dernier round. Vide (même hauteur) hors combat, pour que les statistiques ne bougent pas.
       const loss = el("div", "fw-st loss");
-      loss.title = "Hommes perdus au dernier round de combat (une seconde)";
+      loss.title = "État perdu au dernier round de combat (une seconde), en pourcent d'une division";
       stack.append(loss);
       losses.push(loss);
       lines.push(nicheLines);
@@ -668,13 +668,14 @@ export class FrontWindow implements DndHost {
     this.title.title = `Largeur du front : ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""}`;
     this.drawAttackButton(front);
     this.drawHistory();
-    // Hommes perdus par chaque première ligne au dernier combat (06-Combat-Simplifie §1).
-    const loss = (n: number): string => `Pertes au dernier combat : ${num(n)} hommes`;
+    // État perdu par chaque première ligne au dernier combat (08 §11), en pourcent d'une division, sans décimale.
+    const percent = (n: number): number => Math.round((n * 100) / m.stateScale);
+    const loss = (n: number): string => `Pertes au dernier combat : ${num(percent(n))} % d'état`;
     const sum = (byNiche: readonly number[]): number => byNiche.reduce((s, n) => s + n, 0);
     this.columns.o1.loss!.textContent = loss(sum(front.sides[me]!.lastLossByNiche));
     this.columns.t1.loss!.textContent = loss(sum(front.sides[1 - me]!.lastLossByNiche));
-    front.sides[me]!.lastLossByNiche.forEach((n, i) => (this.gutOurs.losses[i]!.textContent = n > 0 ? `−${formatStat(n)}` : ""));
-    front.sides[1 - me]!.lastLossByNiche.forEach((n, i) => (this.gutTheirs.losses[i]!.textContent = n > 0 ? `−${formatStat(n)}` : ""));
+    front.sides[me]!.lastLossByNiche.forEach((n, i) => (this.gutOurs.losses[i]!.textContent = n > 0 ? `−${formatStat(percent(n))} %` : ""));
+    front.sides[1 - me]!.lastLossByNiche.forEach((n, i) => (this.gutTheirs.losses[i]!.textContent = n > 0 ? `−${formatStat(percent(n))} %` : ""));
 
     // La première ligne adverse a la largeur de celle du joueur (§11.4) ; le reste de son côté est comprimé.
     this.capFirstLine();

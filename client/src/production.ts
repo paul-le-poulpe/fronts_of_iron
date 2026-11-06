@@ -1,124 +1,227 @@
-// Panneau latéral de production (00-Game §8.1) : une section par ville qui a une
-// usine, une ligne par bien de son arbre : en production (« actives / total », un
-// curseur, un bouton + pour une ligne de plus), débloqué (un bouton + pour la
-// première ligne) ou verrouillé (parent → flèche → enfant) ; la priorité par
-// glisser-déposer. La page n'applique aucune
-// règle : elle envoie des ordres (HumanOrder) et affiche ce que le moteur calcule.
+// Panneau latéral de production (Docs/Design/08-Population.md §11) : les boîtes d'activités du joueur, de haut en bas
+// dans l'ordre de priorité, puis les boîtes verrouillées. Une boîte : poignée, entrée (fer), pions, sortie. Les pions
+// sont les bonshommes et les machines ; un glisser prend le pion sous la souris et tous ceux de même type à sa droite,
+// et part en un seul `move_pawn`. La page n'applique aucune règle : elle envoie des
+// ordres (HumanOrder) et affiche ce que le moteur calcule. Seules les règles visibles (boîte pleine, machine hors de sa
+// boîte, Blessés) évitent d'envoyer un ordre que le moteur refuserait.
 //
-// Le panneau est reconstruit seulement quand sa structure change (usines, groupes,
-// nombres de lignes, biens débloqués). Entre deux reconstructions, seuls les
-// nombres (lignes remplies, progression, fer, réserves) sont mis à jour : un
-// curseur ou un glisser en cours n'est pas détruit par le tour suivant.
+// Le panneau est reconstruit seulement quand sa structure change (pions, places, boîtes ouvertes, ordre des boîtes
+// verrouillées, compteurs d'apparition et de sursis). Entre deux reconstructions, seuls les nombres (sorties, barres
+// des compteurs et du déblocage) sont mis à jour : un glisser en cours n'est pas détruit par le tour suivant, et un
+// ordre qui vient de partir retient la reconstruction jusqu'à ce que l'état change (`holdKey`) ou `HOLD_MS` passe.
 
-import { attachGoodTip } from "./goodtips.ts";
+import "./production.css";
 import { onPress } from "./burst.ts";
-import { icon32Path, productIcon } from "./icons.ts";
-import { factoryName, productName, productSymbol, unitName } from "./names.ts";
-import type { FactoryCatalog, FactoryView, HumanDetail, HumanOrder, PlayerStats } from "./protocol.ts";
-import { num } from "./format.ts";
+import { icon32Path } from "./icons.ts";
+import { textPanel, typePanel } from "./infopanels.ts";
+import { activityName, productName, productSymbol, unitName } from "./names.ts";
+import type { ActivityCatalog, ActivityInfo, ActivityView, HumanDetail, HumanOrder, MilitaryCatalog, PlayerStats } from "./protocol.ts";
+import { dec, num } from "./format.ts";
+import { RESOURCE_LEGEND } from "./render.ts";
+import { setTip } from "./tooltip.ts";
 
-/** Production par heure (armement) écrite par minute, à une décimale. */
-const perMinute = (perHour: number): number => Math.round(perHour / 6) / 10;
-
-
-/** Délai pendant lequel une reconstruction est retenue après un réglage, le temps que le moteur applique l'ordre (ms). */
+/** Délai maximal pendant lequel une reconstruction est retenue après un ordre, le temps que le moteur l'applique (ms). */
 const HOLD_MS = 500;
+/** Population au-delà de laquelle le panneau passe en petites icônes, une fois par partie (08 §11). */
+const SMALL_ICONS_POPULATION = 50;
 
-type Drag = { kind: "city"; city: number } | { kind: "line"; city: number; good: string };
-
-/** Icône de `public/icons/<path>`, à la taille du texte. */
-function icon(path: string, alt: string): HTMLImageElement {
-  const img = el("img", "ib-img") as HTMLImageElement;
-  img.src = `icons/${path}`;
-  img.alt = alt;
-  return img;
-}
-
-/** Icône de `public/icons/miscellaneous/`. */
-const miscIcon = (file: string, alt: string): HTMLImageElement => icon(`miscellaneous/${file}`, alt);
-
-const ironIcon = (): HTMLImageElement => icon("goods/goods-iron-ingot.png", "Fer");
-const workerIcon = (): HTMLImageElement => icon("population/pop-worker.png", "Ouvriers");
+/** Déplacement de la souris, en px, à partir duquel un appui sur un pion devient un glisser. */
+const DRAG_PX = 4;
 
 /** Onglet de la barre d'informations qu'ouvre une ligne de l'en-tête. */
-export type SummaryTab = "population" | "resources";
+export type SummaryTab = "resources";
 
-/** Une ligne de l'en-tête : icône, « … suffisant(s) » en vert, ou « … insuffisant(s) » et le malus en gras rouge. */
-interface SummaryLine {
-  readonly root: HTMLButtonElement;
-  readonly text: HTMLElement;
-  readonly malus: HTMLElement;
+/** Icône de pion d'un bonhomme selon le genre de l'activité où il est. */
+const WORKER_ICON: Readonly<Record<string, string>> = {
+  idle: "pop-default",
+  hurt: "pop-hurt",
+  farming: "pop-farmer",
+  fishing: "pop-fisherman",
+  mining: "pop-miner",
+  factory: "pop-worker",
+  barracks: "pop-soldier",
+};
+
+/** Un pion tel que la boîte le dessine. */
+interface Pawn {
+  /** `w` : un bonhomme ; `m:<bien>` : une machine. */
+  readonly pk: string;
+  /** `normal`, `coming` (à venir), `leaving` (en sursis, il clignote) ou `empty` (poste vacant ou place vide). */
+  readonly state: "normal" | "coming" | "leaving" | "empty";
+  /** À venir : tour où il arrive, et durée totale du compteur. */
+  readonly end?: number;
+  readonly total?: number;
+}
+
+/** Un glisser de pions, de l'appui jusqu'au relâchement. */
+interface PawnDrag {
+  readonly act: string;
+  readonly kind: "worker" | "machine";
+  readonly good: string | undefined;
+  readonly els: HTMLElement[];
+  readonly x: number;
+  readonly y: number;
+  started: boolean;
+  ghost: HTMLElement | null;
+  over: HTMLElement | null;
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+/** Image de `public/icons/<path>`. */
+function img(path: string, className: string, alt = ""): HTMLImageElement {
+  const i = el("img", className);
+  i.src = `icons/${path}`;
+  i.alt = alt;
+  i.draggable = false;
+  return i;
 }
 
 export class ProductionPanel {
   private readonly root: HTMLElement;
+  private readonly catalog: ActivityCatalog;
+  private readonly military: MilitaryCatalog;
   private readonly send: (order: HumanOrder) => void;
-  /** Survol d'une usine : la carte hachure la zone de sa ville (0 : plus rien). */
-  private readonly highlight: (city: number) => void;
-  private readonly catalog: FactoryCatalog;
-  private readonly summary: HTMLElement;
-  private readonly workersLine: SummaryLine;
-  private readonly ironLine: SummaryLine;
-  private readonly cities: HTMLElement;
-  private readonly reserves: HTMLElement;
+  private readonly byId = new Map<string, ActivityInfo>();
+  private readonly popLine: HTMLElement;
+  private readonly popText: HTMLElement;
+  private readonly foodText: HTMLElement;
+  private readonly newLine: HTMLElement;
+  private readonly ironLine: HTMLElement;
+  private readonly ironText: HTMLElement;
+  private readonly ironMalus: HTMLElement;
+  private readonly list: HTMLElement;
+  /** Options du panneau : posées dans le menu « Options » de la barre d'informations (infobar.ts). */
+  readonly options: HTMLElement;
   private key = "";
-  private drag: Drag | null = null;
-  private sliderActive = false;
+  /** Clé de structure au moment du dernier ordre : tant qu'elle ne change pas, le moteur n'a pas encore répondu. */
+  private holdKey = "";
   private holdUntil = 0;
+  private pawnDrag: PawnDrag | null = null;
+  private boxDrag: string | null = null;
+  /** Trait de l'interstice visé pendant la réorganisation des boîtes. */
+  private readonly gapMark = el("div", "pb-gap");
+  /** Interstice visé : la boîte glissée ira avant la boîte de cet indice ; -1 : aucun. */
+  private gap = -1;
+  private selected: HTMLElement[] = [];
+  /** Cases qui montrent la croix transparente : ce qu'un clic changerait (08 §7 bis). */
+  private previewed: HTMLElement[] = [];
+  /** Auto-assignation allumée au dernier dessin : les pions ne se glissent pas, ils se barrent (08 §7 bis). */
+  private auto = true;
+  private readonly autoBox = el("input");
+  /** Choisit la taille des icônes de pions ; `iconSizeOption` le pose. */
+  private chooseIcons: (big: boolean) => void = () => {};
+  /** Le passage automatique en petites icônes a déjà eu lieu dans cette partie. */
+  private iconsShrunk = false;
+  /** Appelé au passage automatique en petites icônes : main.ts montre où est l'option. */
+  onIconsShrunk: (() => void) | null = null;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
 
-  constructor(root: HTMLElement, catalog: FactoryCatalog, send: (order: HumanOrder) => void,
-    highlight: (city: number) => void,
-    openTab: (tab: SummaryTab) => void,
-  ) {
+  constructor(root: HTMLElement, catalog: ActivityCatalog, military: MilitaryCatalog, send: (order: HumanOrder) => void, openTab: (tab: SummaryTab) => void) {
     this.root = root;
     this.catalog = catalog;
+    this.military = military;
     this.send = send;
-    this.highlight = highlight;
+    for (const a of catalog.activities) this.byId.set(a.id, a);
     root.innerHTML = "";
-    this.summary = el("div", "prod-summary");
-    this.workersLine = this.summaryLine(workerIcon(), () => openTab("population"));
-    this.ironLine = this.summaryLine(ironIcon(), () => openTab("resources"));
-    this.summary.append(this.workersLine.root, this.ironLine.root);
-    this.cities = el("div", "prod-cities");
-    this.reserves = el("div", "prod-reserves");
-    root.append(this.summary, this.cities, this.reserves);
+    root.classList.add("pp");
+
+    const summary = el("div", "pp-summary");
+    this.popLine = el("div", "pp-line pp-pop");
+    this.popText = el("span");
+    this.foodText = el("span");
+    // X [population] / Y [nourriture] (08 §11).
+    const ham = img("miscellaneous/misc-food-ham.png", "pp-ic32");
+    setTip(ham, () => this.foodTip());
+    const help = el("span", "pp-help", "?");
+    setTip(help, () => this.foodTip());
+    this.popLine.append(this.popText, img("population/pop-default.png", "pp-ic32"), el("span", undefined, "/"), this.foodText, ham, help);
+    this.ironLine = el("button", "pp-line pp-pop pp-link");
+    (this.ironLine as HTMLButtonElement).type = "button";
+    this.ironText = el("span");
+    this.ironMalus = el("span", "pp-malus");
+    const ironHelp = el("span", "pp-help", "?");
+    setTip(ironHelp, () => this.ironTip());
+    this.ironLine.append(img("goods/goods-iron-ingot.png", "pp-ic32"), this.ironText, ironHelp, this.ironMalus);
+    this.ironLine.addEventListener("click", () => openTab("resources"));
+    const stats = el("div", "pp-box");
+    stats.append(this.popLine, this.ironLine);
+    // Boîte de droite : les messages. « Nouvelle ligne disponible » fait défiler jusqu'aux lignes débloquées.
+    const notes = el("div", "pp-box");
+    this.newLine = el("button", "pp-note", "Nouvelle ligne disponible");
+    (this.newLine as HTMLButtonElement).type = "button";
+    this.newLine.hidden = true;
+    this.newLine.addEventListener("click", () => {
+      // Le panneau (`#prod`) est le conteneur qui défile : position écrite directement, sans animation que le tour suivant pourrait couper.
+      const line = this.list.querySelector<HTMLElement>(".pl-new");
+      if (line !== null) this.root.scrollTop += line.getBoundingClientRect().top - this.root.getBoundingClientRect().top - this.root.clientHeight / 2;
+    });
+    notes.append(this.newLine);
+    summary.append(stats, notes);
+    this.options = el("div");
+    this.options.append(this.iconSizeOption(), this.autoAssignOption());
+
+    this.list = el("div", "pp-list");
+    root.append(summary, this.list);
+    this.installPawnDrag();
+    this.installBoxDrop();
   }
 
-  private summaryLine(sym: HTMLImageElement, open: () => void): SummaryLine {
-    const root = el("button", "prod-status") as HTMLButtonElement;
-    root.type = "button";
-    const text = el("span");
-    const malus = el("b", "neg");
-    root.append(sym, text, malus);
-    root.addEventListener("click", open);
-    return { root, text, malus };
+  /** Option du menu « Options » (08 §11) : deux carrés, 16 × 16 et 32 × 32, le sélectionné en bleu, puis « Icônes ». */
+  private iconSizeOption(): HTMLElement {
+    const row = el("div", "pp-options");
+    const small = el("button", "pp-size pp-size-16");
+    const big = el("button", "pp-size pp-size-32");
+    const choose = (on: boolean): void => {
+      this.root.classList.toggle("pp-big", on);
+      small.classList.toggle("on", !on);
+      big.classList.toggle("on", on);
+      small.setAttribute("aria-pressed", String(!on));
+      big.setAttribute("aria-pressed", String(on));
+    };
+    for (const [button, on, title] of [[small, false, "Petites icônes"], [big, true, "Grandes icônes"]] as const) {
+      button.type = "button";
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.addEventListener("click", () => choose(on));
+    }
+    this.chooseIcons = choose;
+    choose(true);
+    row.append(small, big, el("span", undefined, "Icônes"));
+    return row;
   }
 
-  /**
-   * Écrit une ligne de l'en-tête. Le malus est celui de la catégorie la plus touchée (biens, ou armement, servi après) :
-   * 100 % moins sa productivité pour cette ressource.
-   */
-  private writeSummary(line: SummaryLine, labels: readonly [string, string], goodsRatio: number, armRatio: number, tab: string): void {
-    const scale = this.catalog.ratioScale;
-    const malus = (ratio: number): number => Math.round(((scale - ratio) * 100) / scale);
-    const worst = Math.max(malus(goodsRatio), malus(armRatio));
-    const enough = worst <= 0;
-    line.text.textContent = enough ? labels[0] : labels[1];
-    line.text.className = enough ? "pos" : "";
-    line.malus.textContent = enough ? "" : `−${num(worst)} % de production`;
-    line.root.title =
-      `Malus de production : biens ${num(Math.max(0, malus(goodsRatio)))} %, armement ${num(Math.max(0, malus(armRatio)))} %.
-` +
-      `Cliquez pour ouvrir l'onglet ${tab}.`;
+  /** Option du menu « Options » (08 §7 bis) : les inactifs remplissent seuls les postes vacants. */
+  private autoAssignOption(): HTMLElement {
+    const label = el("label", "pp-options pp-check");
+    this.autoBox.type = "checkbox";
+    this.autoBox.addEventListener("change", () => this.order({ type: "set_auto_assign", enabled: this.autoBox.checked }));
+    label.append(this.autoBox, el("span", undefined, "Auto-assignation"));
+    label.title = "Bonshommes et machines se placent seuls, de haut en bas. Désactive le glisser-déposer.";
+    return label;
   }
+
+  // ---- mise à jour ----
 
   /** À appeler à chaque tour (même panneau fermé : le coût est négligeable). */
   update(detail: HumanDetail, stats: PlayerStats): void {
     this.last = { detail, stats };
+    this.autoBox.checked = detail.autoAssign;
+    if (!this.iconsShrunk && stats.population > SMALL_ICONS_POPULATION) {
+      this.iconsShrunk = true;
+      if (this.root.classList.contains("pp-big")) {
+        this.chooseIcons(false);
+        this.onIconsShrunk?.();
+      }
+    }
     if (this.root.hidden) return;
     const key = this.structureKey(detail);
-    if (key !== this.key && this.canRebuild()) {
+    if (key !== this.key && this.canRebuild(key)) {
       this.key = key;
       this.rebuild(detail);
     }
@@ -130,431 +233,769 @@ export class ProductionPanel {
     if (this.last) this.update(this.last.detail, this.last.stats);
   }
 
-  private canRebuild(): boolean {
-    return this.drag === null && !this.sliderActive && performance.now() >= this.holdUntil;
+  private canRebuild(key: string): boolean {
+    if (this.pawnDrag !== null || this.boxDrag !== null) return false;
+    return performance.now() >= this.holdUntil || key !== this.holdKey;
+  }
+
+  /** État d'une boîte hors de la liste (08 §9) : `new` débloquée, jamais ouverte ; `gone` supprimée ; `locked` verrouillée. */
+  private lockState(a: ActivityInfo, d: HumanDetail): "new" | "locked" | "gone" {
+    if (d.unlock[a.index]! < a.unlockCost) return "locked";
+    return d.everOpened[a.index] === 1 ? "gone" : "new";
+  }
+
+  /** Ordre des boîtes hors de la liste : supprimées, débloquées, verrouillées par progression décroissante (08 §9, §11). */
+  private lockedOrder(d: HumanDetail): ActivityInfo[] {
+    const open = new Set(d.activities.map((a) => a.id));
+    const rank = (a: ActivityInfo): number => ({ gone: 0, new: 1, locked: 2 })[this.lockState(a, d)];
+    const share = (a: ActivityInfo): number => (a.unlockCost === 0 ? 1 : d.unlock[a.index]! / a.unlockCost);
+    return this.catalog.activities.filter((a) => !open.has(a.id)).sort((a, b) => rank(a) - rank(b) || share(b) - share(a) || a.index - b.index);
   }
 
   private structureKey(d: HumanDetail): string {
-    return JSON.stringify(
-      d.factories.map((f) => [
-        f.city,
-        f.type,
-        f.groups.map((g) => [g.good, g.lines, g.active]),
-        f.progress.map((p) => (p >= this.catalog.unlockTurns ? 1 : 0)),
-      ]),
-    );
-  }
-
-  private tree(type: string): readonly { good: string; parent: string | null }[] {
-    return this.catalog.factoryTypes.find((t) => t.id === type)!.tree;
+    return JSON.stringify([
+      d.activities.map((a) => [a.id, a.workers, a.machines, a.places, a.slots, a.disabled, a.surface]),
+      d.autoAssign,
+      d.everOpened,
+      d.idleMachines,
+      d.popArrivals.length,
+      d.popLeaves.length,
+      d.machineArrivals.map((x) => x.length),
+      d.machineLeaves.map((x) => x.length),
+      this.lockedOrder(d).map((a) => [a.index, this.lockState(a, d)]),
+    ]);
   }
 
   // ---- construction ----
 
   private rebuild(d: HumanDetail): void {
-    this.cities.innerHTML = "";
-    // Les sections remplacées ne signalent pas la fin du survol.
-    this.highlight(0);
-    if (d.factories.length === 0) {
-      const p = el("p", "muted");
-      p.textContent = "Aucune usine. Utilisez « Inaugurer une usine » dans la barre du bas, puis cliquez sur la zone d'une de vos villes.";
-      this.cities.append(p);
-      return;
-    }
-    d.factories.forEach((f) => this.cities.append(this.citySection(f)));
-  }
-
-  private citySection(f: FactoryView): HTMLElement {
-    const section = el("section", "fsec");
-    section.dataset["city"] = String(f.city);
-    section.addEventListener("pointerenter", () => this.highlight(f.city));
-    section.addEventListener("pointerleave", () => this.highlight(0));
-    const head = el("header", "fhead");
-    const grip = this.grip({ kind: "city", city: f.city }, section);
-    // En-tête : la poignée et le nom du type d'usine, sans la ville ni le niveau (les lignes portent déjà l'icône du bien).
-    const title = el("strong");
-    title.textContent = factoryName(f.type);
-    // Croix en haut à droite de la section : envoie `delete_factory` (l'usine et toutes ses lignes).
-    const remove = el("button", "fdelete") as HTMLButtonElement;
-    remove.type = "button";
-    remove.textContent = "×";
-    remove.title = `Supprimer l'usine de la ville n° ${f.city} (lignes et progression de déblocage perdues)`;
-    remove.addEventListener("click", () => {
-      if (!window.confirm(`Supprimer l'usine de la ville n° ${f.city} (${factoryName(f.type)}) ? Ses ${f.level} lignes et sa progression de déblocage seront perdues.`)) return;
-      this.holdUntil = 0;
-      this.send({ type: "delete_factory", city: f.city });
-    });
-    head.append(grip, title);
-    section.append(head, remove);
-
-    // Une ligne par bien de l'arbre (00-Game §8.1) : d'abord les biens en production,
-    // dans l'ordre de priorité (glissables), avec un bouton + pour une ligne de plus ;
-    // puis les autres biens de l'arbre, dans l'ordre de l'arbre : débloqués, un bouton +
-    // crée la première ligne ; verrouillés, [parent] progression, jauge, cadenas, [bien].
-    for (const g of f.groups) section.append(this.groupRow(f, g));
-    const tree = this.tree(f.type);
-    tree.forEach((node) => {
-      if (f.groups.some((g) => g.good === node.good)) return;
-      const parentIndex = node.parent === null ? -1 : tree.findIndex((n) => n.good === node.parent);
-      if (parentIndex < 0 || f.progress[parentIndex]! >= this.catalog.unlockTurns) {
-        const row = el("div", "unlocked");
-        const text = el("span", "muted small");
-        text.textContent = "aucune ligne";
-        row.append(goodSpan(node.good), text, this.plus(f.city, node.good, "Créer la première ligne"));
-        section.append(row);
-        return;
-      }
-      const row = el("div", "locked");
-      row.dataset["tuto"] = "prod-locked";
-      const bar = el("span", "arrow");
-      const fill = el("i");
-      fill.dataset["prog"] = `${f.city}:${parentIndex}`;
-      bar.append(fill);
-      const text = el("span", "muted small");
-      text.dataset["progText"] = `${f.city}:${parentIndex}`;
-      text.title = "Tours-lignes produits / requis";
-      const padlock = el("img", "ib-img") as HTMLImageElement;
-      padlock.src = "icons/miscellaneous/misc-padlock.png";
-      padlock.alt = "Verrouillé";
-      row.append(goodSpan(node.parent!), text, bar, padlock, goodSpan(node.good));
-      row.title = `Verrouillé : il faut ${num(this.catalog.unlockTurns)} tours-lignes de production de ${productName(node.parent!)} (une ligne : ${num(this.catalog.unlockTurns)} tours ; dix lignes : dix fois moins).`;
-      section.append(row);
-    });
-
-    this.bindCityDrop(section, f.city);
-    return section;
+    this.clearSelection();
+    this.previewed = [];
+    this.auto = d.autoAssign;
+    const leaving = this.leavingPlan(d);
+    const boxes = d.activities.map((a) => this.box(a, d, leaving));
+    const others = this.lockedOrder(d);
+    const gone = others.filter((a) => this.lockState(a, d) === "gone").map((a) => this.lockedBox(a, d));
+    const locked = others.filter((a) => this.lockState(a, d) !== "gone").map((a) => this.lockedBox(a, d));
+    // Un séparateur en pointillé clair entre chaque groupe qui existe : ouvertes, supprimées, pas encore ouvertes.
+    const parts = [gone, locked].filter((p) => p.length > 0).flatMap((p) => [el("div", "pp-sep"), ...p]);
+    this.list.replaceChildren(...boxes, ...parts);
   }
 
   /**
-   * Bouton + : envoie `create_line` (une ligne de plus de ce bien dans cette usine). `blocked` : le bouton n'envoie
-   * rien, et un appui ajoute ce texte en rouge à l'aide sous la souris (burst.ts).
+   * Unités en sursis par boîte (08 §6) : la population part d'Inactifs, puis de la boîte la plus basse vers le haut,
+   * Blessés seulement à la toute fin ; une machine part de sa ligne d'Inactifs, puis de sa boîte d'activité.
    */
-  private plus(city: number, good: string, title: string, blocked?: string): HTMLElement {
-    const b = el("button", "plus") as HTMLButtonElement;
-    b.type = "button";
-    b.dataset["tuto"] = "prod-plus";
-    b.append(miscIcon("misc-plus-lighter.png", title));
-    b.title = `${title} : ${productName(good)}`;
-    if (blocked !== undefined) {
-      b.classList.add("blocked");
-      b.setAttribute("aria-disabled", "true");
-      b.dataset["burstBlocked"] = blocked;
-    }
-    onPress(b, (n) => {
-      this.holdUntil = 0;
-      for (let i = 0; i < n; i++) this.send({ type: "create_line", city, good });
+  private leavingPlan(d: HumanDetail): { workers: Map<string, number>; machines: Map<string, number> } {
+    const workers = new Map<string, number>();
+    let left = d.popLeaves.length;
+    const take = (a: ActivityView): void => {
+      const n = Math.min(left, a.workers);
+      if (n > 0) workers.set(a.id, n);
+      left -= n;
+    };
+    const named = (id: string): ActivityView | undefined => d.activities.find((x) => x.id === id);
+    const order = [named("idle"), ...[...d.activities].reverse().filter((a) => a.id !== "idle" && a.id !== "hurt"), named("hurt")];
+    for (const a of order) if (a !== undefined) take(a);
+    const machines = new Map<string, number>();
+    this.catalog.goodIds.forEach((good, g) => {
+      const total = d.machineLeaves[g]?.length ?? 0;
+      const idle = Math.min(total, d.idleMachines[g] ?? 0);
+      if (idle > 0) machines.set(`idle:${good}`, idle);
+      const host = d.activities.find((a) => this.byId.get(a.id)?.good === good && this.hostKind(a.id));
+      if (host !== undefined && total > idle) machines.set(`${host.id}:${good}`, Math.min(total - idle, host.machines));
     });
-    return b;
+    return { workers, machines };
   }
 
-  private groupRow(f: FactoryView, g: FactoryView["groups"][number]): HTMLElement {
-    const row = el("div", "grow");
-    row.dataset["city"] = String(f.city);
-    row.dataset["good"] = g.good;
-    const grip = this.grip({ kind: "line", city: f.city, good: g.good }, row);
-    const sym = productIcon(g.good, 32);
-    if (!attachGoodTip(sym, g.good)) sym.title = productName(g.good);
-    const slider = el("input") as HTMLInputElement;
-    slider.type = "range";
-    slider.min = "0";
-    slider.max = String(g.lines);
-    slider.step = "1";
-    // Le curseur montre les lignes en service : le réglage du joueur, ramené aux
-    // lignes utiles (pas du dessus de la demande, 00-Game §8.2). Le réglage reste
-    // dans le moteur et revient quand la demande remonte.
-    // Deux informations distinctes (00-Game §8.1) : le curseur est le maximum réglé
-    // par le joueur (`active`) ; la barre bleue, les lignes en service, ce réglage
-    // ramené aux lignes utiles (trait noir, 00-Game §8.2). La production est
-    // celle de la barre bleue.
-    slider.value = String(g.active);
-    slider.className = "lines-slider";
-    const inService = Math.min(g.active, g.usefulLines);
-    const count = el("span", "cnt");
-    const act = el("b");
-    act.dataset["inService"] = `${f.city}:${g.good}`;
-    act.textContent = String(inService);
-    const max = el("span", "muted");
-    max.textContent = ` · max ${g.active} / ${g.lines}`;
-    count.append(act, max);
-    count.title = "En service · réglé / lignes";
-    const filled = el("span", "muted small");
-    filled.dataset["filled"] = `${f.city}:${g.good}`;
-    filled.title = `Par ligne qui tourne : ${num(this.catalog.ironPerLine[g.good] ?? 0)} fer, ${this.catalog.armamentIds.includes(g.good) ? `${num(perMinute(this.catalog.productionPerLine[g.good] ?? 0))} produits par minute` : `${num(this.catalog.productionPerLine[g.good] ?? 0)} produits par tour`}. Ouvriers : ${num(this.catalog.workersPerLine[g.good] ?? 0)} pour la 1re ligne, de moins en moins ensuite, ${num(this.catalog.workersFloor[g.good] ?? 0)} au minimum.`;
-    slider.addEventListener("pointerdown", () => (this.sliderActive = true));
-    // Un clic sans déplacement ne déclenche pas `change` : sans ceci, `sliderActive`
-    // resterait vrai et le panneau ne serait plus jamais reconstruit (nouvelle usine
-    // invisible, curseur bloqué à son ancien maximum).
-    slider.addEventListener("pointerup", () => (this.sliderActive = false));
-    slider.addEventListener("pointercancel", () => (this.sliderActive = false));
-    slider.addEventListener("blur", () => (this.sliderActive = false));
-    slider.addEventListener("input", () => {
-      this.sliderActive = true;
-      max.textContent = ` · max ${slider.value} / ${g.lines}`;
-    });
-    // L'ordre part au relâchement (événement `change`), pas à chaque mouvement du curseur.
-    slider.addEventListener("change", () => {
-      this.sliderActive = false;
-      this.holdUntil = performance.now() + HOLD_MS;
-      this.send({ type: "set_active_lines", city: f.city, good: g.good, count: Number(slider.value) });
-    });
-    // Trait rouge sur le curseur : lignes utiles, au-delà desquelles la production
-    // dépasserait la demande et n'est pas remplie (00-Game §8.2). Biens seulement.
-    const wrap = el("span", "slider-wrap");
-    const track = el("i", "slider-track");
-    const fill = el("i", "slider-fill");
-    fill.dataset["fill"] = `${f.city}:${g.good}`;
-    fill.style.width = onTrack(Math.min(g.running, inService), g.lines);
-    // Écart entre les lignes qui tournent et les lignes en service : une barre rouge et, aux lignes qui tournent, un trait rouge.
-    const short = el("i", "slider-short");
-    short.dataset["short"] = `${f.city}:${g.good}`;
-    const shortMark = el("i", "short-mark");
-    shortMark.dataset["shortMark"] = `${f.city}:${g.good}`;
-    // Besoin inférieur à la production cible : du dernier cran utile au réglage du joueur, une barre verte.
-    const slack = el("i", "slider-slack");
-    slack.dataset["slack"] = `${f.city}:${g.good}`;
-    wrap.dataset["bar"] = `${f.city}:${g.good}`;
-    wrap.dataset["tuto"] = "prod-slider";
-    wrap.append(track, fill, short, slack, slider, shortMark);
-    if (!this.catalog.armamentIds.includes(g.good)) {
-      const mark = el("i", "useful-mark");
-      mark.dataset["useful"] = `${f.city}:${g.good}`;
-      mark.title = "Lignes utiles : au-delà, la production dépasserait la demande et les ouvriers vont ailleurs.";
-      wrap.append(mark);
+  /** L'activité reçoit une machine (agriculture, pêche, mines). */
+  private hostKind(id: string): boolean {
+    const k = this.byId.get(id)?.kind;
+    return k === "farming" || k === "fishing" || k === "mining";
+  }
+
+  /** Icône du produit d'une activité (machine ou type de division), `null` sans produit. */
+  private productIcon(info: ActivityInfo): HTMLElement | null {
+    if (info.division !== null) {
+      const t = this.military.divisions.find((x) => x.id === info.division);
+      if (t !== undefined) return img(icon32Path(t.icon), "pb-sym", unitName(t.id));
     }
-    // Total des lignes qui tournent : fer obtenu → bien produit, à la productivité des lignes (mis à jour à chaque tour).
-    const cost = el("span", "cost");
-    const ironNum = el("span");
-    ironNum.dataset["costIron"] = `${f.city}:${g.good}`;
-    const outNum = el("span");
-    outNum.dataset["costOut"] = `${f.city}:${g.good}`;
-    // Unité de la production, juste après son nombre : par minute pour l'armement, par tour pour les biens.
-    const unit = el("span", "muted");
-    unit.textContent = this.catalog.armamentIds.includes(g.good) ? "/mn" : "/tour";
-    cost.append(ironNum, ironIcon(), "→", outNum, unit, sym);
-    // Pas de ligne de plus tant que des lignes existantes sont inactives (réglage sous le nombre de lignes).
-    const plus = this.plus(f.city, g.good, "Ajouter une ligne", g.active < g.lines ? "Ligne inactive. Impossible d'agrandir." : undefined);
-    row.append(grip, cost, wrap, count, plus, filled);
-    // Croissance automatique (00-Game §8.2), biens seulement : une jauge vers la ligne suivante.
-    if (!this.catalog.armamentIds.includes(g.good)) {
-      const growth = el("div", "growth");
-      growth.dataset["tuto"] = "prod-growth";
-      const bar = el("span", "arrow");
-      const fill = el("i");
-      fill.dataset["growth"] = `${f.city}:${g.good}`;
-      bar.append(fill);
-      const text = el("span", "muted small");
-      text.dataset["growthText"] = `${f.city}:${g.good}`;
-      text.title = "Tours / requis";
-      growth.append(miscIcon("misc-up-lighter.png", "Ligne suivante"), bar, text);
-      growth.title = `L'usine gagne un niveau à chaque fois qu'elle produit l'équivalent de ${num(this.catalog.growthTurns)} tours sur une seule ligne. Plus de lignes la font grandir plus vite.`;
-      row.append(growth);
+    if (info.good !== null) return this.machineIcon(info.good, "pb-sym");
+    return null;
+  }
+
+  /** Icône de 16 × 16 du produit d'une activité : le fichier 16 × 16 quand il existe, sinon le 32 × 32 réduit. */
+  private smallIcon(info: ActivityInfo): HTMLElement {
+    const type = this.military.divisions.find((t) => t.id === info.division);
+    if (type !== undefined) return img(type.icon, "pp-ic", unitName(type.id));
+    return info.good !== null ? this.machineIcon(info.good, "pp-ic") : el("span", "pp-ic");
+  }
+
+  private machineIcon(good: string, className: string): HTMLElement {
+    const path = this.catalog.icons[good];
+    if (path === undefined) return el("span", `${className} sym`, productSymbol(good));
+    return img(className === "pb-sym" ? icon32Path(path) : path, className, productName(good));
+  }
+
+  private pawnEl(act: string, kindOfAct: string, p: Pawn): HTMLElement {
+    const cell = el("span", `pw pw-${p.state}`);
+    cell.dataset["act"] = act;
+    cell.dataset["pk"] = p.pk;
+    // Seuls les pions présents et hors de Blessés se glissent.
+    cell.dataset["sel"] = !this.auto && (p.state === "normal" || p.state === "leaving") && kindOfAct !== "hurt" ? "1" : "0";
+    if (cell.dataset["sel"] === "1") cell.dataset["tuto"] = "prod-pawn";
+    if (p.pk === "w") {
+      cell.append(img(`population/${WORKER_ICON[kindOfAct] ?? "pop-default"}.png`, "pw-ic"));
+    } else {
+      cell.append(this.machineIcon(p.pk.slice(2), "pw-ic"));
     }
-    this.bindLineDrop(row, f.city);
+    if (p.state === "coming") {
+      cell.dataset["end"] = String(p.end);
+      cell.dataset["total"] = String(p.total);
+      cell.append(el("i", "pw-bar"));
+    }
+    const what = p.pk === "w" ? "Bonhomme" : productName(p.pk.slice(2));
+    cell.title =
+      p.state === "coming" ? (p.pk === "w" ? "Nourriture excédentaire. Population en croissance." : "Arrive bientôt.")
+      : p.state === "leaving" ? (p.pk === "w" ? "Pas assez de nourriture. Population en déclin." : "En trop : va bientôt disparaître.")
+      : p.state === "empty" ? "Poste vacant : glissez ici un bonhomme ou une machine."
+      : kindOfAct === "hurt" ? `${what} blessé : soigné un à la fois, il retourne ensuite dans Inactifs.`
+      : "Glissez pour le déplacer, avec ceux à sa droite.";
+    return cell;
+  }
+
+  /** Une boîte. Ses pions, dans l'ordre de lecture : machines à gauche, puis bonshommes ; à venir et places vides en dernier. */
+  private box(a: ActivityView, d: HumanDetail, leaving: ReturnType<ProductionPanel["leavingPlan"]>): HTMLElement {
+    const info = this.byId.get(a.id)!;
+    const kind = info.kind;
+    const box = el("section", "pb");
+    box.dataset["act"] = a.id;
+    box.dataset["kind"] = kind;
+    box.dataset["tuto"] = "prod-box";
+
+    // Poignée de réorganisation (Inactifs reste en haut : pas de poignée, 08 §2).
+    const grip = el("span", "pb-grip");
+    if (a.id !== "idle") {
+      grip.textContent = "⋮⋮";
+      grip.draggable = true;
+      grip.title = "Glisser pour changer la priorité de la ligne.";
+      this.bindGrip(grip, box, a.id);
+    }
+
+    // Entrée : fer des usines et casernes qui en prennent (08 §4). Sans entrée, la colonne reste vide.
+    const input = el("div", "pb-in");
+    const arrowIn = el("span", "pb-arrow");
+    if (info.ironPerUnit > 0) {
+      const tile = el("div", "pb-tile");
+      tile.dataset["in"] = a.id;
+      tile.append(img(icon32Path("goods/goods-iron-ingot.png"), "pb-tile-ic"), el("span"));
+      input.append(tile);
+      arrowIn.classList.add("on");
+    }
+
+    // Colonne centrale : titre et places au-dessus des pions.
+    const center = el("div", "pb-center");
+    const head = el("div", "pb-head");
+    head.append(el("strong", "pb-title", activityName(a.id)));
+    const places = el("span", "pb-places");
+    places.dataset["places"] = a.id;
+    const children = this.catalog.activities.filter((c) => c.parent === a.id && this.lockState(c, d) === "locked");
+    if (children.length > 0) {
+      const lock = el("span", "pb-lock");
+      lock.dataset["tuto"] = "prod-parent";
+      lock.append(img("miscellaneous/icon-padlock-open.png", "pb-open-lock", "Débloque d'autres lignes"));
+      setTip(lock, () => this.childrenTip(info));
+      head.append(lock);
+    }
+    // Après le cadenas : la longueur de ce texte varie, le cadenas ne doit pas bouger avec elle.
+    head.append(places);
+    const pawns = el("div", "pb-pawns");
+    this.fillPawns(pawns, a, info, d, leaving);
+    center.append(head, pawns);
+
+    // Sortie : capacité, fer, ou « existants / limite » (08 §11).
+    const output = el("div", "pb-out");
+    const arrowOut = el("span", "pb-arrow");
+    if (kind !== "idle" && kind !== "hurt") {
+      const tile = el("div", "pb-tile");
+      tile.dataset["out"] = a.id;
+      if (kind === "farming" || kind === "fishing") tile.append(el("span"), img("miscellaneous/misc-food-ham.png", "pb-tile-ic"));
+      else if (kind === "mining") tile.append(el("span"), img("goods/goods-iron-ingot.png", "pb-tile-ic"));
+      else tile.append(el("span"), this.productIcon(info) ?? el("span"));
+      if (kind === "factory" && info.good !== null) setTip(tile, () => this.replacesTip(info));
+      output.append(tile);
+      if (info.hasPlaces) output.append(this.targetArrows(a.id));
+      arrowOut.classList.add("on");
+    }
+
+    // Croix tout à droite : supprime la ligne (08 §9). Agriculteurs, Pêcheurs, Mineurs, Inactifs et Blessés n'en ont pas.
+    const close = el("span");
+    if (kind === "factory" || kind === "barracks") {
+      const b = el("button", "pb-close");
+      b.type = "button";
+      b.title = "Supprimer la ligne.";
+      b.setAttribute("aria-label", "Supprimer la ligne");
+      b.append(img("miscellaneous/misc-red-cross.png", "pb-close-ic"));
+      b.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        this.order({ type: "close_activity", activity: a.id });
+      });
+      close.append(b);
+    }
+    box.append(grip, input, arrowIn, center, arrowOut, output, close);
+    return box;
+  }
+
+  /** Flèches de la production visée (08 §7 ter) : ±1, ±5 avec Maj, ±10 avec Ctrl (burst.ts). */
+  private targetArrows(activity: string): HTMLElement {
+    const box = el("div", "pb-steps");
+    for (const [shape, sign, title] of [["pb-step-up", 1, "Augmenter la production visée"], ["pb-step-down", -1, "Diminuer la production visée"]] as const) {
+      const b = el("button", `pb-step ${shape}`);
+      b.type = "button";
+      b.setAttribute("aria-label", title);
+      b.title = `${title} (Maj : 5, Ctrl : 10)`;
+      onPress(b, (n) => this.order({ type: "change_production_target", activity, delta: sign * n }));
+      box.append(b);
+    }
+    return box;
+  }
+
+  private fillPawns(into: HTMLElement, a: ActivityView, info: ActivityInfo, d: HumanDetail, leaving: ReturnType<ProductionPanel["leavingPlan"]>): void {
+    const kind = info.kind;
+    const append = (row: HTMLElement, count: number, leavingCount: number, pk: string): void => {
+      for (let i = 0; i < count; i++) row.append(this.pawnEl(a.id, kind, { pk, state: i >= count - leavingCount ? "leaving" : "normal" }));
+    };
+    const coming = (row: HTMLElement, ends: readonly number[], total: number, pk: string): void => {
+      for (const end of ends) row.append(this.pawnEl(a.id, kind, { pk, state: "coming", end, total }));
+    };
+    if (kind === "idle") {
+      // Une ligne de population, puis une ligne par type de machine présent, sans libellé (08 §11).
+      const popRow = el("div", "pb-row");
+      append(popRow, a.workers, leaving.workers.get(a.id) ?? 0, "w");
+      coming(popRow, d.popArrivals, this.catalog.popArrivalTurns, "w");
+      if (popRow.childElementCount > 0) into.append(popRow);
+      this.catalog.goodIds.forEach((good, g) => {
+        const row = el("div", "pb-row");
+        append(row, d.idleMachines[g] ?? 0, leaving.machines.get(`idle:${good}`) ?? 0, `m:${good}`);
+        coming(row, d.machineArrivals[g] ?? [], this.catalog.machineArrivalTurns, `m:${good}`);
+        if (row.childElementCount > 0) into.append(row);
+      });
+      return;
+    }
+    const row = el("div", "pb-row");
+    if (this.hostKind(a.id) && info.good !== null) append(row, a.machines, leaving.machines.get(`${a.id}:${info.good}`) ?? 0, `m:${info.good}`);
+    append(row, a.workers, leaving.workers.get(a.id) ?? 0, "w");
+    if (info.hasSlots) {
+      // Postes vacants, avec l'icône du bonhomme qui finira dans la boîte (08 §11).
+      for (let i = a.workers + a.machines; i < a.slots; i++) row.append(this.pawnEl(a.id, kind, { pk: "w", state: "empty" }));
+    }
+    if (info.hasPlaces) {
+      for (let i = a.workers; i < a.places; i++) {
+        const empty = this.pawnEl(a.id, kind, { pk: "w", state: "empty" });
+        empty.title = "Place vide. Peut être remplie.";
+        row.append(empty);
+      }
+    }
+    // Auto-assignation : un clic barre ce poste et ceux à sa droite, ouvriers et machines compris (08 §7 bis).
+    if (d.autoAssign && (info.hasSlots || info.hasPlaces)) {
+      const cells = [...row.querySelectorAll<HTMLElement>(".pw:not(.pw-gauge)")];
+      cells.forEach((cell, i) => {
+        cell.dataset["vac"] = String(i);
+        cell.classList.toggle("pw-off", i >= cells.length - a.disabled);
+        cell.title = "Cliquez pour désactiver ce poste et ceux à sa droite. Cliquez pour réactiver celui-ci et ceux à sa gauche.";
+        cell.append(img("miscellaneous/misc-red-cross.png", "pw-cross"));
+      });
+    }
+    // Jauge de la prochaine place (08 §2.1) : montée jusqu'à 80 % du bas de la case, les 20 % restants arrivent avec la place.
+    if (info.tilesPerWorker > 0) {
+      const part = (a.surface % info.tilesPerWorker) / info.tilesPerWorker;
+      const gauge = this.pawnEl(a.id, kind, { pk: "w", state: "empty" });
+      delete gauge.dataset["pk"];
+      gauge.classList.add("pw-gauge");
+      gauge.style.setProperty("--gauge", `${Math.floor(part * 80)}%`);
+      gauge.title = `Prochaine place : ${num(a.surface % info.tilesPerWorker)} / ${num(info.tilesPerWorker)} cases`;
+      row.append(gauge);
+    }
+    into.append(row);
+  }
+
+  private lockedBox(info: ActivityInfo, d: HumanDetail): HTMLElement {
+    const state = this.lockState(info, d);
+    const row = el("section", `pl pl-${state}`);
+    if (state !== "locked") {
+      // Boîte débloquée, ou supprimée : un clic la met dans la liste ; la première fois, avec son panneau d'information (08 §9).
+      const button = el("span", "pl-name pl-open", activityName(info.id));
+      row.append(this.productIcon(info) ?? el("span", "pb-sym"), button, el("span", "pl-state", state === "new" ? "Débloquée" : "Cliquer pour recréer la ligne"));
+      row.title = state === "new" ? "Cliquez pour découvrir cette ligne." : "Cliquer pour recréer la ligne.";
+      row.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        if (state === "new") this.showInfo(info);
+        this.order({ type: "open_activity", activity: info.id });
+      });
+      return row;
+    }
+    row.dataset["lock"] = String(info.index);
+    row.dataset["kind"] = info.kind;
+    row.dataset["tuto"] = "prod-locked";
+    const parent = info.parent === null ? undefined : this.byId.get(info.parent);
+    // Agriculteurs, Pêcheurs, Mineurs : la ligne se débloque par ses ouvriers, pas par la machine qu'elle reçoit.
+    const sym = parent === undefined ? null : ((this.hostKind(parent.id) ? null : this.productIcon(parent)) ?? img(`population/${WORKER_ICON[parent.kind]}.png`, "pb-sym", activityName(parent.id)));
+    const bar = el("div", "pl-bar");
+    bar.append(el("i", "pl-fill"));
+    bar.append(el("span", "pl-name", activityName(info.id)), el("span", "pl-num"));
+    const lock = img("miscellaneous/icon-padlock-closed.png", "pl-lock", "Verrouillé");
+    row.append(this.productIcon(info) ?? el("span", "pb-sym"), lock, el("span", "pl-sep"), sym ?? el("span", "pb-sym"), bar);
+    setTip(row, () => this.lockedTip(info));
+    this.writeLocked(row, info, d.unlock[info.index]!);
     return row;
   }
 
-  // ---- glisser-déposer : les villes entre elles, les groupes au sein de leur ville ----
+  /** Panneau d'information d'une ligne débloquée (08 §9) : description et statistiques de l'unité, jusqu'au clic sur « Compris ». */
+  private showInfo(info: ActivityInfo): void {
+    document.querySelector(".pp-info")?.remove();
+    const box = el("div", "pp-info themed");
+    const type = this.military.divisions.find((t) => t.id === info.division);
+    const host = this.catalog.activities.find((c) => c.good === info.good && c.id !== info.id);
+    box.append(type !== undefined ? typePanel(type) : textPanel(activityName(info.id), `Remplace un ${activityName(host?.id ?? "").toLowerCase().replace(/s$/, "")}.`));
+    const ok = el("button", "pp-info-ok", "Compris");
+    ok.type = "button";
+    ok.addEventListener("click", () => box.remove());
+    box.append(ok);
+    document.body.append(box);
+  }
 
-  private grip(drag: Drag, moved: HTMLElement): HTMLElement {
-    const g = el("span", "grip");
-    g.textContent = "⋮⋮";
-    g.draggable = true;
-    g.title = drag.kind === "city" ? "Glisser pour changer la priorité de la ville" : "Glisser pour changer la priorité de cette production";
-    g.addEventListener("dragstart", (e) => {
-      this.drag = drag;
-      e.dataTransfer?.setData("text/plain", "fronts-of-iron");
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setDragImage(moved, 10, 10);
+  // ---- infobulles ----
+
+  /**
+   * Survol du « ? » du fer : utilisation, production actuelle et maximale, part de chaque boîte, et la représentation des
+   * cases de fer sur la carte. Une ligne par ressource quand d'autres seront extraites (08 §11).
+   */
+  private ironTip(): Node {
+    const box = el("div", "pt");
+    const d = this.last?.detail;
+    if (d === undefined) return box;
+    box.append(el("div", "pt-title", "Fer"));
+    const figures = el("div", "pt-figures");
+    for (const [label, value] of [["Utilisation actuelle", d.ironReserved], ["Production actuelle", d.ironProduced], ["Production maximale", d.ironMax]] as const) {
+      figures.append(el("span", undefined, label), el("b", undefined, num(value)));
+    }
+    box.append(figures);
+    const rows = d.activities.filter((a) => a.ironUsed > 0).sort((a, b) => b.ironUsed - a.ironUsed);
+    if (rows.length > 0) {
+      const grid = el("div", "tip-iron");
+      for (const a of rows) {
+        const bar = el("div", "tip-ibar");
+        const got = el("i", "obt");
+        got.style.width = `${(a.ironUsed * 100) / rows[0]!.ironUsed}%`;
+        bar.append(got);
+        const symbol = this.smallIcon(this.byId.get(a.id)!);
+        symbol.title = activityName(a.id);
+        grid.append(symbol, bar, el("span", undefined, num(a.ironUsed)));
       }
-      moved.classList.add("dragging");
-    });
-    g.addEventListener("dragend", () => {
-      this.drag = null;
-      moved.classList.remove("dragging");
-      for (const x of this.root.querySelectorAll(".drop")) x.classList.remove("drop");
-      this.refresh();
-    });
-    return g;
+      box.append(grid);
+    }
+    const map = el("div", "pt-map");
+    const swatch = el("span", "legend-swatch");
+    const [red, green, blue] = RESOURCE_LEGEND.iron.rgba;
+    swatch.style.setProperty("--hatch", `rgb(${red} ${green} ${blue})`);
+    map.append(swatch, el("span", undefined, "Sur la carte, ces hachures marquent les cases de fer (vue « Ressources naturelles » du menu Carte)."));
+    box.append(map);
+    return box;
   }
 
-  private bindCityDrop(section: HTMLElement, city: number): void {
-    section.addEventListener("dragover", (e) => {
-      if (this.drag?.kind !== "city") return;
-      e.preventDefault();
-      section.classList.add("drop");
-    });
-    section.addEventListener("dragleave", (e) => {
-      if (e.target === section) section.classList.remove("drop");
-    });
-    section.addEventListener("drop", (e) => {
-      if (this.drag?.kind !== "city") return;
-      e.preventDefault();
-      section.classList.remove("drop");
-      const sections = [...this.cities.querySelectorAll<HTMLElement>(".fsec")];
-      const position = sections.indexOf(section);
-      const dragged = this.drag.city;
-      this.drag = null;
-      this.holdUntil = performance.now() + HOLD_MS;
-      if (dragged !== city && position >= 0) this.send({ type: "set_city_priority", city: dragged, position });
-    });
+  /** Survol de la sortie d'une usine de machines : le métier que la machine remplace, et son icône. */
+  private replacesTip(info: ActivityInfo): Node {
+    const host = this.catalog.activities.find((c) => c.good === info.good && c.id !== info.id)!;
+    const box = el("div", "pt-replace");
+    box.append(`Remplace les ${activityName(host.id).toLowerCase()}`, img(`population/${WORKER_ICON[host.kind]}.png`, "pp-ic"));
+    return box;
   }
 
-  private bindLineDrop(row: HTMLElement, city: number): void {
-    row.addEventListener("dragover", (e) => {
-      if (this.drag?.kind !== "line" || this.drag.city !== city) return;
-      e.preventDefault();
-      e.stopPropagation();
-      row.classList.add("drop");
-    });
-    row.addEventListener("dragleave", (e) => {
-      if (e.target === row) row.classList.remove("drop");
-    });
-    row.addEventListener("drop", (e) => {
-      if (this.drag?.kind !== "line" || this.drag.city !== city) return;
-      e.preventDefault();
-      e.stopPropagation();
-      row.classList.remove("drop");
-      const rows = [...(row.parentElement?.querySelectorAll<HTMLElement>(".grow") ?? [])];
-      const position = rows.indexOf(row);
-      const dragged = this.drag.good;
-      this.drag = null;
-      this.holdUntil = performance.now() + HOLD_MS;
-      if (dragged !== row.dataset["good"] && position >= 0) this.send({ type: "set_line_priority", city, good: dragged, position });
-    });
+  /** Survol du gigot de l'en-tête : la nourriture par source (08 §3), en bonshommes nourris. */
+  private foodTip(): Node {
+    const box = el("div", "pt pt-food");
+    const d = this.last?.detail;
+    if (d === undefined) return box;
+    const f = (food: number): string => dec(food / this.catalog.foodPerPawn);
+    const row = (left: (string | Node)[], value: number): void => {
+      const label = el("span", "pt-food-l");
+      label.append(...left);
+      box.append(label, el("span", undefined, "→"), el("b", undefined, f(value)));
+    };
+    row(["Base"], this.catalog.foodBase);
+    row([`${f(this.catalog.foodPerCity)} /`, img("miscellaneous/icon-town-16.png", "pp-ic32", "Ville")], this.catalog.foodPerCity * d.cities);
+    row([`${f(d.farmPerWorker)} /`, this.machineIcon("tractor", "pp-ic32"), img("population/pop-farmer.png", "pp-ic32", "Agriculteur")], d.wheat);
+    row([`${f(d.fishPerWorker)} /`, img("population/pop-fisherman.png", "pp-ic32", "Pêcheur"), this.machineIcon("fishingBoat", "pp-ic32")], d.fish);
+    return box;
+  }
+
+  private progressRow(c: ActivityInfo, progress: number): HTMLElement {
+    const r = el("div", "pt-row");
+    const bar = el("span", "pt-bar");
+    const fill = el("i");
+    fill.style.width = `${Math.min(100, Math.floor((progress * 100) / c.unlockCost))}%`;
+    bar.append(fill);
+    r.append(el("span", "pt-name", activityName(c.id)), bar, el("span", "pt-num", `${num(progress)} / ${num(c.unlockCost)}`));
+    return r;
+  }
+
+  /** Survol du cadenas ouvert d'une boîte parente : ses enfants à débloquer et leur barre (08 §11). */
+  private childrenTip(parent: ActivityInfo): Node {
+    const box = el("div", "pt");
+    const d = this.last?.detail;
+    const children = this.catalog.activities.filter((c) => c.parent === parent.id);
+    box.append(el("div", "pt-title", `Débloqué par ${children.some((c) => c.unlockByPopulation) ? "la population" : activityName(parent.id)}`));
+    if (d === undefined) return box;
+    for (const c of children) if (this.lockState(c, d) === "locked") box.append(this.progressRow(c, d.unlock[c.index]!));
+    const served = d.served[parent.index] ?? 0;
+    if (children.some((c) => c.unlockByWorkers || c.unlockByPopulation)) return box;
+    box.append(el("div", "pt-note", served > 0 ? `${num(served)} ouvrier(s) servi(s) en fer : ${num(served)} tour(s) de progression par tour.` : `Il manque des ouvriers ou du fer dans « ${activityName(parent.id)} ».`));
+    return box;
+  }
+
+  /** Survol d'une boîte verrouillée : ce qu'il faut pour la débloquer (08 §9, §11). */
+  private lockedTip(c: ActivityInfo): Node {
+    const box = el("div", "pt");
+    const d = this.last?.detail;
+    box.append(el("div", "pt-title", activityName(c.id)));
+    if (c.parent === null || d === undefined) return box;
+    const parent = this.byId.get(c.parent)!;
+    const progress = d.unlock[c.index]!;
+    box.append(this.progressRow(c, progress));
+    if (c.unlockByPopulation) {
+      box.append(el("div", "pt-note", `Se débloque à une population de ${num(c.unlockCost)}.`));
+      return box;
+    }
+    if (c.unlockByWorkers) {
+      box.append(el("div", "pt-note", `Se débloque dès que « ${activityName(parent.id)} » compte ${num(c.unlockCost)} ouvriers.`));
+      return box;
+    }
+    const parentOpen = d.activities.some((a) => a.id === parent.id);
+    const served = d.served[parent.index] ?? 0;
+    const product = parent.division !== null ? unitName(parent.division) : parent.good !== null ? productName(parent.good) : activityName(parent.id);
+    box.append(el("div", "pt-note", `Produisez ${product} pour débloquer.`));
+    if (!parentOpen) box.append(el("div", "pt-note", `« ${activityName(parent.id)} » est elle-même verrouillée.`));
+    else if (served === 0) box.append(el("div", "pt-note", `Il manque des ouvriers ou du fer dans « ${activityName(parent.id)} ».`));
+    else box.append(el("div", "pt-note", `${num(served)} ouvrier(s) servi(s) : environ ${num(Math.ceil((c.unlockCost - progress) / served))} tours restants.`));
+    return box;
   }
 
   // ---- nombres mis à jour à chaque tour ----
 
+  private writeLocked(row: HTMLElement, c: ActivityInfo, progress: number): void {
+    const fill = row.querySelector<HTMLElement>(".pl-fill");
+    if (fill) fill.style.width = `${Math.min(100, Math.floor((progress * 100) / c.unlockCost))}%`;
+    const text = row.querySelector<HTMLElement>(".pl-num");
+    if (text) text.textContent = `${num(progress)} / ${num(c.unlockCost)}`;
+  }
+
   private refreshNumbers(d: HumanDetail, s: PlayerStats): void {
-    for (const f of d.factories) {
-      for (const g of f.groups) {
-        // Seulement les lignes qui tournent ce tour : fer obtenu et production totale
-        // (× productivité) sur la première ligne, ouvriers obtenus sur la seconde.
-        // Le fer est toujours en gras, en rouge quand le fer manque (ratio de la catégorie du groupe < 100 %) ;
-        // les ouvriers sont en rouge quand ils manquent. Catégories : biens, ou armement (servi après).
-        const arm = this.catalog.armamentIds.includes(g.good);
-        const ironRatio = arm ? s.armIronRatio : s.goodsIronRatio;
-        const workerRatio = arm ? s.armWorkerRatio : s.goodsWorkerRatio;
-        const lineRatio = arm ? s.armLineRatio : s.goodsLineRatio;
-        const perLine = this.catalog.productionPerLine[g.good] ?? 0;
-        const ironNum = this.cities.querySelector<HTMLElement>(`[data-cost-iron="${f.city}:${g.good}"]`);
-        if (ironNum) {
-          ironNum.textContent = num(g.ironObtained);
-          ironNum.style.fontWeight = "700";
-          ironNum.classList.toggle("neg", ironRatio < this.catalog.ratioScale);
-        }
-        const outNum = this.cities.querySelector<HTMLElement>(`[data-cost-out="${f.city}:${g.good}"]`);
-        // Armement : `perLine` est par heure ; affiché par minute, une décimale.
-        const out = (g.running * perLine * lineRatio) / this.catalog.ratioScale;
-        if (outNum) outNum.textContent = num(this.catalog.armamentIds.includes(g.good) ? perMinute(out) : Math.floor(out));
-        const cell = this.cities.querySelector<HTMLElement>(`[data-filled="${f.city}:${g.good}"]`);
-        if (cell) {
-          const workers = el("b");
-          workers.textContent = num(g.workersObtained);
-          workers.classList.toggle("neg", workerRatio < this.catalog.ratioScale);
-          // Ouvriers par ligne : la moyenne des lignes qui tournent (le coût baisse avec le rang, 00-Game §8.1) ;
-          // sans ligne qui tourne, le coût de la première.
-          const avg = g.running > 0 ? Math.round(g.workersDemanded / g.running) : (this.catalog.workersPerLine[g.good] ?? 0);
-          cell.replaceChildren(workers, workerIcon(), ` (${num(avg)}/ligne)`);
-          // Armement : combien de divisions de référence le stock cible des lignes actives de ce groupe équipe
-          // (formule du stock cible, 00-Game §8.3, sur les lignes actives au lieu de toutes ; arrondi vers le bas).
-          const unit = this.catalog.equipUnit[g.good];
-          if (unit !== undefined) {
-            const fit = Math.floor(Math.floor((g.active * perLine * this.catalog.stockSeconds) / 3600) / unit.count);
-            const n = el("b");
-            n.textContent = num(fit);
-            const img = el("img", "unit-ic") as HTMLImageElement;
-            img.src = `icons/${icon32Path(unit.icon)}`;
-            img.alt = unitName(unit.division);
-            img.title = `${unitName(unit.division)} : ${num(unit.count)} par division`;
-            cell.append(" · approprié pour : ", n, img);
-          }
-        }
-        const inService = Math.min(g.active, g.usefulLines);
-        const fill = this.cities.querySelector<HTMLElement>(`[data-fill="${f.city}:${g.good}"]`);
-        const real = Math.min(g.running, inService);
-        if (fill) fill.style.width = onTrack(real, g.lines);
-        // Lignes en service mais pas remplies : barre et trait rouges (absents quand tout est rempli).
-        const missing = real < inService;
-        const short = this.cities.querySelector<HTMLElement>(`[data-short="${f.city}:${g.good}"]`);
-        if (short) {
-          short.hidden = !missing;
-          short.style.left = `calc(7px + ${onTrack(real, g.lines)})`;
-          short.style.width = onTrack(inService - real, g.lines);
-        }
-        const shortMark = this.cities.querySelector<HTMLElement>(`[data-short-mark="${f.city}:${g.good}"]`);
-        if (shortMark) {
-          shortMark.hidden = !missing;
-          shortMark.style.left = `calc(7px + ${onTrack(real, g.lines)})`;
-        }
-        // Lignes réglées au-delà des lignes utiles : la demande est couverte avant la production cible.
-        const surplus = g.active > inService;
-        const slack = this.cities.querySelector<HTMLElement>(`[data-slack="${f.city}:${g.good}"]`);
-        if (slack) {
-          slack.hidden = !surplus;
-          slack.style.left = `calc(7px + ${onTrack(inService, g.lines)})`;
-          slack.style.width = onTrack(g.active - inService, g.lines);
-        }
-        const bar = this.cities.querySelector<HTMLElement>(`[data-bar="${f.city}:${g.good}"]`);
-        if (bar) {
-          const notes: string[] = [];
-          if (missing) notes.push("Toutes les lignes en service ne tournent pas (trait rouge : lignes qui tournent).");
-          if (surplus) notes.push("Le besoin est inférieur à la production cible : les lignes en vert ne produisent pas.");
-          bar.title = notes.join("\n");
-        }
-        const act = this.cities.querySelector<HTMLElement>(`[data-in-service="${f.city}:${g.good}"]`);
-        if (act) act.textContent = String(inService);
-        const mark = this.cities.querySelector<HTMLElement>(`[data-useful="${f.city}:${g.good}"]`);
-        if (mark) mark.style.left = `calc(7px + ${onTrack(g.usefulLines, g.lines)})`;
-        const gbar = this.cities.querySelector<HTMLElement>(`[data-growth="${f.city}:${g.good}"]`);
-        if (gbar) gbar.style.width = g.demandMet ? "0%" : `${Math.min(100, Math.floor((g.growth * 100) / this.catalog.growthTurns))}%`;
-        const gtext = this.cities.querySelector<HTMLElement>(`[data-growth-text="${f.city}:${g.good}"]`);
-        if (gtext) gtext.textContent = g.demandMet ? "demande couverte" : `${num(g.growth)} / ${num(this.catalog.growthTurns)} → ligne suivante`;
+    this.popText.textContent = num(s.population);
+    this.popText.classList.toggle("pp-bad", s.population > d.capacity);
+    this.foodText.textContent = num(d.capacity);
+    this.newLine.hidden = !this.catalog.activities.some((a) => !d.activities.some((x) => x.id === a.id) && this.lockState(a, d) === "new");
+    this.ironText.textContent = `${num(d.ironReserved)} / ${num(d.ironProduced)}`;
+    // Rouge et malus si les boîtes demandent plus de fer qu'il n'en est produit (08 §4).
+    const short = d.ironWanted > d.ironProduced;
+    this.ironLine.classList.toggle("pp-bad", short);
+    this.ironMalus.textContent = short ? ` −${100 - Math.floor((d.ironProduced * 100) / d.ironWanted)} % de production` : "";
+
+    for (const a of d.activities) {
+      const info = this.byId.get(a.id)!;
+      const box = this.list.querySelector<HTMLElement>(`.pb[data-act="${a.id}"]`);
+      if (box === null) continue;
+      const kind = info.kind;
+      const places = box.querySelector<HTMLElement>(".pb-places");
+      if (places) {
+        places.textContent =
+          info.hasSlots ? `${num(a.workers + a.machines)} / ${num(a.slots)} places`
+          : info.hasPlaces ? `${num(a.workers)} / ${num(a.places)} places`
+          : kind === "idle" || kind === "hurt" ? ""
+          : `${num(a.workers)} ouvrier${a.workers > 1 ? "s" : ""}`;
       }
-      f.progress.forEach((p, i) => {
-        const bar = this.cities.querySelector<HTMLElement>(`[data-prog="${f.city}:${i}"]`);
-        if (bar) bar.style.width = `${Math.min(100, Math.floor((p * 100) / this.catalog.unlockTurns))}%`;
-        const text = this.cities.querySelector<HTMLElement>(`[data-prog-text="${f.city}:${i}"]`);
-        if (text) text.textContent = `${num(p)} / ${num(this.catalog.unlockTurns)}`;
+      const tileIn = box.querySelector<HTMLElement>(".pb-tile[data-in]");
+      if (tileIn) {
+        tileIn.lastElementChild!.textContent = num(a.ironUsed);
+        const units = Math.floor((a.workers * info.unitsPerWorker) / info.workersPerUnit);
+        tileIn.classList.toggle("pb-bad", a.output < units);
+        tileIn.title = `${num(info.ironPerUnit)} par ligne
+Besoin satisfait à ${units === 0 ? 100 : Math.floor((a.output * 100) / units)} %`;
+      }
+      const tileOut = box.querySelector<HTMLElement>(".pb-tile[data-out]");
+      if (tileOut) {
+        const value = tileOut.firstElementChild!;
+        if (kind === "farming" || kind === "fishing") {
+          value.textContent = `+${dec(a.output / this.catalog.foodPerPawn)}`;
+          tileOut.title = "Augmente la limite de population";
+        } else if (kind === "mining") {
+          value.textContent = `+${num(a.output)}`;
+          tileOut.title = "Sert à produire des machines";
+        } else {
+          // Production visée (08 §7 ter) : permis par les ouvriers présents / maximum réglé, sans distinguer la formation.
+          const unitsFor = (n: number): number => Math.floor((n * info.unitsPerWorker) / info.workersPerUnit);
+          value.textContent = info.hasPlaces ? `${num(unitsFor(a.workers))} / ${num(unitsFor(a.places))}` : `${num(a.existing)} / ${num(a.limit)}`;
+          tileOut.classList.toggle("pb-bad", a.existing > a.limit);
+          if (info.good === null) tileOut.title = `${num(a.existing - a.forming)} active(s), ${num(a.forming)} en formation`;
+        }
+      }
+    }
+    for (const c of this.list.querySelectorAll<HTMLElement>(".pw-coming")) {
+      const end = Number(c.dataset["end"]);
+      const total = Number(c.dataset["total"]);
+      const bar = c.querySelector<HTMLElement>(".pw-bar");
+      if (bar) bar.style.width = `${Math.max(0, Math.min(100, Math.round(((total - (end - d.tick)) * 100) / total)))}%`;
+    }
+    for (const row of this.list.querySelectorAll<HTMLElement>(".pl")) {
+      const c = this.catalog.activities[Number(row.dataset["lock"])]!;
+      this.writeLocked(row, c, d.unlock[c.index]!);
+    }
+  }
+
+  // ---- ordres ----
+
+  private order(order: HumanOrder): void {
+    this.holdKey = this.key;
+    this.holdUntil = performance.now() + HOLD_MS;
+    this.send(order);
+  }
+
+  // ---- glisser des pions : un appui prend le pion sous la souris et ceux de même type à sa droite (08 §11) ----
+
+  /** Les pions glissables de même type que `pawn`, de la boîte, à partir de `pawn` inclus, dans l'ordre de lecture. */
+  private groupOf(pawn: HTMLElement): HTMLElement[] {
+    const box = pawn.closest<HTMLElement>(".pb");
+    if (box === null) return [];
+    const all = [...box.querySelectorAll<HTMLElement>(`.pw[data-pk="${pawn.dataset["pk"]}"][data-sel="1"]`)];
+    return all.slice(all.indexOf(pawn));
+  }
+
+  /** Les postes vacants de la boîte de `cell`, de gauche à droite. */
+  private vacantCells(cell: HTMLElement): HTMLElement[] {
+    return [...(cell.closest(".pb")?.querySelectorAll<HTMLElement>(".pw[data-vac]") ?? [])];
+  }
+
+  /** Montre les croix à 50 % sur les postes qu'un clic sur `cell` changerait (08 §7 bis). */
+  private previewOff(cell: HTMLElement | null): void {
+    for (const c of this.previewed) c.classList.remove("pw-would");
+    this.previewed = [];
+    if (cell === null || cell.dataset["vac"] === undefined) return;
+    const k = Number(cell.dataset["vac"]);
+    const off = cell.classList.contains("pw-off");
+    this.previewed = this.vacantCells(cell).filter((c, i) => (off ? i <= k : i >= k) && c.classList.contains("pw-off") === off);
+    for (const c of this.previewed) c.classList.add("pw-would");
+  }
+
+  private clearSelection(): void {
+    for (const e of this.selected) e.classList.remove("pw-sel");
+    this.selected = [];
+  }
+
+  private select(pawn: HTMLElement | null): void {
+    const group = pawn !== null && pawn.dataset["sel"] === "1" ? this.groupOf(pawn) : [];
+    if (group.length === this.selected.length && group.every((e, i) => e === this.selected[i])) return;
+    this.clearSelection();
+    for (const e of group) e.classList.add("pw-sel");
+    this.selected = group;
+  }
+
+  /**
+   * Nombre de pions du glisser que la boîte `to` recevrait, 0 si le dépôt est refusé par les règles visibles : boîte
+   * pleine (une place par bonhomme ou machine, 08 §2.1), machine hors de sa boîte ou d'Inactifs, Blessés (08 §2). Une
+   * machine prend aussi la place d'un bonhomme, renvoyé dans Inactifs : seules les autres machines la limitent.
+   */
+  private dropCount(drag: PawnDrag, to: string): number {
+    const target = this.byId.get(to);
+    if (target === undefined || to === drag.act || to === "hurt") return 0;
+    const n = drag.els.length;
+    if (drag.kind === "machine") {
+      const host = this.catalog.activities.find((c) => c.good === drag.good && (c.kind === "farming" || c.kind === "fishing" || c.kind === "mining"));
+      if (to !== "idle" && to !== host?.id) return 0;
+    }
+    if (target.hasSlots) {
+      const a = this.last?.detail.activities.find((x) => x.id === to);
+      if (a === undefined) return 0;
+      const taken = drag.kind === "machine" ? a.machines : a.workers + a.machines;
+      return Math.min(n, Math.max(0, a.slots - taken));
+    }
+    return n;
+  }
+
+  private installPawnDrag(): void {
+    this.list.addEventListener("pointermove", (e) => {
+      if (this.pawnDrag !== null) return;
+      const pawn = (e.target as Element).closest<HTMLElement>(".pw");
+      this.select(pawn);
+      this.previewOff(pawn);
+    });
+    this.list.addEventListener("pointerleave", () => {
+      if (this.pawnDrag === null) this.clearSelection();
+      this.previewOff(null);
+    });
+    this.list.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || this.pawnDrag !== null) return;
+      const pawn = (e.target as Element).closest<HTMLElement>(".pw");
+      // Clic sur un poste vacant : il se désactive avec ceux à sa droite ; sur un poste désactivé, il se réactive avec ceux à sa gauche.
+      if (pawn?.dataset["vac"] !== undefined) {
+        const k = Number(pawn.dataset["vac"]);
+        const vacant = this.vacantCells(pawn).length;
+        e.preventDefault();
+        this.order({ type: "set_disabled_slots", activity: pawn.dataset["act"]!, count: pawn.classList.contains("pw-off") ? vacant - k - 1 : vacant - k });
+        return;
+      }
+      if (pawn === null || pawn.dataset["sel"] !== "1") return;
+      const els = this.groupOf(pawn);
+      const pk = pawn.dataset["pk"]!;
+      this.pawnDrag = {
+        act: pawn.dataset["act"]!,
+        kind: pk === "w" ? "worker" : "machine",
+        good: pk === "w" ? undefined : pk.slice(2),
+        els,
+        x: e.clientX,
+        y: e.clientY,
+        started: false,
+        ghost: null,
+        over: null,
+      };
+      e.preventDefault();
+      window.addEventListener("pointermove", this.onMove);
+      window.addEventListener("pointerup", this.onUp);
+      window.addEventListener("pointercancel", this.onCancel);
+    });
+  }
+
+  private readonly onMove = (e: PointerEvent): void => {
+    const drag = this.pawnDrag;
+    if (drag === null) return;
+    if (!drag.started) {
+      if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) <= DRAG_PX) return;
+      drag.started = true;
+      const ghost = el("div", "pw-ghost");
+      ghost.classList.toggle("pp-big", this.root.classList.contains("pp-big"));
+      ghost.append(drag.els[0]!.cloneNode(true), el("b", undefined, `× ${drag.els.length}`));
+      document.body.append(ghost);
+      // L'icône des pions déplacés remplace le curseur (08 §11).
+      document.body.classList.add("pw-moving");
+      drag.ghost = ghost;
+      for (const p of drag.els) p.classList.add("pw-drag");
+    }
+    drag.ghost!.style.left = `${e.clientX}px`;
+    drag.ghost!.style.top = `${e.clientY}px`;
+    const over = this.dropBox(drag, e.clientX, e.clientY);
+    if (over !== drag.over) {
+      drag.over?.classList.remove("pb-over");
+      over?.classList.add("pb-over");
+      drag.over = over;
+    }
+  };
+
+  /** La boîte sous la souris qui accepte au moins un pion du glisser. */
+  private dropBox(drag: PawnDrag, x: number, y: number): HTMLElement | null {
+    for (const e of document.elementsFromPoint(x, y)) {
+      const box = e.closest<HTMLElement>(".pb");
+      if (box !== null) return this.dropCount(drag, box.dataset["act"]!) > 0 ? box : null;
+    }
+    return null;
+  }
+
+  private readonly onUp = (e: PointerEvent): void => {
+    const drag = this.pawnDrag;
+    if (drag === null) return;
+    const target = drag.started ? this.dropBox(drag, e.clientX, e.clientY) : null;
+    this.endPawnDrag();
+    if (target !== null) {
+      const to = target.dataset["act"]!;
+      const count = this.dropCount(drag, to);
+      this.order({
+        type: "move_pawn",
+        from: drag.act,
+        to,
+        kind: drag.kind,
+        ...(drag.good !== undefined ? { good: drag.good } : {}),
+        count,
       });
     }
-    this.writeSummary(this.workersLine, ["Ouvriers suffisants", "Ouvriers insuffisants"], s.goodsWorkerRatio, s.armWorkerRatio, "Population");
-    this.writeSummary(this.ironLine, ["Fer suffisant", "Fer insuffisant"], s.goodsIronRatio, s.armIronRatio, "Ressources (flux)");
+    this.refresh();
+  };
 
-    const reserveLines = this.catalog.armamentIds
-      .map((id, i) => ({ id, i }))
-      .filter(({ i }) => d.reserveMax[i]! > 0 || d.reserve[i]! > 0)
-      .map(({ id, i }) => `${productSymbol(id)} ${num(d.reserve[i]!)} (stock cible ${num(d.reserveMax[i]!)})`);
-    const head = Object.assign(el("strong"), { textContent: "Réserves d'armement" });
-    this.reserves.replaceChildren(
-      head,
-      ...(reserveLines.length === 0
-        ? [Object.assign(el("div", "muted"), { textContent: "Aucune ligne d'armement." })]
-        : reserveLines.map((t) => Object.assign(el("div"), { textContent: t }))),
-    );
+  private readonly onCancel = (): void => {
+    this.endPawnDrag();
+    this.refresh();
+  };
+
+  private endPawnDrag(): void {
+    const drag = this.pawnDrag;
+    if (drag === null) return;
+    drag.ghost?.remove();
+    document.body.classList.remove("pw-moving");
+    drag.over?.classList.remove("pb-over");
+    for (const p of drag.els) p.classList.remove("pw-drag");
+    this.pawnDrag = null;
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("pointerup", this.onUp);
+    window.removeEventListener("pointercancel", this.onCancel);
   }
-}
 
-function el(tag: string, className?: string): HTMLElement {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  return e;
-}
+  // ---- réorganisation des boîtes par la poignée (08 §2) ----
 
-function span(text: string): HTMLElement {
-  return Object.assign(el("span", "sym"), { textContent: text });
-}
+  private bindGrip(grip: HTMLElement, box: HTMLElement, act: string): void {
+    grip.addEventListener("dragstart", (e) => {
+      this.boxDrag = act;
+      e.dataTransfer?.setData("text/plain", "fronts-of-iron");
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setDragImage(box, 10, 10);
+      }
+      box.classList.add("pb-dragging");
+    });
+    grip.addEventListener("dragend", () => {
+      this.boxDrag = null;
+      box.classList.remove("pb-dragging");
+      this.hideGap();
+      this.refresh();
+    });
+  }
 
-/** Symbole d'un bien, avec son infobulle construite s'il en a une. */
-function goodSpan(good: string): HTMLElement {
-  const s = productIcon(good, 32);
-  if (!attachGoodTip(s, good)) s.title = productName(good);
-  return s;
-}
+  /** L'interstice le plus proche de `y` (08 §11) : `gap` est l'indice de la boîte qui suit, jamais avant Inactifs. */
+  private nearestGap(y: number): { gap: number; at: number } {
+    const rects = [...this.list.querySelectorAll<HTMLElement>(".pb")].map((b) => b.getBoundingClientRect());
+    let best = { gap: rects.length, at: rects[rects.length - 1]!.bottom + 4 };
+    for (let i = 1; i < rects.length; i++) {
+      const at = (rects[i - 1]!.bottom + rects[i]!.top) / 2;
+      if (Math.abs(y - at) < Math.abs(y - best.at)) best = { gap: i, at };
+    }
+    return best;
+  }
 
-/** Longueur sur la piste du curseur (entre les centres extrêmes du pouce, 14 px) pour `n` lignes sur `lines`. */
-function onTrack(n: number, lines: number): string {
-  const ratio = lines > 0 ? Math.min(1, n / lines) : 0;
-  return `calc((100% - 14px) * ${ratio})`;
+  private hideGap(): void {
+    this.gap = -1;
+    this.gapMark.remove();
+  }
+
+  /** Dépose sur tout le panneau : le trait suit l'interstice le plus proche, même au-dessus d'une boîte. */
+  private installBoxDrop(): void {
+    this.list.addEventListener("dragover", (e) => {
+      if (this.boxDrag === null) return;
+      e.preventDefault();
+      const { gap, at } = this.nearestGap(e.clientY);
+      this.gap = gap;
+      this.gapMark.style.top = `${at - this.list.getBoundingClientRect().top - 2}px`;
+      this.list.append(this.gapMark);
+    });
+    this.list.addEventListener("dragleave", (e) => {
+      if (!this.list.contains(e.relatedTarget as Node | null)) this.hideGap();
+    });
+    this.list.addEventListener("drop", (e) => {
+      if (this.boxDrag === null || this.gap < 0) return;
+      e.preventDefault();
+      const boxes = [...this.list.querySelectorAll<HTMLElement>(".pb")];
+      const from = boxes.findIndex((b) => b.dataset["act"] === this.boxDrag);
+      const gap = this.gap;
+      const dragged = this.boxDrag;
+      this.boxDrag = null;
+      this.hideGap();
+      // `position` est l'indice final : la boîte glissée quitte d'abord sa place. Les deux interstices qui la bordent ne la déplacent pas.
+      if (gap !== from && gap !== from + 1) this.order({ type: "set_activity_order", activity: dragged, position: gap > from ? gap - 1 : gap });
+    });
+  }
 }

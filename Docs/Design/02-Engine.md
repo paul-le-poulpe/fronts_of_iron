@@ -4,6 +4,11 @@ Le moteur (`packages/engine`) calcule l'état d'une partie à partir de ses tour
 Chaque navigateur l'exécute et doit obtenir exactement le même état (règle 2 du
 `CLAUDE.md`, 01-Architecture §3).
 
+**Depuis la branche `Human-Style-Pop`, la population, la production, les usines, les casernes
+et le déblocage suivent `08-Population.md`** : ce document décrit encore par endroits les
+anciennes lignes de production, l'armement et la mécanisation ; `packages/engine/src/activities.ts`
+et `economy.ts` font référence pour le code.
+
 **Les règles viennent de `00-Game.md`.** Le moteur n'implémente que ce que ce
 document décide. Implémenté : les villes (00-Game §3.1 à §3.6 : fondation,
 zones, routes terrestres, ports, groupes), la fertilité de la carte (§2), la

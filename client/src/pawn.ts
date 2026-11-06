@@ -1,7 +1,8 @@
 // Pion d'une division et disposition d'une zone : espacé, piles, « trop de pions »
 // (Docs/Design/05-Fronts.md §11.3). Ce module ne choisit pas la sélection, ne gère ni le
 // glisser-déposer ni les panneaux de survol : il dessine ce qu'on lui donne et rend les
-// positions. Chaque pion porte `data-id` (identifiant de la division).
+// positions. Chaque pion porte `data-id` (identifiant de la division). Une division en trop
+// (`leaveTick`, 08 §6) clignote jusqu'à sa disparition.
 
 import "./pawn.css";
 import { defendsBreakthrough } from "./divisions.ts";
@@ -163,7 +164,7 @@ function pawnHtml(p: Placed, scale: number, lifted: boolean, military: MilitaryC
   const y = PAWN_Y + p.line * ROW_H;
   const z = (lifted ? 1000 : 10) + p.depth;
   let h =
-    `<div class="pz-pawn${isGrey(d) ? " pz-grey" : ""}" data-id="${d.id}" ` +
+    `<div class="pz-pawn${isGrey(d) ? " pz-grey" : ""}${d.leaveTick !== 0 ? " pz-leaving" : ""}" data-id="${d.id}" ` +
     `style="left:${p.x}px;top:${y}px;width:${p.w}px;z-index:${z}">` +
     `<img class="pz-icon" src="${src}" alt="" draggable="false">`;
   const rank = rankOf(d);

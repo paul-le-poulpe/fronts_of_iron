@@ -22,7 +22,7 @@
   /* Largeur du panneau latéral : le bouton « Carte » s'arrête à son bord gauche. */
   --panel-w: 320px;
   /* Largeur du panneau de production, posé sur le bord droit de la carte. */
-  --prod-w: 380px;
+  --prod-w: 600px;
   color-scheme: light;
 }
 
@@ -273,7 +273,7 @@ input[type="number"] {
 /* Menu « Tutoriel » : deux choix courts, largeur du texte. */
 .menu.menu-short { min-width: 0; }
 
-/* ---- panneau de production (00-Game §8.1) ---- */
+/* ---- panneau de production (08-Population §11, production.css) ---- */
 
 #prod {
   position: absolute;
@@ -287,57 +287,7 @@ input[type="number"] {
   border-left: 1px solid var(--line);
   box-shadow: -4px 0 14px #0002;
 }
-#prod h2 { margin: 0 0 6px; font-size: 14px; }
-.prod-summary { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-/* Une ligne de l'en-tête : un clic ouvre l'onglet Population ou Ressources (flux) de la barre d'informations. */
-.prod-status { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border: 0; background: none; font-size: 14px; text-align: left; cursor: pointer; }
-.prod-status:hover { background: #eef1f6; }
-.prod-cities { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
-.prod-reserves { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-.fsec { --fsec-line: #8f8b80; position: relative; border: 2px solid var(--fsec-line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
-/* Suppression de l'usine : croix discrète en haut à droite de la section. */
-.fdelete { position: absolute; top: 2px; right: 3px; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; font-size: 15px; line-height: 1; color: var(--muted); }
-.fdelete:hover:not(:disabled) { color: var(--fg); border: 0; }
-.fsec.dragging, .grow.dragging { opacity: 0.5; }
-.fsec.drop, .grow.drop { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* Trait entre deux lignes de l'usine, de même épaisseur et couleur que le contour (la première n'en a pas : l'en-tête la précède). */
-.fsec > :is(.grow, .unlocked, .locked) ~ :is(.grow, .unlocked, .locked) { border-top: 2px solid var(--fsec-line); padding-top: 6px; }
-.fhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-right: 18px; }
-.grip { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; padding: 0 2px; }
-.grow { display: grid; grid-template-columns: auto auto minmax(40px, 1fr) auto auto; align-items: center; gap: 6px; }
-.grow > .muted { grid-column: 2 / -1; margin-top: -4px; }
-.grow input[type="range"] { width: 100%; min-width: 0; }
-/* Curseur des lignes : la piste native est transparente ; dessous, une piste grise
-   et la barre bleue des lignes en service, posées entre les centres extrêmes du
-   pouce (7 px de chaque côté), pour que 100 % tombe sous le pouce au maximum. */
-.slider-wrap { position: relative; display: block; min-width: 0; height: 18px; }
-.slider-track, .slider-fill, .slider-short, .slider-slack { position: absolute; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; pointer-events: none; }
-.slider-track { left: 7px; right: 7px; background: #d8d4cc; }
-.slider-fill { left: 7px; width: 0; background: var(--accent); }
-input.lines-slider { -webkit-appearance: none; appearance: none; position: relative; display: block; width: 100%; height: 18px; margin: 0; background: transparent; }
-input.lines-slider::-webkit-slider-runnable-track { height: 18px; background: transparent; }
-input.lines-slider::-moz-range-track { background: transparent; }
-input.lines-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
-input.lines-slider::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
-.slider-short { left: 7px; width: 0; background: var(--bad); }
-.slider-slack { left: 7px; width: 0; background: #b7e4c1; }
-.short-mark { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: var(--bad); pointer-events: none; }
-.useful-mark { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: #000; pointer-events: none; }
 .sym { font-size: 12px; padding: 1px 4px; border: 1px dashed var(--muted); border-radius: 4px; white-space: nowrap; }
-.cnt { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cost { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.grow > .muted .ib-img { vertical-align: middle; margin: 0 2px; }
-.grow > .muted b { color: var(--fg); font-weight: 700; }
-.unit-ic { width: 16px; height: 16px; vertical-align: middle; margin: 0 2px; }
-.locked { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; opacity: 0.85; }
-.arrow { position: relative; display: inline-block; width: 64px; height: 8px; border: 1px solid var(--muted); border-radius: 4px; overflow: hidden; }
-.arrow i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
-.grow .growth { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; margin-top: -2px; }
-.unlocked { display: flex; align-items: center; gap: 6px; }
-.unlocked .plus { margin-left: auto; }
-button.plus { width: 22px; height: 22px; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
-/* « + » bloqué (des lignes de ce bien sont inactives) : grisé, l'appui ne fait qu'afficher la raison (burst.ts). */
-button.plus.blocked { opacity: 0.4; cursor: not-allowed; }
 
 #panel {
   grid-area: panel;
@@ -510,7 +460,18 @@ tr.me td { font-weight: 600; }
 .ib-map { flex-direction: row; align-items: center; gap: 8px; margin-left: auto; margin-right: calc(var(--panel-w) + var(--prod-offset, 0px)); padding: 0 20px; border-left: 1px solid var(--line); font-size: 15px; font-weight: 600; }
 .ib-map .ib-name { color: var(--fg); }
 .ib-map .ib-chev::before { font-size: 13px; }
+/* Menu « Options » : au-dessus du panneau de production, à son bord gauche ; absent quand le panneau est fermé. */
+.ib-options { flex: none; flex-direction: row; align-items: center; gap: 8px; box-sizing: border-box; width: var(--prod-w); margin-right: var(--panel-w); padding: 0 12px; border-left: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+.ib-options .ib-name { color: var(--fg); }
+.ib-options .ib-chev::before { font-size: 13px; }
+#game:has(#prod:not([hidden])) .ib-map { margin-right: 0; }
+#game:not(:has(#prod:not([hidden]))) .ib-options { display: none; }
 .menu.ib-menu { top: 100%; bottom: auto; left: auto; right: calc(var(--panel-w) + var(--prod-offset, 0px)); min-width: 210px; border-top: 0; border-radius: 0 0 8px 8px; }
+.menu.ib-menu.ib-options-menu { right: calc(var(--panel-w) + var(--prod-w)); transform: translateX(100%); }
+/* Message à côté du menu « Options », qui clignote jusqu'à son ouverture. */
+.ib-hint { position: absolute; top: 100%; right: calc(var(--panel-w) + var(--prod-w) + 8px); z-index: 30; max-width: 280px; padding: 6px 10px; border: 2px solid var(--tuto); border-radius: 6px; background: var(--card); color: var(--fg); font-size: 13px; box-shadow: 0 2px 8px #0005; }
+.ib-options.ib-attn { animation: ib-attn var(--blink-period, 1000ms) steps(1, end) infinite; }
+@keyframes ib-attn { 50% { background: color-mix(in srgb, var(--tuto) 45%, transparent); } }
 .ib-check { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
 .ib-check:hover { background: #eef1f6; }
 /* Case survolée : en bas à droite de la vue de la carte, à gauche du panneau de production ouvert. */

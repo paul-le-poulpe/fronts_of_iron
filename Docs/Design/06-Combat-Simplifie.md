@@ -12,6 +12,10 @@ plus foi là où elles le contredisent :
   lignes), §8.1, §8.2, §8.3 (réserve d'armement) et §8.4 (types d'usines) ;
 - `05-Fronts.md` §3.5 (création des divisions par le joueur).
 
+**`08-Population.md` remplace les §3 à §4 ci-dessous** (usines sur la carte, niveaux,
+centres de recrutement), sauf la barre de vie (§3.3) et le soin (§3.6), qu'il reprend. Les
+mentions d'hommes et de matériel des pertes se lisent comme des pertes de divisions et d'état.
+
 Décisions de l'auteur du 4 novembre 2026. Ce que l'auteur n'a pas tranché est
 marqué « *provisoire* » et listé au §5. Version stable d'avant : tag git
 `v0.2` (même commit que `avant-combat-simplifie`).
@@ -282,7 +286,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 - **Fait** : les deux combats de la percée instantanés (§1, point 5) —
   `combat.ts` (`resolveBreakthroughCombat`), `breakthroughs.ts`
   (`failBreakthroughCombat`) ; `CombatRecord.kind` et `success`.
-- **Pas encore** : usines d'unités, barre de vie sans équipement, centres de recrutement (§3,
-  §4) ; les tests de `05-Fronts` qui supposent une attaque durable
+- **Fait** : barre de vie sans équipement, usines et casernes par `08-Population.md`.
+- **Pas encore** : les tests de `05-Fronts` qui supposent une attaque durable
   (`packages/engine/test/combat.test.ts`, `fronts.test.ts`, `scenario.ts`) ne
   sont pas encore adaptés.

@@ -38,12 +38,17 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   discussions (ne fait pas foi) : `05-Fronts-History.md`, qui garde aussi la
   version 0.1 (tag `v0.1`) ;
 - `Docs/Design/06-Combat-Simplifie.md` — combat instantané et son replay
-  (attaque sur tout le front, deux combats de la percée, renforts), usines
-  d'unités et centres de recrutement (pas encore implémentés) ; fait foi et
-  remplace les parties de `05-Fronts.md` et `00-Game.md` qu'il liste en tête.
-  La version d'avant (combat continu, production par lignes) est au tag `v0.2`.
+  (attaque sur tout le front, deux combats de la percée, renforts) ; fait foi et
+  remplace les parties de `05-Fronts.md` qu'il liste en tête. Ses §3 à §4 sont
+  remplacés par `08-Population.md`. La version d'avant (combat continu,
+  production par lignes) est au tag `v0.2`.
 - `Docs/Design/07-Tutoriel.md` — tutoriel : composants à contour bleu, premier
   clic qui ouvre une leçon, leçons écrites et à écrire.
+- `Docs/Design/08-Population.md` — population en bonshommes, boîtes d'activités
+  (agriculture, pêche, mines, usines, casernes), fer, délais, blessés, déblocage,
+  panneau de production ; fait foi et remplace les parties de `00-Game.md`,
+  `05-Fronts.md` et `06-Combat-Simplifie.md` qu'il liste en tête. Historique, qui
+  ne fait pas foi : `00-Game-History.md`.
 
 ---
 

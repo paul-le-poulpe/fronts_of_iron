@@ -25,6 +25,11 @@ export function compactInt(n: number, from = 1000): string {
   return n < 0 ? `-${text}` : text;
 }
 
+/** Nombre à une décimale au plus (« 1,5 », « 3 »), pour les capacités de population (08 §3). */
+export function dec(n: number): string {
+  return oneDecimal.format(n);
+}
+
 /** Nombre affiché : exact sous 10 000, puis K et M. */
 export function num(n: number): string {
   return compact(n);

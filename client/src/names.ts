@@ -1,29 +1,22 @@
-// Noms français des biens, de l'armement, des types d'usine et des joueurs, et les
-// symboles provisoires des biens. Les icônes n'existent pas encore (00-Game §11) : un texte entre
-// crochets les remplace. Rien ici n'est une règle.
+// Noms français des machines, des activités, des types de division et des joueurs, et les
+// symboles provisoires des biens sans icône. Rien ici n'est une règle.
 
 const PRODUCT_NAMES: Readonly<Record<string, string>> = {
-  rifle: "fusil",
-  machineGun: "mitrailleuse",
-  artillery: "artillerie",
-  antiAirGun: "canon anti-aérien",
-  antiTankGun: "canon anti-char",
-  tankette: "chenillette",
-  infantryTank: "char d'infanterie",
-  cruiserTank: "char de cavalerie",
-  mediumTank: "char moyen",
-  selfPropelledArtilleryGun: "artillerie autopropulsée",
-  armoredAntiTankGun: "canon anti-char blindé",
-  selfPropelledAntiAirGun: "canon anti-aérien autopropulsé",
   tractor: "tracteur",
   fishingBoat: "bateau de pêche",
   miningMachine: "pompe à vapeur",
 };
 
-const FACTORY_NAMES: Readonly<Record<string, string>> = {
-  infantryArmament: "Manufacture d'armes",
-  fishingBoats: "Chantier naval",
-  miningMachines: "Usine mécanique",
+/** Noms des activités sans usine (identifiants de `ACTIVITIES`, 08 §2). Une usine s'appelle « Usine - » et son produit : `activityName`. */
+const ACTIVITY_NAMES: Readonly<Record<string, string>> = {
+  idle: "Inactifs",
+  hurt: "Blessés",
+  farmers: "Agriculteurs",
+  fishers: "Pêcheurs",
+  miners: "Mineurs",
+  militia: "Caserne de milice",
+  regulars: "Caserne de réguliers",
+  elite: "Caserne d'élites",
 };
 
 /** Noms des types de division (clés de `DIVISIONS`) et des niches des fronts (clés de `NICHES`, 05-Fronts §3). */
@@ -60,27 +53,15 @@ const NICHE_LETTERS: Readonly<Record<string, string>> = {
   artillery: "ART",
 };
 
-/** Équipement requis d'une division, au pluriel, avec majuscule (panneaux de survol, 05-Fronts §11.7) ; `men` : les hommes. */
-const EQUIPMENT_NAMES: Readonly<Record<string, string>> = {
-  men: "Hommes",
-  rifle: "Fusils",
-  machineGun: "Mitrailleuses",
-  artillery: "Artillerie",
-  antiAirGun: "Canons anti-aériens",
-  antiTankGun: "Canons anti-char",
-  tankette: "Chenillettes",
-  infantryTank: "Chars d'infanterie",
-  cruiserTank: "Chars de cavalerie",
-  mediumTank: "Chars moyens",
-  selfPropelledArtilleryGun: "Artillerie autopropulsée",
-  armoredAntiTankGun: "Canons anti-char blindés",
-  selfPropelledAntiAirGun: "Canons anti-aériens autopropulsés",
-};
-
 export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;
 export const nicheName = (id: string): string => NICHE_NAMES[id] ?? id;
 export const nicheLetters = (id: string): string => NICHE_LETTERS[id] ?? id.toUpperCase();
-export const equipmentName = (id: string): string => EQUIPMENT_NAMES[id] ?? id;
+export function activityName(id: string): string {
+  const name = ACTIVITY_NAMES[id];
+  if (name !== undefined) return name;
+  const product = PRODUCT_NAMES[id] ?? UNIT_NAMES[id] ?? id;
+  return `Usine - ${product.charAt(0).toUpperCase()}${product.slice(1)}`;
+}
 
 let localId = 1;
 let rosterNames: readonly string[] = [];
@@ -98,31 +79,5 @@ export const localPlayer = (): number => localId;
 export const playerName = (id: number): string => (id === localId ? "Vous" : (rosterNames[id - 1] ?? `Joueur ${id}`));
 
 export const productName = (id: string): string => PRODUCT_NAMES[id] ?? id;
-export const factoryName = (id: string): string => FACTORY_NAMES[id] ?? id;
-
-/** Symbole provisoire d'un bien ou d'un type d'armement. */
+/** Symbole provisoire d'un bien. */
 export const productSymbol = (id: string): string => `[${productName(id)}]`;
-/** Symbole provisoire d'un type d'usine. */
-export const factorySymbol = (id: string): string => `[${factoryName(id)}]`;
-/**
- * Bien de l'arbre d'une usine qui a le plus de lignes construites (actives ou non) :
- * c'est lui qui la représente, dans le panneau et sur la carte. À égalité, le premier
- * de l'arbre ; sans aucune ligne, la racine de l'arbre.
- */
-export function dominantGood(
-  tree: readonly { readonly good: string }[],
-  groups: readonly { readonly good: string; readonly lines: number }[],
-): string {
-  let best = tree[0]!.good;
-  let bestLines = 0;
-  for (const node of tree) {
-    const lines = groups.find((g) => g.good === node.good)?.lines ?? 0;
-    if (lines > bestLines) {
-      best = node.good;
-      bestLines = lines;
-    }
-  }
-  return best;
-}
-/** Initiale dessinée sur la carte à côté de la ville qui porte l'usine. */
-export const factoryInitial = (id: string): string => factoryName(id).charAt(0).toUpperCase();

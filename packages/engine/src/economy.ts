@@ -1,602 +1,393 @@
-// Population, lignes de production, extraction du fer, agriculture et pêche
-// (Docs/Design/00-Game.md §4, §6, §7, §8) : une étape par tour et par joueur,
-// après les ordres. Tout est en entiers (règle 2 du
-// CLAUDE.md) : divisions par Math.floor, multiplications avant les divisions.
+// Population, fer, limites, déblocage, apparitions et disparitions, soin (Docs/Design/08-Population.md) : une étape par
+// tour et par joueur, après les ordres, joueurs dans l'ordre des identifiants. Tout est en entiers (règle 2 du
+// CLAUDE.md) : multiplications avant les divisions.
 //
-// Unités : la population est un nombre de personnes ; une surface est un nombre
-// de cases ; la mécanisation M est en millièmes de case par travailleur ; les
-// machines sont comptées pour 1 000 travailleurs (choix provisoires, 02-Engine §7).
+// Ordre de l'étape d'un joueur (08 §13) : places et trop-plein, capacité, service du fer de haut en bas, remplissage des
+// places de caserne, déblocage, compteurs de population, de machines et de divisions, soin d'un blessé, soin des
+// divisions abîmées. Avec `economyFrozen`, seul le soin continue.
 
+import { COMBAT, DIVISION_TIMING, FARMING, FISHING, FOOD, GOODS_TIMING, MINING, POPULATION, RESOURCES } from "./config.ts";
 import {
-  ARMAMENT,
-  FACTORY,
-  FACTORY_TYPES,
-  FARMING,
-  FISHING,
-  FOOD,
-  GOODS,
-  GOODS_DECAY,
-  MINING,
-  POPULATION,
-  RESOURCES,
-  type GoodId,
-  type MechanizationConfig,
-  type ProductId,
-} from "./config.ts";
-import { ARMAMENT_IDS, armamentIndex, armamentReserveMax, goodIndex, productConfig } from "./factories.ts";
-import { divisionEquipment } from "./divisions.ts";
-import { RATIO_SCALE, type GameState, type Player } from "./state.ts";
-
-/** Échelle de la courbe de mécanisation (00-Game §6.3) : x = 1 s'écrit S. */
-export const CURVE_SCALE = 10_000;
-/** Un millième : unité de M (millièmes de case par travailleur). */
-const MILLI = 1000;
-/** Échelle du reste de croissance : millionièmes de personne. */
-export const GROWTH_SCALE = 1_000_000;
-
-/**
- * f(x) = 1 − (1 − x)ⁿ (00-Game §6.3), en entiers sur 0…S : `X` est x ramené sur
- * 0…S (0 ≤ X ≤ S), `n` entier ≥ 1. f(0) = 0, f(S) = S. Plus grand intermédiaire :
- * S × S = 10⁸.
- */
-export function mechanizationCurve(X: number, n: number): number {
-  const S = CURVE_SCALE;
-  let p = S;
-  for (let i = 0; i < n; i++) p = Math.floor((p * (S - X)) / S);
-  return S - p;
-}
-
-/** Travailleurs qui couvrent `surface` cases à pleine mécanisation (`M_max`, 00-Game §6.2), arrondi vers le haut. */
-export function fullMechanizationWorkers(cfg: MechanizationConfig, surface: number): number {
-  return Math.ceil((surface * MILLI) / cfg.mechanizationMax);
-}
-
-/**
- * Référence des machines (00-Game §6.2) : les travailleurs disponibles, plafonnés
- * à ceux qui couvrent `surface` cases à pleine mécanisation. Les machines d'une
- * mécanisation totale sont `référence × m_max` : les inactifs n'en demandent pas.
- */
-export function machineReference(cfg: MechanizationConfig, available: number, surface: number): number {
-  return Math.min(available, fullMechanizationWorkers(cfg, surface));
-}
-
-/**
- * Mécanisation M, en millièmes de case par travailleur (00-Game §6.2) :
- * `machines` machines (tracteurs ou bateaux) rapportées à `available`
- * travailleurs (la référence, `machineReference`). Calculée une fois, avec les
- * travailleurs disponibles et non ceux qui travaillent réellement.
- */
-export function mechanization(cfg: MechanizationConfig, available: number, machines: number): number {
-  const f = machineCurve(cfg, available, machines);
-  return cfg.mechanizationBase + Math.floor(((cfg.mechanizationMax - cfg.mechanizationBase) * f) / CURVE_SCALE);
-}
-
-/** f(x) sur 0…S pour `machines` machines et `available` travailleurs disponibles (00-Game §6.2, §6.3). */
-export function machineCurve(cfg: MechanizationConfig, available: number, machines: number): number {
-  const S = CURVE_SCALE;
-  const X =
-    available === 0
-      ? 0
-      : Math.min(S, Math.floor((machines * MILLI * S) / (available * cfg.maxMachinesPer1000)));
-  return mechanizationCurve(X, cfg.curveExponent);
-}
-
-/**
- * Rendement d'une case d'eau, en millièmes (00-Game §6.4) : de `tileYield` sans
- * bateau à `tileYieldMax` avec le maximum, selon la même courbe que la
- * mécanisation de la pêche.
- */
-export function waterYieldMilli(available: number, boats: number): number {
-  const f = machineCurve(FISHING, available, boats);
-  return FISHING.tileYield * MILLI + Math.floor(((FISHING.tileYieldMax - FISHING.tileYield) * MILLI * f) / CURVE_SCALE);
-}
-
-export interface Harvest {
-  /** Travailleurs qui travaillent : min(disponibles, requis). */
-  readonly workers: number;
-  /** Surface travaillée, en cases : min(surface_max, travailleurs × M / 1000). */
-  readonly area: number;
-  /** Production : fertilité_totale × surface travaillée / surface_max (00-Game §6.5). */
-  readonly yield: number;
-  /** Mécanisation M du tour, en millièmes de case par travailleur. */
-  readonly mechanization: number;
-}
-
-/**
- * Agriculture (00-Game §6.2) ou pêche (§6.4) d'un joueur. `surfaceMax` : nombre
- * de cases ; `fertilitySum` : somme de leurs fertilités. `required` est arrondi
- * vers le haut (00-Game §13 le laisse ouvert) : assez de travailleurs pour
- * couvrir toute la surface.
- */
-export function harvest(
-  cfg: MechanizationConfig,
-  available: number,
-  machines: number,
-  surfaceMax: number,
-  fertilitySum: number,
-  extra = 0,
-): Harvest {
-  // `extra` : travailleurs en trop de l'autre activité (report, 00-Game §4). Ils
-  // comptent parmi les disponibles de la référence : à 0 % de fermiers, les
-  // pêcheurs reportés aux champs utilisent les tracteurs (00-Game §6.2).
-  const M = mechanization(cfg, machineReference(cfg, available + extra, surfaceMax), machines);
-  const required = Math.ceil((surfaceMax * MILLI) / M);
-  const workers = Math.min(available + extra, required);
-  const area = Math.min(surfaceMax, Math.floor((workers * M) / MILLI));
-  const output = surfaceMax === 0 ? 0 : Math.floor((fertilitySum * area) / surfaceMax);
-  return { workers, area, yield: output, mechanization: M };
-}
-
-/** Travailleurs requis pour couvrir `surfaceMax` cases (00-Game §6.2), arrondi vers le haut. */
-export function requiredWorkers(cfg: MechanizationConfig, available: number, machines: number, surfaceMax: number): number {
-  return Math.ceil((surfaceMax * MILLI) / mechanization(cfg, machineReference(cfg, available, surfaceMax), machines));
-}
-
-/** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
-const IRON = Object.keys(RESOURCES).indexOf("iron");
-const TRACTOR = goodIndex("tractor");
-const FISHING_BOAT = goodIndex("fishingBoat");
-const MINING_MACHINE = goodIndex("miningMachine");
-
-/** Cases de fer à exploiter pour extraire `demand` fer par tour (00-Game §7, `cases_exploitées`). */
-export function ironTilesFor(demand: number): number {
-  return Math.ceil(demand / RESOURCES.iron.capacityPerTile);
-}
-
-/**
- * Mineurs pour extraire `demand` fer par tour avec `machines` pompes à vapeur (00-Game
- * §7). Pompes rapportées aux mineurs qui exploitent ces cases à pleine
- * mécanisation (00-Game §6.2, même référence que les autres machines). Ne baisse
- * jamais quand `demand` monte.
- */
-export function minersFor(demand: number, machines: number): number {
-  const tiles = ironTilesFor(demand);
-  if (tiles === 0) return 0;
-  return Math.ceil((tiles * MILLI) / mechanization(MINING, fullMechanizationWorkers(MINING, tiles), machines));
-}
-
-/**
- * Ouvriers de la ligne de rang `rank` (1 pour la première) d'un groupe (00-Game
- * §8.1) : `W × (f + (1 − f) × a / (a + d × (rank − 1)))`, `W` = `workersPerLine`
- * du produit, `d` et `f` = `FACTORY.specialization` en fractions, `a = 1 − d − f`.
- * Rang 1 : `W` ; rang 2 : `W × (1 − d)` ; tend vers `W × f` sans l'atteindre.
- * Entiers, arrondi vers le bas (un coût sous le plancher n'arrive pas : `W × f` est entier).
- */
-export function workersForRank(good: ProductId, rank: number): number {
-  const { decayPercent: d, floorPercent: f } = FACTORY.specialization;
-  const a = 100 - d - f;
-  const den = a + d * (rank - 1);
-  return Math.floor((productConfig(good).workersPerLine * (f * den + (100 - f) * a)) / (100 * den));
-}
-
-/** Ouvriers des `count` premières lignes d'un groupe : somme de `workersForRank` pour les rangs 1 à `count`. */
-export function workersForLines(good: ProductId, count: number): number {
-  let sum = 0;
-  for (let rank = 1; rank <= count; rank++) sum += workersForRank(good, rank);
-  return sum;
-}
-
-/**
- * Demande de tracteurs (`b` = TRACTOR) ou de bateaux de pêche (FISHING_BOAT) si `people` personnes se répartissent entre les
- * champs et la pêche (00-Game §4, §6.2, §8.2) : machines d'une mécanisation totale (référence × m_max), la référence
- * étant les disponibles de l'activité plus le report de l'autre, comme dans `allocate`. Les machines du report sont
- * les effectives.
- */
-function fieldMachineDemand(p: Player, b: number, people: number): number {
-  const farmers = Math.floor((people * p.farmPercent) / 100);
-  const fishers = people - farmers;
-  const ref =
-    b === TRACTOR
-      ? machineReference(FARMING, farmers + Math.max(0, fishers - requiredWorkers(FISHING, fishers, p.goodsEffective[FISHING_BOAT]!, p.seaTiles)), p.farmTiles)
-      : machineReference(FISHING, fishers + Math.max(0, farmers - requiredWorkers(FARMING, farmers, p.goodsEffective[TRACTOR]!, p.farmTiles)), p.seaTiles);
-  const cfg = b === TRACTOR ? FARMING : FISHING;
-  return Math.ceil((ref * cfg.maxMachinesPer1000) / MILLI);
-}
-
-/**
- * Personnes qui iraient aux champs et à la pêche si toutes les lignes actives tournaient à 100 % (00-Game §4, §8.2) :
- * `people` moins les mineurs du fer de toutes les lignes actives (plafonné par les cases) et moins les ouvriers de
- * toutes les lignes de biens actives. Ne dépend pas des lignes qui tournent, qui dépendent elles-mêmes de la demande
- * de machines calculée sur ce nombre : pas de boucle, ni dans le tour ni d'un tour à l'autre. Sous-estime les fermiers
- * quand des lignes de biens actives ne tournent pas (choix de l'auteur, 5 novembre 2026).
- */
-function fieldPeopleIfAllActive(p: Player, people: number): number {
-  let iron = 0;
-  let goodsWorkers = 0;
-  for (const f of p.factories) {
-    for (const g of f.groups) {
-      iron += g.active * productConfig(g.good).ironPerLine;
-      if (armamentIndex(g.good) < 0) goodsWorkers += workersForLines(g.good, g.active);
-    }
-  }
-  const miners = minersFor(Math.min(iron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile), p.goodsEffective[MINING_MACHINE]!);
-  return Math.max(0, people - miners - goodsWorkers);
-}
-
-/** `n × ratio / RATIO_SCALE`, arrondi vers le bas : `n` entier, `ratio` sur l'échelle `RATIO_SCALE`. */
-export function scaledByRatio(n: number, ratio: number): number {
-  return Math.floor((n * ratio) / RATIO_SCALE);
-}
-
-interface LineRun {
-  /** Fer demandé par les lignes qui tournent. */
-  readonly iron: number;
-  /** Ouvriers demandés par les lignes qui tournent (`workersForRank` par rang). */
-  readonly workers: number;
-  /** La part des lignes de biens (tracteurs, bateaux, pompes) dans `iron` et `workers` : servies avant l'armement. */
-  readonly goodsIron: number;
-  readonly goodsWorkers: number;
-}
-
-/**
- * Lignes qui tournent (00-Game §8) : toutes les lignes actives, dans l'ordre des usines et des groupes, sauf les lignes
- * de tracteurs, bateaux ou pompes dont la production à 100 % de productivité, avec les lignes déjà retenues, couvre déjà
- * la demande `demand` (00-Game §8.2) : elles ne tournent pas et ne consomment rien. L'ordre ne décide donc que de
- * laquelle de ces lignes en trop est écartée. Écrit `running` dans les groupes.
- */
-function selectLines(p: Player, demand: readonly number[]): LineRun {
-  let iron = 0;
-  let workers = 0;
-  let goodsIron = 0;
-  let goodsWorkers = 0;
-  const produced = new Array<number>(p.goods.length).fill(0);
-  for (const f of p.factories) {
-    for (const g of f.groups) {
-      const { ironPerLine } = productConfig(g.good);
-      const b = armamentIndex(g.good) < 0 ? goodIndex(g.good) : -1;
-      g.running = 0;
-      for (let j = 0; j < g.active; j++) {
-        if (b >= 0 && produced[b]! >= demand[b]!) break;
-        g.running++;
-        if (b >= 0) produced[b] = produced[b]! + GOODS[g.good as GoodId].productionPerLine;
-      }
-      const groupWorkers = workersForLines(g.good, g.running);
-      iron += g.running * ironPerLine;
-      workers += groupWorkers;
-      if (b >= 0) {
-        goodsIron += g.running * ironPerLine;
-        goodsWorkers += groupWorkers;
-      }
-    }
-  }
-  return { iron, workers, goodsIron, goodsWorkers };
-}
-
-/**
- * Production des lignes qui tournent (00-Game §8, §8.3), à la productivité de sa catégorie (`p.goodsLineRatio` pour les biens, `p.armLineRatio` pour l'armement) : les biens vont dans
- * `p.goods` (les machines du tour suivant), à chaque tour ; l'armement dans les
- * réserves, seulement quand `second` est vrai (une fois par seconde). La production fractionnaire reste dans
- * `goodsRemainder` (échelle `RATIO_SCALE`) et `armamentProductionRemainder` (3 600es d'exemplaire × `RATIO_SCALE`) ;
- * les exemplaires entiers passent dans `goods` et dans la réserve. Puis
- * progression du déblocage (00-Game §8.2) ; puis déclin de l'excès au-dessus du
- * stock cible, avec son reste. La production ne s'arrête jamais (00-Game §8.3).
- * `deployed` : équipement des divisions, par type d'armement ; il compte dans le
- * stock, mais le déclin ne retire que l'équipement hors des divisions
- * (05-Fronts §4.5).
- */
-function produce(p: Player, deployed: readonly number[], second: boolean): void {
-  const made = new Array<number>(p.goods.length).fill(0);
-  for (const f of p.factories) {
-    for (const g of f.groups) {
-      if (g.running === 0) continue;
-      const a = armamentIndex(g.good);
-      if (a < 0) made[goodIndex(g.good)] = made[goodIndex(g.good)]! + g.running * GOODS[g.good as GoodId].productionPerLine;
-      else if (second) p.armamentProductionRemainder[a] = p.armamentProductionRemainder[a]! + g.running * ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerHour * p.armLineRatio;
-    }
-    // Déblocage : + (lignes du bien qui tournent × productivité), donc proportionnel à sa production dans l'usine.
-    const tree = FACTORY_TYPES[f.type].tree;
-    for (let i = 0; i < tree.length; i++) {
-      let running = 0;
-      for (const g of f.groups) if (g.good === tree[i]!.good) running += g.running;
-      if (running === 0) continue;
-      const total = f.progressRemainder[i]! + running * (armamentIndex(tree[i]!.good) < 0 ? p.goodsLineRatio : p.armLineRatio);
-      const whole = Math.floor(total / RATIO_SCALE);
-      f.progressRemainder[i] = total - whole * RATIO_SCALE;
-      f.progress[i] = Math.min(FACTORY.unlockTurns, f.progress[i]! + whole);
-    }
-  }
-  for (let b = 0; b < p.goods.length; b++) {
-    const total = p.goodsRemainder[b]! + made[b]! * p.goodsLineRatio;
-    const whole = Math.floor(total / RATIO_SCALE);
-    p.goods[b] = whole;
-    p.goodsRemainder[b] = total - whole * RATIO_SCALE;
-  }
-  if (second) {
-    for (let a = 0; a < ARMAMENT_IDS.length; a++) {
-      const units = Math.floor(p.armamentProductionRemainder[a]! / (3600 * RATIO_SCALE));
-      p.armamentReserve[a] = p.armamentReserve[a]! + units;
-      p.armamentProductionRemainder[a] = p.armamentProductionRemainder[a]! - units * 3600 * RATIO_SCALE;
-    }
-  }
-  growLines(p);
-  for (let a = 0; a < ARMAMENT_IDS.length; a++) {
-    const excess = Math.max(0, p.armamentReserve[a]! + deployed[a]! - armamentReserveMax(p, ARMAMENT_IDS[a]!));
-    if (excess === 0) {
-      p.armamentRemainder[a] = 0;
-      continue;
-    }
-    const total = p.armamentRemainder[a]! + excess * ARMAMENT.decayRate;
-    const lost = Math.floor(total / CURVE_SCALE);
-    if (lost > p.armamentReserve[a]!) {
-      // Le déclin ne retire que l'équipement non déployé : le stock non déployé tombe à zéro.
-      p.armamentReserve[a] = 0;
-      p.armamentRemainder[a] = 0;
-      continue;
-    }
-    p.armamentRemainder[a] = total - lost * CURVE_SCALE;
-    p.armamentReserve[a] = p.armamentReserve[a]! - lost;
-  }
-}
-
-/**
- * Valeur effective des biens (00-Game §12) : monte tout de suite à la production
- * du tour ; sinon, aux tours de baisse (`decay`), elle perd le plus grand de
- * `GOODS_DECAY.minUnits` et de `percent` % d'elle-même (arrondi vers le bas), sans
- * passer sous la production. Les machines que la mécanisation utilise au tour
- * suivant sont les effectives, pas les produites.
- */
-function settleGoods(p: Player, decay: boolean): void {
-  for (let b = 0; b < p.goods.length; b++) {
-    const made = p.goods[b]!;
-    const kept = p.goodsEffective[b]!;
-    if (made >= kept) p.goodsEffective[b] = made;
-    else if (decay) {
-      const step = Math.max(GOODS_DECAY.minUnits, Math.floor((kept * GOODS_DECAY.percent) / 100));
-      p.goodsEffective[b] = Math.max(made, kept - step);
-    }
-  }
-}
-
-/**
- * Croissance automatique des lignes de biens (00-Game §8.2) : un groupe dont toutes
- * les lignes sont actives et tournent ce tour, quelle que soit leur productivité (provisoire),
- * avance d'autant de tours-lignes qu'il a de lignes
- * (proportionnel à sa production, comme le déblocage) ; à `FACTORY.growthTurns`
- * tours-lignes, il gagne une ligne active et le dépassement reste dans le
- * compteur. Il n'avance pas
- * quand la capacité du joueur pour ce bien (toutes ses lignes × production par
- * ligne) couvre déjà la demande (`goodsDemand`). L'armement ne grandit pas tout
- * seul : sa demande attend les armées.
- */
-function growLines(p: Player): void {
-  const capacity = new Array<number>(p.goods.length).fill(0);
-  for (const f of p.factories) {
-    for (const g of f.groups) {
-      if (armamentIndex(g.good) < 0) capacity[goodIndex(g.good)] += g.lines * GOODS[g.good as GoodId].productionPerLine;
-    }
-  }
-  for (const f of p.factories) {
-    for (const g of f.groups) {
-      if (armamentIndex(g.good) >= 0) continue;
-      const b = goodIndex(g.good);
-      if (capacity[b]! >= p.goodsDemand[b]! || g.running < g.lines) continue;
-      g.growth += g.lines;
-      if (g.growth < FACTORY.growthTurns) continue;
-      g.growth -= FACTORY.growthTurns;
-      g.lines++;
-      g.active++;
-      capacity[b] = capacity[b]! + GOODS[g.good as GoodId].productionPerLine;
-    }
-  }
-}
-
-/** Productivités d'une catégorie de lignes (`RATIO_SCALE`) : fer, ouvriers, et leur minimum. */
-interface Ratios {
-  readonly iron: number;
-  readonly worker: number;
-  readonly line: number;
-}
-
-/** `min(1, disponible / demandé)` sur l'échelle `RATIO_SCALE` ; 100 % sans demande. */
-function ratioOf(available: number, demanded: number): number {
-  return demanded === 0 ? RATIO_SCALE : Math.min(RATIO_SCALE, Math.floor((Math.max(0, available) * RATIO_SCALE) / demanded));
-}
-
-/** Productivité d'une catégorie qui demande `iron` fer et `workers` ouvriers, sur `ironLeft` fer et `workersLeft` ouvriers. */
-function ratiosFor(iron: number, workers: number, ironLeft: number, workersLeft: number): Ratios {
-  const ironRatio = ratioOf(ironLeft, iron);
-  const worker = ratioOf(workersLeft, workers);
-  return { iron: ironRatio, worker, line: Math.min(ironRatio, worker) };
-}
-
-interface Allocation {
-  readonly farm: Harvest;
-  readonly sea: Harvest;
-  /** Tracteurs et bateaux demandés par les fermiers et pêcheurs répartis (-1 pour les autres biens). */
-  readonly fieldDemand: readonly number[];
-  readonly lines: LineRun;
-  /** Mineurs : ceux qu'il faut pour le fer demandé, plafonné par les cases de fer, ou autant que le reste de la population en offre. */
-  readonly miners: number;
-  readonly extracted: number;
-  /** Ouvriers employés : demandés × productivité. */
-  readonly factoryWorkers: number;
-  readonly ironConsumed: number;
-  readonly goods: Ratios;
-  readonly arm: Ratios;
-  /** Personnes sans emploi. */
-  readonly idle: number;
-}
-
-/**
- * Répartition de `people` personnes (00-Game §4) : les mineurs du fer que demandent les lignes qui tournent d'abord ; puis
- * les ouvriers des lignes de biens ; puis fermiers et pêcheurs, selon le réglage du joueur, avec le report de l'un à
- * l'autre ; puis les ouvriers de l'armement ; le reste est inactif. Les lignes de biens tournent à une productivité
- * commune, celles d'armement à la leur, sur ce que les biens et les champs ont laissé (00-Game §8). Ne change que
- * `running` des groupes de lignes (recalculé à chaque appel).
- */
-function allocate(p: Player, people: number): Allocation {
-  // Demande des lignes utiles : tracteurs et bateaux, ceux des personnes qui peuvent aller aux champs et à la pêche ;
-  // pompes, celle du tour précédent.
-  const fieldDemand = new Array<number>(p.goods.length).fill(-1);
-  const fieldPeopleEstimate = fieldPeopleIfAllActive(p, people);
-  fieldDemand[TRACTOR] = fieldMachineDemand(p, TRACTOR, fieldPeopleEstimate);
-  fieldDemand[FISHING_BOAT] = fieldMachineDemand(p, FISHING_BOAT, fieldPeopleEstimate);
-  const demand = p.goodsDemand.map((d, b) => (fieldDemand[b]! >= 0 ? fieldDemand[b]! : d));
-  const lines = selectLines(p, demand);
-  // Mineurs d'abord (auteur, 4 novembre 2026) : ceux du fer que demandent les lignes qui tournent, plafonné par la capacité
-  // des cases ; faute de monde, le fer extrait baisse en proportion.
-  const capped = Math.min(lines.iron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile);
-  const needed = minersFor(capped, p.goodsEffective[MINING_MACHINE]!);
-  const miners = Math.min(needed, people);
-  const extracted = needed === 0 ? 0 : Math.floor((capped * miners) / needed);
-  // Puis les ouvriers des lignes de biens (auteur, 4 novembre 2026), avant les champs : ils prennent leur part du fer
-  // extrait et des personnes qui restent.
-  const goods = ratiosFor(lines.goodsIron, lines.goodsWorkers, extracted, people - miners);
-  const goodsIronUsed = scaledByRatio(lines.goodsIron, goods.line);
-  const goodsWorkersUsed = scaledByRatio(lines.goodsWorkers, goods.line);
-  const fieldPeople = people - miners - goodsWorkersUsed;
-  const tractors = p.goodsEffective[TRACTOR]!;
-  const fishingBoats = p.goodsEffective[FISHING_BOAT]!;
-  const availableFarmers = Math.floor((fieldPeople * p.farmPercent) / 100);
-  const availableFishers = fieldPeople - availableFarmers;
-  // Report (00-Game §4) : les disponibles en trop d'un côté vont à l'autre, jusqu'à ce qu'il soit plein. Le réglage ne
-  // joue que si la population manque.
-  const spareFarmers = Math.max(0, availableFarmers - requiredWorkers(FARMING, availableFarmers, tractors, p.farmTiles));
-  const spareFishers = Math.max(0, availableFishers - requiredWorkers(FISHING, availableFishers, fishingBoats, p.seaTiles));
-  const farm = harvest(FARMING, availableFarmers, tractors, p.farmTiles, p.fertilitySum, spareFishers);
-  // Rendement total de l'eau = cases × rendement d'une case (millièmes), arrondi à l'unité.
-  const seaYield = Math.floor((p.seaTiles * waterYieldMilli(machineReference(FISHING, availableFishers + spareFarmers, p.seaTiles), fishingBoats)) / MILLI);
-  const sea = harvest(FISHING, availableFishers, fishingBoats, p.seaTiles, seaYield, spareFarmers);
-  const available = fieldPeople - farm.workers - sea.workers;
-  // L'armement en dernier (00-Game §8) : le fer que les biens ont laissé et les personnes que les champs ont laissées.
-  const arm = ratiosFor(lines.iron - lines.goodsIron, lines.workers - lines.goodsWorkers, extracted - goodsIronUsed, available);
-  const armWorkersUsed = scaledByRatio(lines.workers - lines.goodsWorkers, arm.line);
-  const factoryWorkers = goodsWorkersUsed + armWorkersUsed;
-  return {
-    farm,
-    sea,
-    fieldDemand,
-    lines,
-    miners,
-    extracted,
-    factoryWorkers,
-    ironConsumed: goodsIronUsed + scaledByRatio(lines.iron - lines.goodsIron, arm.line),
-    goods,
-    arm,
-    idle: available - armWorkersUsed,
-  };
-}
-
-/**
- * Personnes que le pays emploie s'il y consacre toute sa population : fermiers, pêcheurs, mineurs et ouvriers. Ce qui est
- * en plus est inactif (00-Game §4).
- */
-export function workersNeeded(p: Player): number {
-  const a = allocate(p, p.population);
-  return a.farm.workers + a.sea.workers + a.miners + a.factoryWorkers;
-}
-
-/**
- * Étape d'un joueur (00-Game §4, §4.1, §6, §7, §8) : répartition en fermiers et pêcheurs, mineurs puis ouvriers, récolte,
- * production, nourriture, croissance avec reste. Les résultats sont calculés sur
- * la population du début de l'étape, puis la croissance la change. Les machines
- * utilisées sont les effectives, qui suivent la production du tour précédent
- * (00-Game §12).
- */
-function stepPlayer(p: Player, deployed: readonly number[], decay: boolean, second: boolean, heal: boolean): void {
-  // Les hommes des divisions comptent dans la population mais ne travaillent pas (00-Game §4, point 5) : la répartition
-  // se fait sur le reste, blessés exclus (00-Game §4.2). En mobilisation forcée, le renfort des divisions est déjà passé
-  // avant (05-Fronts §4.3).
-  const people = Math.max(0, p.population - p.soldiers - p.hurt);
-  const a = allocate(p, people);
-  const { farm, sea } = a;
-
-  p.farmers = farm.workers;
-  p.fishers = sea.workers;
-  p.idle = a.idle;
-  p.cultivated = farm.area;
-  p.farmMechanization = farm.mechanization;
-  p.fished = sea.area;
-  p.fishMechanization = sea.mechanization;
-  p.wheat = farm.yield;
-  p.fish = sea.yield;
-  p.food = Math.max(p.wheat + p.fish, FOOD.minimum);
-  p.factoryWorkers = a.factoryWorkers;
-  p.miners = a.miners;
-  p.minedTiles = ironTilesFor(a.extracted);
-  // Celle de `minersFor` pour le fer extrait (00-Game §7).
-  p.mineMechanization = mechanization(MINING, fullMechanizationWorkers(MINING, p.minedTiles), p.goodsEffective[MINING_MACHINE]!);
-  p.ironExtracted = a.extracted;
-  p.ironDemanded = a.lines.iron;
-  p.ironConsumed = a.ironConsumed;
-  p.goodsIronRatio = a.goods.iron;
-  p.goodsWorkerRatio = a.goods.worker;
-  p.goodsLineRatio = a.goods.line;
-  p.armIronRatio = a.arm.iron;
-  p.armWorkerRatio = a.arm.worker;
-  p.armLineRatio = a.arm.line;
-  // Demande de machines : celles d'une mécanisation totale (référence × m_max, 00-Game §6.2). Tracteurs et bateaux :
-  // celle des fermiers et pêcheurs répartis, la même qui limite les lignes utiles et la croissance des lignes.
-  const full = (ref: number, per1000: number): number => Math.ceil((ref * per1000) / MILLI);
-  for (const b of [TRACTOR, FISHING_BOAT]) p.goodsDemand[b] = a.fieldDemand[b]!;
-  // Pompes : sur le fer demandé par toutes les lignes actives, pas sur le fer extrait.
-  // Sinon une usine de pompes seule, plafonnée à une demande nulle, n'extrairait
-  // jamais de fer et sa demande resterait nulle.
-  let requiredIron = 0;
-  for (const f of p.factories) for (const g of f.groups) requiredIron += g.active * productConfig(g.good).ironPerLine;
-  p.goodsDemand[MINING_MACHINE] = full(
-    fullMechanizationWorkers(MINING, ironTilesFor(Math.min(requiredIron, p.resourceTiles[IRON]! * RESOURCES.iron.capacityPerTile))),
-    MINING.maxMachinesPer1000,
-  );
-  produce(p, deployed, second);
-  settleGoods(p, decay);
-
-  // Croissance (00-Game §4.1) : le reste, en millionièmes de personne, garde la
-  // fraction d'un tour à l'autre. Les négatifs sont arrondis vers zéro (Math.trunc).
-  const surplus = p.food - p.population * POPULATION.foodPerHead;
-  p.growthRemainder += surplus * POPULATION.growthPerMillion;
-  const delta = Math.trunc(p.growthRemainder / GROWTH_SCALE);
-  const before = p.population;
-  p.population += delta;
-  p.growthRemainder -= delta * GROWTH_SCALE;
-  if (p.population < 0) {
-    p.population = 0;
-    p.growthRemainder = 0;
-  }
-  // Famine (00-Game §4.2) : les blessés baissent avec la population perdue, les soldats ne sont jamais retirés.
-  if (p.population < before) cutHurtOnLoss(p, before - p.population);
-  p.hurt = Math.min(p.hurt, Math.max(0, p.population - p.soldiers));
-  if (heal) healHurt(p);
-}
-
-/**
- * Perte de population `lost` par la famine (00-Game §4.2) : les blessés perdent `ceil(blessés × perte / (population −
- * soldats))`, au plus tous. La base est la population non soldat, seule touchée par la famine. `lost` ≥ 0 ; la population
- * a déjà baissé de `lost`.
- */
-function cutHurtOnLoss(p: Player, lost: number): void {
-  const base = p.population + lost - p.soldiers;
-  if (p.hurt === 0 || base <= 0) return;
-  p.hurt -= Math.min(p.hurt, Math.floor((p.hurt * lost + base - 1) / base));
-}
-
-/**
- * Guérison (00-Game §4.2) : chaque seconde, `max(hurtMinimum, floor(population / hurtDivisor))` blessés disparaissent, au plus
- * tous. Le plancher empêche une population presque entièrement blessée de rester sans main-d'œuvre. Ils quittent aussi la
- * population ; la croissance les remplace ensuite.
- */
-function healHurt(p: Player): void {
-  if (p.hurt === 0) return;
-  const healed = Math.min(p.hurt, Math.max(POPULATION.hurtMinimum, Math.floor(p.population / POPULATION.hurtDivisor)));
-  p.hurt -= healed;
-  p.population -= healed;
-}
+  ACTIVITY_DATA,
+  FARMERS,
+  FISHERS,
+  GOOD_COUNT,
+  HURT,
+  IDLE,
+  MACHINE_HOST,
+  MINERS,
+  activityOf,
+  divisionLimit,
+  machineCount,
+  machineLimit,
+  slotsOf,
+  takePawn,
+  unitsOf,
+  type Activity,
+} from "./activities.ts";
+import { removeEmptyBoxes } from "./breakthroughs.ts";
+import {
+  DIVISION_DATA,
+  STATE_SCALE,
+  addDivision,
+  currentTurn,
+  divisionCount,
+  eliteCap,
+  infantryCount,
+  inFormation,
+  type Division,
+} from "./divisions.ts";
+import { inCombat } from "./fronts.ts";
+import { IRON_INDEX } from "./map.ts";
+import type { GameState, Player } from "./state.ts";
 
 /** Étape de tous les joueurs, dans l'ordre des identifiants. Appelée par `applyTurn` après les ordres. */
 export function stepEconomy(state: GameState): void {
-  // Le tour que l'étape joue est `state.tick + 1` (`applyTurn` avance `tick` à la fin).
-  const turn = state.tick + 1;
-  const heal = turn % POPULATION.hurtEveryTurns === 0;
-  if (state.economyFrozen) {
-    // Partie de test : ni croissance, ni nourriture, ni production ; seule la guérison des blessés continue.
-    for (const p of state.players) {
-      p.hurt = Math.min(p.hurt, Math.max(0, p.population - p.soldiers));
-      if (heal) healHurt(p);
+  const turn = currentTurn(state);
+  for (const p of state.players) {
+    // Sans ville (avant la fondation, ou éliminé) : aucun bonhomme n'arrive, aucune division n'est produite (provisoire).
+    if (p.cityIds.length === 0) continue;
+    if (state.economyFrozen) {
+      // Partie de test : le bilan est calculé sans limite de fer, pour que les limites couvrent les divisions placées.
+      balance(p, true);
+    } else {
+      fixOverflow(p);
+      balance(p, false);
+      fillPlaces(state, p);
+      progressUnlock(p);
+      stepPopulation(p, turn);
+      stepMachines(p, turn);
+      stepDivisions(state, p, turn);
     }
+    healHurt(p, turn);
+    healDivisions(state, p);
+  }
+}
+
+// ---- places et trop-plein (08 §2.1) ----
+
+/**
+ * Places des activités de cases, recalculées ; le trop-plein retourne dans Inactifs, les bonshommes d'abord, puis les
+ * machines, chacun sur sa ligne (provisoire : 08 §2.1 ne dit pas lesquels partent en premier).
+ */
+function fixOverflow(p: Player): void {
+  for (const a of p.activities) {
+    const data = ACTIVITY_DATA[a.id]!;
+    a.slots = slotsOf(p, data);
+    if (!data.hasSlots) continue;
+    let excess = a.workers + a.machines - a.slots;
+    if (excess <= 0) continue;
+    const workers = Math.min(a.workers, excess);
+    a.workers -= workers;
+    activityOf(p, IDLE)!.workers += workers;
+    excess -= workers;
+    a.machines -= excess;
+    p.idleMachines[data.good] = p.idleMachines[data.good]! + excess;
+  }
+}
+
+// ---- capacité et fer (08 §3, §4) ----
+
+/**
+ * Bilan statique du joueur : surface agricole, blé, poisson, capacité de population, fer produit, puis le partage du fer
+ * (sortie de chaque usine et caserne). Ne change aucun compteur. `unlimitedIron` : partie de test, chaque
+ * boîte est servie comme s'il y avait assez de fer.
+ */
+function balance(p: Player, unlimitedIron: boolean): void {
+  for (const a of p.activities) {
+    a.output = 0;
+    a.ironUsed = 0;
+    a.slots = slotsOf(p, ACTIVITY_DATA[a.id]!);
+  }
+  const farm = activityOf(p, FARMERS)!;
+  const sea = activityOf(p, FISHERS)!;
+  const mine = activityOf(p, MINERS)!;
+  p.cultivated = Math.min(p.farmTiles, (farm.workers + farm.machines) * FARMING.tilesPerWorker);
+  p.wheat = p.farmTiles === 0 ? 0 : Math.floor((p.fertilitySum * p.cultivated) / p.farmTiles);
+  p.fished = Math.min(p.seaTiles, (sea.workers + sea.machines) * FISHING.tilesPerWorker);
+  p.fish = Math.floor((p.fished * FISHING.foodPerWorker) / FISHING.tilesPerWorker);
+  p.food = FOOD.base + FOOD.perCity * p.cityIds.length + p.wheat + p.fish;
+  p.capacity = Math.floor((p.food + POPULATION.foodPerPawn - 1) / POPULATION.foodPerPawn);
+  farm.output = p.wheat;
+  sea.output = p.fish;
+
+  p.minedTiles = Math.min(p.resourceTiles[IRON_INDEX]!, (mine.workers + mine.machines) * MINING.tilesPerWorker);
+  p.ironProduced = p.minedTiles * RESOURCES.iron.capacityPerTile;
+  mine.output = p.ironProduced;
+
+  // Malus proportionnel au manque de fer (08 §4) : chaque boîte garde la même part de ses unités, arrondie vers le bas.
+  const makers = p.activities.filter((a) => ACTIVITY_DATA[a.id]!.kind === "factory" || ACTIVITY_DATA[a.id]!.kind === "barracks");
+  let wanted = 0;
+  for (const a of makers) wanted += unitsOf(ACTIVITY_DATA[a.id]!, a.workers) * ACTIVITY_DATA[a.id]!.ironPerUnit;
+  p.ironWanted = wanted;
+  const short = !unlimitedIron && wanted > p.ironProduced;
+  let reserved = 0;
+  for (const a of makers) {
+    const data = ACTIVITY_DATA[a.id]!;
+    const units = unitsOf(data, a.workers);
+    a.output = short && data.ironPerUnit > 0 ? Math.floor((units * p.ironProduced) / wanted) : units;
+    a.ironUsed = a.output * data.ironPerUnit;
+    reserved += a.ironUsed;
+  }
+  // Ce que l'arrondi laisse va aux boîtes du haut, unité par unité : sinon une boîte d'une seule unité n'aurait rien.
+  if (short) {
+    for (const a of makers) {
+      const data = ACTIVITY_DATA[a.id]!;
+      if (data.ironPerUnit === 0) continue;
+      const more = Math.min(unitsOf(data, a.workers) - a.output, Math.floor((p.ironProduced - reserved) / data.ironPerUnit));
+      a.output += more;
+      a.ironUsed += more * data.ironPerUnit;
+      reserved += more * data.ironPerUnit;
+    }
+  }
+  p.ironReserved = reserved;
+}
+
+// ---- casernes et auto-assignation (08 §7, §7 bis) ----
+
+/**
+ * Deux passes, de haut en bas. D'abord chaque boîte rend ce qu'elle a en trop : les ouvriers au-delà des places choisies ;
+ * avec l'auto-assignation, les machines d'Inactifs entrent sur les postes non barrés et les ouvriers en trop sortent. Puis
+ * les inactifs remplissent les places vides, et avec l'auto-assignation les postes non barrés. Un ouvrier sorti d'une boîte
+ * peut donc rejoindre une boîte plus haute ou plus basse. Enfin, avec l'auto-assignation, une boîte qui a encore de la
+ * place prend les ouvriers des boîtes plus basses, la plus basse d'abord (08 §7 bis).
+ */
+function fillPlaces(state: GameState, p: Player): void {
+  const idle = activityOf(p, IDLE)!;
+  for (const a of p.activities) {
+    const data = ACTIVITY_DATA[a.id]!;
+    if (data.hasPlaces) {
+      // Élites : au plus une division pour `ELITE_TROOPS_RATIO` divisions d'infanterie (08 §5).
+      if (DIVISION_DATA[data.division]!.elite) a.places = Math.min(a.places, eliteCap(infantryCount(state, p.id)) * data.workersPerUnit);
+      a.disabled = Math.min(a.disabled, a.places);
+      const allowed = a.places - (p.autoAssign ? a.disabled : 0);
+      if (a.workers > allowed) {
+        idle.workers += a.workers - allowed;
+        a.workers = allowed;
+      }
+    }
+    if (!data.hasSlots) continue;
+    a.disabled = Math.min(a.disabled, a.slots);
+    if (!p.autoAssign) continue;
+    const usable = a.slots - a.disabled;
+    if (data.kind !== "factory" && p.idleMachines[data.good]! > 0) {
+      const moved = Math.max(0, Math.min(p.idleMachines[data.good]!, usable - a.machines));
+      p.idleMachines[data.good] = p.idleMachines[data.good]! - moved;
+      a.machines += moved;
+    }
+    if (data.kind !== "factory" && a.machines > usable) {
+      p.idleMachines[data.good] = p.idleMachines[data.good]! + a.machines - usable;
+      a.machines = usable;
+    }
+    const excess = Math.min(a.workers, Math.max(0, a.workers + a.machines - usable));
+    a.workers -= excess;
+    idle.workers += excess;
+  }
+  const roomIn = (a: Activity): number => {
+    const data = ACTIVITY_DATA[a.id]!;
+    if (data.hasPlaces) return a.places - (p.autoAssign ? a.disabled : 0) - a.workers;
+    return data.hasSlots && p.autoAssign ? a.slots - a.disabled - a.workers - a.machines : 0;
+  };
+  for (const a of p.activities) {
+    const moved = Math.min(roomIn(a), idle.workers);
+    if (moved <= 0) continue;
+    a.workers += moved;
+    idle.workers -= moved;
+  }
+  if (!p.autoAssign) return;
+  const list = p.activities;
+  let bottom = list.length - 1;
+  for (let i = 0; i < bottom; i++) {
+    let room = roomIn(list[i]!);
+    while (room > 0 && bottom > i) {
+      const from = list[bottom]!;
+      const data = ACTIVITY_DATA[from.id]!;
+      if (from.workers === 0 || (!data.hasSlots && !data.hasPlaces)) {
+        bottom--;
+        continue;
+      }
+      const moved = Math.min(room, from.workers);
+      from.workers -= moved;
+      list[i]!.workers += moved;
+      room -= moved;
+    }
+  }
+}
+
+// ---- déblocage (08 §9) ----
+
+/**
+ * Chaque activité verrouillée gagne, par tour, les ouvriers de son parent dont la production est servie en fer
+ * (sortie × ouvriers par unité), jusqu'à son coût. Le joueur l'ouvre ensuite (`open_activity`, 08 §9). Parcours dans l'ordre de la table.
+ */
+function progressUnlock(p: Player): void {
+  for (const data of ACTIVITY_DATA) {
+    if (data.parent < 0 || p.unlock[data.index]! >= data.unlockCost) continue;
+    const parent = activityOf(p, data.parent);
+    if (parent === undefined) continue;
+    if (data.unlockByPopulation) {
+      p.unlock[data.index] = Math.min(data.unlockCost, Math.max(p.unlock[data.index]!, p.population));
+      continue;
+    }
+    if (data.unlockByWorkers) {
+      p.unlock[data.index] = Math.min(data.unlockCost, Math.max(p.unlock[data.index]!, parent.workers));
+      continue;
+    }
+    const from = ACTIVITY_DATA[data.parent]!;
+    const served = Math.ceil((parent.output * from.workersPerUnit) / from.unitsPerWorker);
+    p.unlock[data.index] = Math.min(data.unlockCost, p.unlock[data.index]! + served);
+  }
+}
+
+// ---- apparitions et disparitions (08 §6) ----
+
+/**
+ * Compteurs d'un type d'unité pour `existing` unités et la limite `limit` : les unités en trop ont chacune un compteur de
+ * disparition, les unités manquantes chacune un compteur d'apparition. Quand l'écart se referme, le compteur le plus
+ * récent (la dernière valeur des tableaux triés) est annulé (provisoire). Les deux tableaux restent triés : un compteur
+ * ajouté finit toujours après les autres.
+ */
+function adjustCounters(arrivals: number[], leaves: number[], existing: number, limit: number, turn: number, arrivalTurns: number, leaveTurns: number): void {
+  const excess = Math.max(0, existing - limit);
+  while (leaves.length > excess) leaves.pop();
+  while (leaves.length < excess) leaves.push(turn + leaveTurns);
+  const missing = Math.max(0, limit - existing);
+  while (arrivals.length > missing) arrivals.pop();
+  while (arrivals.length < missing) arrivals.push(turn + arrivalTurns);
+}
+
+/** Retire un bonhomme (08 §6) : Inactifs d'abord, puis de l'activité la plus basse vers le haut, Blessés tout à la fin. Une caserne perd aussi sa place. */
+function removePawn(p: Player): void {
+  const a = takePawn(p);
+  if (a !== undefined) {
+    if (ACTIVITY_DATA[a.id]!.hasPlaces) a.places--;
     return;
   }
-  // Les hommes des divisions ne retournent jamais d'eux-mêmes à l'économie (05-Fronts §3.5) : il faut supprimer la division.
-  const decay = turn % GOODS_DECAY.everyTurns === 0;
-  const second = turn % ARMAMENT.everyTurns === 0;
-  for (const p of state.players) stepPlayer(p, divisionEquipment(state, p.id), decay, second, heal);
+  const hurt = activityOf(p, HURT)!;
+  if (hurt.workers === 0) return;
+  hurt.workers--;
+  p.population--;
+}
+
+function stepPopulation(p: Player, turn: number): void {
+  while (p.popArrivals.length > 0 && p.popArrivals[0]! <= turn) {
+    p.popArrivals.shift();
+    if (p.population < p.capacity) {
+      p.population++;
+      activityOf(p, IDLE)!.workers++;
+    }
+  }
+  while (p.popLeaves.length > 0 && p.popLeaves[0]! <= turn) {
+    p.popLeaves.shift();
+    if (p.population > p.capacity) removePawn(p);
+  }
+  adjustCounters(p.popArrivals, p.popLeaves, p.population, p.capacity, turn, POPULATION.arrivalTurns, POPULATION.leaveTurns);
+}
+
+/** Machines, bien par bien : une machine en trop part de sa ligne d'Inactifs, puis de son activité ; une nouvelle arrive dans Inactifs. */
+function stepMachines(p: Player, turn: number): void {
+  for (let g = 0; g < GOOD_COUNT; g++) {
+    const arrivals = p.machineArrivals[g]!;
+    const leaves = p.machineLeaves[g]!;
+    const limit = machineLimit(p, g);
+    while (arrivals.length > 0 && arrivals[0]! <= turn) {
+      arrivals.shift();
+      if (machineCount(p, g) < limit) p.idleMachines[g] = p.idleMachines[g]! + 1;
+    }
+    while (leaves.length > 0 && leaves[0]! <= turn) {
+      leaves.shift();
+      if (machineCount(p, g) > limit) {
+        const host = activityOf(p, MACHINE_HOST[g]!);
+        if (p.idleMachines[g]! > 0) p.idleMachines[g] = p.idleMachines[g]! - 1;
+        else if (host !== undefined && host.machines > 0) host.machines--;
+      }
+    }
+    adjustCounters(arrivals, leaves, machineCount(p, g), limit, turn, GOODS_TIMING.arrivalTurns, GOODS_TIMING.leaveTurns);
+  }
+}
+
+/**
+ * Ordre dans lequel les divisions en trop sont choisies (08 §6, provisoire) : d'abord celles en formation, puis les plus
+ * abîmées, puis le plus grand identifiant.
+ */
+function leaveOrder(state: GameState): (a: Division, b: Division) => number {
+  return (a, b) => Number(inFormation(state, b)) - Number(inFormation(state, a)) || a.state - b.state || b.id - a.id;
+}
+
+/** Divisions, type par type (08 §6) : sursis ajustés à l'excédent, disparitions échues, création des divisions manquantes. */
+function stepDivisions(state: GameState, p: Player, turn: number): void {
+  const choose = leaveOrder(state);
+  let removed = false;
+  for (let t = 0; t < DIVISION_DATA.length; t++) {
+    const limit = divisionLimit(state, p, t);
+    const mine = state.divisions.filter((d) => d.owner === p.id && d.type === t);
+    const excess = Math.max(0, mine.length - limit);
+    const marked = mine.filter((d) => d.leaveTick !== 0);
+    if (marked.length > excess) {
+      // Le compteur le plus récent est annulé : le plus grand tour de fin, à égalité le dernier dans l'ordre de choix.
+      marked.sort((a, b) => b.leaveTick - a.leaveTick || choose(b, a));
+      for (const d of marked.slice(0, marked.length - excess)) d.leaveTick = 0;
+    } else if (marked.length < excess) {
+      const free = mine.filter((d) => d.leaveTick === 0).sort(choose);
+      for (const d of free.slice(0, excess - marked.length)) d.leaveTick = turn + DIVISION_TIMING.leaveTurns;
+    }
+    const gone = mine.filter((d) => d.leaveTick !== 0 && d.leaveTick <= turn);
+    if (gone.length > 0) {
+      const ids = new Set(gone.map((d) => d.id));
+      state.divisions = state.divisions.filter((d) => !ids.has(d.id));
+      removed = true;
+    }
+    // Un joueur éliminé n'arrive pas ici (sans ville) ; les nouvelles divisions naissent pleines, en formation.
+    for (let n = divisionCount(state, p.id, t); n < divisionLimit(state, p, t); n++) {
+      addDivision(state, p.id, t, turn + DIVISION_DATA[t]!.productionTurns);
+    }
+  }
+  if (removed) removeEmptyBoxes(state);
+}
+
+// ---- soin (08 §5, §8) ----
+
+/**
+ * Soin d'un blessé à la fois (08 §8) : `min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population))` tours, calculés
+ * au démarrage. À la fin, le bonhomme passe dans Inactifs (provisoire). Le compteur démarre quand aucun soin n'est en cours
+ * et que Blessés n'est pas vide.
+ */
+function healHurt(p: Player, turn: number): void {
+  const hurt = activityOf(p, HURT)!;
+  if (p.hurtHealEnd !== 0 && turn >= p.hurtHealEnd) {
+    p.hurtHealEnd = 0;
+    if (hurt.workers > 0) {
+      hurt.workers--;
+      activityOf(p, IDLE)!.workers++;
+    }
+  }
+  if (hurt.workers === 0) {
+    p.hurtHealEnd = 0;
+    return;
+  }
+  if (p.hurtHealEnd === 0) {
+    const turns = Math.min(POPULATION.hurtHealMaxTurns, Math.floor(POPULATION.hurtHealTurnsTimesPop / Math.max(1, p.population)));
+    p.hurtHealEnd = turn + Math.max(1, turns);
+  }
+}
+
+/**
+ * Soin des divisions abîmées (08 §5) : hors combat, tant que le joueur a une limite pour leur type, toutes en même temps.
+ * Une division en trop (en sursis) ne se soigne pas. Hors combat : ni dans une percée, ni sur un front en combat.
+ */
+function healDivisions(state: GameState, p: Player): void {
+  const gain = Math.floor((COMBAT.healPercentPerSecond * STATE_SCALE) / (100 * COMBAT.turnsPerSecond));
+  if (gain <= 0) return;
+  const fighting = new Set<number>();
+  for (const f of state.fronts) if (inCombat(state, f)) fighting.add(f.id);
+  const limits = new Map<number, number>();
+  for (const d of state.divisions) {
+    if (d.owner !== p.id || d.leaveTick !== 0 || d.state >= STATE_SCALE || d.breakthrough !== 0 || fighting.has(d.front)) continue;
+    let limit = limits.get(d.type);
+    if (limit === undefined) {
+      limit = divisionLimit(state, p, d.type);
+      limits.set(d.type, limit);
+    }
+    if (limit > 0) d.state = Math.min(STATE_SCALE, d.state + gain);
+  }
 }

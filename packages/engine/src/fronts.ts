@@ -36,8 +36,8 @@ export interface FrontSide {
    */
   attackAt: number;
   /**
-   * Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `NICHE_IDS`, 05-Fronts §11.4) ;
-   * remis à 0 à chaque round.
+   * État perdu (échelle `STATE_SCALE`) par sa première ligne au dernier combat, par niche (ordre de `NICHE_IDS`, 05-Fronts §11.4) ;
+   * remis à 0 au début de chaque combat.
    */
   lastLossByNiche: number[];
 }

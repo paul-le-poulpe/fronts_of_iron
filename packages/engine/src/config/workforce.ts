@@ -1,32 +1,37 @@
-// Population, nourriture, et les activités qui emploient la population :
-// agriculture, pêche, extraction (Docs/Design/00-Game.md §4 à §7). Valeurs
-// d'essai, pas des valeurs fixées, sauf mention contraire.
+// Population en bonshommes, nourriture, agriculture, pêche, extraction (Docs/Design/08-Population.md §1 à §8).
+// Valeurs d'essai, pas des valeurs fixées, sauf mention contraire.
 
 export const POPULATION = {
-  /** Population donnée au joueur par la fondation de sa première ville. */
-  initial: 1000,
-  /** `consommation_par_tête` : nourriture consommée par personne et par tour. */
-  foodPerHead: 1,
-  /** `taux_de_croissance`, en millionièmes : personnes gagnées par tour = nourriture restante × growthPerMillion / 1 000 000. */
-  growthPerMillion: 5000,
-  /**
-   * Intervalle de la guérison des blessés (00-Game §4.2), en tours : 20 tours = 2 secondes (auteur, 5 novembre 2026 :
-   * guérison deux fois plus lente ; 10 avant).
-   */
-  hurtEveryTurns: 20,
-  /**
-   * Dénominateur de la guérison des blessés (00-Game §4.2) : toutes les `hurtEveryTurns` tours, `max(hurtMinimum,
-   * floor(population / hurtDivisor))` blessés disparaissent. 5 000 : 10 % de la population en 1 000 s ; valeur donnée par l'auteur.
-   */
-  hurtDivisor: 5000,
-  /** Plancher de la guérison des blessés (00-Game §4.2) : à chaque guérison (toutes les 2 s), au moins 5 blessés disparaissent (auteur). */
-  hurtMinimum: 5,
+  /** Bonshommes donnés au joueur par la fondation de sa première ville (08 §10). */
+  initial: 1,
+  /** Habitants de l'ancienne échelle qu'un bonhomme représente : sert à convertir le coût d'une ville (08 §10). */
+  inhabitantsPerPawn: 1000,
+  /** Nourriture consommée par un bonhomme : capacité = ceil(nourriture / foodPerPawn) (08 §3). */
+  foodPerPawn: 1000,
+  /** Tours avant qu'un bonhomme apparaisse dans Inactifs, quand la capacité dépasse la population (08 §6). À fixer. */
+  arrivalTurns: 50,
+  /** Tours avant qu'un bonhomme en trop disparaisse (08 §6). À fixer. */
+  leaveTurns: 100,
+  /** `hurtHealTurnsTimesPop` : tours de soin d'un blessé = min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population)) (08 §8). */
+  hurtHealTurnsTimesPop: 100_000,
+  /** Durée maximale de soin d'un blessé, en tours (08 §8). */
+  hurtHealMaxTurns: 4000,
 } as const;
 
-/** Nourriture (00-Game §6.5). */
+/** Délais des machines (tracteurs, bateaux de pêche, pompes), beaucoup plus courts que ceux des divisions (08 §6). À fixer. */
+export const GOODS_TIMING = {
+  /** Tours avant qu'une machine apparaisse dans sa ligne d'Inactifs. */
+  arrivalTurns: 10,
+  /** Tours avant qu'une machine en trop disparaisse. */
+  leaveTurns: 20,
+} as const;
+
+/** Nourriture (08 §3). */
 export const FOOD = {
-  /** Nourriture minimale par tour d'un joueur, même sans fermier ni terre. 1 500 : valeur donnée par l'auteur. */
-  minimum: 1500,
+  /** Production de base d'un joueur, quelles que soient ses villes : 1 000, valeur de l'auteur. */
+  base: 1000,
+  /** Production de chaque ville : 500, valeur de l'auteur. Une seule ville donne donc 1 500 au total. */
+  perCity: 500,
 } as const;
 
 /** Fertilité sur la carte (00-Game §2), de 0 à 10. */
@@ -35,54 +40,21 @@ export const FERTILITY = {
   land: 5,
 } as const;
 
-/**
- * Réglages d'une activité mécanisée (00-Game §6.2, §6.3). Mécanisation en
- * millièmes de case par travailleur ; machines par millier de travailleurs.
- */
-export interface MechanizationConfig {
-  /** `M_base` : millièmes de case par travailleur sans machine (≥ 1). */
-  readonly mechanizationBase: number;
-  /** `M_max` : millièmes de case par travailleur à pleine mécanisation (≥ M_base). */
-  readonly mechanizationMax: number;
-  /** `m_max` : machines pour 1 000 travailleurs au-delà desquelles la mécanisation n'augmente plus (≥ 1). */
-  readonly maxMachinesPer1000: number;
-  /** `n` de la courbe f(x) = 1 − (1 − x)ⁿ, entier ≥ 1. */
-  readonly curveExponent: number;
-}
+/** Agriculture (08 §2.1, §3) : cases cultivées par travailleur (bonhomme ou tracteur). */
+export const FARMING = {
+  /** 0,3 case par personne de l'ancienne échelle. */
+  tilesPerWorker: 300,
+} as const;
 
-/** Agriculture (00-Game §6.2) : tracteurs. */
-export const FARMING: MechanizationConfig = {
-  mechanizationBase: 300,
-  mechanizationMax: 1500,
-  maxMachinesPer1000: 100,
-  curveExponent: 2,
-};
+/** Pêche (08 §2.1, §3) : cases pêchées par travailleur (bonhomme ou bateau). */
+export const FISHING = {
+  tilesPerWorker: 300,
+  /** Nourriture d'un travailleur plein : 1 000, soit +1 de capacité (auteur). */
+  foodPerWorker: 1000,
+} as const;
 
-/**
- * Pêche (00-Game §6.4) : bateaux de pêche. Les bateaux réduisent les pêcheurs
- * requis (mécanisation) et augmentent le rendement d'une case d'eau, avec la
- * même courbe f(x). Le rapport 3 pour 5 de `tileYield` et le doublement de
- * `tileYieldMax` sont des ordres de grandeur donnés par l'auteur.
- */
-export const FISHING: MechanizationConfig & { readonly tileYield: number; readonly tileYieldMax: number } = {
-  mechanizationBase: 300,
-  mechanizationMax: 1500,
-  maxMachinesPer1000: 100,
-  curveExponent: 2,
-  /** Rendement d'une case d'eau sans bateau (fertilité d'une terre : FERTILITY.land). */
-  tileYield: 3,
-  /** Rendement d'une case d'eau avec le maximum de bateaux (≥ tileYield). */
-  tileYieldMax: 6,
-};
-
-/**
- * Extraction (00-Game §7) : pompes à vapeur. Les mineurs travaillent des cases de
- * gisement ; mécanisation en millièmes de case par mineur. Sans pompe, un mineur
- * exploite 0,1 case (10 mineurs par case) ; à pleine mécanisation, 0,5 case.
- */
-export const MINING: MechanizationConfig = {
-  mechanizationBase: 100,
-  mechanizationMax: 500,
-  maxMachinesPer1000: 100,
-  curveExponent: 2,
-};
+/** Extraction (08 §2.1, §4) : cases de fer exploitées par travailleur (bonhomme ou pompe à vapeur). */
+export const MINING = {
+  /** 0,1 case par personne de l'ancienne échelle. */
+  tilesPerWorker: 100,
+} as const;

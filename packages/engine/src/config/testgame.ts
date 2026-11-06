@@ -40,6 +40,4 @@ export const TEST_GAME = {
   maxCities: 80,
   /** Divisions de chaque type dans la réserve nationale de chaque joueur, au départ (provisoire). Élites : au plus ce que `ELITE_TROOPS_RATIO` permet. */
   reservePerType: 10,
-  /** Réserve de renfort : hommes et armement en plus de ce que les divisions complètes demandent, en % (provisoire). */
-  reservePercent: 100,
 } as const;

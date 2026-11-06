@@ -2,11 +2,11 @@
 // routes sont dans roads.ts. Tout est en entiers : distances au carré, sans racine.
 
 import { CITY, MAX_CITIES, POPULATION } from "./config.ts";
-import { removeSoldiers } from "./divisions.ts";
+import { IDLE, activityOf, hurtPawns, takePawn } from "./activities.ts";
 import { isLand } from "./map.ts";
 import { activeFrontCities, updateFronts } from "./fronts.ts";
 import { addCityToRoads } from "./roads.ts";
-import { setOwner, type City, type GameState, type Player } from "./state.ts";
+import { setOwner, type City, type GameState } from "./state.ts";
 
 /**
  * Ordre `found_city` (00-Game §3.3), après vérification des champs par
@@ -25,14 +25,18 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   const player = state.players[playerId - 1]!;
   const first = player.capital === 0;
   if (!first) {
-    // Les blessés ne peuvent pas payer (00-Game §4.2) ; les soldats, si, en dernier (§3.3).
-    if (player.population - player.hurt < foundingCost(player.cityIds.length)) return false;
+    // Toute la population paie, sauf les blessés (08 §10).
+    if (player.population - hurtPawns(player) < foundingCostPawns(player.cityIds.length)) return false;
     if (!inExpansionRadius(state, player.cityIds, tile)) return false;
   }
 
-  // Tout est valide : les effets, dans l'ordre de 00-Game §3.3.
-  if (first) player.population += POPULATION.initial;
-  else payFoundingCost(state, player, foundingCost(player.cityIds.length));
+  // Tout est valide : les effets, dans l'ordre de 00-Game §3.3. La première ville est gratuite et donne un bonhomme (08 §10).
+  if (first) {
+    player.population += POPULATION.initial;
+    activityOf(player, IDLE)!.workers += POPULATION.initial;
+  } else {
+    for (let n = foundingCostPawns(player.cityIds.length); n > 0; n--) takePawn(player);
+  }
   const id = state.cities.length + 1;
   const city: City = { id, player: playerId, tile, port: false, group: id };
   state.cities.push(city);
@@ -62,14 +66,12 @@ export function foundingCost(cityCount: number): number {
 }
 
 /**
- * Retire `cost` de la population du joueur (00-Game §3.3). Il est pris d'abord sur les non-soldats non blessés ; le manque
- * est pris sur les soldats, le même ratio à toutes les divisions (`removeSoldiers`). Les blessés ne sont pas touchés.
- * Suppose `population − blessés ≥ cost`.
+ * Coût en bonshommes d'une ville pour un joueur qui en possède déjà `cityCount` (08 §10) : `foundingCost` divisé par
+ * `POPULATION.inhabitantsPerPawn`, arrondi vers le haut (provisoire) : 1, 2, 2, 3… à partir de la deuxième ville.
+ * Payé par les inactifs d'abord, puis par les boîtes de la plus basse à la plus haute, jamais par les blessés.
  */
-function payFoundingCost(state: GameState, player: Player, cost: number): void {
-  const shortfall = Math.max(0, cost - (player.population - player.soldiers - player.hurt));
-  player.population -= cost;
-  if (shortfall > 0) removeSoldiers(state, player.id, shortfall);
+export function foundingCostPawns(cityCount: number): number {
+  return Math.ceil(foundingCost(cityCount) / POPULATION.inhabitantsPerPawn);
 }
 
 /**

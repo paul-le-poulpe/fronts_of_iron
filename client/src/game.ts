@@ -6,77 +6,69 @@
 // Le joueur local est `you` : l'humain du solo (HUMAN) ou le joueur du message de départ en ligne.
 
 import {
+  ACTIVITY_DATA,
+  ACTIVITY_IDS,
+  activityOf,
   applyTurn as applyEngineTurn,
-  ARMAMENT,
-  ARMAMENT_IDS,
-  armamentIndex,
-  armamentReserveMax,
   CITY,
   createGame,
   DIVISION_DATA,
+  DIVISION_IDS,
   DIVISIONS,
-  divisionEquipment,
-  divisionEquipmentFull,
+  DIVISION_TIMING,
+  divisionCount,
+  divisionLimit,
   DIPLOMACY,
   ELITE_TROOPS_RATIO,
-  FACTORY,
-  FACTORY_TYPE_IDS,
-  FACTORY_TYPES,
-  factoryLevel,
-  factoryOf,
   FARMING,
   FISHING,
   FOOD,
   FRONTS,
-  foundingCost,
+  foundingCostPawns,
   generateTestMap,
   setupTestGame,
   TEST_SCENARIOS,
   type TestScenarioId,
   GOOD_IDS,
   GOODS,
+  GOODS_TIMING,
+  HURT,
+  IDLE,
+  idlePawns,
   inFormation,
   LINE_BOX,
   LINE_FIRST,
   LINE_RAPID,
   isActive,
   isFleeing,
+  machineCount,
+  machineLimit,
   MINING,
   NICHES,
   POPULATION,
-  PRODUCT_IDS,
-  productConfig,
   STATE_SCALE,
   stateOf,
   RESOURCES,
   STATUS_PACT,
   STATUS_WAR,
   statusOf,
-  waterYieldMilli,
-  workersForLines,
-  scaledByRatio,
-  RATIO_SCALE,
-  machineReference,
   advanceOf,
   type Breakthrough,
   type Division,
   type Front,
   type GameState,
-  type ProductId,
   type Intent,
 } from "@fronts-of-iron/engine";
 
-/** Case de `Player.goods` des bateaux de pêche. */
-const FISHING_BOAT = GOOD_IDS.indexOf("fishingBoat");
 /** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). */
 const IRON = Object.keys(RESOURCES).indexOf("iron");
 
 import { isMapId, type MapId, type TurnData } from "@fronts-of-iron/shared";
 
-import { dominantGood } from "./names.ts";
 import {
   type DiplomacyView,
-  type FactoryCatalog,
+  type ActivityCatalog,
+  type ActivityView,
   type CombatView,
   type DivisionView,
   type FrontView,
@@ -123,101 +115,61 @@ export interface PendingOrder {
   readonly order: HumanOrder;
 }
 
-/** Division de référence de chaque type d'armement (`FactoryCatalog.equipUnit`) : les réguliers s'ils l'utilisent, sinon la première division de `DIVISIONS` qui l'utilise. */
-function equipUnits(): FactoryCatalog["equipUnit"] {
-  type Component = { readonly resource: string; readonly count: number };
-  const out: Record<string, { division: string; count: number; icon: string }> = {};
-  for (const id of ARMAMENT_IDS) {
-    const ids = ["regulars", ...Object.keys(DIVISIONS)] as (keyof typeof DIVISIONS)[];
-    for (const division of ids) {
-      const config = DIVISIONS[division] as { readonly components: readonly Component[]; readonly icon: string };
-      const c = config.components.find((x) => x.resource === id);
-      if (c === undefined) continue;
-      out[id] = { division, count: c.count, icon: config.icon };
-      break;
-    }
-  }
-  return out;
-}
-
-/** Production d'une ligne qui tourne à 100 % : par tour pour un bien, par heure pour un type d'armement (00-Game §8, §8.3). */
-function productionOf(id: ProductId): number {
-  const a = armamentIndex(id);
-  return a >= 0 ? ARMAMENT.types[ARMAMENT_IDS[a]!].productionPerHour : GOODS[id as (typeof GOOD_IDS)[number]].productionPerLine;
-}
-
-/** La configuration des usines que la page affiche (00-Game §8.4) : tout vient du moteur, rien n'est écrit en double. */
-export function factoryCatalog(): FactoryCatalog {
+/** La configuration des activités que la page affiche (08 §2, §9) : tout vient du moteur, rien n'est écrit en double. */
+export function activityCatalog(): ActivityCatalog {
+  const tiles = (kind: string): number => (kind === "farming" ? FARMING.tilesPerWorker : kind === "fishing" ? FISHING.tilesPerWorker : kind === "mining" ? MINING.tilesPerWorker : 0);
   return {
-    factoryTypes: FACTORY_TYPE_IDS.map((id) => ({
-      id,
-      tree: FACTORY_TYPES[id].tree.map((n) => ({ good: n.good, parent: n.parent })),
+    activities: ACTIVITY_DATA.map((d) => ({
+      id: d.id,
+      index: d.index,
+      kind: d.kind,
+      parent: d.parent < 0 ? null : ACTIVITY_IDS[d.parent]!,
+      unlockCost: d.unlockCost,
+      unlockByWorkers: d.unlockByWorkers,
+      unlockByPopulation: d.unlockByPopulation,
+      workersPerUnit: d.workersPerUnit,
+      unitsPerWorker: d.unitsPerWorker,
+      hasSlots: d.hasSlots,
+      hasPlaces: d.hasPlaces,
+      ironPerUnit: d.ironPerUnit,
+      good: d.good < 0 ? null : GOOD_IDS[d.good]!,
+      division: d.division < 0 ? null : DIVISION_IDS[d.division]!,
+      tilesPerWorker: tiles(d.kind),
     })),
-    unlockTurns: FACTORY.unlockTurns,
-    growthTurns: FACTORY.growthTurns,
-    ratioScale: RATIO_SCALE,
     goodIds: GOOD_IDS,
-    armamentIds: ARMAMENT_IDS,
-    productionPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productionOf(id)])),
-    workersPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).workersPerLine])),
-    workersFloor: Object.fromEntries(
-      PRODUCT_IDS.map((id) => [id, Math.floor((productConfig(id).workersPerLine * FACTORY.specialization.floorPercent) / 100)]),
-    ),
-    ironPerLine: Object.fromEntries(PRODUCT_IDS.map((id) => [id, productConfig(id).ironPerLine])),
-    icons: Object.fromEntries(PRODUCT_IDS.flatMap((id) => {
-      const icon = productConfig(id).icon;
-      return icon === undefined ? [] : [[id, icon]];
-    })),
-    stockSeconds: ARMAMENT.maxStockSeconds,
-    equipUnit: equipUnits(),
-    economy: {
-      foodPerHead: POPULATION.foodPerHead,
-      foodMinimum: FOOD.minimum,
-      machinesPer1000: {
-        tractor: FARMING.maxMachinesPer1000,
-        fishingBoat: FISHING.maxMachinesPer1000,
-        miningMachine: MINING.maxMachinesPer1000,
-      },
-      armamentDecayPercent: ARMAMENT.decayRate / 100,
-      mechanization: {
-        tractor: { base: FARMING.mechanizationBase, max: FARMING.mechanizationMax },
-        fishingBoat: { base: FISHING.mechanizationBase, max: FISHING.mechanizationMax },
-        miningMachine: { base: MINING.mechanizationBase, max: MINING.mechanizationMax },
-      },
-      waterYield: { base: FISHING.tileYield, max: FISHING.tileYieldMax },
-    },
+    icons: Object.fromEntries(GOOD_IDS.map((id) => [id, GOODS[id].icon])),
+    popArrivalTurns: POPULATION.arrivalTurns,
+    popLeaveTurns: POPULATION.leaveTurns,
+    machineArrivalTurns: GOODS_TIMING.arrivalTurns,
+    machineLeaveTurns: GOODS_TIMING.leaveTurns,
+    divisionLeaveTurns: DIVISION_TIMING.leaveTurns,
+    foodPerPawn: POPULATION.foodPerPawn,
+    foodBase: FOOD.base,
+    foodPerCity: FOOD.perCity,
+    ironPerTile: RESOURCES.iron.capacityPerTile,
+    fishYield: FISHING.foodPerWorker / FISHING.tilesPerWorker,
   };
 }
 
 /** Types de division, niches et réglages des fronts que la page affiche (05-Fronts §3, §12) : tout vient du moteur. */
 export function militaryCatalog(): MilitaryCatalog {
-  const armamentName = (k: number): string => ARMAMENT_IDS[k]!;
   return {
     divisions: DIVISION_DATA.map((d) => {
       const config = DIVISIONS[d.id] as { readonly icon: string; readonly description?: string };
-      const firstArmament = d.components.find((c) => c.resource >= 0);
-      const fallback = firstArmament === undefined ? undefined : (ARMAMENT.types[armamentName(firstArmament.resource) as keyof typeof ARMAMENT.types] as { readonly description?: string }).description;
       return {
         id: d.id,
         index: d.index,
         niche: Object.keys(NICHES)[d.niche]!,
         rank: d.rank,
         support: d.support,
-        components: d.components.map((c) => ({
-          resource: c.resource < 0 ? "men" : armamentName(c.resource),
-          count: c.count,
-          required: c.required,
-          weight: c.weight,
-          softAttack: c.softAttack,
-          hardAttack: c.hardAttack,
-          airAttack: c.airAttack,
-          lossMultiplier: c.lossMultiplier,
-        })),
+        softAttack: d.softAttack,
+        hardAttack: d.hardAttack,
+        airAttack: d.airAttack,
         icon: config.icon,
-        description: config.description ?? fallback ?? "",
+        description: config.description ?? "",
         frontWidth: d.width / 1000,
         breakthroughWidth: d.breakthroughWidth / 1000,
-        formationTurns: d.formationTurns,
+        productionTurns: d.productionTurns,
         elite: d.elite,
         hitPoints: d.hitPoints,
         defenseHitPointsMultiplier: d.defenseHitPointsMultiplier,
@@ -269,7 +221,6 @@ export function divisionView(state: GameState, d: Division): DivisionView {
     id: d.id,
     owner: d.owner,
     type: d.type,
-    counts: d.counts.slice(),
     front: d.front,
     line: d.line === LINE_FIRST ? "first" : d.line === LINE_RAPID ? "rapid" : d.line === LINE_BOX ? "box" : "second",
     box: d.box,
@@ -279,6 +230,7 @@ export function divisionView(state: GameState, d: Division): DivisionView {
     state: stateOf(d),
     status,
     until: status === "formation" ? d.formedTick : status === "moving" ? d.arrivalTick : status === "fleeing" ? d.fleeUntilTick : 0,
+    leaveTick: d.leaveTick,
   };
 }
 
@@ -301,8 +253,6 @@ export class Game {
   readonly you: number;
   /** `tileCity` tel qu'envoyé à la page : sert à trouver les cases qui ont changé. */
   private readonly sentTileCity: Uint16Array;
-  /** Les usines telles qu'envoyées à la page (`factoryMarks`), pour n'envoyer que les changements. */
-  private sentMarks = "";
   /** Les fronts tels qu'envoyés à la page (JSON), pour n'envoyer que les changements. */
   private sentFronts = "";
   /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
@@ -350,7 +300,7 @@ export class Game {
       expansionRadius: CITY.expansionRadius,
       controlRadius: CITY.controlRadius,
       stepMs: this.stepMs,
-      catalog: factoryCatalog(),
+      catalog: activityCatalog(),
       military: militaryCatalog(),
     };
   }
@@ -381,10 +331,8 @@ export class Game {
     // Partie de test : les villes existent avant le premier tour, qui doit donc les envoyer (villes, zones, routes, fronts).
     const initial = this.options.testGame !== undefined && !this.initialSent;
     this.initialSent = true;
-    // Pour reconnaître une usine ou une ligne créée par ce tour : l'état avant les ordres.
-    const linesBefore = human.length > 0 ? this.lineCounts() : null;
-    // Les machines que l'étape va utiliser : les effectives (00-Game §12), remplacées par `applyTurn`.
-    const machinesUsed = state.players.map((p) => Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsEffective[i]!])));
+    // Pour reconnaître l'effet d'un déplacement de pions : l'état avant les ordres.
+    const pawnsBefore = human.length > 0 ? this.pawnCounts() : null;
     const t1 = performance.now();
     this.advance(turn);
     const t2 = performance.now();
@@ -395,7 +343,7 @@ export class Game {
       : human.map(({ id, order }) => ({
           id,
           order,
-          applied: this.wasApplied(order, citiesBefore, linesBefore),
+          applied: this.wasApplied(order, citiesBefore, pawnsBefore),
         }));
 
     // `tileCity` ne change que quand une ville est fondée : sinon, rien à comparer.
@@ -442,19 +390,6 @@ export class Game {
       tiles = new Uint32Array(0);
     }
 
-    // Usines de tous les joueurs (marqueurs de la carte) : envoyées seulement quand elles changent.
-    const marks: number[] = [];
-    for (const p of state.players) {
-      for (const f of p.factories) {
-        const tree = FACTORY_TYPES[f.type].tree;
-        const good = dominantGood(tree, f.groups);
-        marks.push(f.city, FACTORY_TYPE_IDS.indexOf(f.type), factoryLevel(f), tree.findIndex((n) => n.good === good));
-      }
-    }
-    const marksKey = marks.join(",");
-    const factoryMarks = full || marksKey !== this.sentMarks ? Uint32Array.from(marks) : null;
-    this.sentMarks = marksKey;
-
     // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
     let fronts: FrontView[] | null = null;
     if (full || initial || state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
@@ -481,55 +416,35 @@ export class Game {
     this.sentCombats = combatsKey;
 
     const players: PlayerStats[] = state.players.map((p) => {
-      // Référence des bateaux pour le rendement de l'eau (00-Game §6.2) : tous les
-      // travailleurs hors usines et mines pourraient pêcher, plafonnés par la mer.
-      const fishRef = machineReference(FISHING, p.farmers + p.fishers + p.idle, p.seaTiles);
-      const fishMax = Math.floor((p.seaTiles * waterYieldMilli(fishRef, p.goodsEffective[FISHING_BOAT]!)) / 1000);
+      const workers = (kind: string): number => p.activities.filter((a) => ACTIVITY_DATA[a.id]!.kind === kind).reduce((n, a) => n + a.workers, 0);
       return {
-      id: p.id,
-      soldiers: p.soldiers,
-      forcedMobilization: p.forcedMobilization,
-      divisionEquipment: divisionEquipment(state, p.id),
-      divisionEquipmentFull: divisionEquipmentFull(state, p.id),
-      population: p.population,
-      farmers: p.farmers,
-      fishers: p.fishers,
-      idle: p.idle,
-      hurt: p.hurt,
-      food: p.food,
-      wheat: p.wheat,
-      fish: p.fish,
-      cultivated: p.cultivated,
-      mechanization: { tractor: p.farmMechanization, fishingBoat: p.fishMechanization, miningMachine: p.mineMechanization },
-      machinesUsed: machinesUsed[p.id - 1]!,
-      ironTiles: p.resourceTiles[IRON]!,
-      farmTiles: p.farmTiles,
-      fished: p.fished,
-      seaTiles: p.seaTiles,
-      farmPercent: p.farmPercent,
-      capital: p.capital,
-      cities: p.cityIds.length,
-      defeated: p.defeated,
-      foundingCost: foundingCost(p.cityIds.length),
-      factoryWorkers: p.factoryWorkers,
-      miners: p.miners,
-      minedTiles: p.minedTiles,
-      ironExtracted: p.ironExtracted,
-      ironDemanded: p.ironDemanded,
-      ironConsumed: p.ironConsumed,
-      goodsIronRatio: p.goodsIronRatio,
-      goodsWorkerRatio: p.goodsWorkerRatio,
-      goodsLineRatio: p.goodsLineRatio,
-      armIronRatio: p.armIronRatio,
-      armWorkerRatio: p.armWorkerRatio,
-      armLineRatio: p.armLineRatio,
-      // Nourriture si toutes les cases fertiles et toutes les cases d'eau étaient travaillées,
-      // avec le rendement de l'eau des bateaux actuels (00-Game §6.4, §6.5).
-      foodPotential: Math.max(FOOD.minimum, p.fertilitySum + fishMax),
-      wheatMax: p.fertilitySum,
-      fishMax,
-      // Demande calculée par le moteur (goodsDemand) : la même que celle qui arrête la croissance des lignes.
-      fullMachines: Object.fromEntries(GOOD_IDS.map((id, i) => [id, p.goodsDemand[i]!])),
+        id: p.id,
+        population: p.population,
+        capacity: p.capacity,
+        idle: idlePawns(p),
+        hurt: activityOf(p, HURT)!.workers,
+        farmers: workers("farming"),
+        fishers: workers("fishing"),
+        miners: workers("mining"),
+        soldiers: workers("barracks"),
+        divisions: state.divisions.filter((d) => d.owner === p.id).length,
+        food: p.food,
+        wheat: p.wheat,
+        fish: p.fish,
+        cultivated: p.cultivated,
+        fished: p.fished,
+        minedTiles: p.minedTiles,
+        ironTiles: p.resourceTiles[IRON]!,
+        farmTiles: p.farmTiles,
+        seaTiles: p.seaTiles,
+        ironProduced: p.ironProduced,
+        ironReserved: p.ironReserved,
+        machines: GOOD_IDS.map((_, g) => machineCount(p, g)),
+        machineLimits: GOOD_IDS.map((_, g) => machineLimit(p, g)),
+        capital: p.capital,
+        cities: p.cityIds.length,
+        defeated: p.defeated,
+        foundingCost: foundingCostPawns(p.cityIds.length),
       };
     });
     const t3 = performance.now();
@@ -540,7 +455,6 @@ export class Game {
       tiles,
       cities,
       roads,
-      factoryMarks,
       human: this.humanDetail(),
       players,
       results,
@@ -562,25 +476,16 @@ export class Game {
    * local directement, entre deux tours, hors des règles et sans ordre. N'existent
    * qu'en solo : en ligne, l'état ne se modifie que par les tours (règle 3).
    */
-  debug(action: "addPopulation" | "addArmament" | "armBots", amount: number): void {
+  debug(action: "addPopulation" | "armBots", amount: number): void {
     if (!Number.isInteger(amount)) return;
-    if (action === "addPopulation") {
-      const p = this.state.players[this.you - 1]!;
-      p.population = Math.max(0, p.population + amount);
-    }
-    // Un lot d'armement : de quoi équiper 10 divisions de chaque type (l'armement de `DIVISIONS`).
-    const grant = (p: GameState["players"][number], lots: number): void => {
-      for (const d of DIVISION_DATA) {
-        for (const c of d.components) if (c.resource >= 0) p.armamentReserve[c.resource] = p.armamentReserve[c.resource]! + 10 * lots * c.count;
-      }
+    const grant = (p: GameState["players"][number], n: number): void => {
+      const n2 = Math.max(n, -idlePawns(p));
+      activityOf(p, IDLE)!.workers += n2;
+      p.population += n2;
     };
-    if (action === "addArmament") grant(this.state.players[this.you - 1]!, amount);
+    if (action === "addPopulation") grant(this.state.players[this.you - 1]!, amount);
     if (action === "armBots") {
-      for (const p of this.state.players) {
-        if (p.id === this.you) continue;
-        grant(p, amount);
-        p.population += 50_000 * amount;
-      }
+      for (const p of this.state.players) if (p.id !== this.you) grant(p, amount);
     }
   }
 
@@ -605,72 +510,70 @@ export class Game {
     };
   }
 
-  /** Le détail des usines du joueur humain (panneau de production). */
+  /** Les activités du joueur humain (panneau de production). */
   humanDetail(): HumanDetail {
-    const p = this.state.players[this.you - 1]!;
-    // Lignes utiles de chaque groupe de biens (00-Game §8.2) : dans l'ordre de
-    // remplissage du moteur, celles dont la production reste sous la demande.
-    const before = new Array<number>(GOOD_IDS.length).fill(0);
-    const useful = (good: string, lines: number, active: number): number => {
-      const b = GOOD_IDS.indexOf(good as (typeof GOOD_IDS)[number]);
-      if (b < 0) return lines;
-      const per = GOODS[good as (typeof GOOD_IDS)[number]].productionPerLine;
-      const n = Math.min(lines, Math.ceil(Math.max(0, p.goodsDemand[b]! - before[b]!) / per));
-      before[b] = before[b]! + Math.min(active, n) * per;
-      return n;
-    };
-    const factories = p.factories.map((f) => ({
-        city: f.city,
-        type: f.type,
-        level: factoryLevel(f),
-        groups: f.groups.map((g) => {
-          const b = GOOD_IDS.indexOf(g.good as (typeof GOOD_IDS)[number]);
-          const usefulLines = useful(g.good, g.lines, g.active);
-          // Capacité du joueur pour ce bien : toutes ses lignes, toutes usines (00-Game §8.2).
-          let capacity = 0;
-          for (const o of p.factories) for (const h of o.groups) if (h.good === g.good) capacity += h.lines * productionOf(h.good);
-          const workersDemanded = workersForLines(g.good as ProductId, g.running);
-          const ironDemanded = g.running * productConfig(g.good as ProductId).ironPerLine;
-          return {
-            good: g.good,
-            lines: g.lines,
-            active: g.active,
-            running: g.running,
-            workersDemanded,
-            workersObtained: scaledByRatio(workersDemanded, b < 0 ? p.armLineRatio : p.goodsLineRatio),
-            ironDemanded,
-            ironObtained: scaledByRatio(ironDemanded, b < 0 ? p.armLineRatio : p.goodsLineRatio),
-            growth: g.growth,
-            demandMet: b < 0 || capacity >= p.goodsDemand[b]!,
-            usefulLines,
-          };
-        }),
-        progress: f.progress.slice(),
-      }));
+    const state = this.state;
+    const p = state.players[this.you - 1]!;
+    const activities: ActivityView[] = p.activities.map((a) => {
+      const d = ACTIVITY_DATA[a.id]!;
+      const product = d.kind === "factory" || d.kind === "barracks";
+      const machine = d.kind === "factory" && d.good >= 0;
+      return {
+        id: d.id,
+        workers: a.workers,
+        machines: a.machines,
+        places: a.places,
+        slots: a.slots,
+        surface: d.kind === "farming" ? p.farmTiles : d.kind === "fishing" ? p.seaTiles : d.kind === "mining" ? p.resourceTiles[IRON]! : 0,
+        disabled: a.disabled,
+        output: a.output,
+        ironUsed: a.ironUsed,
+        forming: d.division < 0 ? 0 : state.divisions.filter((x) => x.owner === p.id && x.type === d.division && inFormation(state, x)).length,
+        existing: !product ? -1 : machine ? machineCount(p, d.good) : divisionCount(state, p.id, d.division),
+        limit: !product ? -1 : machine ? machineLimit(p, d.good) : divisionLimit(state, p, d.division),
+      };
+    });
+    const served = ACTIVITY_DATA.map((d) => {
+      const a = activityOf(p, d.index);
+      return a === undefined ? 0 : Math.ceil((a.output * d.workersPerUnit) / d.unitsPerWorker);
+    });
     return {
-      factories,
-      goods: p.goods.slice(),
-      reserve: p.armamentReserve.slice(),
-      reserveMax: ARMAMENT_IDS.map((id) => armamentReserveMax(p, id)),
-      ironCapacity: p.resourceTiles[Object.keys(RESOURCES).indexOf("iron")]! * RESOURCES.iron.capacityPerTile,
-      // Fer requis : celui des lignes en service (réglage du joueur ramené aux lignes
-      // utiles, 00-Game §8.2). Les lignes arrêtées parce que la demande est atteinte
-      // ne demandent pas de fer : le rouge de la barre ne montre qu'un vrai manque.
-      ironRequired: factories.reduce(
-        (sum, f) =>
-          sum + f.groups.reduce((s, g) => s + Math.min(g.active, g.usefulLines) * productConfig(g.good as ProductId).ironPerLine, 0),
-        0,
-      ),
+      tick: state.tick,
+      activities,
+      cities: p.cityIds.length,
+      wheat: p.wheat,
+      fish: p.fish,
+      farmPerWorker: p.farmTiles === 0 ? 0 : Math.floor((p.fertilitySum * FARMING.tilesPerWorker) / p.farmTiles),
+      fishPerWorker: FISHING.foodPerWorker,
+      autoAssign: p.autoAssign,
+      unlock: p.unlock.slice(),
+      everOpened: p.everOpened.slice(),
+      served,
+      idleMachines: p.idleMachines.slice(),
+      popArrivals: p.popArrivals.slice(),
+      popLeaves: p.popLeaves.slice(),
+      machineArrivals: p.machineArrivals.map((a) => a.slice()),
+      machineLeaves: p.machineLeaves.map((a) => a.slice()),
+      hurtHealEnd: p.hurtHealEnd,
+      capacity: p.capacity,
+      ironProduced: p.ironProduced,
+      ironReserved: p.ironReserved,
+      ironWanted: p.ironWanted,
+      ironMax: (activityOf(p, ACTIVITY_DATA.findIndex((d) => d.kind === "mining"))?.slots ?? 0) * MINING.tilesPerWorker * RESOURCES.iron.capacityPerTile,
     };
   }
 
-  /** Lignes du joueur humain par « ville:bien », et « ville: » pour chaque usine. */
-  private lineCounts(): Map<string, number> {
+  /** Pions du joueur humain par « w:activité » (bonshommes), « m:activité » (machines), « p:activité » (places) et « i:bien » (Inactifs). */
+  private pawnCounts(): Map<string, number> {
     const counts = new Map<string, number>();
-    for (const f of this.state.players[this.you - 1]!.factories) {
-      counts.set(`${f.city}:`, 0);
-      for (const g of f.groups) counts.set(`${f.city}:${g.good}`, g.lines);
+    const p = this.state.players[this.you - 1]!;
+    for (const a of p.activities) {
+      const id = ACTIVITY_IDS[a.id]!;
+      counts.set(`w:${id}`, a.workers);
+      counts.set(`m:${id}`, a.machines);
+      counts.set(`p:${id}`, a.places);
     }
+    GOOD_IDS.forEach((id, g) => counts.set(`i:${id}`, p.idleMachines[g]!));
     return counts;
   }
 
@@ -682,32 +585,36 @@ export class Game {
   }
 
   /** Le moteur a-t-il appliqué cet ordre humain ? (`applyTurn` ne le dit pas : on regarde l'état.) */
-  private wasApplied(order: HumanOrder, citiesBefore: number, linesBefore: Map<string, number> | null): boolean {
+  private wasApplied(order: HumanOrder, citiesBefore: number, pawnsBefore: Map<string, number> | null): boolean {
     const state = this.state;
     const me = state.players[this.you - 1]!;
     switch (order.type) {
-      case "set_farm_share":
-        return Number.isInteger(order.percent) && me.farmPercent === order.percent;
       case "found_city":
         for (let i = citiesBefore; i < state.cities.length; i++) {
           const c = state.cities[i]!;
           if (c.player === this.you && c.tile === order.tile) return true;
         }
         return false;
-      case "delete_factory":
-        return linesBefore?.has(`${order.city}:`) === true && factoryOf(me, order.city) === undefined;
-      case "build_factory":
-        return !linesBefore?.has(`${order.city}:`) && factoryOf(me, order.city)?.type === order.factoryType;
-      case "create_line": {
-        const lines = factoryOf(me, order.city)?.groups.find((g) => g.good === order.good)?.lines ?? 0;
-        return lines > (linesBefore?.get(`${order.city}:${order.good}`) ?? 0);
+      // Pions : le moteur ne le dit pas, on compare avec l'état d'avant les ordres (approximation : plusieurs ordres du même tour se mélangent).
+      case "move_pawn": {
+        const now = this.pawnCounts();
+        const was = (key: string): number => pawnsBefore?.get(key) ?? 0;
+        if (order.kind === "worker") return (now.get(`w:${order.to}`) ?? 0) !== was(`w:${order.to}`) || (now.get(`p:${order.to}`) ?? 0) !== was(`p:${order.to}`);
+        const gain = (id: string): number => (id === "idle" ? (now.get(`i:${order.good}`) ?? 0) - was(`i:${order.good}`) : (now.get(`m:${id}`) ?? 0) - was(`m:${id}`));
+        return gain(order.to) > 0;
       }
-      case "set_active_lines":
-        return factoryOf(me, order.city)?.groups.find((g) => g.good === order.good)?.active === order.count;
-      case "set_city_priority":
-        return me.factories[order.position]?.city === order.city;
-      case "set_line_priority":
-        return factoryOf(me, order.city)?.groups[order.position]?.good === order.good;
+      case "set_activity_order":
+        return me.activities[order.position]?.id === ACTIVITY_IDS.indexOf(order.activity as (typeof ACTIVITY_IDS)[number]);
+      case "open_activity":
+        return me.activities.some((a) => a.id === ACTIVITY_IDS.indexOf(order.activity as (typeof ACTIVITY_IDS)[number]));
+      case "close_activity":
+        return !me.activities.some((a) => a.id === ACTIVITY_IDS.indexOf(order.activity as (typeof ACTIVITY_IDS)[number]));
+      case "change_production_target":
+        return (this.pawnCounts().get(`p:${order.activity}`) ?? 0) !== (pawnsBefore?.get(`p:${order.activity}`) ?? 0);
+      case "set_auto_assign":
+        return me.autoAssign === order.enabled;
+      case "set_disabled_slots":
+        return me.activities.find((a) => a.id === ACTIVITY_IDS.indexOf(order.activity as (typeof ACTIVITY_IDS)[number]))?.disabled === order.count;
       // Diplomatie : `applyTurn` vide les événements au début du tour, donc ceux de `state.events` sont de ce tour.
       case "declare_war":
         return state.events.some((e) => e.type === "war_declared" && e.from === this.you && e.to === order.target);
@@ -722,12 +629,6 @@ export class Game {
         return state.events.some((e) => e.type === answer && e.from === order.from && e.to === this.you);
       }
       // Fronts : le réglage demandé est dans l'état.
-      case "set_forced_mobilization":
-        return me.forcedMobilization === order.enabled;
-      case "create_division":
-        return state.divisions.some((d) => d.owner === this.you && DIVISION_DATA[d.type]!.id === order.division && d.formedTick === state.tick + DIVISION_DATA[d.type]!.formationTurns);
-      case "delete_division":
-        return !state.divisions.some((d) => d.id === order.id);
       case "move_division":
         return order.ids.some((id) => state.divisions.find((d) => d.id === id)?.front === order.front);
       case "start_breakthrough":

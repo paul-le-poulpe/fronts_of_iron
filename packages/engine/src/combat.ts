@@ -10,7 +10,7 @@
 // Les dégâts des deux camps sont calculés sur les divisions du début du round,
 // puis appliqués ensemble (provisoire, 05-Fronts §6). Tout est en entiers.
 // Ordre des parcours : fronts par identifiant, camps 0 puis 1, percées et divisions par
-// identifiant, composants dans l'ordre de `components` (règle 2 du CLAUDE.md).
+// identifiant (règle 2 du CLAUDE.md).
 
 import {
   assignCounterForces,
@@ -23,7 +23,7 @@ import {
   type Arrival,
   type Breakthrough,
 } from "./breakthroughs.ts";
-import { ARMAMENT, FRONTS } from "./config.ts";
+import { FRONTS } from "./config.ts";
 import { captureCity } from "./conquest.ts";
 import {
   INFANTRY_NICHE,
@@ -34,16 +34,15 @@ import {
   WIDTH_SCALE,
   applyLoss,
   attackOf,
-  countSoldiers,
   currentTurn,
-  MEN,
   dataOf,
+  isEmpty,
   isFleeing,
   stateOf,
   type Division,
 } from "./divisions.ts";
 import { ROUTE, endOf, frontWidth, hasRound, isActive, isBreakthroughCombat, type Front } from "./fronts.ts";
-import { applyFlight, arrangeSide, removeDestroyed, sideDivisions, trimAll } from "./placement.ts";
+import { applyFlight, arrangeSide, removeDestroyed, sideDivisions } from "./placement.ts";
 import type { GameState } from "./state.ts";
 
 /**
@@ -197,9 +196,8 @@ function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, rec
   );
   const engaged = [...force, ...defense].sort((a, b) => a.id - b.id);
   const { before, index } = snapshot(record, engaged);
-  // Hommes perdus par la première ligne de chaque camp (05-Fronts §11.4) : la tranche de première ligne.
-  const hit = applyLosses(state, front, record, losses, (d) => d.line === LINE_FIRST && d.front === front.id);
-  trimAll(state);
+  // État perdu par la première ligne de chaque camp (05-Fronts §11.4) : la tranche de première ligne.
+  const hit = applyLosses(front, record, losses, (d) => d.line === LINE_FIRST && d.front === front.id);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
   applyFlight(state, front);
@@ -226,7 +224,6 @@ function resolveBreakthroughCombat(state: GameState, front: Front, bt: Breakthro
   // Première ligne percée : délai avant le combat 2 ; réaction rapide battue : délai avant la chute de la ville.
   record.success = state.breakthroughs.includes(bt) && (bt.phase === 2 || bt.phase === 4);
   removeEmptyBoxes(state);
-  countSoldiers(state);
   if (record.units.some((u) => u.owner === bt.owner) && record.units.some((u) => u.owner === defender)) {
     state.combats.push(record);
     trimCombats(state);
@@ -267,25 +264,21 @@ function snapshot(record: CombatRecord, engaged: readonly Division[]): { before:
 }
 
 /**
- * Applique les pertes d'un round, divisions par identifiant (pertes tirées, 05-Fronts §1), et les ajoute aux pertes du
- * rapport. `firstLine(d)` : les hommes perdus par `d` comptent dans `lastLossByNiche` (05-Fronts §11.4). Renvoie les
- * divisions touchées.
+ * Applique les pertes d'un round, divisions par identifiant, et les ajoute aux pertes du rapport (état perdu, divisions
+ * détruites). `firstLine(d)` : l'état perdu par `d` compte dans `lastLossByNiche` (05-Fronts §11.4). Renvoie les divisions
+ * touchées.
  */
-function applyLosses(state: GameState, front: Front, record: CombatRecord, losses: ReadonlyMap<Division, number>, firstLine: (d: Division) => boolean): Division[] {
+function applyLosses(front: Front, record: CombatRecord, losses: ReadonlyMap<Division, number>, firstLine: (d: Division) => boolean): Division[] {
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
   for (const d of hit) {
-    const counts = d.counts.slice();
-    const men = applyLoss(state, d, Math.min(LOSS_SCALE, losses.get(d)!));
+    const lostState = applyLoss(d, Math.min(LOSS_SCALE, losses.get(d)!));
     if (firstLine(d)) {
       const byNiche = front.sides[front.players.indexOf(d.owner)]!.lastLossByNiche;
-      byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + men;
+      byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + lostState;
     }
     const lost = record.losses[d.owner === record.attacker ? 0 : 1];
-    dataOf(d).components.forEach((c, i) => {
-      const n = counts[i]! - d.counts[i]!;
-      if (c.resource === MEN) lost.men += n;
-      else lost.equipment[c.resource] = lost.equipment[c.resource]! + n;
-    });
+    lost.state += lostState;
+    if (isEmpty(d)) lost.divisions++;
   }
   return hit;
 }
@@ -368,10 +361,10 @@ export interface CombatRound {
   readonly advance: number;
 }
 
-/** Pertes d'un camp sur tout un combat : hommes, et exemplaires de chaque type d'armement (ordre de `ARMAMENT.types`). */
+/** Pertes d'un camp sur tout un combat (08 §11, provisoire) : divisions détruites, et état perdu (échelle `STATE_SCALE`, toutes divisions). */
 export interface CombatLosses {
-  men: number;
-  readonly equipment: number[];
+  divisions: number;
+  state: number;
 }
 
 /**
@@ -395,7 +388,7 @@ export interface CombatRecord {
   readonly city2: number;
   readonly units: CombatUnit[];
   readonly rounds: CombatRound[];
-  /** Pertes de l'attaquant puis du défenseur (pertes tirées, 05-Fronts §6.2), sans les excédents rendus au stock. */
+  /** Pertes de l'attaquant puis du défenseur. */
   readonly losses: readonly [CombatLosses, CombatLosses];
   /** Ville prise à la fin du combat, 0 sinon. */
   captured: number;
@@ -448,8 +441,7 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   );
   const engaged = [...sides[0]!, ...sides[1]!].sort((a, b) => a.id - b.id);
   const { before, index } = snapshot(record, engaged);
-  const hit = applyLosses(state, front, record, losses, () => true);
-  trimAll(state);
+  const hit = applyLosses(front, record, losses, () => true);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
   applyFlight(state, front);
@@ -491,7 +483,7 @@ function advanceRound(front: Front, x: number, by: number, record: CombatRecord,
   return arrivals;
 }
 
-const noCombatLosses = (): CombatLosses => ({ men: 0, equipment: new Array<number>(Object.keys(ARMAMENT.types).length).fill(0) });
+const noCombatLosses = (): CombatLosses => ({ divisions: 0, state: 0 });
 
 /** Garde au plus `FRONTS.combatHistoryPerPlayer` rapports par joueur : un rapport part quand ses deux joueurs en ont trop. */
 function trimCombats(state: GameState): void {
@@ -564,7 +556,6 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
     record.captured = captureArrivals(state, arrivals, changed);
     record.success = record.captured !== 0 || record.rounds.some((r) => r.advance > 0);
     removeEmptyBoxes(state);
-    countSoldiers(state);
     if (record.rounds.length > 0) state.combats.push(record);
   }
   if (due.length > 0) trimCombats(state);
@@ -582,5 +573,4 @@ export function combatRound(state: GameState, changed: number[]): void {
   }
   captureArrivals(state, pending, changed);
   removeEmptyBoxes(state);
-  countSoldiers(state);
 }

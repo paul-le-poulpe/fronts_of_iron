@@ -10,8 +10,8 @@ import { setGameLauncher, showHome } from "./lobby.ts";
 import { Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_ALTITUDE, TERRAIN_LAND, TERRAIN_OCEAN, TERRAIN_SHORE } from "./mirror.ts";
 import { Painter, playerColor, rgbCss } from "./painter.ts";
 import { type EndedMessage, type FrontView, type FromWorker, type HumanOrder, type InitMessage, type PlayerStats, type TickMessage, type ToWorker } from "./protocol.ts";
-import { productIcon, productIconPath, setProductIcons } from "./icons.ts";
-import { factoryName, localPlayer, playerName, productSymbol, setRoster } from "./names.ts";
+import { setProductIcons } from "./icons.ts";
+import { localPlayer, playerName, setRoster } from "./names.ts";
 import { Diplomacy } from "./diplomacy.ts";
 import { DiplomacyTab } from "./diplomacytab.ts";
 import { CombatIcons, CombatReplay, onCombatViewed, resetViewed } from "./combatreplay.ts";
@@ -21,7 +21,7 @@ import { FrontWindow } from "./frontwindow.ts";
 import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView, RESOURCE_LEGEND } from "./render.ts";
-import { attachFactoryTreeTip, setGoodTipEconomy, setGoodTipStats } from "./goodtips.ts";
+import { setGoodTipCatalog, setGoodTipStats } from "./goodtips.ts";
 import { applyBlinkPeriod } from "./blink.ts";
 import { currentTheme, toggleTheme } from "./theme.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
@@ -259,17 +259,16 @@ function onInit(s: Session, init: InitMessage): void {
     onHoverFront: (id) => s.forces?.setHighlight(id),
   });
   s.view.placementCheck = (tile) => foundingProblem(mirror, tile);
-  s.view.factoryCheck = (tile) => factoryTarget(mirror, tile);
-  setGoodTipEconomy(init.catalog.economy);
+  setGoodTipCatalog(init.catalog);
   setProductIcons(init.catalog.icons);
-  s.production = new ProductionPanel($("prod"), init.catalog, sendOrder, (city) => s.view?.highlightCity(city), (tab) => s.infobar?.openTab(tab));
+  s.production = new ProductionPanel($("prod"), init.catalog, init.military, sendOrder, (tab) => s.infobar?.openTab(tab));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
   for (const o of MAP_OPTIONS) mapChecked[o.id] = o.initial;
   // Fenêtre d'un front (05-Fronts §11.4) et onglet des forces (§11.2) : « ← Retour » ramène de l'une à l'autre.
   s.frontPanel = new FrontWindow($("front-panel"), init.military, sendOrder, () => s.infobar?.openForces(), startAxisMode);
   // Combats (06-Combat-Simplifie §2) : icônes par-dessus le canvas, replacées à chaque dessin ; replay dans `#stage`.
   for (const old of document.querySelectorAll(".cr-icons, .cr")) old.remove();
-  s.replay = new CombatReplay($("stage"), init.military, init.catalog.armamentIds, localPlayer);
+  s.replay = new CombatReplay($("stage"), init.military, localPlayer);
   s.combatIcons = new CombatIcons(
     $("stage"),
     { cityTile: (id) => mirror.cities[id - 1]?.tile, tileToCss: (x, y) => s.view?.tileToCss(x, y) ?? null, width: mirror.width },
@@ -285,7 +284,7 @@ function onInit(s: Session, init: InitMessage): void {
     s.combatIcons?.remove(id);
     s.frontPanel?.redrawHistory();
   });
-  s.forces = new ForcesTab(init.military, init.catalog, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
+  s.forces = new ForcesTab(init.military, sendOrder, openFront, (id) => s.view?.highlightFront(id), s.frontPanel);
   // Onglet Diplomatie : un clic sur un joueur ouvre le même menu qu'un clic sur son territoire ; un spectateur n'en a pas.
   s.players = new DiplomacyTab(
     mirror.playerCount,
@@ -298,20 +297,18 @@ function onInit(s: Session, init: InitMessage): void {
     $("infobar"),
     init.catalog,
     setMapOption,
-    (percent) => sendOrder({ type: "set_farm_share", percent }),
-    (enabled) => sendOrder({ type: "set_forced_mobilization", enabled }),
     s.forces,
     s.players,
+    s.production.options,
   );
+  s.production.onIconsShrunk = () => s.infobar?.showOptionsHint();
   // Un détail de la barre d'informations ou le menu « Carte » qui s'ouvre désarme « Créer une ville ».
   s.infobar.onOpen = () => {
     if (placement) setPlacement(false);
   };
-  buildFactoryMenu(init.catalog);
   // Le panneau de production est ouvert au début de chaque partie ; le bouton « Production » le ferme.
   $("prod").hidden = false;
   $("production").setAttribute("aria-pressed", "true");
-  setFactoryArmed(null);
   $("you-swatch").innerHTML = `<span class="sw" style="background:${rgbCss(playerColor(localPlayer()))}"></span>`;
   setPlacement(false);
   clearNotifications();
@@ -327,7 +324,7 @@ function onTick(s: Session, msg: TickMessage): void {
   const repaint = mirror.applyTick(msg);
   painter.paintTiles(repaint);
   view.upload(repaint);
-  if (msg.cities !== null || msg.factoryMarks !== null) view.refresh();
+  if (msg.cities !== null) view.refresh();
   if (msg.fronts !== null) view.frontsChanged();
   s.frontPanel?.refresh(mirror.fronts, mirror.divisions, msg.tick);
   if (msg.combats !== null) {
@@ -414,16 +411,14 @@ function onTick(s: Session, msg: TickMessage): void {
 /** Le joueur local est éliminé : il suit la partie sans pouvoir donner d'ordre (le moteur les ignore). */
 let spectator = false;
 
-/** Affiche ou retire l'état de spectateur : bandeau, boutons de fondation et d'usine, outils armés. Appelée à chaque tour. */
+/** Affiche ou retire l'état de spectateur : bandeau, bouton de fondation, outil armé. Appelée à chaque tour. */
 function setSpectator(on: boolean): void {
   if (on === spectator) return;
   spectator = on;
   $("spectator-badge").hidden = !on;
   foundButton.disabled = on;
-  factoryButton.disabled = on;
   if (on) {
     setPlacement(false);
-    setFactoryArmed(null);
     diplomacy.openFor(0);
   } else {
     $("defeat").hidden = true;
@@ -449,7 +444,7 @@ debugToggle.addEventListener("click", () => {
 
 function updatePanel(players: readonly PlayerStats[]): void {
   const me = players[localPlayer() - 1]!;
-  $("s-pop").textContent = num(me.population - me.hurt);
+  $("s-pop").textContent = `${num(me.population)} / ${num(me.capacity)}`;
   $("s-farmers").textContent = num(me.farmers);
   $("s-fishers").textContent = num(me.fishers);
   $("s-idle").textContent = num(me.idle);
@@ -458,16 +453,16 @@ function updatePanel(players: readonly PlayerStats[]): void {
   $("s-cities").textContent = num(me.cities);
   $("s-cultivated").textContent = `${num(me.cultivated)} / ${num(me.farmTiles)}`;
   $("s-fished").textContent = `${num(me.fished)} / ${num(me.seaTiles)}`;
-  // Coût de la prochaine ville, en habitants ; la première (sans capitale) est gratuite.
+  // Coût de la prochaine ville, en bonshommes ; la première (sans capitale) est gratuite.
   const cost = $("found-cost");
   cost.hidden = me.capital === 0;
-  cost.lastElementChild!.textContent = num(me.foundingCost);
-  // Le coût d'une fondation dépend de la population : la case survolée peut changer de couleur.
+  cost.querySelector("span")!.textContent = num(me.foundingCost);
+  // Le coût d'une fondation dépend des villes et des inactifs : la case survolée peut changer de couleur.
   if (placement) session?.view?.requestDraw();
 }
 
 /** Cases du menu « Carte » telles que le joueur les a laissées. */
-const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, factories: true, frontZones: true };
+const mapChecked: Record<MapOption, boolean> = { iron: false, playerColor: true, fertility: false, frontZones: true };
 /** Vues de la carte affichées d'office pendant le mode placement, sans toucher aux cases (00-Game §11). */
 const PLACEMENT_MAP_OPTIONS: readonly MapOption[] = ["iron", "playerColor", "fertility"];
 
@@ -490,13 +485,10 @@ function applyMapOptions(): void {
   const fertility = shown("fertility");
   const iron = shown("iron");
   $("map-legend").hidden = !iron;
-  // Les icônes d'usine ne font pas partie des vues du placement : seule leur case compte.
-  const factories = mapChecked.factories;
   const frontZones = mapChecked.frontZones;
-  if (s.view.showFertility !== fertility || s.view.showIron !== iron || s.view.showFactoryLogos !== factories || s.view.showFrontZones !== frontZones) {
+  if (s.view.showFertility !== fertility || s.view.showIron !== iron || s.view.showFrontZones !== frontZones) {
     s.view.showFertility = fertility;
     s.view.showIron = iron;
-    s.view.showFactoryLogos = factories;
     s.view.showFrontZones = frontZones;
     s.view.requestDraw();
   }
@@ -535,12 +527,9 @@ $("pause").addEventListener("click", () => {
 
 // Barre de debug (outils de développement, 03-Client) : hors des règles du jeu.
 $("dbg-pop").addEventListener("click", () => {
-  if (session !== null) post({ type: "debug", action: "addPopulation", amount: 1000 });
+  if (session !== null) post({ type: "debug", action: "addPopulation", amount: 10 });
 });
 
-$("dbg-arm").addEventListener("click", () => {
-  if (session !== null) post({ type: "debug", action: "addArmament", amount: 1 });
-});
 $("dbg-bots").addEventListener("click", () => {
   if (session !== null) post({ type: "debug", action: "armBots", amount: 3 });
 });
@@ -565,7 +554,6 @@ function endSession(): void {
   diplomacy.reset();
   setSpectator(false);
   setPlacementFlag(false);
-  setFactoryArmed(null);
   gameScreen.hidden = true;
   startScreen.hidden = false;
   playButton.disabled = false;
@@ -612,10 +600,6 @@ function showHover(tile: number): void {
     session.view.axisHover = tile >= 0 ? nearestConnection(m, axisFront, tile) : null;
     session.view.requestDraw();
   }
-  if (factoryArmed !== null && tile >= 0) {
-    const target = factoryTarget(m, tile);
-    $("bar-hint").textContent = target.problem ?? `Cliquez pour inaugurer : ${factoryName(factoryArmed)}, dans la ville n° ${target.city}.`;
-  }
   if (placement && tile >= 0) {
     const problem = foundingProblem(m, tile);
     const fertile = m.fertileTilesFor(tile);
@@ -636,7 +620,6 @@ function setPlacementFlag(on: boolean): void {
 }
 
 function setPlacement(on: boolean): void {
-  if (on) setFactoryArmed(null);
   setPlacementFlag(on);
   applyMapOptions();
   const view = session?.view;
@@ -648,7 +631,7 @@ function setPlacement(on: boolean): void {
   const me = m?.stats[localPlayer() - 1];
   $("bar-hint").textContent = on
     ? m && me?.capital
-      ? `Placement : dans le rayon d'expansion d'une de vos villes (${m.expansionRadius} cases), en dehors de toute zone, coût ${num(me.foundingCost)} habitants.`
+      ? `Placement : dans le rayon d'expansion d'une de vos villes (${m.expansionRadius} cases), en dehors de toute zone, coût ${num(me.foundingCost)} bonhomme${me.foundingCost > 1 ? "s" : ""}.`
       : "Placement de votre première ville : n'importe quelle case de terre libre, gratuit."
     : "";
 }
@@ -659,7 +642,6 @@ document.addEventListener("keydown", (e) => {
   session?.infobar?.closeMenu();
   if (axisFront !== 0) stopAxisMode();
   if (placement) setPlacement(false);
-  if (factoryArmed !== null || !factoryMenu.hidden) setFactoryArmed(null);
 });
 
 /**
@@ -673,7 +655,8 @@ function foundingProblem(m: Mirror, tile: number): string | null {
   const me = m.stats[localPlayer() - 1];
   const mine = m.cityIds[localPlayer() - 1]!;
   if (mine.length === 0) return null;
-  if (me && me.population - me.hurt < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} habitants nécessaires).`;
+  // Toute la population paie une ville, sauf les blessés (08 §10).
+  if (me && me.population - me.hurt < me.foundingCost) return `Population insuffisante (${num(me.foundingCost)} bonhomme${me.foundingCost > 1 ? "s" : ""} nécessaire${me.foundingCost > 1 ? "s" : ""}).`;
   const w = m.width;
   const x = tile % w;
   const y = Math.floor(tile / w);
@@ -701,16 +684,6 @@ function onMapClick(tile: number): void {
     }
     return;
   }
-  if (m && factoryArmed !== null) {
-    const target = factoryTarget(m, tile);
-    if (target.problem !== null) {
-      toast(target.problem);
-      return;
-    }
-    sendOrder({ type: "build_factory", city: target.city, factoryType: factoryArmed });
-    setFactoryArmed(null);
-    return;
-  }
   if (m && !placement) {
     // Aucun outil armé : un clic dans une zone de front, affichée ou non, ouvre le panneau de ce front (05-Fronts §11.1) ;
     // sinon un clic sur le territoire d'un autre joueur ouvre le menu de diplomatie, ailleurs il le ferme.
@@ -733,55 +706,7 @@ function onMapClick(tile: number): void {
   sendOrder({ type: "found_city", tile });
 }
 
-// ---- barre de boutons : Inaugurer une usine, Production (00-Game §1, §8.1) ----
-
-let factoryArmed: string | null = null;
-const factoryButton = $<HTMLButtonElement>("factory");
-const factoryMenu = $("factory-menu");
-
-/** Remplit le menu déplié vers le haut : un choix par type d'usine, avec l'icône de sa racine et son arbre de progression au survol. */
-function buildFactoryMenu(catalog: InitMessage["catalog"]): void {
-  factoryMenu.innerHTML = "";
-  for (const type of catalog.factoryTypes) {
-    const b = document.createElement("button");
-    b.type = "button";
-    const root = type.tree[0]!.good;
-    if (productIconPath(root) === undefined) b.textContent = `${productSymbol(root)} ${factoryName(type.id)}`;
-    else b.append(productIcon(root, 32), ` ${factoryName(type.id)}`);
-    b.dataset["type"] = type.id;
-    attachFactoryTreeTip(b, type, factoryMenu);
-    b.addEventListener("click", () => setFactoryArmed(type.id));
-    factoryMenu.appendChild(b);
-  }
-}
-
-/** Arme le bouton avec un type d'usine (ou le désarme : null). Le menu se ferme au choix. */
-function setFactoryArmed(type: string | null): void {
-  factoryArmed = type;
-  factoryMenu.hidden = true;
-  factoryButton.setAttribute("aria-pressed", String(type !== null));
-  if (type !== null) setPlacement(false);
-  const view = session?.view;
-  if (view) {
-    view.factoryMode = type !== null;
-    view.refresh();
-  }
-  $("bar-hint").textContent =
-    type === null ? "" : `${factoryName(type)} : cliquez sur la zone d'une de vos villes qui n'a pas d'usine (Échap : annuler).`;
-}
-
-factoryButton.addEventListener("click", () => {
-  if (factoryArmed !== null) setFactoryArmed(null);
-  else {
-    factoryMenu.hidden = !factoryMenu.hidden;
-    if (!factoryMenu.hidden) {
-      setPlacement(false);
-      // Une usine par type et par joueur (00-Game §8) : les types déjà construits sont grisés.
-      const built = new Set(session?.mirror?.detail?.factories.map((f) => f.type) ?? []);
-      for (const b of factoryMenu.querySelectorAll<HTMLButtonElement>("button[data-type]")) b.disabled = built.has(b.dataset["type"]!);
-    }
-  }
-});
+// ---- barre de boutons : Production (08 §11) ----
 
 const productionButton = $<HTMLButtonElement>("production");
 productionButton.addEventListener("click", () => {
@@ -798,7 +723,6 @@ const tutoButton = $<HTMLButtonElement>("tuto-button");
 const tutoMenu = $("tuto-menu");
 
 function setTutoMenu(open: boolean): void {
-  if (open && !factoryMenu.hidden) setFactoryArmed(null);
   tutoMenu.hidden = !open;
   tutoButton.setAttribute("aria-expanded", String(open));
 }
@@ -820,20 +744,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") setTutoMenu(false);
 });
 
-/**
- * Ville dont la zone contient la case, et ce qui empêche d'y inaugurer une usine (null : possible).
- * Copie des conditions de 00-Game §8 pour colorer la zone ; le moteur reste l'autorité.
- */
-function factoryTarget(m: Mirror, tile: number): { city: number; ok: boolean; problem: string | null } {
-  const city = m.tileCity[tile]!;
-  let problem: string | null = null;
-  if (city === 0) problem = "Cette case n'est dans la zone d'aucune ville.";
-  else if (m.cities[city - 1]!.player !== localPlayer()) problem = "Cette zone appartient à un autre joueur.";
-  else if (m.factoryMarks.has(city)) problem = `La ville n° ${city} a déjà une usine.`;
-  else if (m.detail?.factories.some((f) => f.type === factoryArmed)) problem = `Vous avez déjà une usine de ce type : ${factoryName(factoryArmed!)}.`;
-  return { city, ok: problem === null, problem };
-}
-
 // ---- fronts : fenêtre d'un front (05-Fronts §11.4) ----
 
 /** Front dont le joueur choisit l'axe d'une percée, et la boîte qui perce (0 : hors du mode). */
@@ -849,7 +759,6 @@ function startAxisMode(frontId: number, boxId: number): void {
   axisFromTab = s.frontPanel?.fromTab ?? false;
   s.frontPanel?.close();
   setPlacement(false);
-  setFactoryArmed(null);
   axisFront = frontId;
   axisBox = boxId;
   s.view?.setAxisMode(frontId);

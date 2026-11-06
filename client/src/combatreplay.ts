@@ -15,8 +15,8 @@
 
 import { compactInt } from "./format.ts";
 import type { Stats } from "./frontstats.ts";
-import { icon32Path, productIcon } from "./icons.ts";
-import { equipmentName, playerName, unitName } from "./names.ts";
+import { icon32Path } from "./icons.ts";
+import { playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
@@ -126,15 +126,13 @@ interface Card {
 export class CombatReplay {
   private readonly root: HTMLElement;
   private readonly military: MilitaryCatalog;
-  private readonly armamentIds: readonly string[];
   private readonly me: () => number;
   private readonly panel: HTMLElement;
   private timers: number[] = [];
 
-  constructor(root: HTMLElement, military: MilitaryCatalog, armamentIds: readonly string[], me: () => number) {
+  constructor(root: HTMLElement, military: MilitaryCatalog, me: () => number) {
     this.root = root;
     this.military = military;
-    this.armamentIds = armamentIds;
     this.me = me;
     this.panel = el("div", "cr themed");
     this.panel.hidden = true;
@@ -272,13 +270,7 @@ export class CombatReplay {
       const type = m.divisions[u.type]!;
       const k = hp[i]! / scale;
       const mult = sideOf(u.owner) === attackerSide ? type.attackMultiplier / 100 : 1;
-      let soft = 0;
-      let hard = 0;
-      for (const comp of type.components) {
-        soft += comp.softAttack;
-        hard += comp.hardAttack;
-      }
-      return { soft: soft * k * mult, hard: hard * k * mult, hp: type.support ? 0 : type.hitPoints * k };
+      return { soft: type.softAttack * k * mult, hard: type.hardAttack * k * mult, hp: type.support ? 0 : type.hitPoints * k };
     };
 
     /** Message d'un repli faute d'infanterie (06-Combat-Simplifie §1). */
@@ -389,16 +381,13 @@ export class CombatReplay {
         const l = c.losses[side === attackerSide ? 0 : 1];
         const box = el("div", side === 0 ? "cr-loss" : "cr-loss right");
         box.append(el("div", "cr-loss-title", side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
-        const men = el("div", "cr-loss-row");
-        men.append(el("span", "cr-loss-n", compactInt(l.men, 10_000)), el("span", undefined, "hommes"));
-        box.append(men);
-        l.equipment.forEach((n, k) => {
-          if (n === 0) return;
-          const id = this.armamentIds[k]!;
-          const row = el("div", "cr-loss-row");
-          row.append(el("span", "cr-loss-n", compactInt(n, 10_000)), productIcon(id), el("span", undefined, equipmentName(id)));
-          box.append(row);
-        });
+        // Pertes en divisions détruites et en état (08 §11), sans décimale : l'état perdu est la somme des barres de vie, en pourcent d'une division.
+        const destroyed = el("div", "cr-loss-row");
+        destroyed.append(el("span", "cr-loss-n", compactInt(l.divisions, 10_000)), el("span", undefined, l.divisions > 1 ? "divisions détruites" : "division détruite"));
+        const state = el("div", "cr-loss-row");
+        state.append(el("span", "cr-loss-n", compactInt(Math.round((l.state * 100) / this.military.stateScale), 10_000)), el("span", undefined, "% d'état perdu"));
+        state.title = "Somme des barres de vie perdues par les divisions de ce camp : 100 % valent une division entière.";
+        box.append(destroyed, state);
         return box;
       };
       const pct = Math.round(advance / 10);

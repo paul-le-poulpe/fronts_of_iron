@@ -12,26 +12,23 @@ export const HUMAN = 1;
 /** Ordre du joueur local. Le champ `player` est écrit par le relais (règle 4 du CLAUDE.md), jamais par la page. */
 export type HumanOrder =
   | { readonly type: "found_city"; readonly tile: number }
-  | { readonly type: "set_farm_share"; readonly percent: number }
-  | { readonly type: "build_factory"; readonly city: number; readonly factoryType: string }
-  | { readonly type: "delete_factory"; readonly city: number }
-  | { readonly type: "create_line"; readonly city: number; readonly good: string }
-  | { readonly type: "set_active_lines"; readonly city: number; readonly good: string; readonly count: number }
-  | { readonly type: "set_city_priority"; readonly city: number; readonly position: number }
-  | { readonly type: "set_line_priority"; readonly city: number; readonly good: string; readonly position: number }
+  // Pions et activités (08 §10) : `from` et `to` sont des identifiants d'activité (`ActivityInfo.id`), `good` un identifiant de bien.
+  | { readonly type: "move_pawn"; readonly from: string; readonly to: string; readonly kind: "worker" | "machine"; readonly good?: string; readonly count: number }
+  | { readonly type: "set_activity_order"; readonly activity: string; readonly position: number }
+  | { readonly type: "set_auto_assign"; readonly enabled: boolean }
+  | { readonly type: "set_disabled_slots"; readonly activity: string; readonly count: number }
+  | { readonly type: "change_production_target"; readonly activity: string; readonly delta: number }
+  | { readonly type: "open_activity" | "close_activity"; readonly activity: string }
   | { readonly type: "declare_war"; readonly target: number }
   | { readonly type: "propose_pact"; readonly target: number }
   | { readonly type: "break_pact"; readonly target: number }
   | { readonly type: "propose_peace"; readonly target: number }
   | { readonly type: "answer_proposal"; readonly from: number; readonly accept: boolean }
-  // Fronts (05-Fronts §5.2) : `front` est l'identifiant du front (0 : réserve nationale), `division` une clé de `DIVISIONS`.
-  | { readonly type: "create_division"; readonly division: string }
-  | { readonly type: "delete_division"; readonly id: number }
+  // Fronts (05-Fronts §5.2) : `front` est l'identifiant du front (0 : réserve nationale).
   // `line: "box"` : `box` est une boîte de percée du joueur sur ce front, ou 0 pour en créer une (05-Fronts §4.6).
   | { readonly type: "move_division"; readonly ids: readonly number[]; readonly front: number; readonly line?: "first" | "second" | "rapid" | "box"; readonly box?: number }
   | { readonly type: "start_breakthrough"; readonly box: number; readonly city1: number; readonly city2: number }
   | { readonly type: "cancel_breakthrough"; readonly id: number }
-  | { readonly type: "set_forced_mobilization"; readonly enabled: boolean }
   | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number };
 
 // ---- page → Worker ----
@@ -57,10 +54,10 @@ export type ToWorker =
   | { readonly type: "pause"; readonly paused: boolean }
   /**
    * Outil de développement, mode solo seulement : modifie l'état directement, hors des règles et des ordres.
-   * `addPopulation` et `addArmament` : le joueur humain ; `armBots` : chaque bot reçoit de la population et
-   * `amount` fois un lot d'armement (pour essayer les fronts sans que les bots produisent).
+   * `addPopulation` : `amount` bonshommes dans Inactifs du joueur humain ; `armBots` : chaque bot reçoit `amount`
+   * bonshommes dans Inactifs (pour essayer les fronts sans attendre que les bots grandissent).
    */
-  | { readonly type: "debug"; readonly action: "addPopulation" | "addArmament" | "armBots"; readonly amount: number };
+  | { readonly type: "debug"; readonly action: "addPopulation" | "armBots"; readonly amount: number };
 
 // ---- Worker → page ----
 
@@ -82,23 +79,9 @@ export interface InitMessage {
   readonly expansionRadius: number;
   readonly controlRadius: number;
   readonly stepMs: number;
-  readonly catalog: FactoryCatalog;
+  readonly catalog: ActivityCatalog;
   /** Types de division, niches et réglages des fronts (05-Fronts), envoyés une fois. */
   readonly military: MilitaryCatalog;
-}
-
-/** Un composant d'un type de division (05-Fronts §3.2), en entiers tels que le moteur les lit. */
-export interface DivisionComponentInfo {
-  /** `"men"` (les hommes) ou une clé de `ARMAMENT.types`. */
-  readonly resource: string;
-  readonly count: number;
-  readonly required: boolean;
-  readonly weight: number;
-  readonly softAttack: number;
-  readonly hardAttack: number;
-  readonly airAttack: number;
-  /** Échelle 100 (1 : 100). */
-  readonly lossMultiplier: number;
 }
 
 /** Un type de division (`config/divisions.ts`, 05-Fronts §3.4), en entiers tels que le moteur les lit. */
@@ -112,17 +95,20 @@ export interface DivisionTypeInfo {
   readonly rank: number;
   /** Niche d'appui-feu (antichar, antiaérien, artillerie). */
   readonly support: boolean;
-  readonly components: readonly DivisionComponentInfo[];
+  /** Attaques d'une division pleine : somme de ses composants (08 §5), millièmes de point. */
+  readonly softAttack: number;
+  readonly hardAttack: number;
+  readonly airAttack: number;
   readonly icon: string;
-  /** Description propre au type, sinon celle de l'armement de son premier composant d'armement. */
+  /** Description propre au type ; vide s'il n'en a pas. */
   readonly description: string;
   /** Largeur de première ligne, en liaisons. */
   readonly frontWidth: number;
   /** Largeur dans une percée, en liaisons (05-Fronts §7.2). */
   readonly breakthroughWidth: number;
-  /** Durée de formation, en tours ; 0 : aucune. */
-  readonly formationTurns: number;
-  /** Limité par `MilitaryCatalog.eliteTroopsRatio` à la création (05-Fronts §3.5). */
+  /** Tours de formation d'une division produite (08 §6). */
+  readonly productionTurns: number;
+  /** Limité par `MilitaryCatalog.eliteTroopsRatio` (08 §5). */
   readonly elite: boolean;
   /** PV d'une division complète. */
   readonly hitPoints: number;
@@ -143,7 +129,7 @@ export interface MilitaryCatalog {
   readonly niches: readonly { readonly id: string; readonly support: boolean; readonly types: readonly string[] }[];
   /** Tours entre deux rounds de combat. */
   readonly combatTurns: number;
-  /** `ELITE_TROOPS_RATIO` : divisions d'infanterie par division d'élite au plus (05-Fronts §3.5). */
+  /** `ELITE_TROOPS_RATIO` : divisions d'infanterie par division d'élite au plus (08 §5). */
   readonly eliteTroopsRatio: number;
   /** Délai d'un déplacement, en tours. */
   readonly transferTurns: number;
@@ -194,13 +180,10 @@ export interface CombatView {
   readonly city2: number;
   readonly units: readonly CombatUnitView[];
   readonly rounds: readonly CombatRoundView[];
-  /**
-   * Pertes de l'attaquant puis du défenseur : hommes, et exemplaires de chaque type d'armement (ordre de
-   * `FactoryCatalog.armamentIds`).
-   */
+  /** Pertes de l'attaquant puis du défenseur (08 §11) : divisions détruites, et état perdu (échelle `MilitaryCatalog.stateScale`). */
   readonly losses: readonly [
-    { readonly men: number; readonly equipment: readonly number[] },
-    { readonly men: number; readonly equipment: readonly number[] },
+    { readonly divisions: number; readonly state: number },
+    { readonly divisions: number; readonly state: number },
   ];
   /** Ville prise à la fin du combat, 0 sinon. */
   readonly captured: number;
@@ -208,104 +191,128 @@ export interface CombatView {
   readonly success: boolean;
 }
 
-/** Ce que la page lit de la configuration des usines (envoyé une fois, dans `init`). */
-export interface FactoryCatalog {
-  /** Dans l'ordre du moteur : l'indice d'un type est celui de `factoryMarks`. */
-  readonly factoryTypes: readonly { readonly id: string; readonly tree: readonly { readonly good: string; readonly parent: string | null }[] }[];
-  readonly unlockTurns: number;
-  /** `FACTORY.growthTurns` : tours avant une ligne automatique (00-Game §8.2). */
-  readonly growthTurns: number;
-  /** `RATIO_SCALE` : 100 % de productivité s'écrit ainsi (`PlayerStats.goodsLineRatio`…). */
-  readonly ratioScale: number;
-  /** Biens, dans l'ordre de `HumanDetail.goods`. */
+/** Une activité de la table du moteur (`config/activities.ts`, 08 §2, §9), telle que le panneau l'affiche. */
+export interface ActivityInfo {
+  /** Identifiant de l'activité, celui des ordres. */
+  readonly id: string;
+  /** Indice dans `ActivityCatalog.activities` : c'est aussi celui de `HumanDetail.unlock`. */
+  readonly index: number;
+  /** `idle`, `hurt`, `farming`, `fishing`, `mining`, `factory` ou `barracks`. */
+  readonly kind: string;
+  /** Identifiant de l'activité parente, `null` s'il n'y en a pas. */
+  readonly parent: string | null;
+  /** Coût de déblocage, en tours d'un ouvrier servi du parent ; 0 : débloquée au départ. */
+  readonly unlockCost: number;
+  /** `unlockCost` compte les ouvriers présents dans le parent (08 §9). */
+  readonly unlockByWorkers: boolean;
+  /** `unlockCost` compte la population totale du joueur (08 §9). */
+  readonly unlockByPopulation: boolean;
+  readonly workersPerUnit: number;
+  readonly unitsPerWorker: number;
+  readonly ironPerUnit: number;
+  /** Agriculteurs, pêcheurs, mineurs, usines de machines : places calculées, barrables (08 §7 bis). */
+  readonly hasSlots: boolean;
+  /** Casernes et usines de divisions : places choisies par la production visée (08 §7 ter). */
+  readonly hasPlaces: boolean;
+  /** Bien produit (usine de machines) ou machine reçue (agriculture, pêche, mines), `null` sinon. */
+  readonly good: string | null;
+  /** Type de division produit (usine ou caserne), `null` sinon. */
+  readonly division: string | null;
+  /** Cases par travailleur (agriculture, pêche, mines) ; 0 ailleurs. */
+  readonly tilesPerWorker: number;
+}
+
+/** Ce que la page lit de la configuration des activités (envoyé une fois, dans `init`). */
+export interface ActivityCatalog {
+  /** Dans l'ordre du moteur (`ACTIVITY_IDS`). */
+  readonly activities: readonly ActivityInfo[];
+  /** Biens (machines), dans l'ordre de `HumanDetail.idleMachines`. */
   readonly goodIds: readonly string[];
-  /** Types d'armement, dans l'ordre de `HumanDetail.reserve`. */
-  readonly armamentIds: readonly string[];
-  /** Production d'une ligne qui tourne à 100 % : par tour pour un bien, par heure pour un type d'armement (00-Game §8, §8.3). */
-  readonly productionPerLine: Readonly<Record<string, number>>;
-  /** Ouvriers de la première ligne d'un groupe, par bien ou type d'armement. */
-  readonly workersPerLine: Readonly<Record<string, number>>;
-  /** Ouvriers minimaux d'une ligne (plancher de la spécialisation, 00-Game §8.1), par bien ou type d'armement. */
-  readonly workersFloor: Readonly<Record<string, number>>;
-  /** Fer consommé par une ligne remplie, par bien ou type d'armement. */
-  readonly ironPerLine: Readonly<Record<string, number>>;
-  /** Icône d'un bien ou d'un type d'armement (chemin sous `public/icons/`) ; absent : symbole texte. */
+  /** Icône d'un bien (chemin sous `public/icons/`) ; absent : symbole texte. */
   readonly icons: Readonly<Record<string, string>>;
-  /** `ARMAMENT.maxStockSeconds` : secondes de production d'une ligne qui forment son stock cible (00-Game §8.3). */
-  readonly stockSeconds: number;
-  /**
-   * Par type d'armement, la division de référence de l'indication « approprié pour » : les réguliers
-   * quand ils l'utilisent, sinon la première division qui l'utilise. `count` : exemplaires dans une division complète.
-   */
-  readonly equipUnit: Readonly<Record<string, { readonly division: string; readonly count: number; readonly icon: string }>>;
-  /** Réglages que la barre d'informations lit (envoyés une fois). */
-  readonly economy: EconomyInfo;
+  /** Délais en tours (08 §6) : apparition et disparition d'un bonhomme, d'une machine, d'une division. */
+  readonly popArrivalTurns: number;
+  readonly popLeaveTurns: number;
+  readonly machineArrivalTurns: number;
+  readonly machineLeaveTurns: number;
+  readonly divisionLeaveTurns: number;
+  /** `POPULATION.foodPerPawn` : la nourriture se lit en bonshommes en divisant par ce nombre (08 §3). */
+  readonly foodPerPawn: number;
+  /** `FOOD.base` et `FOOD.perCity`. */
+  readonly foodBase: number;
+  readonly foodPerCity: number;
+  /** `RESOURCES.iron.capacityPerTile` : fer produit par case de fer exploitée (08 §4). */
+  readonly ironPerTile: number;
+  /** Nourriture d'une case d'eau pêchée : `FISHING.foodPerWorker / tilesPerWorker`. */
+  readonly fishYield: number;
 }
 
-/** Réglages du moteur dont la barre d'informations tire des rapports (maximum de population, mécanisation totale, déclin du stock). */
-export interface EconomyInfo {
-  /** `POPULATION.foodPerHead`. */
-  readonly foodPerHead: number;
-  /** `FOOD.minimum`. */
-  readonly foodMinimum: number;
-  /** `maxMachinesPer1000` de chaque bien-machine (clé = identifiant du bien). */
-  readonly machinesPer1000: Readonly<Record<string, number>>;
-  /** Part de l'excès d'armement supprimée par tour, en pourcent (`ARMAMENT.decayRate` / 100). */
-  readonly armamentDecayPercent: number;
-  /**
-   * `mechanizationBase` et `mechanizationMax` de chaque bien-machine (clé = identifiant
-   * du bien) : surface par travailleur sans machine et à pleine mécanisation, en
-   * millièmes de case (`FARMING`, `FISHING`, `MINING`).
-   */
-  readonly mechanization: Readonly<Record<string, { readonly base: number; readonly max: number }>>;
-  /** `FISHING.tileYield` et `FISHING.tileYieldMax` : rendement d'une case d'eau sans bateau et au maximum. */
-  readonly waterYield: { readonly base: number; readonly max: number };
-}
-
-/** Un groupe de lignes du même bien dans une usine du joueur. */
-export interface LineGroupView {
-  readonly good: string;
-  readonly lines: number;
-  readonly active: number;
-  /** Lignes qui tournent (les actives, sauf les lignes utiles en trop, 00-Game §8.2). */
-  readonly running: number;
-  /** Ouvriers demandés par les lignes qui tournent (somme selon le rang de chaque ligne, 00-Game §8.1). */
-  readonly workersDemanded: number;
-  /** Ouvriers obtenus : demandés × productivité des lignes. */
-  readonly workersObtained: number;
-  /** Fer demandé par les lignes qui tournent. */
-  readonly ironDemanded: number;
-  /** Fer obtenu : demandé × productivité des lignes. */
-  readonly ironObtained: number;
-  /** Tours comptés vers la prochaine ligne automatique (biens seulement, 00-Game §8.2). */
-  readonly growth: number;
-  /** La capacité du joueur pour ce bien couvre la demande : plus de croissance automatique. */
-  readonly demandMet: boolean;
-  /** Lignes de ce groupe dont la production reste sous la demande (biens) ; `lines` pour l'armement. Trait rouge du curseur. */
-  readonly usefulLines: number;
-}
-
-export interface FactoryView {
-  readonly city: number;
-  readonly type: string;
-  /** Nombre total de lignes. */
-  readonly level: number;
-  readonly groups: readonly LineGroupView[];
-  /** Un compteur de déblocage par nœud de l'arbre du type (même indice que `FactoryCatalog.factoryTypes[...].tree`). */
-  readonly progress: readonly number[];
+/** Une activité ouverte du joueur humain, dans l'ordre choisi par le joueur (`Player.activities`). */
+export interface ActivityView {
+  /** Identifiant (`ActivityInfo.id`). */
+  readonly id: string;
+  /** Bonshommes présents. Caserne : les places remplies. */
+  readonly workers: number;
+  /** Machines présentes (agriculteurs, pêcheurs, mineurs). */
+  readonly machines: number;
+  /** Casernes : places, remplies ou vides. */
+  readonly places: number;
+  /** Agriculteurs, pêcheurs, mineurs : places tirées des cases (08 §2.1). */
+  readonly slots: number;
+  /** Agriculteurs, pêcheurs, mineurs : cases de cette activité, pour la jauge de la prochaine place (08 §2.1). 0 ailleurs. */
+  readonly surface: number;
+  /** Postes barrés, comptés depuis la droite (08 §7 bis). */
+  readonly disabled: number;
+  /** Blé ou poisson (agriculteurs, pêcheurs), fer produit (mineurs), unités servies en fer (usines et casernes). */
+  readonly output: number;
+  /** Fer réservé par la sortie. */
+  readonly ironUsed: number;
+  /** Divisions du type en formation, comprises dans `existing` ; 0 sans type de division. */
+  readonly forming: number;
+  /** Usines et casernes : existants (machines du bien, ou divisions du type) et limite effective (élites plafonnées). -1 ailleurs. */
+  readonly existing: number;
+  readonly limit: number;
 }
 
 /** Ce dont le panneau de production a besoin, pour le joueur humain seulement. */
 export interface HumanDetail {
-  /** Dans l'ordre de priorité des villes. */
-  readonly factories: readonly FactoryView[];
-  readonly goods: readonly number[];
-  readonly reserve: readonly number[];
-  readonly reserveMax: readonly number[];
-  /** Capacité d'extraction de fer par tour (cases de fer des zones × capacité par case). */
-  readonly ironCapacity: number;
-  /** Fer demandé par toutes les lignes actives, remplies ou non : Σ (lignes actives × fer par ligne). */
-  readonly ironRequired: number;
+  /** Dernier tour appliqué : les compteurs ci-dessous sont des tours de fin. */
+  readonly tick: number;
+  /** Activités ouvertes, de haut en bas. */
+  readonly activities: readonly ActivityView[];
+  /** Villes du joueur, blé, poisson, et nourriture d'un agriculteur et d'un pêcheur pleins : le détail de la nourriture (08 §3). */
+  readonly cities: number;
+  readonly wheat: number;
+  readonly fish: number;
+  readonly farmPerWorker: number;
+  readonly fishPerWorker: number;
+  /** Auto-assignation (08 §7 bis). */
+  readonly autoAssign: boolean;
+  /** Progression de déblocage de chaque activité (indice de `ActivityCatalog.activities`), en tours d'ouvrier servi. */
+  readonly unlock: readonly number[];
+  /** 1 pour une activité déjà ouverte une fois (08 §9), même indice. */
+  readonly everOpened: readonly number[];
+  /** Ouvriers servis en fer de chaque activité ouverte (unités servies × ouvriers par unité) : la vitesse de déblocage de ses enfants. 0 si fermée. */
+  readonly served: readonly number[];
+  /** Machines disponibles dans Inactifs, par bien (ordre de `ActivityCatalog.goodIds`). */
+  readonly idleMachines: readonly number[];
+  /** Tours de fin des bonshommes à venir et en sursis, triés (08 §6). */
+  readonly popArrivals: readonly number[];
+  readonly popLeaves: readonly number[];
+  /** Tours de fin des machines à venir et en sursis, par bien, triés. */
+  readonly machineArrivals: readonly (readonly number[])[];
+  readonly machineLeaves: readonly (readonly number[])[];
+  /** Fin du soin du blessé en cours, 0 si aucun. */
+  readonly hurtHealEnd: number;
+  /** Capacité de population (08 §3). */
+  readonly capacity: number;
+  /** Fer demandé par les usines et casernes (08 §4). */
+  readonly ironWanted: number;
+  /** Fer produit si tous les postes de mineurs sont occupés. */
+  readonly ironMax: number;
+  /** Fer produit par les mineurs et fer réservé par les usines et casernes servies (08 §4). */
+  readonly ironProduced: number;
+  readonly ironReserved: number;
 }
 
 /** Une connexion d'un front : `position` en millièmes de la route depuis `city1` ; 0 en paix (le client prend alors 500). */
@@ -321,7 +328,7 @@ export interface FrontSideView {
   readonly frontAttack: boolean;
   /** Tour où cette attaque sera résolue, 0 sans attaque (compte à rebours). */
   readonly attackAt: number;
-  /** Hommes perdus par sa première ligne au dernier round de combat, par niche (ordre de `military.niches`, 05-Fronts §11.4). */
+  /** État perdu par sa première ligne au dernier round de combat (échelle `stateScale`), par niche (ordre de `military.niches`, 05-Fronts §11.4). */
   readonly lastLossByNiche: readonly number[];
 }
 
@@ -370,8 +377,6 @@ export interface DivisionView {
   readonly owner: number;
   /** Indice dans `MilitaryCatalog.divisions`. */
   readonly type: number;
-  /** Exemplaires présents par composant, dans l'ordre de `components`. */
-  readonly counts: readonly number[];
   /** Front où elle est, ou vers lequel elle va ; 0 : réserve nationale. */
   readonly front: number;
   /** `box` : dans la boîte de percée `box` (05-Fronts §4.6) ; `rapid` : réaction rapide. */
@@ -397,77 +402,50 @@ export interface DivisionView {
   readonly status: "ready" | "formation" | "moving" | "fleeing";
   /** Tour où le statut prend fin (formation, déplacement, fuite) ; 0 pour `ready`. */
   readonly until: number;
+  /** Division en trop (08 §6) : tour où elle disparaît, 0 sinon. Son pion clignote jusque-là. */
+  readonly leaveTick: number;
 }
 
 export interface PlayerStats {
   readonly id: number;
-  /** Soldats : hommes de toutes les divisions du joueur (00-Game §4, point 5). */
-  readonly soldiers: number;
-  readonly forcedMobilization: boolean;
-  /** Armement dans les divisions du joueur, par type d'armement dans l'ordre de `FactoryCatalog.armamentIds` (05-Fronts §4.5, §11.6). */
-  readonly divisionEquipment: readonly number[];
-  /** Armement que les divisions du joueur auraient à effectif complet, dans le même ordre que `divisionEquipment`. */
-  readonly divisionEquipmentFull: readonly number[];
-  /** Population entière, blessés compris (ils mangent et occupent des places de maximum). Le total affiché est `population − hurt`. */
+  /** Population en bonshommes, blessés compris (ils occupent de la capacité). */
   readonly population: number;
+  /** Capacité de population (08 §3). */
+  readonly capacity: number;
+  /** Bonshommes d'Inactifs, de Blessés, d'Agriculteurs, de Pêcheurs, de Mineurs. */
+  readonly idle: number;
+  readonly hurt: number;
   readonly farmers: number;
   readonly fishers: number;
-  readonly idle: number;
-  /** Blessés (00-Game §4.2). */
-  readonly hurt: number;
+  readonly miners: number;
+  /** Bonshommes des casernes : le nombre de soldats. */
+  readonly soldiers: number;
+  /** Divisions du joueur (en formation ou en sursis comprises). */
+  readonly divisions: number;
   readonly food: number;
   readonly wheat: number;
   readonly fish: number;
+  /** Surface cultivée, surface pêchée, cases de fer exploitées (rayons d'exploitation, 00-Game §6.6). */
   readonly cultivated: number;
-  /**
-   * Mécanisation du dernier tour par bien-machine, en millièmes de case par
-   * travailleur : `Player.farmMechanization`, `fishMechanization`, `mineMechanization`.
-   */
-  readonly mechanization: Readonly<Record<string, number>>;
-  /** Machines utilisées au dernier tour, par bien (celles produites au tour d'avant, 00-Game §12). */
-  readonly machinesUsed: Readonly<Record<string, number>>;
-  /** Cases de fer des zones du joueur. */
-  readonly ironTiles: number;
-  /** `surface_max` : cases fertiles du joueur. */
-  readonly farmTiles: number;
   readonly fished: number;
+  readonly minedTiles: number;
+  /** Cases de fer, cases fertiles et cases d'eau des zones du joueur. */
+  readonly ironTiles: number;
+  readonly farmTiles: number;
   readonly seaTiles: number;
-  readonly farmPercent: number;
+  /** Fer produit et fer réservé par les usines et les casernes servies (08 §4). */
+  readonly ironProduced: number;
+  readonly ironReserved: number;
+  /** Machines possédées (Inactifs et activité) et limite, par bien dans l'ordre de `ActivityCatalog.goodIds`. */
+  readonly machines: readonly number[];
+  readonly machineLimits: readonly number[];
   /** Identifiant de la capitale, 0 = aucune. */
   readonly capital: number;
   readonly cities: number;
   /** Éliminé (05-Fronts §10.3) : sa dernière ville a été prise. */
   readonly defeated: boolean;
-  /** Coût en population de la prochaine ville (00-Game §3.3). */
+  /** Coût en bonshommes de la prochaine ville (00-Game §3.3, 08 §10). */
   readonly foundingCost: number;
-  /** Ouvriers employés par les lignes, mineurs, cases de fer exploitées, fer extrait (dernier tour). */
-  readonly factoryWorkers: number;
-  readonly miners: number;
-  readonly minedTiles: number;
-  readonly ironExtracted: number;
-  /** Fer demandé par les lignes qui tournent, et fer consommé (demandé × productivité). */
-  readonly ironDemanded: number;
-  readonly ironConsumed: number;
-  /** Productivités sur l'échelle `RATIO_SCALE` (10 000 = 100 %), pour les biens puis l'armement : fer, ouvriers, et lignes = le plus petit des deux. */
-  readonly goodsIronRatio: number;
-  readonly goodsWorkerRatio: number;
-  readonly goodsLineRatio: number;
-  /** Idem pour l'armement, servi après les biens (00-Game §8). */
-  readonly armIronRatio: number;
-  readonly armWorkerRatio: number;
-  readonly armLineRatio: number;
-  /** Nourriture si toutes les terres et toutes les eaux étaient travaillées (au moins FOOD.minimum). */
-  readonly foodPotential: number;
-  /** Blé si toutes les cases fertiles étaient cultivées (`Player.fertilitySum`). */
-  readonly wheatMax: number;
-  /** Poisson si toutes les cases d'eau étaient pêchées, au rendement d'eau des bateaux actuels. */
-  readonly fishMax: number;
-  /**
-   * Machines d'une mécanisation totale (00-Game §6.2) : la référence (disponibles
-   * plafonnés aux travailleurs qui couvrent la surface à pleine mécanisation) × machines pour 1 000
-   * ÷ 1 000. Clé = bien-machine.
-   */
-  readonly fullMachines: Readonly<Record<string, number>>;
 }
 
 /** Statut diplomatique de deux joueurs (00-Game §1) : neutre, pacte de non-agression, guerre. */
@@ -525,13 +503,7 @@ export interface TickMessage {
   readonly cities: Uint32Array | null;
   /** Routes : paires d'identifiants de villes. Même condition que `cities`. */
   readonly roads: Uint16Array | null;
-  /**
-   * Usines de tous les joueurs, 4 nombres chacune [ville, indice du type, niveau, indice dans
-   * l'arbre du bien qui a le plus de lignes construites, `dominantGood`]. Présente
-   * seulement si elle a changé depuis le tour précédent ; sinon `null`.
-   */
-  readonly factoryMarks: Uint32Array | null;
-  /** Le détail des usines du joueur humain, à chaque tour. */
+  /** Les activités du joueur humain (panneau de production), à chaque tour. */
   readonly human: HumanDetail;
   /** Statistiques des joueurs, dans l'ordre des identifiants. */
   readonly players: readonly PlayerStats[];

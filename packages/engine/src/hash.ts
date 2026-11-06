@@ -4,7 +4,6 @@
 // tableaux par une vue Uint32Array, dont l'ordre des octets dépend de la machine.
 
 import { fmix32, mixWord } from "./bits.ts";
-import { factoryTypeIndex, productIndex } from "./factories.ts";
 import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import type { GameMap } from "./map.ts";
@@ -60,7 +59,7 @@ function hashDivision(h: number, d: Division): number {
   h = mixWord(h, d.id);
   h = mixWord(h, d.owner);
   h = mixWord(h, d.type);
-  h = mixList(h, d.counts);
+  h = mixWord(h, d.state);
   h = mixWord(h, d.front);
   h = mixWord(h, d.line);
   h = mixWord(h, d.box);
@@ -70,16 +69,16 @@ function hashDivision(h: number, d: Division): number {
   h = mixWord(h, d.arrivalTick);
   h = mixWord(h, d.formedTick);
   h = mixWord(h, d.fleeUntilTick);
+  h = mixWord(h, d.leaveTick);
   return h;
 }
 
 /**
- * Couvre : carte (par mapHash), numéro de tour, générateur aléatoire, joueurs
- * (cases, population, capitale, villes, cases de ressources, reste de
- * croissance, répartition fermiers / pêcheurs, totaux de fertilité, résultats
- * du dernier tour, usines avec leurs groupes de lignes et leurs compteurs de
- * déblocage, biens produits, réserves d'armement, mobilisation forcée, soldats, élimination), villes (joueur, case, port, groupe), routes,
- * fronts (connexions, positions, attaques), divisions (tous leurs champs), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
+ * Couvre : carte (par mapHash), numéro de tour, générateur aléatoire, joueurs (cases, population, capitale, villes, cases
+ * de ressources, totaux de fertilité, activités avec leur ordre, leurs bonshommes, machines, places et résultats,
+ * déblocage, machines d'Inactifs, compteurs de population et de machines, soin en cours, résultats du dernier tour,
+ * élimination), villes (joueur, case, port, groupe), routes, fronts (connexions, positions, attaques), divisions (tous
+ * leurs champs), statuts diplomatiques, propositions en attente, propriétaires, ville de chaque case.
  * Pas `state.events` (liste du dernier tour, jamais lue par les règles).
  */
 export function hashState(state: GameState): number {
@@ -101,66 +100,41 @@ export function hashState(state: GameState): number {
     for (const n of p.resourceTiles) h = mixWord(h, n);
     h = mixWord(h, p.cityIds.length);
     for (const id of p.cityIds) h = mixWord(h, id);
-    h = mixWord(h, p.growthRemainder);
-    h = mixWord(h, p.farmPercent);
     h = mixWord(h, p.farmTiles);
     h = mixWord(h, p.fertilitySum);
     h = mixWord(h, p.seaTiles);
-    h = mixWord(h, p.farmers);
-    h = mixWord(h, p.fishers);
-    h = mixWord(h, p.idle);
-    h = mixWord(h, p.cultivated);
-    h = mixWord(h, p.farmMechanization);
-    h = mixWord(h, p.fished);
-    h = mixWord(h, p.fishMechanization);
+    h = mixWord(h, p.capacity);
+    h = mixWord(h, p.food);
     h = mixWord(h, p.wheat);
     h = mixWord(h, p.fish);
-    h = mixWord(h, p.food);
-    h = mixWord(h, p.factoryWorkers);
-    h = mixWord(h, p.miners);
+    h = mixWord(h, p.cultivated);
+    h = mixWord(h, p.fished);
     h = mixWord(h, p.minedTiles);
-    h = mixWord(h, p.mineMechanization);
-    h = mixWord(h, p.ironExtracted);
-    h = mixWord(h, p.ironDemanded);
-    h = mixWord(h, p.ironConsumed);
-    h = mixWord(h, p.goodsIronRatio);
-    h = mixWord(h, p.goodsWorkerRatio);
-    h = mixWord(h, p.goodsLineRatio);
-    h = mixWord(h, p.armIronRatio);
-    h = mixWord(h, p.armWorkerRatio);
-    h = mixWord(h, p.armLineRatio);
-    h = mixWord(h, p.forcedMobilization ? 1 : 0);
-    h = mixWord(h, p.soldiers);
-    h = mixWord(h, p.hurt);
+    h = mixWord(h, p.ironProduced);
+    h = mixWord(h, p.ironReserved);
+    h = mixWord(h, p.ironWanted);
+    h = mixWord(h, p.hurtHealEnd);
+    h = mixWord(h, p.autoAssign ? 1 : 0);
     h = mixWord(h, p.defeated ? 1 : 0);
-    h = mixWord(h, p.goods.length);
-    for (const n of p.goods) h = mixWord(h, n);
-    for (const n of p.goodsEffective) h = mixWord(h, n);
-    for (const n of p.goodsDemand) h = mixWord(h, n);
-    for (const n of p.goodsRemainder) h = mixWord(h, n);
-    h = mixWord(h, p.armamentReserve.length);
-    for (let a = 0; a < p.armamentReserve.length; a++) {
-      h = mixWord(h, p.armamentReserve[a]!);
-      h = mixWord(h, p.armamentRemainder[a]!);
-      h = mixWord(h, p.armamentProductionRemainder[a]!);
+    // Activités dans leur ordre (la priorité du joueur).
+    h = mixWord(h, p.activities.length);
+    for (const a of p.activities) {
+      h = mixWord(h, a.id);
+      h = mixWord(h, a.workers);
+      h = mixWord(h, a.machines);
+      h = mixWord(h, a.places);
+      h = mixWord(h, a.slots);
+      h = mixWord(h, a.disabled);
+      h = mixWord(h, a.output);
+      h = mixWord(h, a.ironUsed);
     }
-    // Usines dans l'ordre de priorité, groupes dans l'ordre de leur usine.
-    h = mixWord(h, p.factories.length);
-    for (const f of p.factories) {
-      h = mixWord(h, f.city);
-      h = mixWord(h, factoryTypeIndex(f.type));
-      h = mixWord(h, f.progress.length);
-      for (const n of f.progress) h = mixWord(h, n);
-      for (const n of f.progressRemainder) h = mixWord(h, n);
-      h = mixWord(h, f.groups.length);
-      for (const g of f.groups) {
-        h = mixWord(h, productIndex(g.good));
-        h = mixWord(h, g.lines);
-        h = mixWord(h, g.active);
-        h = mixWord(h, g.running);
-        h = mixWord(h, g.growth);
-      }
-    }
+    h = mixList(h, p.unlock);
+    h = mixList(h, p.everOpened);
+    h = mixList(h, p.idleMachines);
+    h = mixList(h, p.popArrivals);
+    h = mixList(h, p.popLeaves);
+    for (const list of p.machineArrivals) h = mixList(h, list);
+    for (const list of p.machineLeaves) h = mixList(h, list);
   }
   h = mixWord(h, state.cities.length);
   for (const c of state.cities) {

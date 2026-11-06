@@ -29,6 +29,15 @@
 .pz-grey .pz-icon {
   opacity: 0.5;
 }
+/* Division en trop (08 §6) : clignote jusqu'à sa disparition (--blink-period, blink.ts). */
+.pz-leaving {
+  animation: pz-blink var(--blink-period, 1000ms) steps(1, end) infinite;
+}
+@keyframes pz-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
 .pz-rank {
   position: absolute;
   left: 0;

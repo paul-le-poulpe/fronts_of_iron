@@ -21,6 +21,8 @@ export const RESOURCE_COUNT = Object.keys(RESOURCES).length;
 export const RESOURCE_IRON = 0x01;
 /** Bit 1 de `resources` : aluminium (deuxième clé de RESOURCES). */
 export const RESOURCE_ALUMINIUM = 0x02;
+/** Rang du fer dans `Player.resourceTiles` (ordre des clés de RESOURCES). Ne pas confondre avec le bit `RESOURCE_IRON`. */
+export const IRON_INDEX = Object.keys(RESOURCES).indexOf("iron");
 
 export interface GameMap {
   readonly width: number;
