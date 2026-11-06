@@ -925,23 +925,29 @@ contraire.
   du front (§11.5, petit point rouge foncé) et, de chaque côté sur le segment
   droit entre les deux villes, **un rond de la couleur du joueur de ce côté**,
   de la taille d'une ville, qui touche le point. Fronts actifs seulement.
-- **Unités** : quand l'écran montre au plus `FRONT_UNITS_MAX_TILES` cases
-  (240 000, soit environ deux cents villes, *provisoire*), les icônes 32 × 32
-  des unités de la première ligne sont dessinées, aux couleurs de leur
+- **Unités** : quand l'écran montre au plus `FRONT_INFANTRY_MAX_TILES` cases
+  (960 000, soit environ huit cents villes, *provisoire*), chaque camp dessine
+  au plus une infanterie par connexion, centrée sur le segment droit, et rien
+  d'autre, pas même le petit rond d'un emplacement vide. Quand il montre au plus `FRONT_UNITS_MAX_TILES` cases
+  (240 000, soit environ deux cents villes, *provisoire*), toutes les icônes
+  32 × 32 de la première ligne sont dessinées, aux couleurs de leur
   propriétaire, sur tous les fronts, **en guerre comme en paix** : elles
   remplacent les ronds d'un front actif. En paix, le point vaut le milieu de la
   route, sans petit point rouge. De chaque côté du point
-  d'avancement, deux emplacements côte à côte, parallèles au front et à la même
-  distance de lui : un pour l'infanterie (le plus haut à l'écran), un pour une
-  autre unité (char ou appui-feu). Les icônes des deux camps se font face et
-  gardent leur taille à tout zoom : de loin, elles peuvent se chevaucher.
+  d'avancement, les unités sont en rangées parallèles au front. Première rangée,
+  contre le front : l'infanterie (le plus haut à l'écran) et une autre unité
+  (char ou appui-feu), côte à côte. Les autres unités de la connexion suivent par
+  deux sur les rangées de derrière, vers l'arrière du camp ; une unité seule sur
+  sa rangée est centrée. Les icônes des deux camps se font face et gardent leur
+  taille à tout zoom : de loin, elles peuvent se chevaucher.
   L'infanterie prend les connexions dans l'ordre de la chaîne, tant qu'il y en
   a ; un emplacement d'infanterie vide montre un petit rond de la couleur du
-  joueur sur un front actif (*provisoire*), rien en paix ; un autre emplacement
-  vide ne montre rien. Les autres
-  unités sont prises une par niche à tour de rôle, puis espacées régulièrement
-  le long du front. Au plus une de chaque par connexion : le reste n'est pas
-  affiché. Une division en déplacement n'est pas montrée (*provisoire*).
+  joueur sur un front actif (*provisoire*), rien en paix. Chaque autre niche est
+  espacée régulièrement le long du front, à partir d'un point de départ propre à
+  la niche, pour que les types se mélangent ; une connexion reçoit d'abord une
+  niche qu'elle n'a pas, puis celle qui a le moins d'unités passe avant
+  (*provisoire*). Toute la première ligne est affichée. Une division en
+  déplacement n'est pas montrée (*provisoire*).
 - **Mode choix d'axe** (bouton « Lancer » d'une boîte de percée) : la fenêtre
   du front se ferme le temps du choix ; un clic sur la carte lance la percée
   sur la connexion du front la plus proche du clic (*provisoire*), surlignée
