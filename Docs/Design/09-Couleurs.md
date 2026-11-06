@@ -25,26 +25,26 @@ en sont calculées (§3).
 
 | N° | Nom | Teinte | Saturation | Clarté | Carte | Foncé | Moyen | Clair |
 | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |
-| 1 | Rouge | 0 | 0,70 | 0,50 | `#d92626` | `#8a4242` | `#ac5353` | `#c07c7c` |
-| 2 | Bordeaux | 345 | 0,60 | 0,34 | `#8b233d` | `#502b34` | `#713d4a` | `#985264` |
-| 3 | Orange | 25 | 0,80 | 0,52 | `#e77423` | `#966440` | `#b67c54` | `#c89d7e` |
-| 4 | Or | 45 | 0,75 | 0,50 | `#dfaf20` | `#8c7940` | `#af9750` | `#c2b07a` |
-| 5 | Jaune | 56 | 0,75 | 0,55 | `#e2d736` | `#9e9848` | `#b7b261` | `#cac68b` |
-| 6 | Olive | 70 | 0,45 | 0,40 | `#859438` | `#585e3b` | `#757d4f` | `#97a069` |
-| 7 | Citron vert | 90 | 0,60 | 0,48 | `#7ac431` | `#617e44` | `#7a9f56` | `#99b87a` |
-| 8 | Vert | 130 | 0,50 | 0,42 | `#36a147` | `#3d6644` | `#508659` | `#6ca776` |
-| 9 | Sapin | 155 | 0,55 | 0,30 | `#227754` | `#254135` | `#376250` | `#4e8970` |
-| 10 | Turquoise | 175 | 0,60 | 0,42 | `#2baba1` | `#396a66` | `#4b8b86` | `#67ada7` |
-| 11 | Cyan | 192 | 0,70 | 0,50 | `#26b5d9` | `#427b8a` | `#539aac` | `#7cb2c0` |
-| 12 | Azur | 210 | 0,70 | 0,52 | `#2f85da` | `#466b91` | `#5a85af` | `#83a3c3` |
-| 13 | Bleu | 225 | 0,65 | 0,45 | `#284dbd` | `#3c4b76` | `#4d6098` | `#6e80b5` |
-| 14 | Marine | 228 | 0,55 | 0,28 | `#20306f` | `#21263b` | `#343c5b` | `#4a5582` |
-| 15 | Indigo | 255 | 0,55 | 0,45 | `#5334b2` | `#4d4172` | `#635392` | `#8273b0` |
-| 16 | Violet | 280 | 0,55 | 0,48 | `#9137be` | `#6a467c` | `#86599c` | `#a27db5` |
-| 17 | Magenta | 310 | 0,60 | 0,50 | `#cc33b2` | `#85477a` | `#a65999` | `#bb81b1` |
-| 18 | Rose | 335 | 0,75 | 0,68 | `#eb70a3` | `#a84d73` | `#bc6c8d` | `#cf96ae` |
-| 19 | Marron | 25 | 0,45 | 0,33 | `#7a4e2e` | `#48382d` | `#675141` | `#8d6e59` |
-| 20 | Gris | 210 | 0,06 | 0,50 | `#788087` | `#636669` | `#7c8083` | `#9b9ea1` |
+| 1 | Rouge | 0 | 0,70 | 0,50 | `#d92626` | `#7c3c3c` | `#ac5353` | `#c78a8a` |
+| 2 | Bordeaux | 345 | 0,60 | 0,34 | `#8b233d` | `#42242b` | `#713d4a` | `#a6596c` |
+| 3 | Orange | 25 | 0,80 | 0,52 | `#e77423` | `#885a3a` | `#b67c54` | `#cea88d` |
+| 4 | Or | 45 | 0,75 | 0,50 | `#dfaf20` | `#7e6d39` | `#af9750` | `#c9b988` |
+| 5 | Jaune | 56 | 0,75 | 0,55 | `#e2d736` | `#908b41` | `#b7b261` | `#d1cd99` |
+| 6 | Olive | 70 | 0,45 | 0,40 | `#859438` | `#4c5133` | `#757d4f` | `#a0a876` |
+| 7 | Citron vert | 90 | 0,60 | 0,48 | `#7ac431` | `#57713d` | `#7a9f56` | `#a3bf88` |
+| 8 | Vert | 130 | 0,50 | 0,42 | `#36a147` | `#36593b` | `#508659` | `#79af82` |
+| 9 | Sapin | 155 | 0,55 | 0,30 | `#227754` | `#1e342b` | `#376250` | `#55967b` |
+| 10 | Turquoise | 175 | 0,60 | 0,42 | `#2baba1` | `#325d59` | `#4b8b86` | `#74b4af` |
+| 11 | Cyan | 192 | 0,70 | 0,50 | `#26b5d9` | `#3c6f7c` | `#539aac` | `#8abbc7` |
+| 12 | Azur | 210 | 0,70 | 0,52 | `#2f85da` | `#3f6183` | `#5a85af` | `#91adca` |
+| 13 | Bleu | 225 | 0,65 | 0,45 | `#284dbd` | `#354269` | `#4d6098` | `#7b8bbc` |
+| 14 | Marine | 228 | 0,55 | 0,28 | `#20306f` | `#1a1e2e` | `#343c5b` | `#515e8f` |
+| 15 | Indigo | 255 | 0,55 | 0,45 | `#5334b2` | `#443965` | `#635392` | `#8e80b7` |
+| 16 | Violet | 280 | 0,55 | 0,48 | `#9137be` | `#5f3f6f` | `#86599c` | `#ac8abc` |
+| 17 | Magenta | 310 | 0,60 | 0,50 | `#cc33b2` | `#77406e` | `#a65999` | `#c28eba` |
+| 18 | Rose | 335 | 0,75 | 0,68 | `#eb70a3` | `#9a4669` | `#bc6c8d` | `#d6a4b9` |
+| 19 | Marron | 25 | 0,45 | 0,33 | `#7a4e2e` | `#3b2f26` | `#675141` | `#997861` |
+| 20 | Gris | 210 | 0,06 | 0,50 | `#788087` | `#595c5f` | `#7c8083` | `#a6a8ab` |
 
 Couleurs proches, à revoir si besoin : Orange et Or, Bleu et Indigo, Violet et
 Magenta sur les unités ; Marine et Gris sur la carte.
@@ -57,13 +57,13 @@ et clarté `l` :
 | Couleur | Calcul |
 | --- | --- |
 | Carte | `hsl(h, s, l)` |
-| Case de territoire | 55 % de la couleur du terrain, 45 % de la couleur de carte (`painter.ts`) |
+| Case de territoire | 60 % de la couleur du terrain, 40 % de la couleur de carte (`TERRITORY_ALPHA`, `painter.ts`) |
 | Frontière | `hsl(h, s, l − 0,13)` |
 | Limite entre villes | `hsl(h, s, l + 0,13)` |
 | Villes et routes | `hsl(h, s + 0,05, l − 0,25)`, clarté d'au moins 0,15 |
 | Ton moyen d'unité | `hsl(h, s × 0,5, m)`, avec `m` = `l` ramené entre 0,28 et 0,58 |
-| Ton foncé d'unité | `hsl(h, s × 0,5, m − 0,10)` |
-| Ton clair d'unité | `hsl(h, s × 0,5, m + 0,12)` |
+| Ton foncé d'unité | `hsl(h, s × 0,5, m − 0,14)` |
+| Ton clair d'unité | `hsl(h, s × 0,5, m + 0,16)` |
 
 Effet de chaque réglage :
 
@@ -75,7 +75,7 @@ Effet de chaque réglage :
   contre le contour noir ; la borne haute garde le ton clair sous le blanc.
   Une borne haute à 0,50 fait sortir le Rose nettement plus sombre que sa couleur
   de carte.
-- **Écarts −0,10 et +0,12** : contraste des ombres et des lumières de l'icône.
+- **Écarts −0,14 et +0,16** : contraste des ombres et des lumières de l'icône.
   Dans les verts d'origine, les écarts sont d'environ −0,09 et +0,13.
 
 ## 4. Icônes de remplacement

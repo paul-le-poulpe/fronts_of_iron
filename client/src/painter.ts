@@ -17,6 +17,8 @@ import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND } from "./mirror.ts";
 import { playerBorder, playerColor, playerLimit, type Rgb } from "./playercolors.ts";
 
 const WATER: Rgb = [111, 156, 204];
+/** Part de la couleur du joueur sur une case de son territoire, le reste étant le terrain (09-Couleurs §3). */
+const TERRITORY_ALPHA = 0.4;
 const FIELD_DARK: Rgb = [96, 152, 52];
 const FIELD_LIGHT: Rgb = [128, 190, 72];
 // Avec « Couleur des joueurs », un champ, une zone de pêche ou une mine garde 70 % de la couleur de la case
@@ -101,8 +103,10 @@ export class Painter {
     const onLand = (b & TERRAIN_LAND) !== 0;
     const w = m.width;
     const id = m.tileCity[t]!;
+    // Couloir de route sur le territoire d'un joueur : sol nu, sans teinte verte ni champ. Purement visuel.
+    const corridor = onLand && id !== 0 && this.showPlayerColor && m.roadCorridor[t] === 1;
     const c: Rgb = onLand
-      ? ((m.resources[t]! & 1) !== 0 ? this.landIron : m.fertility[t] !== 0 ? this.landFertile : this.land)[
+      ? ((m.resources[t]! & 1) !== 0 ? this.landIron : m.fertility[t] !== 0 && !corridor ? this.landFertile : this.land)[
           b & TERRAIN_ALTITUDE
         ]!
       : WATER;
@@ -118,14 +122,14 @@ export class Painter {
       // ville couvre aussi l'eau dans le moteur, mais pas à l'affichage.
       if (onLand && this.showPlayerColor) {
         const pc = this.playerRgb[city.player]!;
-        r = Math.round(r * 0.55 + pc[0] * 0.45);
-        g = Math.round(g * 0.55 + pc[1] * 0.45);
-        bl = Math.round(bl * 0.55 + pc[2] * 0.45);
+        r = Math.round(r * (1 - TERRITORY_ALPHA) + pc[0] * TERRITORY_ALPHA);
+        g = Math.round(g * (1 - TERRITORY_ALPHA) + pc[1] * TERRITORY_ALPHA);
+        bl = Math.round(bl * (1 - TERRITORY_ALPHA) + pc[2] * TERRITORY_ALPHA);
       }
       // Champs (terre fertile) et zone de pêche (eau) à moins du rayon d'exploitation du joueur.
       // Mine : cases de fer à moins du rayon d'exploitation du fer (texture propre, provisoire : 00-Game §11).
       const mine = onLand && (m.resources[t]! & 1) !== 0;
-      if (!onLand || m.fertility[t] !== 0 || mine) {
+      if (!onLand || (m.fertility[t] !== 0 && !corridor) || mine) {
         const ct = city.tile;
         const dx = x - (ct % w);
         const dy = y - (((ct - (ct % w)) / w) | 0);

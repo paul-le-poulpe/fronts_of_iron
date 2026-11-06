@@ -41,7 +41,21 @@ installTutorial();
 applyBlinkPeriod();
 installNotifications($("notifs"));
 /** Menu de diplomatie et notifications des événements diplomatiques (00-Game §1). */
-const diplomacy = new Diplomacy((order) => sendOrder(order));
+const diplomacy = new Diplomacy(
+  (order) => sendOrder(order),
+  (id) => {
+    menuPlayer = id;
+    showPlayerHighlight();
+  },
+);
+/** Joueur du menu de diplomatie ouvert, et joueur survolé dans l'onglet Diplomatie (0 : aucun). */
+let menuPlayer = 0;
+let hoveredPlayer = 0;
+
+/** Hachure le territoire du joueur survolé dans l'onglet, sinon celui du menu ouvert. */
+function showPlayerHighlight(): void {
+  session?.view?.highlightPlayer(hoveredPlayer !== 0 ? hoveredPlayer : menuPlayer);
+}
 
 // ---- écran de départ ----
 
@@ -293,7 +307,10 @@ function onInit(s: Session, init: InitMessage): void {
     (id) => {
       if (!spectator) diplomacy.openFor(id);
     },
-    (id) => s.view?.highlightPlayer(id),
+    (id) => {
+      hoveredPlayer = id;
+      showPlayerHighlight();
+    },
   );
   s.infobar = new InfoBar(
     $("infobar"),

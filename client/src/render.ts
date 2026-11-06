@@ -6,9 +6,10 @@
 
 import { type Mirror, RESOURCE_ALUMINIUM, RESOURCE_IRON, TERRAIN_LAND } from "./mirror.ts";
 import { type Painter } from "./painter.ts";
-import { playerColor, playerDark, rgbCss } from "./playercolors.ts";
+import { PlayerLabels, type LabelSpot } from "./playerlabels.ts";
+import { playerColor, playerDark, playerLimit, rgbCss } from "./playercolors.ts";
 import { FrontLayer, type ZoneShape } from "./frontlayer.ts";
-import { localPlayer } from "./names.ts";
+import { localPlayer, playerName } from "./names.ts";
 import { type FrontView } from "./protocol.ts";
 
 export interface MapViewHooks {
@@ -21,6 +22,15 @@ export interface MapViewHooks {
 }
 
 const MAX_ZOOM = 48;
+
+// Noms des joueurs sur la carte dézoomée, valeurs provisoires. Ils apparaissent quand l'écran montre au moins
+// `LABEL_MIN_TILES` cases, soit environ cent villes.
+const LABEL_MIN_TILES = 120000;
+const LABEL_FONT_PX = 15;
+const LABEL_STROKE_PX = 2;
+const LABEL_FONT = `700 ${LABEL_FONT_PX}px Arial, sans-serif`;
+/** Finesse du cache des positions : un calcul par palier de zoom de `1 / LABEL_ZOOM_STEPS` en logarithme. */
+const LABEL_ZOOM_STEPS = 8;
 const DRAG_THRESHOLD_PX = 4;
 /** Hachures des vues : période et épaisseur des bandes, en pixels CSS (constantes à l'écran, quel que soit le zoom). */
 const HATCH_PERIOD_PX = 10;
@@ -101,6 +111,10 @@ export class MapView {
   /** Joueur survolé dans la liste de l'onglet Diplomatie (0 : aucun) et le masque de son territoire, refait quand des cases changent. */
   private highlightedPlayer = 0;
   private playerMask: HTMLCanvasElement | null = null;
+  private readonly labels: PlayerLabels;
+  /** Positions des noms, pour le palier de zoom `labelZoom`. */
+  private labelSpots: readonly LabelSpot[] = [];
+  private labelZoom: number | null = null;
   /** Calque des hachures, à la taille du canvas : un masque à la caméra, rempli du motif. */
   private readonly hatch: HTMLCanvasElement;
   private readonly hatchCtx: CanvasRenderingContext2D;
@@ -151,6 +165,7 @@ export class MapView {
     const hatchCtx = this.hatch.getContext("2d");
     if (hatchCtx === null) throw new Error("canvas 2D indisponible");
     this.hatchCtx = hatchCtx;
+    this.labels = new PlayerLabels(mirror);
     this.uploadAll();
     this.bindPointer();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -161,6 +176,7 @@ export class MapView {
   uploadAll(): void {
     this.baseCtx.putImageData(this.image, 0, 0);
     this.playerMask = null;
+    this.invalidateLabels();
     this.requestDraw();
   }
 
@@ -182,6 +198,7 @@ export class MapView {
     }
     this.baseCtx.putImageData(this.image, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     this.playerMask = null;
+    this.invalidateLabels();
     this.requestDraw();
   }
 
@@ -478,6 +495,46 @@ export class MapView {
     }
   }
 
+  private invalidateLabels(): void {
+    this.labels.invalidate();
+    this.labelZoom = null;
+  }
+
+  /** Noms des joueurs, de taille constante à l'écran, quand la carte est assez dézoomée. Les positions restent en cache par palier de zoom. */
+  private drawPlayerLabels(ctx: CanvasRenderingContext2D): void {
+    const { zoom } = this;
+    if ((this.cssW * this.cssH) / (zoom * zoom) < LABEL_MIN_TILES) return;
+    const k = this.dpr;
+    ctx.save();
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.font = LABEL_FONT;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2 * LABEL_STROKE_PX;
+    ctx.strokeStyle = "#000";
+    const step = Math.round(Math.log(zoom) * LABEL_ZOOM_STEPS);
+    if (step !== this.labelZoom) {
+      this.labelZoom = step;
+      // Bas du palier : le plus petit zoom du palier donne le nom le plus grand en cases.
+      const low = Math.exp((step - 0.5) / LABEL_ZOOM_STEPS);
+      const boxH = Math.ceil((LABEL_FONT_PX + 2 * LABEL_STROKE_PX) / low);
+      this.labelSpots = this.labels.spots((player) => ({
+        w: Math.ceil((ctx.measureText(playerName(player)).width + 2 * LABEL_STROKE_PX) / low),
+        h: boxH,
+      }));
+    }
+    for (const spot of this.labelSpots) {
+      const x = this.tx + spot.x * zoom;
+      const y = this.ty + spot.y * zoom;
+      const name = playerName(spot.player);
+      ctx.strokeText(name, x, y);
+      ctx.fillStyle = rgbCss(playerLimit(spot.player));
+      ctx.fillText(name, x, y);
+    }
+    ctx.restore();
+  }
+
   private draw(): void {
     const { ctx, mirror, zoom } = this;
     const k = this.dpr;
@@ -598,6 +655,7 @@ export class MapView {
     // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
     // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.
     this.drawBreakthroughs(ctx, px);
+    this.drawPlayerLabels(ctx);
 
     // Mode choix d'axe : la connexion du front la plus proche de la souris.
     if (this.axisFront !== 0 && this.axisHover !== null) {

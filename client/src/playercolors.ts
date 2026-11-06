@@ -46,8 +46,8 @@ const DARK_LIGHT_MIN = 0.15;
 const UNIT_SAT = 0.5;
 const UNIT_LIGHT_MIN = 0.28;
 const UNIT_LIGHT_MAX = 0.58;
-const UNIT_DARK = -0.1;
-const UNIT_BRIGHT = 0.12;
+const UNIT_DARK = -0.14;
+const UNIT_BRIGHT = 0.16;
 
 function hsl(h: number, s: number, l: number): Rgb {
   const k = (n: number): number => (n + h / 30) % 12;

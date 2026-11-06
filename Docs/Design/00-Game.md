@@ -610,6 +610,10 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   dans la carte de base, toujours affiché (auteur, 24 octobre 2026). Il
   remplace le rouge plein ; le rouge foncé ne sert plus qu'aux hachures de la
   vue « Ressources naturelles ».
+- Autour des routes, sur le territoire d'un joueur, un couloir montre le sol nu teinté
+  par le joueur, sans champs ni vert : les territoires se lisent mieux carte dézoomée.
+  C'est purement visuel, la surface cultivée et son revenu ne changent pas (auteur,
+  6 novembre 2026 ; largeur dans `03-Client.md` §6).
 - Zone d'exploitation : vert, puis texture de champs (§6.6). Quand la couleur
   des joueurs est affichée, les textures des champs, de la pêche et de la mine
   sont effacées (mélangées à 30 % à la couleur de la case) pour ne pas couvrir

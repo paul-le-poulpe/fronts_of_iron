@@ -14,6 +14,9 @@ import { computeFrontZones, type GeomWorld } from "./frontgeom.ts";
 import type { ActivityCatalog, DivisionView, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
 import { RoadPaths } from "./roadpaths.ts";
 
+/** Rayon des couloirs de routes, en cases : 11 cases de large avec la route (provisoire). Purement visuel. */
+export const ROAD_CORRIDOR_RADIUS = 5;
+
 export const TERRAIN_LAND = 0x80;
 export const TERRAIN_SHORE = 0x40;
 export const TERRAIN_OCEAN = 0x20;
@@ -50,6 +53,8 @@ export class Mirror {
   roads: Uint16Array = new Uint16Array(0);
   /** Tracé d'affichage de chaque route (00-Game §3.5) : `roadTiles[i]` est la suite de cases de `roads[2i]`–`roads[2i+1]`. */
   roadTiles: Int32Array[] = [];
+  /** Une case par case de la carte : 1 à moins de `ROAD_CORRIDOR_RADIUS` d'une route. N'entre dans aucun calcul de surface. */
+  readonly roadCorridor: Uint8Array;
   private readonly roadPaths: RoadPaths;
   /** Statistiques du dernier tour, `stats[id - 1]`. */
   stats: PlayerStats[] = [];
@@ -97,6 +102,7 @@ export class Mirror {
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
     this.repaintMark = new Uint8Array(size);
+    this.roadCorridor = new Uint8Array(size);
     const bins = init.controlRadius * init.controlRadius + 1;
     this.cityIds = Array.from({ length: init.playerCount }, () => []);
     this.farmHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
@@ -105,6 +111,30 @@ export class Mirror {
     this.farmThreshold = new Int32Array(init.playerCount).fill(-1);
     this.seaThreshold = new Int32Array(init.playerCount).fill(-1);
     this.ironThreshold = new Int32Array(init.playerCount).fill(-1);
+  }
+
+  /** Refait les couloirs d'après les tracés des routes ; les cases qui changent sont repeintes. */
+  private updateRoadCorridors(mark: (t: number) => void): void {
+    const w = this.width;
+    const r = ROAD_CORRIDOR_RADIUS;
+    const next = new Uint8Array(this.roadCorridor.length);
+    for (const path of this.roadTiles) {
+      for (const t of path) {
+        const x = t % w;
+        const y = (t - x) / w;
+        for (let v = Math.max(0, y - r); v <= Math.min(this.height - 1, y + r); v++) {
+          for (let u = Math.max(0, x - r); u <= Math.min(w - 1, x + r); u++) {
+            if ((u - x) ** 2 + (v - y) ** 2 <= r * r) next[v * w + u] = 1;
+          }
+        }
+      }
+    }
+    for (let t = 0; t < next.length; t++) {
+      if (next[t] !== this.roadCorridor[t]) {
+        this.roadCorridor[t] = next[t]!;
+        mark(t);
+      }
+    }
   }
 
   /**
@@ -244,7 +274,10 @@ export class Mirror {
       for (const city of this.cities) if (city.port) this.portTiles.set(city.id, this.findPortTile(city));
     }
     // Après les ports : le tracé d'une route sans chemin de terre passe par les ports de ses villes (00-Game §3.6).
-    if (msg.cities !== null || msg.roads !== null) this.roadTiles = this.roadPaths.sync(this.cities, this.roads, this.portTiles);
+    if (msg.cities !== null || msg.roads !== null) {
+      this.roadTiles = this.roadPaths.sync(this.cities, this.roads, this.portTiles);
+      this.updateRoadCorridors(mark);
+    }
 
     this.stats = msg.players.slice();
     for (const p of this.stats) {

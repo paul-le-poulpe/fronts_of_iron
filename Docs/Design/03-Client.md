@@ -52,7 +52,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/names.ts` | noms français des machines, des activités (les boîtes du panneau) et des types de division, des niches (et leurs lettres) ; symboles provisoires (texte entre crochets) des machines sans icône ; joueurs de la partie (`setRoster`, `localPlayer`, `playerName` : « Vous » pour le joueur de la page, sinon le nom du message de départ ou « Bot n » en solo) |
 | `src/notifications.ts` | pile de notifications en bas à gauche de la carte (§7) : `notify`, `dismiss`, `updateNotifications`, `clearNotifications`. Ne connaît aucun système du jeu (DOM, pas de règle) |
 | `src/diplomacy.ts` | diplomatie côté page (00-Game §1) : menu au clic sur le territoire d'un autre joueur, notifications des propositions et des changements de statut (§7). Pas de règle |
-| `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, mode placement |
+| `src/render.ts` | canvas de la carte : caméra, envoi du tampon de pixels, routes, villes, mode placement, noms des joueurs |
+| `src/playerlabels.ts` | position des noms des joueurs sur la carte (sans DOM) |
 | `src/painter.ts` | couleur de chaque case dans un tampon RGBA (sans DOM) |
 | `src/playercolors.ts` | liste des couleurs des joueurs, variantes de carte et tons d'unité (09-Couleurs §2, §3 ; sans DOM) |
 | `src/uniticons.ts` | icônes d'unités aux couleurs du joueur : lecture des PNG de `units-generated/`, remplacement, cache (09-Couleurs §4) |
@@ -333,10 +334,14 @@ teinte plus sombre) ; sinon, si sa voisine de droite ou du dessous est de la
 terre d'une autre ville du même joueur, **limite** (`playerLimit`, sa teinte plus
 claire). L'eau et le bord de la carte ne déclenchent rien. Entre deux joueurs,
 chaque côté est peint de sa couleur : double ligne. Le trait ne dépend pas des
-cases du menu « Carte » (`showPlayerColor` : mélange à 45 % de la couleur du
+cases du menu « Carte » (`showPlayerColor` : mélange à 40 % de la couleur du
 joueur sur la terre). Le relief d'une case de fer est toujours recouvert d'un gris
 brun-rouge (`landIron`, `IRON_TINT` à 55 %) ; sinon, celui d'une case cultivable
-(fertilité > 0) d'un vert léger (`landFertile`, 80/255 d'opacité). Les trois textures sont différentes de la couleur du joueur : champs en
+(fertilité > 0) d'un vert léger (`landFertile`, 80/255 d'opacité). **Couloirs de routes** : `Mirror.roadCorridor` marque
+les cases à moins de `ROAD_CORRIDOR_RADIUS` (5, soit 11 cases de large, provisoire) du tracé d'une route ; sur une case
+de terre d'un joueur, quand `showPlayerColor` est vrai, la peinture n'y met ni le vert léger ni les champs, pour que la
+couleur du joueur se lise carte dézoomée. Ce n'est que de l'affichage : la surface cultivée et son revenu ne changent
+pas, et le moteur ne connaît pas ces couloirs. Les trois textures sont différentes de la couleur du joueur : champs en
 bandes vertes, pêche en points blancs sur l'eau bleue, mine en bandes diagonales
 sombres et orangées (provisoire, 00-Game §11). Chaque texture remplace la
 couleur de la case quand `showPlayerColor` est faux ; quand il est vrai, la case
@@ -345,8 +350,8 @@ la texture (`TEXTURE_ALPHA_ON_PLAYER`) : à 100 %, les champs couvraient la
 couleur des joueurs ; même réglage pour la pêche et la mine
 (auteur, 25 octobre 2026). À chaque tour, seules sont
 repeintes : les cases dont la ville a changé et leurs quatre voisines (la couleur
-d'une case dépend de ses voisines de gauche, droite, haut et bas), et les cases dont l'appartenance au champ, à la zone de pêche ou à la
-mine a changé. Le rectangle englobant est renvoyé au canvas par `putImageData` avec
+d'une case dépend de ses voisines de gauche, droite, haut et bas), les cases dont l'appartenance au champ, à la zone de pêche ou à la
+mine a changé, et celles qui entrent dans un couloir de route ou en sortent. Le rectangle englobant est renvoyé au canvas par `putImageData` avec
 rectangle sale.
 
 **Rayon d'exploitation** (00-Game §6.6, affichage seulement). Pour chaque joueur,
@@ -397,6 +402,15 @@ de ports qui l'a produit : si l'un des deux ports change de case ou disparaît,
 il est recalculé. Sans port ou sans eau entre les ports, le chemin est vide et
 `render.ts` ne dessine pas la route (les routes voisines portent le trajet). Les calculs sont en flottants : ils ne
 touchent jamais l'état de la partie.
+
+**Noms des joueurs** (`render.ts`, `playerlabels.ts`). Quand la carte est assez dézoomée, le nom de chaque joueur est écrit
+sur elle, en 15 px gras, dans sa couleur de limite (`playerLimit`), avec un contour noir de 2 px. Il apparaît quand l'écran
+montre au moins `LABEL_MIN_TILES` cases (120 000, soit environ cent villes, provisoire) et garde la même taille à l'écran
+à tout zoom. Le nom va dans le plus grand territoire contigu du joueur (cases de terre reliées par les quatre côtés) : à
+la position où son rectangle ne recouvre aucune case d'un autre joueur, couvre le plus de cases de ce territoire, puis
+est le plus près de son centre. Il peut déborder sur la mer ou une terre libre. Si aucune position ne convient, le joueur
+n'a pas de nom (provisoire). Les territoires ne sont refaits que si un propriétaire de case change, et les positions
+sont gardées par palier de zoom. Les noms ne dépendent pas des cases du menu « Carte ».
 
 **Canvas** (`render.ts`). Molette : zoom centré sur la souris ; glisser : déplacer
 (sous 4 pixels de mouvement, c'est un clic). À chaque image : le tampon de la
@@ -792,7 +806,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   blanc le territoire terrestre du joueur sur la carte (`MapView.highlightPlayer`, même motif que la ville
   survolée du panneau de production) ; le masque est refait quand des cases changent (`upload`, `uploadAll`) ;
   la mise en évidence est retirée quand la souris quitte la ligne ou que le détail se replie
-  (`Section.collapsed`).
+  (`Section.collapsed`). Le menu de diplomatie ouvert met en évidence son joueur de la même façon, jusqu'à sa
+  fermeture (`Diplomacy.onTarget`) ; le survol d'une ligne de l'onglet est prioritaire.
 - Tout le texte est en français.
 
 La section maritime de la barre (00-Game §1) n'existe pas. La diplomatie se limite au

@@ -40,6 +40,8 @@ interface MenuAction {
 
 export class Diplomacy {
   private readonly sendOrder: (order: HumanOrder) => void;
+  /** Le joueur du menu change (0 : menu fermé). */
+  private readonly onTarget: (player: number) => void;
   private readonly menu: HTMLElement;
   private view: DiplomacyView | null = null;
   /** Joueur du menu ouvert, 0 si fermé. */
@@ -51,8 +53,9 @@ export class Diplomacy {
   /** Cartes de proposition reçue affichées, par auteur de la proposition. */
   private readonly shown = new Set<number>();
 
-  constructor(sendOrder: (order: HumanOrder) => void) {
+  constructor(sendOrder: (order: HumanOrder) => void, onTarget: (player: number) => void) {
     this.sendOrder = sendOrder;
+    this.onTarget = onTarget;
     this.menu = document.createElement("div");
     this.menu.id = "dip-menu";
     this.menu.setAttribute("role", "menu");
@@ -105,10 +108,12 @@ export class Diplomacy {
     this.renderMenu();
     this.menu.hidden = false;
     this.place();
+    this.onTarget(owner);
   }
 
   closeMenu(): void {
     this.target = 0;
+    this.onTarget(0);
     this.menuKey = "";
     this.menu.hidden = true;
   }
