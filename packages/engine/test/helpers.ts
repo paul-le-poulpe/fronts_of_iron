@@ -5,19 +5,41 @@
 import assert from "node:assert/strict";
 
 import {
+  ACTIVITY_DATA,
+  ACTIVITY_IDS,
+  activityOf,
+  applyIntent,
   CITY,
   FERTILITY,
   isLand,
   RESOURCE_COUNT,
   RESOURCE_IRON,
   TERRAIN_LAND,
+  type Activity,
+  type ActivityId,
   type GameMap,
   type GameState,
+  type Player,
 } from "../src/index.ts";
 
 export const tileAt = (map: GameMap, x: number, y: number): number => y * map.width + x;
 export const xOf = (map: GameMap, tile: number): number => tile % map.width;
 export const yOf = (map: GameMap, tile: number): number => Math.floor(tile / map.width);
+
+/** L'activité ouverte `id` du joueur. */
+export function box(p: Player, id: ActivityId): Activity {
+  const a = activityOf(p, ACTIVITY_IDS.indexOf(id));
+  assert.ok(a !== undefined, `activité ${id} fermée`);
+  return a;
+}
+
+/** Finit le déblocage de l'activité `id` (08 §9) et l'ouvre par l'ordre `open_activity`. */
+export function openBox(s: GameState, player: number, id: ActivityId): Activity {
+  const index = ACTIVITY_IDS.indexOf(id);
+  s.players[player - 1]!.unlock[index] = ACTIVITY_DATA[index]!.unlockCost;
+  assert.ok(applyIntent(s, { type: "open_activity", player, activity: id }, []), `ouverture de ${id}`);
+  return box(s.players[player - 1]!, id);
+}
 
 /** Toutes les cases du disque de rayon `r` autour de (x, y) sont de la terre. */
 export function isLandDisc(map: GameMap, x: number, y: number, r: number): boolean {
@@ -218,43 +240,6 @@ export function customMap(
   }
   return { width, height, terrain, resources, fertility: fertile };
 }
-
-/**
- * Récolte d'un joueur par la définition de 00-Game §6.2 à §6.5, écrite avec des
- * rationnels exacts (BigInt) et non avec la formule en entiers de src/economy.ts :
- * même résultat attendu. `machines` est un nombre de machines (tracteurs ou bateaux).
- */
-export function bruteHarvest(
-  cfg: { mechanizationBase: number; mechanizationMax: number; maxMachinesPer1000: number; curveExponent: number },
-  available: number,
-  machines: number,
-  surfaceMax: number,
-  fertilitySum: number,
-): { workers: number; area: number; yield: number } {
-  const S = 10_000n;
-  const maxM = BigInt(cfg.maxMachinesPer1000);
-  // référence = min(disponibles, surface_max / M_max arrondi vers le haut) (00-Game §6.2).
-  const atFull = (BigInt(surfaceMax) * 1000n + BigInt(cfg.mechanizationMax) - 1n) / BigInt(cfg.mechanizationMax);
-  const reference = BigInt(available) < atFull ? BigInt(available) : atFull;
-  // x = min(machines / référence, m_max) / m_max, ramené sur 0…S par division entière.
-  // m_max est en machines pour 1 000 travailleurs.
-  let X = reference === 0n ? 0n : (BigInt(machines) * 1000n * S) / (reference * maxM);
-  if (X > S) X = S;
-  let p = S;
-  for (let i = 0; i < cfg.curveExponent; i++) p = (p * (S - X)) / S;
-  const f = S - p;
-  const base = BigInt(cfg.mechanizationBase);
-  const M = base + ((BigInt(cfg.mechanizationMax) - base) * f) / S;
-  const surface = BigInt(surfaceMax);
-  // fermiers_requis = surface_max / M, arrondi vers le haut (surface en cases, M en millièmes).
-  const required = (surface * 1000n + M - 1n) / M;
-  const workers = required < BigInt(available) ? required : BigInt(available);
-  let area = (workers * M) / 1000n;
-  if (area > surface) area = surface;
-  const output = surface === 0n ? 0n : (BigInt(fertilitySum) * area) / surface;
-  return { workers: Number(workers), area: Number(area), yield: Number(output) };
-}
-
 
 /**
  * Fronts par la définition de 05-Fronts §2, écrite avec des boucles sur toutes les paires de villes

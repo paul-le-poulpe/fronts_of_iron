@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITY, DIVISION_DATA, FRONTS } from "@fronts-of-iron/engine";
+import { CITY, DIVISION_DATA, FRONTS, STATE_SCALE } from "@fronts-of-iron/engine";
 
 import { computeFrontZones, connectionPoint, frontChains, type GeomWorld } from "../src/frontgeom.ts";
 import { Mirror } from "../src/mirror.ts";
@@ -160,7 +160,7 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
     id: game.state.nextDivisionId++,
     owner: 1,
     type: infantry.index,
-    counts: infantry.components.map((c) => c.count),
+    state: STATE_SCALE,
     front: front.id,
     line: 0,
     box: 0,
@@ -170,11 +170,13 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
     arrivalTick: 0,
     formedTick: 0,
     fleeUntilTick: 0,
+    leaveTick: 0,
   });
-  for (const p of game.state.players) p.population = 10_000_000;
+  // Une attaque avance d'au plus 15 % de la route (06-Combat-Simplifie §1) : le front part près de la ville du bot.
+  front.connections[0]!.position = front.players[0] === HUMAN ? 950 : 50;
   apply(game.step([{ id: 3, order: { type: "start_front_attack", front: front.id } }]));
   let captured = false;
-  for (let i = 0; i < 3000 && !captured; i++) {
+  for (let i = 0; i < 2 * FRONTS.attackDelayTurns && !captured; i++) {
     const msg = game.step([]);
     apply(msg);
     captured = msg.captured.some((c) => c.city === botCity);

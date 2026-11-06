@@ -10,9 +10,8 @@ import {
   createGame,
   createRng,
   FERTILITY,
-  FOOD,
   forEachNeighbor,
-  foundingCost,
+  foundingCostPawns,
   generateResourcePresence,
   generateTestMap,
   hashMap,
@@ -61,8 +60,7 @@ const direct = (s: GameState, intent: Intent): boolean => applyIntent(s, intent,
 
 /**
  * Partie à 3 joueurs où le joueur 1 a fondé sa première ville au centre de la
- * carte (une montagne : pas de terre cultivable, la population y baisse vers la
- * nourriture minimale).
+ * carte, au tour 1 : son bonhomme de départ est passé dans une boîte (auto-assignation).
  */
 function setup(): GameState {
   const s = createGame({ seed: 5, map: MAP, playerCount: 3 });
@@ -243,8 +241,8 @@ describe("tour et ordres", () => {
     assert.deepEqual(s.cities, [{ id: 1, player: 1, tile: start, port: false, group: 1 }]);
     assert.deepEqual(s.roads, []);
     assert.equal(s.players[1]!.capital, 0);
-    // Un joueur sans ville croît quand même (nomades, 00-Game §4) : après un tour, la partie entière du premier gain.
-    assert.equal(s.players[1]!.population, Math.trunc((FOOD.minimum * POPULATION.growthPerMillion) / 1_000_000));
+    // Un joueur sans ville n'est pas traité par l'économie (08 §12, point 14).
+    assert.equal(s.players[1]!.population, 0);
     assert.equal(s.changedMark.indexOf(1), -1, "marqueurs remis à zéro");
     checkCityInvariants(s);
     // Juste après la fondation, avant l'étape de nourriture du tour : la population de départ.
@@ -254,7 +252,7 @@ describe("tour et ordres", () => {
     assert.equal(alone.players[1]!.population, 0);
   });
 
-  it("found_city : la deuxième ville coûte la population de fondation, dans le rayon d'expansion seulement", () => {
+  it("found_city : la deuxième ville coûte des bonshommes, dans le rayon d'expansion seulement", () => {
     const s = setup();
     // À r cases (= rayon d'expansion) : permis. À r + 1 : refusé, sans rien changer.
     const r = CITY.expansionRadius;
@@ -276,7 +274,7 @@ describe("tour et ordres", () => {
     assert.ok(!direct(d, found(1, CX + r + 1, CY)));
     assert.equal(d.players[0]!.population, POPULATION.initial);
     assert.ok(direct(d, found(1, CX + r, CY)));
-    assert.equal(d.players[0]!.population, POPULATION.initial - foundingCost(1));
+    assert.equal(d.players[0]!.population, POPULATION.initial - foundingCostPawns(1));
   });
 
   it("found_city : le rayon d'expansion d'une ville d'un autre joueur ne compte pas", () => {
@@ -286,7 +284,6 @@ describe("tour et ordres", () => {
     assert.deepEqual(applyTurn(s, { turn: 3, intents: [found(2, CX + NEAR, CY)] }), []);
     assert.equal(s.cities.length, 2);
     // Même case pour le joueur 1 : permis.
-    s.players[0]!.population = foundingCost(1);
     assert.ok(applyTurn(s, { turn: 4, intents: [found(1, CX + NEAR, CY)] }).length > 0);
     assert.equal(s.cities.length, 3);
   });
@@ -353,19 +350,16 @@ describe("tour et ordres", () => {
       { type: "found_city", player: 2, tile: 2.5 },
       { type: "found_city", player: 2, tile: NaN },
       { type: "found_city", player: 2, tile: Infinity },
-      { type: "set_farm_share" },
-      { type: "set_farm_share", player: 1 },
-      { type: "set_farm_share", player: 1, percent: -1 },
-      { type: "set_farm_share", player: 1, percent: 101 },
-      { type: "set_farm_share", player: 1, percent: 50.5 },
-      { type: "set_farm_share", player: 1, percent: "50" },
-      { type: "set_farm_share", player: 1, percent: null },
-      { type: "set_farm_share", player: 1, percent: NaN },
-      { type: "set_farm_share", player: 1, percent: Infinity },
-      { type: "set_farm_share", player: 0, percent: 50 },
-      { type: "set_farm_share", player: 4, percent: 50 },
-      { type: "set_farm_share", player: 1.5, percent: 50 },
-      { type: "set_farm_share", player: "1", percent: 50 },
+      // Ordres retirés (08 §10) : le moteur les ignore.
+      { type: "set_farm_share", player: 1, percent: 50 },
+      { type: "build_factory", player: 1, city: 1, factoryType: "infantryArmament" },
+      { type: "create_line", player: 1, city: 1, good: "rifle" },
+      { type: "set_active_lines", player: 1, city: 1, good: "rifle", count: 1 },
+      { type: "set_city_priority", player: 1, city: 1, position: 0 },
+      { type: "set_line_priority", player: 1, city: 1, good: "rifle", position: 0 },
+      { type: "create_division", player: 1, division: "regulars" },
+      { type: "delete_division", player: 1, id: 1 },
+      { type: "set_forced_mobilization", player: 1, enabled: true },
       { type: "found_city", player: 2, tile: firstWaterTile(MAP) }, // eau
       { type: "found_city", player: 2, tile: owned }, // dans le rayon de contrôle d'un autre joueur
       { type: "found_city", player: 1, tile: owned }, // sur sa propre ville
@@ -381,9 +375,8 @@ describe("tour et ordres", () => {
       assert.deepEqual(changed, [], `ordre ${JSON.stringify(intent)}`);
       assert.equal(hashState(b), hashState(a), `ordre ${JSON.stringify(intent)}`);
     }
-    // Population insuffisante : une personne de moins que le coût de la deuxième ville, sur une case autrement valide.
-    const cost = foundingCost(1);
-    assert.ok(cost > CITY.foundingCostPopulation, "le coût de la deuxième ville dépasse le coût de base");
+    // Population insuffisante : un bonhomme de moins que le coût de la deuxième ville, sur une case autrement valide.
+    const cost = foundingCostPawns(1);
     const poor = setup();
     poor.players[0]!.population = cost - 1;
     const reference = setup();
@@ -391,10 +384,12 @@ describe("tour et ordres", () => {
     applyTurn(reference, { turn: 2, intents: [] });
     assert.deepEqual(applyTurn(poor, { turn: 2, intents: [found(1, CX + NEAR, CY)] }), []);
     assert.equal(hashState(poor), hashState(reference));
-    // Avec exactement le coût, le même ordre est valide (hors étape de nourriture : la population tombe à 0).
-    poor.players[0]!.population = cost;
-    assert.ok(direct(poor, found(1, CX + NEAR, CY)));
-    assert.equal(poor.players[0]!.population, 0);
+    // Avec exactement le coût, le même ordre est valide (hors tour : la population tombe à 0).
+    const exact = createGame({ seed: 5, map: MAP, playerCount: 3 });
+    assert.ok(direct(exact, found(1, CX, CY)));
+    assert.equal(exact.players[0]!.population, cost);
+    assert.ok(direct(exact, found(1, CX + NEAR, CY)));
+    assert.equal(exact.players[0]!.population, 0);
     // Un tour dont `intents` n'est pas un tableau ne fait rien non plus.
     const a = setup();
     const b = setup();
@@ -414,28 +409,40 @@ describe("tour et ordres", () => {
   it("hashState couvre chaque champ de l'état des villes et de l'économie", () => {
     const base = (): GameState => {
       const s = setup();
-      s.players[0]!.population = 100_000;
+      s.players[0]!.population = 100;
       applyTurn(s, { turn: 2, intents: [found(1, CX + NEAR, CY), found(1, CX, CY + NEAR), found(2, CX - 2 * E, CY)] });
+      // Une valeur dans chaque compteur, pour que chacun ait quelque chose à changer.
+      const p = s.players[0]!;
+      p.idleMachines[0] = 1;
+      p.popArrivals.push(99);
+      p.popLeaves.push(99);
+      p.machineArrivals[0]!.push(99);
+      p.machineLeaves[0]!.push(99);
+      p.hurtHealEnd = 99;
       return s;
     };
     const reference = hashState(base());
     assert.equal(hashState(base()), reference);
     const mutations: [string, (s: GameState) => void][] = [
       ["population", (s) => void s.players[0]!.population++],
-      ["growthRemainder", (s) => void s.players[0]!.growthRemainder++],
-      ["farmPercent", (s) => void s.players[0]!.farmPercent--],
       ["farmTiles", (s) => void s.players[0]!.farmTiles++],
       ["fertilitySum", (s) => void s.players[0]!.fertilitySum++],
       ["seaTiles", (s) => void s.players[0]!.seaTiles++],
-      ["farmers", (s) => void s.players[0]!.farmers++],
-      ["fishers", (s) => void s.players[0]!.fishers++],
-      ["idle", (s) => void s.players[0]!.idle++],
-      ["cultivated", (s) => void s.players[0]!.cultivated++],
-      ["fished", (s) => void s.players[0]!.fished++],
-      ["wheat", (s) => void s.players[0]!.wheat++],
-      ["fish", (s) => void s.players[0]!.fish++],
-      ["food", (s) => void s.players[0]!.food++],
-      ["résultats du joueur 2", (s) => void s.players[1]!.idle++],
+      ...(["workers", "machines", "places", "disabled", "slots", "output", "ironUsed"] as const).map((key): [string, (s: GameState) => void] => [`activité : ${key}`, (s) => void s.players[0]!.activities[2]![key]++]),
+      ["ordre des activités", (s) => void s.players[0]!.activities.reverse()],
+      ["activité en moins", (s) => void s.players[0]!.activities.pop()],
+      ["unlock", (s) => void s.players[0]!.unlock[5]!++],
+      ["everOpened", (s) => void (s.players[0]!.everOpened[5] = 1)],
+      ["idleMachines", (s) => void s.players[0]!.idleMachines[0]!++],
+      ["popArrivals", (s) => void s.players[0]!.popArrivals[0]!++],
+      ["popLeaves", (s) => void s.players[0]!.popLeaves[0]!++],
+      ["machineArrivals", (s) => void s.players[0]!.machineArrivals[0]![0]!++],
+      ["machineLeaves", (s) => void s.players[0]!.machineLeaves[0]![0]!++],
+      ["hurtHealEnd", (s) => void s.players[0]!.hurtHealEnd++],
+      ["autoAssign", (s) => void (s.players[0]!.autoAssign = false)],
+      ["defeated", (s) => void (s.players[0]!.defeated = true)],
+      ...(["capacity", "food", "wheat", "fish", "cultivated", "fished", "minedTiles", "ironProduced", "ironReserved", "ironWanted"] as const).map((key): [string, (s: GameState) => void] => [key, (s) => void s.players[0]![key]++]),
+      ["résultats du joueur 2", (s) => void s.players[1]!.food++],
       ["capital", (s) => void s.players[0]!.capital++],
       ["cityIds", (s) => void s.players[0]!.cityIds.reverse()],
       ["resourceTiles", (s) => void (s.players[0]!.resourceTiles[0] = s.players[0]!.resourceTiles[0]! + 1)],

@@ -5,9 +5,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITY, hashState, productConfig, workersForLines } from "@fronts-of-iron/engine";
+import { ACTIVITY_DATA, ACTIVITY_IDS, CITY, hashState, MINING } from "@fronts-of-iron/engine";
 
-import { farmShareTarget } from "../src/bots.ts";
 import { Mirror } from "../src/mirror.ts";
 import { Painter } from "../src/painter.ts";
 import { HUMAN, type TickMessage } from "../src/protocol.ts";
@@ -73,8 +72,8 @@ test("ordre humain : fondation appliquée ou refusée, signalée dans les résul
   const msg = game.step([
     { id: 1, order: { type: "found_city", tile: water } },
     { id: 2, order: { type: "found_city", tile: land } },
-    { id: 3, order: { type: "set_farm_share", percent: 40 } },
-    { id: 4, order: { type: "set_farm_share", percent: 140 } },
+    { id: 3, order: { type: "set_auto_assign", enabled: false } },
+    { id: 4, order: { type: "move_pawn", from: "idle", to: "hurt", kind: "worker", count: 1 } },
   ]);
   apply(msg);
   assert.deepEqual(
@@ -82,17 +81,14 @@ test("ordre humain : fondation appliquée ou refusée, signalée dans les résul
     [[1, false], [2, true], [3, true], [4, false]],
   );
   assert.equal(mirror.stats[HUMAN - 1]!.cities, 1);
-  assert.equal(mirror.stats[HUMAN - 1]!.farmPercent, 40);
+  assert.equal(mirror.detail!.autoAssign, false);
   assert.equal(mirror.cities.find((c) => c.player === HUMAN)!.tile, land);
 });
 
-test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et marqueur sur la copie de la page", () => {
-  const { game, mirror, painter, apply } = setup(12345, 1);
-  const { map } = game.state;
-  // Une case fertile dont le rayon de contrôle porte au moins 20 cases de fer.
+/** Une case fertile dont le rayon de contrôle porte au moins 200 cases de fer, soit au moins deux postes de mineurs. */
+function ironTile(map: SoloGame["state"]["map"]): number {
   const R = CITY.controlRadius;
-  let land = -1;
-  for (let t = 0; t < map.terrain.length && land < 0; t += 7) {
+  for (let t = 0; t < map.terrain.length; t += 7) {
     if (map.fertility[t]! === 0 || (t % map.width) < 300) continue;
     let iron = 0;
     for (let dy = -R; dy <= R; dy++) {
@@ -101,31 +97,29 @@ test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et mar
         if (dx * dx + dy * dy <= R * R && u >= 0 && u < map.terrain.length && (map.resources[u]! & 1) !== 0) iron++;
       }
     }
-    if (iron >= 20) land = t;
+    if (iron >= 2 * MINING.tilesPerWorker) return t;
   }
+  return -1;
+}
+
+test("mineurs du joueur : ordres, résultats, fer produit, rayon de la mine sur la copie de la page", () => {
+  const { game, mirror, painter, apply } = setup(12345, 1);
+  const land = ironTile(game.state.map);
   assert.ok(land >= 0);
-  apply(game.step([{ id: 1, order: { type: "found_city", tile: land } }]));
-  const city = mirror.cities.find((c) => c.player === HUMAN)!.id;
-  const msg = game.step([
-    { id: 2, order: { type: "build_factory", city, factoryType: "infantryArmament" } },
-    { id: 3, order: { type: "build_factory", city, factoryType: "fishingBoats" } },
-    { id: 4, order: { type: "create_line", city, good: "rifle" } },
-    { id: 5, order: { type: "create_line", city, good: "machineGun" } },
-    { id: 6, order: { type: "set_active_lines", city, good: "rifle", count: 1 } },
-    { id: 7, order: { type: "set_line_priority", city, good: "rifle", position: 0 } },
-  ]);
-  apply(msg);
-  assert.deepEqual(
-    msg.results.map((r) => [r.id, r.applied]),
-    [[2, true], [3, false], [4, true], [5, false], [6, true], [7, true]],
-  );
+  // Auto-assignation éteinte : le bonhomme va où l'ordre le met.
+  apply(game.step([{ id: 1, order: { type: "found_city", tile: land } }, { id: 2, order: { type: "set_auto_assign", enabled: false } }]));
+  // Un ordre par tour : `wasApplied` compare avec l'état d'avant les ordres, et mélange ceux d'un même tour.
+  for (const [id, applied] of [[3, true], [4, false]] as const) {
+    const msg = game.step([{ id, order: { type: "move_pawn", from: "idle", to: "miners", kind: "worker", count: 1 } }]);
+    apply(msg);
+    assert.deepEqual(msg.results.map((r) => [r.id, r.applied]), [[id, applied]]);
+  }
   for (let i = 0; i < 20; i++) apply(game.step([]));
   const me = mirror.stats[HUMAN - 1]!;
-  assert.equal(me.ironExtracted, 1);
-  assert.ok(me.miners > 0 && me.factoryWorkers > 0);
-  assert.deepEqual(mirror.factoryMarks.get(city), { type: "infantryArmament", level: 2, good: "rifle" });
-  assert.equal(mirror.detail!.factories[0]!.groups[0]!.running, 1);
-  assert.ok(mirror.detail!.reserve[0]! > 0);
+  assert.equal(me.miners, 1);
+  assert.equal(me.minedTiles, MINING.tilesPerWorker);
+  assert.equal(me.ironProduced, game.state.players[HUMAN - 1]!.ironProduced);
+  assert.ok(me.ironProduced > 0);
   // Un seul gisement exploité : le rayon de la mine couvre au moins une case de fer, et les pixels suivent le recalcul complet.
   assert.deepEqual([...mirror.ironThreshold], mirror.referenceThresholds().iron);
   assert.ok(mirror.ironThreshold[HUMAN - 1]! >= 0);
@@ -134,43 +128,27 @@ test("usine du joueur : ordres, résultats, fer extrait, rayon de la mine et mar
   assert.ok(Buffer.from(full.buffer).equals(Buffer.from(painter.buffer)));
 });
 
-test("ouvriers d'un groupe de lignes : la somme des coûts par rang, la même que celle du moteur", () => {
+test("casernes : la page reçoit les activités, les soldats et les divisions du moteur", () => {
   const { game, mirror, apply } = setup(12345, 1);
-  const { map } = game.state;
-  // Une case fertile dont le rayon de contrôle porte au moins 20 cases de fer.
-  const R = CITY.controlRadius;
-  let land = -1;
-  for (let t = 0; t < map.terrain.length && land < 0; t += 7) {
-    if (map.fertility[t]! === 0 || (t % map.width) < 300) continue;
-    let iron = 0;
-    for (let dy = -R; dy <= R; dy++) {
-      for (let dx = -R; dx <= R; dx++) {
-        const u = t + dy * map.width + dx;
-        if (dx * dx + dy * dy <= R * R && u >= 0 && u < map.terrain.length && (map.resources[u]! & 1) !== 0) iron++;
-      }
-    }
-    if (iron >= 20) land = t;
-  }
-  assert.ok(land >= 0);
-  apply(game.step([{ id: 1, order: { type: "found_city", tile: land } }]));
-  const city = mirror.cities.find((c) => c.player === HUMAN)!.id;
-  apply(
-    game.step([
-      { id: 2, order: { type: "build_factory", city, factoryType: "infantryArmament" } },
-      { id: 3, order: { type: "create_line", city, good: "rifle" } },
-      { id: 4, order: { type: "create_line", city, good: "rifle" } },
-    ]),
-  );
-  // Population assez grande pour remplir les trois lignes : le moteur compte alors les rangs 1, 2 et 3.
-  for (let i = 0; i < 5; i++) {
-    game.state.players[HUMAN - 1]!.population = 100_000;
-    apply(game.step([]));
-  }
-  const group = mirror.detail!.factories[0]!.groups[0]!;
-  assert.equal(group.running, 3);
-  assert.equal(group.workersObtained, workersForLines("rifle", 3));
-  assert.equal(group.workersObtained, mirror.stats[HUMAN - 1]!.factoryWorkers);
-  assert.ok(group.workersObtained < 3 * productConfig("rifle").workersPerLine, "les lignes suivantes coûtent moins que la première");
+  const land = ironTile(game.state.map);
+  apply(game.step([{ id: 1, order: { type: "found_city", tile: land } }, { id: 2, order: { type: "set_auto_assign", enabled: false } }]));
+  const human = game.state.players[HUMAN - 1]!;
+  const militia = ACTIVITY_IDS.indexOf("militia");
+  // Déblocage par la population (08 §9) : atteint à la main, puis les bonshommes vont à la caserne.
+  human.population = 10;
+  human.activities[0]!.workers = 10;
+  apply(game.step([]));
+  assert.equal(human.unlock[militia], ACTIVITY_DATA[militia]!.unlockCost);
+  apply(game.step([{ id: 3, order: { type: "open_activity", activity: "militia" } }]));
+  const msg = game.step([{ id: 4, order: { type: "move_pawn", from: "idle", to: "militia", kind: "worker", count: 2 } }]);
+  apply(msg);
+  assert.deepEqual(msg.results.map((r) => [r.id, r.applied]), [[4, true]]);
+  apply(game.step([]));
+  const me = mirror.stats[HUMAN - 1]!;
+  assert.equal(me.soldiers, 2);
+  assert.equal(me.divisions, 2);
+  assert.equal(mirror.detail!.activities.at(-1)!.workers, 2);
+  assert.equal(game.state.divisions.filter((d) => d.owner === HUMAN).length, 2);
 });
 
 test("un ordre humain ne peut pas parler au nom d'un autre joueur", () => {
@@ -179,13 +157,6 @@ test("un ordre humain ne peut pas parler au nom d'un autre joueur", () => {
   const msg = game.step([{ id: 1, order: forged }]);
   apply(msg);
   assert.ok(game.state.cities.every((c) => c.player !== 2 || c.tile !== 1000));
-});
-
-test("part de fermiers des bots", () => {
-  assert.equal(farmShareTarget(1000, 317, 0), 100, "sans eau");
-  assert.equal(farmShareTarget(1000, 0, 50), 0, "sans terre fertile");
-  assert.equal(farmShareTarget(1000, 150, 50), 50, "500 fermiers requis sur 1000");
-  assert.equal(farmShareTarget(1000, 317, 50), 100, "1057 fermiers requis > population");
 });
 
 test("mesure du coût d'un tour (affiché, pas vérifié)", () => {

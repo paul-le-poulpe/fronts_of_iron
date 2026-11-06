@@ -162,7 +162,7 @@ describe("tours", () => {
     // Un ordre de chaque joueur, dont deux dans le même tour : l'ordre d'arrivée au relais fait foi.
     const tile = fertileLand();
     a.game.order(1, { type: "found_city", tile });
-    b.game.order(1, { type: "set_farm_share", percent: 40 });
+    b.game.order(1, { type: "set_auto_assign", enabled: false });
     net.step(3 * HASH_EVERY_TURNS);
     for (const client of clients) {
       assert.equal(client.of("tick").length, 3 * HASH_EVERY_TURNS, client.name);
@@ -172,7 +172,7 @@ describe("tours", () => {
     assert.equal(new Set(clients.map(stateHash)).size, 1, "même état d'arrivée");
     // La ville de Marc existe chez tous les clients, avec son identifiant de joueur écrit par le relais.
     for (const client of clients) assert.equal(client.game.game!.state.cities.find((x) => x.tile === tile)?.player, 1);
-    assert.equal(a.game.game!.state.players[1]!.farmPercent, 40);
+    assert.equal(a.game.game!.state.players[1]!.autoAssign, false);
     // Un hash tous les N tours, identique chez les trois.
     const expected = [10, 20, 30];
     for (const client of clients) assert.deepEqual(net.hashes(client.conn).map((h) => h.turn), expected);
@@ -185,7 +185,7 @@ describe("tours", () => {
     const { net, clients } = await launched();
     const [a, b] = clients as [Client, Client];
     a.game.order(7, { type: "found_city", tile: fertileLand() });
-    a.game.order(8, { type: "set_farm_share", percent: 140 });
+    a.game.order(8, { type: "move_pawn", from: "idle", to: "hurt", kind: "worker", count: 1 });
     net.step();
     assert.deepEqual(a.last("tick").results.map((r) => [r.id, r.applied]), [[7, true], [8, false]]);
     assert.deepEqual(b.last("tick").results, []);
@@ -193,9 +193,9 @@ describe("tours", () => {
 
   it("le message d'un ordre ne porte pas de champ « player » : c'est le relais qui l'écrit", async () => {
     const { net, clients } = await launched();
-    clients[1]!.game.order(1, { type: "set_farm_share", percent: 50 });
+    clients[1]!.game.order(1, { type: "set_auto_assign", enabled: false });
     const sent = net.sent.get(clients[1]!.conn)!.find((m) => m.type === "order")!;
-    assert.deepEqual(sent, { type: "order", order: { type: "set_farm_share", percent: 50 } });
+    assert.deepEqual(sent, { type: "order", order: { type: "set_auto_assign", enabled: false } });
   });
 
   it("un tour déjà appliqué est ignoré ; un tour manquant arrête la partie", async () => {
@@ -328,7 +328,7 @@ describe("connexion", () => {
     const { net, clients } = await launched();
     const a = clients[0]!;
     a.game.stop();
-    a.game.order(1, { type: "set_farm_share", percent: 10 });
+    a.game.order(1, { type: "set_auto_assign", enabled: false });
     a.game.setPaused(true);
     net.step();
     assert.equal(a.of("tick").length, 0);
