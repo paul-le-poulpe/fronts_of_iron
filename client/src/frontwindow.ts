@@ -38,6 +38,8 @@ interface RowRefs {
   readonly pct: HTMLElement | null;
   /** Rectangle élargi au survol d'une rangée comprimée. */
   readonly pop: HTMLElement | null;
+  /** Message d'une rangée d'infanterie vide ; `null` pour les autres niches. */
+  readonly need: HTMLElement | null;
 }
 
 interface Column {
@@ -623,13 +625,18 @@ export class FrontWindow implements DndHost {
       clip.append(big);
       const zone = el("div", "fw-zone");
       row.append(clip, zone);
+      const need = niche.id === "infantry" ? el("div", "fw-need", "L'infanterie est essentielle.") : null;
+      if (need !== null) {
+        need.hidden = true;
+        row.append(need);
+      }
       let pop: HTMLElement | null = null;
       if (compressed) {
         pop = el("div", "fw-pop");
         row.append(pop);
         attachPawnPanels(pop, this.military, (id) => this.byId.get(id));
       }
-      rows.push({ niche: niche.id, zone, pct, pop });
+      rows.push({ niche: niche.id, zone, pct, pop, need });
       box.append(row);
     }
     col.append(box);
@@ -712,6 +719,7 @@ export class FrontWindow implements DndHost {
     };
     fill(this.columns.o2, this.dnd.zone("o2"), mine, "second");
     fill(this.columns.o1, this.dnd.zone("o1"), mine, "first");
+    this.showNeed(this.columns.o1.rows, mine.filter((d) => d.line === "first"), nicheOf);
     fill(this.columns.t1, null, theirs, "first");
     this.compressed(this.columns.t2, theirs.filter((d) => d.line === "second"), nicheOf);
 
@@ -890,9 +898,16 @@ export class FrontWindow implements DndHost {
       }
       order.push(ui.root);
       this.dnd.zone(`bx${b.id}`).set(rows);
+      this.showNeed(ui.rows, here, nicheOf);
     });
     this.pierceList.replaceChildren(...order, this.plus);
     this.plus.dataset.drop = `box:${front.id}:0`;
+  }
+
+  /** Message de la rangée d'infanterie : les autres unités ne combattent pas sans elle, il s'affiche quand la rangée est vide. */
+  private showNeed(rows: readonly RowRefs[], divisions: readonly DivisionView[], nicheOf: (d: DivisionView) => string): void {
+    const need = rows.find((r) => r.need !== null)?.need;
+    if (need) need.hidden = divisions.some((d) => nicheOf(d) === "infantry");
   }
 
   /** Une boîte au repos : ses pions groupés par type (pas de sélection : elle se fait dans la vue étendue). */

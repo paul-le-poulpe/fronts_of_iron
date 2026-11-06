@@ -1238,6 +1238,10 @@ très légèrement teinté :
 - **Lettres de niche** en grosses lettres grasses, **plus sombres que le
   fond** (à peine visibles) : `INF`, `TANK`, `AT`, `AA`, `ART` (*provisoire*),
   alignées à droite de la rangée, derrière les pions. 36 px.
+- **Infanterie manquante** : quand la rangée d'infanterie de la première ligne
+  du joueur, ou celle d'une de ses boîtes de percée, est vide, le texte rouge
+  « L'infanterie est essentielle. » s'y affiche : les autres unités ne peuvent
+  rien faire sans elle.
 - **En première ligne seulement** (du joueur et de l'adversaire), sous les
   lettres, le **pourcentage de couverture du front** de la niche (largeur
   engagée / largeur du front), de même taille et gras ; lettres et

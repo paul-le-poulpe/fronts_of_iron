@@ -218,6 +218,8 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-pct { display: block; font-size: 24px; font-weight: 800; letter-spacing: 0.04em; }
 .fw-row.cov .fw-big { color: var(--n-ink2); }
 .fw-row.cov .fw-letters { font-size: 24px; }
+/* Rangée d'infanterie vide : le message laisse passer le glisser vers la rangée. */
+.fw-need { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 700; color: var(--t-red); pointer-events: none; }
 .fw-zone { position: relative; flex: 1; min-width: 0; height: 50px; }
 /* Première ligne : les pions ne passent jamais sous les lettres de niche et le pourcentage (05-Fronts §11.4) : la zone que `renderZone`
    mesure (`clientWidth`) exclut leur place, d'où des piles plus tôt. */
