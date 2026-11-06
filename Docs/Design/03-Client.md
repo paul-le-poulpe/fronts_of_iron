@@ -695,7 +695,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   toujours déployée, jamais en mode « trop de pions » ; sans place sur une ligne, les piles passent sur plusieurs lignes (blocs par niche, une
   niche sur une ligne si possible ; un type trop long est tronqué avec un « + » en `.pz-num`, `layout.groups` garde tous ses ids) et la hauteur de la
   section (`ZoneLayout.height`) suit, ce qui repousse les fronts vers le bas. Sections de front : fronts en guerre active puis
-  en paix, du plus long au plus court (`sortedFronts`), fond de la couleur de l'adversaire (`playerColor`), carré de 32 × 32 px de statut
+  en paix, du plus long au plus court (`sortedFronts`), fond de la couleur de l'adversaire telle que la carte la montre sur un sol de mi-altitude (`playerOnLand`), contour de 3 px de sa couleur de frontière (`playerBorder`), carré de 32 × 32 px de statut
   diplomatique (rouge guerre, bleu paix ; provisoire), à droite la largeur du front (`connections.length`, `.fx-width` : icône
   `icon-front-width.png` (`frontWidthIcon` de `infopanels.ts`, 16 px), puis le nombre), et par niche non vide `countTag` (icône du type le plus nombreux, nombre total) ; un clic
   ouvre la fenêtre du front ; `title` : « Front en guerre|paix contre *nom de l'adversaire* : cliquez pour l'ouvrir. » ; **surbrillance liée à la carte** :

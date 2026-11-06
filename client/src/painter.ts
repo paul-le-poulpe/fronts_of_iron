@@ -14,11 +14,9 @@
 // de ses quatre voisines.
 
 import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND } from "./mirror.ts";
-import { playerBorder, playerColor, playerLimit, type Rgb } from "./playercolors.ts";
+import { LAND_MID, TERRITORY_ALPHA, playerBorder, playerColor, playerLimit, type Rgb } from "./playercolors.ts";
 
 const WATER: Rgb = [111, 156, 204];
-/** Part de la couleur du joueur sur une case de son territoire, le reste étant le terrain (09-Couleurs §3). */
-const TERRITORY_ALPHA = 0.4;
 const FIELD_DARK: Rgb = [96, 152, 52];
 const FIELD_LIGHT: Rgb = [128, 190, 72];
 // Avec « Couleur des joueurs », un champ, une zone de pêche ou une mine garde 70 % de la couleur de la case
@@ -34,7 +32,6 @@ const MINE_LIGHT: Rgb = [214, 126, 46];
 const FRONT_RED: Rgb = [200, 30, 30];
 
 const LAND_LOW = [150, 176, 112] as const;
-const LAND_MID = [181, 160, 118] as const;
 const LAND_HIGH = [236, 232, 224] as const;
 
 // Terre cultivable (fertilité > 0) : relief recouvert de ce vert à 80/255 d'opacité, toujours.

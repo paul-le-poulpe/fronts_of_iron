@@ -58,6 +58,7 @@ et clarté `l` :
 | --- | --- |
 | Carte | `hsl(h, s, l)` |
 | Case de territoire | 60 % de la couleur du terrain, 40 % de la couleur de carte (`TERRITORY_ALPHA`, `painter.ts`) |
+| Barre de front (onglet Forces) | 60 % du sol de mi-altitude `#b5a076`, 40 % de la couleur de carte, contour de la couleur de frontière |
 | Frontière | `hsl(h, s, l − 0,13)` |
 | Limite entre villes | `hsl(h, s, l + 0,13)` |
 | Villes et routes | `hsl(h, s + 0,05, l − 0,25)`, clarté d'au moins 0,15 |

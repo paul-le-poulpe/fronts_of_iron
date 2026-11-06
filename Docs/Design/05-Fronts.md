@@ -973,7 +973,7 @@ l'implémentation). De haut en bas :
 3. **Les fronts**, chacun dans sa section : d'abord les **fronts en guerre
    active**, puis les **fronts en paix**, chaque groupe trié par longueur
    (*provisoire* : du plus long au plus court). Une section de front :
-   - fond de la **couleur de l'adversaire** ;
+   - fond de la **couleur de l'adversaire**, telle que la carte la montre sur la terre, avec un contour de sa couleur de frontière ;
    - à gauche, la **colonne du statut diplomatique** : un carré de 32 × 32 px
      à bord noir, **rouge en guerre, bleu en paix** (*provisoire* : carrés en
      attendant les icônes) ; la réserve a une case vide de même largeur, pour

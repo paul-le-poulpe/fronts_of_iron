@@ -37,6 +37,11 @@ export const PLAYER_COLORS: readonly PlayerColorEntry[] = [
   { name: "Gris", hue: 210, sat: 0.06, light: 0.5 },
 ];
 
+/** Part de la couleur du joueur sur une case de son territoire, le reste étant le terrain (09-Couleurs §3). */
+export const TERRITORY_ALPHA = 0.4;
+/** Sol de mi-altitude. */
+export const LAND_MID: Rgb = [181, 160, 118];
+
 // Réglages provisoires du calcul (09-Couleurs §3).
 const BORDER_LIGHT = -0.13;
 const LIMIT_LIGHT = 0.13;
@@ -96,6 +101,13 @@ export function playerBorder(player: number): Rgb {
 export function playerLimit(player: number): Rgb {
   const c = entryOf(player);
   return hsl(c.hue, c.sat, c.light + LIMIT_LIGHT);
+}
+
+/** Couleur du joueur telle que la carte la montre sur un sol de mi-altitude : barres de front de l'onglet Forces. */
+export function playerOnLand(player: number): Rgb {
+  const c = playerColor(player);
+  const mix = (i: 0 | 1 | 2): number => Math.round(LAND_MID[i] * (1 - TERRITORY_ALPHA) + c[i] * TERRITORY_ALPHA);
+  return [mix(0), mix(1), mix(2)];
 }
 
 /** Tons d'unité de l'entrée `index` de `PLAYER_COLORS` : foncé, moyen, clair. */
