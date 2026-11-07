@@ -711,23 +711,18 @@ export class MapView {
 
     // Fronts actifs (05-Fronts §11.4) : le point d'avancement du front sur chaque connexion, et de loin, de chaque côté, un rond de la
     // couleur du joueur de ce côté (deux soldats qui se battent), de la taille d'une ville.
-    // Assez près, chaque camp montre les unités de sa première ligne à la place du rond, en guerre comme en paix.
+    // Assez près, les unités remplacent les ronds ; elles sont dessinées après les villes.
     const tiles = this.visibleTiles();
     const units = tiles <= FRONT_INFANTRY_MAX_TILES ? this.frontLayer.markUnits() : null;
     const all = tiles <= FRONT_UNITS_MAX_TILES;
-    this.frontLayer.marks().forEach((m, i) => {
+    this.frontLayer.marks().forEach((m) => {
       if (m.active) {
         ctx.fillStyle = "#7a0c0c";
         ctx.beginPath();
         ctx.arc(m.x, m.y, 2.5 * px, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (units !== null) {
-        this.drawFrontSide(ctx, px, m, -1, m.player1, units[i]!.units1, all);
-        this.drawFrontSide(ctx, px, m, 1, m.player2, units[i]!.units2, all);
-        return;
-      }
-      if (!m.active) return;
+      if (units !== null || !m.active) return;
       ctx.lineWidth = 1.5 * px;
       const d = s0 + 3 * px;
       for (const [sign, player] of [[-1, m.player1], [1, m.player2]] as const) {
@@ -739,10 +734,6 @@ export class MapView {
         ctx.stroke();
       }
     });
-
-    // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
-    // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.
-    this.drawBreakthroughs(ctx, px);
 
     // Mode choix d'axe : la connexion du front la plus proche de la souris.
     if (this.axisFront !== 0 && this.axisHover !== null) {
@@ -795,6 +786,18 @@ export class MapView {
       ctx.lineWidth = 1.5 * px;
       ctx.strokeRect(x + 0.5 - side / 2, y + 0.5 - side / 2, side, side);
     }
+    // Unités de la première ligne, en guerre comme en paix : par-dessus les villes (05-Fronts §11.1).
+    if (units !== null) {
+      this.frontLayer.marks().forEach((m, i) => {
+        this.drawFrontSide(ctx, px, m, -1, m.player1, units[i]!.units1, all);
+        this.drawFrontSide(ctx, px, m, 1, m.player2, units[i]!.units2, all);
+      });
+    }
+
+    // Percées en cours, des deux camps (05-Fronts §11.1) : un trait rouge le long du segment droit entre les deux villes de l'axe,
+    // et une flèche au milieu, de la ville de celui qui perce vers celle de son adversaire.
+    this.drawBreakthroughs(ctx, px);
+
     // En dernier : les noms passent par-dessus les villes, les routes et les fronts.
     this.drawPlayerLabels(ctx);
     this.onDrawn?.();

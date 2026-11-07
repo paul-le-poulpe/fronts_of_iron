@@ -939,7 +939,8 @@ contraire.
   (char ou appui-feu), côte à côte. Les autres unités de la connexion suivent par
   deux sur les rangées de derrière, vers l'arrière du camp ; une unité seule sur
   sa rangée est centrée. Les icônes des deux camps se font face et gardent leur
-  taille à tout zoom : de loin, elles peuvent se chevaucher.
+  taille à tout zoom : de loin, elles peuvent se chevaucher. Elles passent
+  par-dessus les villes et les capitales.
   L'infanterie prend les connexions dans l'ordre de la chaîne, tant qu'il y en
   a ; un emplacement d'infanterie vide montre un petit rond de la couleur du
   joueur sur un front actif (*provisoire*), rien en paix. Chaque autre niche est
