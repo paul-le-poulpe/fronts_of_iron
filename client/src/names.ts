@@ -53,6 +53,35 @@ const NICHE_LETTERS: Readonly<Record<string, string>> = {
   artillery: "ART",
 };
 
+/** Matériel d'une division qui n'est pas de l'infanterie (clés de `DIVISIONS`) : singulier, pluriel. */
+const EQUIPMENT_NAMES: Readonly<Record<string, readonly [string, string]>> = {
+  tankette: ["chenillette", "chenillettes"],
+  infantryTank: ["char d'infanterie", "chars d'infanterie"],
+  cruiserTank: ["char de cavalerie", "chars de cavalerie"],
+  mediumTank: ["char moyen", "chars moyens"],
+  antiTank: ["canon anti-char", "canons anti-char"],
+  antiAir: ["canon anti-aérien", "canons anti-aériens"],
+  artillery: ["pièce d'artillerie", "pièces d'artillerie"],
+  armoredAntiTank: ["canon anti-char blindé", "canons anti-char blindés"],
+  selfPropelledAntiAir: ["canon anti-aérien autopropulsé", "canons anti-aériens autopropulsés"],
+  selfPropelledArtillery: ["pièce d'artillerie autopropulsée", "pièces d'artillerie autopropulsées"],
+};
+
+/** Effectif affiché d'une division (08 §8 bis) : des hommes pour l'infanterie, du matériel pour le reste. Aucun effet sur le jeu. */
+const MEN_PER_DIVISION = 1000;
+const EQUIPMENT_PER_DIVISION = 100;
+
+/** Effectif de `divisions` divisions du type `id` de la niche `niche` (une fraction pour des pertes) : nombre entier et nom accordé. */
+export function strengthOf(id: string, niche: string, divisions: number): { readonly count: number; readonly name: string } {
+  if (niche === "infantry") {
+    const count = Math.round(divisions * MEN_PER_DIVISION);
+    return { count, name: count > 1 ? "hommes" : "homme" };
+  }
+  const count = Math.round(divisions * EQUIPMENT_PER_DIVISION);
+  const [one, many] = EQUIPMENT_NAMES[id] ?? [id, id];
+  return { count, name: count > 1 ? many : one };
+}
+
 export const unitName = (id: string): string => UNIT_NAMES[id] ?? id;
 export const nicheName = (id: string): string => NICHE_NAMES[id] ?? id;
 export const nicheLetters = (id: string): string => NICHE_LETTERS[id] ?? id.toUpperCase();

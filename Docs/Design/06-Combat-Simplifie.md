@@ -14,7 +14,7 @@ plus foi là où elles le contredisent :
 
 **`08-Population.md` remplace les §3 à §4 ci-dessous** (usines sur la carte, niveaux,
 centres de recrutement), sauf la barre de vie (§3.3) et le soin (§3.6), qu'il reprend. Les
-mentions d'hommes et de matériel des pertes se lisent comme des pertes de divisions et d'état.
+pertes du rapport sont décrites par `08-Population.md` §8 bis et §11.
 
 Décisions de l'auteur du 4 novembre 2026. Ce que l'auteur n'a pas tranché est
 marqué « *provisoire* » et listé au §5. Version stable d'avant : tag git
@@ -168,8 +168,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   - **aucune décimale** dans l'écran de bataille (totaux, attaques, pertes) :
     entiers, puis « 5K », « 3M » ;
   - **à la fin**, à gauche et à droite, dans un cadre, les **pertes de chaque
-    camp** : hommes et matériel (exemplaires de chaque type d'armement), et
-    l'issue au-dessus (avancée, ville prise ; pour une percée : première ligne
+    camp** (`08-Population.md` §11), et l'issue au-dessus (avancée, ville prise ; pour une percée : première ligne
     percée et saut, ou percée arrêtée ; contre-attaque repoussée, ou percée
     arrêtée).
   *Provisoire* : 0,45 seconde par round (22,5 secondes au plus pour 50 rounds) ;

@@ -12,7 +12,7 @@ export const POPULATION = {
   arrivalTurns: 100,
   /** Tours avant qu'un bonhomme en trop disparaisse (08 §6). À fixer. */
   leaveTurns: 100,
-  /** `hurtHealTurnsTimesPop` : tours de soin d'un blessé = min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population)) (08 §8). */
+  /** Points de soin d'un blessé ; il en gagne `population` par tour : tours de soin = min(hurtHealMaxTurns, hurtHealTurnsTimesPop / population) (08 §8). */
   hurtHealTurnsTimesPop: 100_000,
   /** Durée maximale de soin d'un blessé, en tours (08 §8). */
   hurtHealMaxTurns: 4000,

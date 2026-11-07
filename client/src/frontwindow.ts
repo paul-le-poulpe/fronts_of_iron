@@ -66,6 +66,8 @@ interface Gutter {
 const FIRST_MIN = 200;
 /** Combats du front gardés dans son historique (06-Combat-Simplifie §2 ; auteur, 5 novembre 2026). */
 const HISTORY_SIZE = 4;
+/** Les pertes du dernier combat restent affichées ce nombre de tours (10 s), puis disparaissent (05-Fronts §11.4). */
+const LOSS_SHOWN_TURNS = 100;
 
 /** Une boîte de percée du joueur : sa carte dans la liste, et sa vue étendue (rangées par niche), construites une fois. */
 interface BoxUi {
@@ -474,8 +476,28 @@ export class FrontWindow implements DndHost {
       if (front !== undefined) {
         this.drawStrip(front);
         this.drawAttackButton(front);
+        this.drawLosses(front);
       }
     }
+  }
+
+  /** État perdu par chaque première ligne au dernier combat (08 §11), en pourcent d'une division, sans décimale ; rien si ce combat a plus de 10 s. */
+  private drawLosses(front: FrontView): void {
+    const me = front.players.indexOf(localPlayer());
+    const percent = (n: number): number => Math.round((n * 100) / this.military.stateScale);
+    const lastTick = this.combats.reduce((latest, c) => (c.front === front.id ? Math.max(latest, c.tick) : latest), -Infinity);
+    const recent = this.tick - lastTick <= LOSS_SHOWN_TURNS;
+    const line = (loss: HTMLElement, byNiche: readonly number[]): void => {
+      loss.hidden = !recent;
+      loss.textContent = `Pertes au dernier combat : ${num(percent(byNiche.reduce((s, n) => s + n, 0)))} % d'état`;
+    };
+    const niches = (losses: readonly HTMLElement[], byNiche: readonly number[]): void => {
+      byNiche.forEach((n, i) => (losses[i]!.textContent = recent && n > 0 ? `−${formatStat(percent(n))} %` : ""));
+    };
+    line(this.columns.o1.loss!, front.sides[me]!.lastLossByNiche);
+    line(this.columns.t1.loss!, front.sides[1 - me]!.lastLossByNiche);
+    niches(this.gutOurs.losses, front.sides[me]!.lastLossByNiche);
+    niches(this.gutTheirs.losses, front.sides[1 - me]!.lastLossByNiche);
   }
 
   // ---- percées en cours (§11.4) ----
@@ -707,14 +729,7 @@ export class FrontWindow implements DndHost {
     this.title.title = `Largeur du front : ${front.connections.length} liaison${front.connections.length > 1 ? "s" : ""}`;
     this.drawAttackButton(front);
     this.drawHistory();
-    // État perdu par chaque première ligne au dernier combat (08 §11), en pourcent d'une division, sans décimale.
-    const percent = (n: number): number => Math.round((n * 100) / m.stateScale);
-    const loss = (n: number): string => `Pertes au dernier combat : ${num(percent(n))} % d'état`;
-    const sum = (byNiche: readonly number[]): number => byNiche.reduce((s, n) => s + n, 0);
-    this.columns.o1.loss!.textContent = loss(sum(front.sides[me]!.lastLossByNiche));
-    this.columns.t1.loss!.textContent = loss(sum(front.sides[1 - me]!.lastLossByNiche));
-    front.sides[me]!.lastLossByNiche.forEach((n, i) => (this.gutOurs.losses[i]!.textContent = n > 0 ? `−${formatStat(percent(n))} %` : ""));
-    front.sides[1 - me]!.lastLossByNiche.forEach((n, i) => (this.gutTheirs.losses[i]!.textContent = n > 0 ? `−${formatStat(percent(n))} %` : ""));
+    this.drawLosses(front);
 
     // La première ligne adverse a la largeur de celle du joueur (§11.4) ; le reste de son côté est comprimé.
     this.capFirstLine();

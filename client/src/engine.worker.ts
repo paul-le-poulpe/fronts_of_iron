@@ -21,7 +21,7 @@ function post(msg: FromWorker): void {
   const transfer: Transferable[] = [];
   if (msg.type === "init") transfer.push(msg.terrain.buffer, msg.resources.buffer, msg.fertility.buffer);
   else if (msg.type === "tick") {
-    transfer.push(msg.tiles.buffer);
+    transfer.push(msg.tiles.buffer, msg.fishers.buffer);
     if (msg.cities) transfer.push(msg.cities.buffer);
     if (msg.roads) transfer.push(msg.roads.buffer);
   }

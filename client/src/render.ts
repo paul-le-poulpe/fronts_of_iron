@@ -78,6 +78,9 @@ interface Hatching {
   readonly stroke: number;
 }
 
+/** Hachures des cases cultivables, vue « Fertilité » et « Créer une ville » (le panneau de production les reprend). */
+export const FERTILE_RGBA: Rgba = [70, 160, 80, 120];
+
 /** Ressources de la vue « Ressources naturelles » : couleur des hachures (la légende de la carte la reprend) et icône. */
 export const RESOURCE_LEGEND = {
   iron: { name: "Fer", icon: "goods/goods-iron-ingot.png", rgba: [130, 30, 22, 190] },
@@ -166,7 +169,7 @@ export class MapView {
     if (baseCtx === null) throw new Error("canvas 2D indisponible");
     this.baseCtx = baseCtx;
     this.image = new ImageData(painter.bytes, mirror.width, mirror.height);
-    this.fertileHatch = hatching(buildMask(mirror, (t) => mirror.fertility[t] !== 0), [70, 160, 80, 120], 1);
+    this.fertileHatch = hatching(buildMask(mirror, (t) => mirror.fertility[t] !== 0), FERTILE_RGBA, 1);
     this.ironHatch = hatching(
       buildMask(mirror, (t) => (mirror.resources[t]! & RESOURCE_IRON) !== 0 && (mirror.terrain[t]! & TERRAIN_LAND) !== 0),
       RESOURCE_LEGEND.iron.rgba,
@@ -545,8 +548,8 @@ export class MapView {
       const along = sign * (FRONT_UNIT_ALONG_PX + rank * FRONT_UNIT_RANK_PX) * px;
       return { x: m.x + m.ux * along + nx * across * px, y: m.y + m.uy * along + ny * across * px };
     };
-    // Les icônes regardent vers la gauche : à gauche du front, elles sont retournées pour faire face à l'adversaire.
-    const flip = sign * m.ux < 0;
+    // Les icônes regardent vers la droite : à droite du front, elles sont retournées pour faire face à l'adversaire.
+    const flip = sign * m.ux > 0;
     const draw = (d: DivisionView, at: { x: number; y: number }): void => {
       const info = this.mirror.military.divisions[d.type];
       const icon = info === undefined ? null : unitIconCanvas(info.icon, d.owner);

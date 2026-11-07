@@ -11,7 +11,7 @@ import type { CombatRecord } from "./combat.ts";
 import type { Division } from "./divisions.ts";
 import type { Front } from "./fronts.ts";
 import { hashMap } from "./hash.ts";
-import { RESOURCE_COUNT, TERRAIN_LAND, type GameMap } from "./map.ts";
+import { RESOURCE_COUNT, type GameMap } from "./map.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { createRoadNetwork, type RoadNetwork } from "./roads.ts";
 
@@ -37,7 +37,7 @@ export interface Player {
   farmTiles: number;
   /** Somme des fertilités des cases du joueur. Tenu à jour par `setOwner`. */
   fertilitySum: number;
-  /** Nombre de cases d'eau (mer et lacs) que possède le joueur : la surface de pêche maximale. Tenu à jour par `setOwner`. */
+  /** Nombre de cases d'eau (mer et lacs) que pêchent les villes du joueur : la surface de pêche maximale. Tenu à jour par `setFisher`. */
   seaTiles: number;
   /**
    * Activités ouvertes (08 §2), de haut en bas : l'ordre est la priorité du fer et des disparitions. Inactifs est
@@ -58,8 +58,8 @@ export interface Player {
   readonly machineArrivals: number[][];
   /** Tours de fin des machines en sursis, par bien, triés. */
   readonly machineLeaves: number[][];
-  /** Fin du soin du blessé en cours, 0 si aucun (08 §8). */
-  hurtHealEnd: number;
+  /** Soin du dernier blessé (08 §8), de 0 à `POPULATION.hurtHealTurnsTimesPop` : gagne la population chaque tour, perd les pertes d'infanterie. */
+  hurtHeal: number;
   /** Auto-assignation (08 §7 bis) : bonshommes et machines se placent seuls, de haut en bas. Allumée au départ. */
   autoAssign: boolean;
   // Résultats du dernier tour (economy.ts). 0 avant le premier tour.
@@ -113,6 +113,8 @@ export interface GameState {
   readonly cities: City[];
   /** Identifiant de la ville dont la zone contient la case (terre et eau), 0 = aucune (00-Game §3.2). */
   readonly tileCity: Uint16Array;
+  /** Identifiant de la ville qui pêche la case d'eau, 0 = aucune : la ville à port la plus proche, dans `CITY.fishingRadius` (00-Game §3.1). */
+  readonly tileFisher: Uint16Array;
   /** Routes terrestres gardées (00-Game §3.5) : paires d'identifiants [a, b], a < b, triées par longueur au carré, puis a, puis b. Mises à jour à chaque fondation par `roadNetwork`. */
   readonly roads: [number, number][];
   /** Toutes les routes candidates et leur grille (roads.ts). Déduit des villes : hors du hash, comme `changedMark`. */
@@ -208,7 +210,7 @@ export function createGame(setup: GameSetup): GameState {
       popLeaves: [],
       machineArrivals: Array.from({ length: GOOD_COUNT }, () => [] as number[]),
       machineLeaves: Array.from({ length: GOOD_COUNT }, () => [] as number[]),
-      hurtHealEnd: 0,
+      hurtHeal: 0,
       autoAssign: true,
       capacity: 0,
       food: 0,
@@ -230,6 +232,7 @@ export function createGame(setup: GameSetup): GameState {
     players,
     cities: [],
     tileCity: new Uint16Array(size),
+    tileFisher: new Uint16Array(size),
     roads: [],
     roadNetwork: createRoadNetwork(map.width, map.height, CITY.expansionRadius),
     fronts: [],
@@ -256,30 +259,35 @@ export function isPlayerId(state: GameState, v: unknown): v is number {
   return Number.isInteger(v) && (v as number) >= 1 && (v as number) <= state.players.length;
 }
 
+/** Seule façon de changer la ville qui pêche une case d'eau : met à jour `tileFisher` et `seaTiles` des joueurs. */
+export function setFisher(state: GameState, tile: number, city: number): void {
+  const prev = state.tileFisher[tile]!;
+  if (prev !== 0) state.players[state.cities[prev - 1]!.player - 1]!.seaTiles--;
+  if (city !== 0) state.players[state.cities[city - 1]!.player - 1]!.seaTiles++;
+  state.tileFisher[tile] = city;
+}
+
 /**
  * Seule façon de changer le propriétaire d'une case : met à jour `owner`, les
- * compteurs de cases, de ressources, de cases fertiles, de fertilité et de cases
- * d'eau des joueurs, et ajoute la case à `changed` la première fois qu'elle
+ * compteurs de cases, de ressources, de cases fertiles et de fertilité des
+ * joueurs, et ajoute la case à `changed` la première fois qu'elle
  * change dans le tour.
  */
 export function setOwner(state: GameState, tile: number, newOwner: number, changed: number[]): void {
   const prev = state.owner[tile]!;
   if (prev === newOwner) return;
   const fertility = state.map.fertility[tile]!;
-  const water = (state.map.terrain[tile]! & TERRAIN_LAND) === 0;
   if (prev !== 0) {
     const p = state.players[prev - 1]!;
     p.tileCount--;
     if (fertility > 0) p.farmTiles--;
     p.fertilitySum -= fertility;
-    if (water) p.seaTiles--;
   }
   if (newOwner !== 0) {
     const p = state.players[newOwner - 1]!;
     p.tileCount++;
     if (fertility > 0) p.farmTiles++;
     p.fertilitySum += fertility;
-    if (water) p.seaTiles++;
   }
   const res = state.map.resources[tile]!;
   if (res !== 0) {

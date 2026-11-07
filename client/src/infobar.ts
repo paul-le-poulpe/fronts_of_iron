@@ -13,7 +13,7 @@
 // Seuls la barre et le détail ouvert sont mis à jour ; un détail replié est remis à
 // jour à son ouverture.
 //
-// La première section est l'onglet Ressources (flux), branché sur le fer et les machines (machines / limite) ; la
+// La première section est l'onglet Ressources (flux), branché sur le fer ; la
 // deuxième, l'onglet des forces (05-Fronts §11.2, `forcestab.ts`) ; la troisième, l'onglet Diplomatie
 // (`diplomacytab.ts`). La barre ne fait que poser le détail des deux dernières.
 //
@@ -27,10 +27,8 @@
 
 import { type DiplomacyTab } from "./diplomacytab.ts";
 import { type ForcesTab } from "./forcestab.ts";
-import { attachGoodTip } from "./goodtips.ts";
-import { productIcon } from "./icons.ts";
 import { activityName } from "./names.ts";
-import { type ActivityCatalog, type HumanDetail, type PlayerStats } from "./protocol.ts";
+import { type HumanDetail, type PlayerStats } from "./protocol.ts";
 import { num } from "./format.ts";
 import { setTip } from "./tooltip.ts";
 
@@ -158,7 +156,6 @@ export class InfoBar {
   onOpen: (() => void) | null = null;
   private closeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly root: HTMLElement;
-  private readonly catalog: ActivityCatalog;
   private readonly bar: HTMLElement;
   private readonly sections: Section[];
   private open = -1;
@@ -181,17 +178,15 @@ export class InfoBar {
    */
   constructor(
     root: HTMLElement,
-    catalog: ActivityCatalog,
     onMapOption: (option: MapOption, checked: boolean) => void,
     forces: ForcesTab,
     diplomacy: DiplomacyTab,
     productionOptions: HTMLElement,
   ) {
     this.root = root;
-    this.catalog = catalog;
     this.forcesTab = forces;
     this.bar = el("div", "ib-bar");
-    this.sections = [this.flows(catalog), this.forcesSection(forces), this.diplomacySection(diplomacy)];
+    this.sections = [this.flows(), this.forcesSection(forces), this.diplomacySection(diplomacy)];
     this.forcesIndex = 1;
     root.replaceChildren(this.bar);
     this.sections.forEach((s, i) => {
@@ -430,7 +425,7 @@ export class InfoBar {
 
   // ---- 1. Ressources (flux) ----
 
-  private flows(catalog: ActivityCatalog): Section {
+  private flows(): Section {
     // Mini-barre : le fer, la ressource dont dépend la production (même barre que dans le détail).
     const miniIron = track("flow");
     miniIron.root.classList.add("iron");
@@ -451,21 +446,6 @@ export class InfoBar {
     setTip(aluminiumPie, () => el("div", undefined, "Aucune consommation"));
     const aluminiumRow = row(iconLabel("goods/goods-aluminium-ingot.png", "Aluminium", aluminiumPie), track("flow").root, el("span", "ib-value", "à venir"), "soon");
 
-    const machines = [
-      { good: "tractor", label: "Tracteurs" },
-      { good: "fishingBoat", label: "Bateaux de pêche" },
-      { good: "miningMachine", label: "Pompes à vapeur" },
-    ].map((m) => {
-      const t = track("flow");
-      const value = el("span", "ib-value");
-      value.title = "Possédées / limite";
-      const label = el("span", "ib-iconlabel");
-      const sym = productIcon(m.good);
-      attachGoodTip(sym, m.good);
-      label.append(sym, m.label);
-      return { ...m, index: catalog.goodIds.indexOf(m.good), t, value, r: row(label, t.root, value) };
-    });
-
     const legend = el("p", "ib-legend");
     legend.append(
       legendItem("flow", "fer réservé"),
@@ -476,7 +456,6 @@ export class InfoBar {
       el("h3", undefined, "Ressources (flux)"),
       ironRow,
       aluminiumRow,
-      ...machines.map((m) => m.r),
       legend,
     );
     iron.root.title = "Orange : fer réservé par les usines et les casernes servies · orange clair : fer produit par les mineurs";
@@ -497,12 +476,6 @@ export class InfoBar {
         latest = { d, s };
         ironSpans(iron, d);
         ironValue.textContent = `${num(d.ironReserved)} / ${num(d.ironProduced)}`;
-        for (const m of machines) {
-          const have = m.index >= 0 ? (s.machines[m.index] ?? 0) : 0;
-          const limit = m.index >= 0 ? (s.machineLimits[m.index] ?? 0) : 0;
-          span(m.t.fill, 0, pct(have, limit));
-          m.value.textContent = `${num(have)} / ${num(limit)}`;
-        }
       },
     };
   }

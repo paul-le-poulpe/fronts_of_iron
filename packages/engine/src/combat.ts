@@ -12,6 +12,7 @@
 // Ordre des parcours : fronts par identifiant, camps 0 puis 1, percées et divisions par
 // identifiant (règle 2 du CLAUDE.md).
 
+import { woundMen } from "./activities.ts";
 import {
   assignCounterForces,
   breakthroughFlight,
@@ -197,7 +198,7 @@ function breakthroughRound(state: GameState, front: Front, bt: Breakthrough, rec
   const engaged = [...force, ...defense].sort((a, b) => a.id - b.id);
   const { before, index } = snapshot(record, engaged);
   // État perdu par la première ligne de chaque camp (05-Fronts §11.4) : la tranche de première ligne.
-  const hit = applyLosses(front, record, losses, (d) => d.line === LINE_FIRST && d.front === front.id);
+  const hit = applyLosses(state, front, record, losses, (d) => d.line === LINE_FIRST && d.front === front.id);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
   applyFlight(state, front);
@@ -265,13 +266,14 @@ function snapshot(record: CombatRecord, engaged: readonly Division[]): { before:
 
 /**
  * Applique les pertes d'un round, divisions par identifiant, et les ajoute aux pertes du rapport (état perdu, divisions
- * détruites). `firstLine(d)` : l'état perdu par `d` compte dans `lastLossByNiche` (05-Fronts §11.4). Renvoie les divisions
+ * détruites) et aux blessés (08 §8). `firstLine(d)` : l'état perdu par `d` compte dans `lastLossByNiche` (05-Fronts §11.4). Renvoie les divisions
  * touchées.
  */
-function applyLosses(front: Front, record: CombatRecord, losses: ReadonlyMap<Division, number>, firstLine: (d: Division) => boolean): Division[] {
+function applyLosses(state: GameState, front: Front, record: CombatRecord, losses: ReadonlyMap<Division, number>, firstLine: (d: Division) => boolean): Division[] {
   const hit = [...losses.keys()].sort((a, b) => a.id - b.id);
   for (const d of hit) {
     const lostState = applyLoss(d, Math.min(LOSS_SCALE, losses.get(d)!));
+    woundMen(state.players[d.owner - 1]!, d.type, lostState);
     if (firstLine(d)) {
       const byNiche = front.sides[front.players.indexOf(d.owner)]!.lastLossByNiche;
       byNiche[dataOf(d).niche] = byNiche[dataOf(d).niche]! + lostState;
@@ -445,7 +447,7 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   );
   const engaged = [...sides[0]!, ...sides[1]!].sort((a, b) => a.id - b.id);
   const { before, index } = snapshot(record, engaged);
-  const hit = applyLosses(front, record, losses, () => true);
+  const hit = applyLosses(state, front, record, losses, () => true);
   removeDestroyed(state, hit);
   const alive = new Set(state.divisions.map((d) => d.id));
   applyFlight(state, front);

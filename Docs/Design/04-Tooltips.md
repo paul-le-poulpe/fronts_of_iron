@@ -1,8 +1,7 @@
 # Infobulles des icônes — feuille de route
 
 Chaque icône du jeu (machine, ressource, métier, activité, type de division) aura à terme
-sa propre infobulle construite (`setTip` de `client/src/tooltip.ts`, contenus
-dans `client/src/goodtips.ts`). Mécanisme et affichage : 03-Client.md
+sa propre infobulle construite (`setTip` de `client/src/tooltip.ts`). Mécanisme et affichage : 03-Client.md
 (« Infobulles construites »). Ce document liste ce qui existe et ce qui reste.
 
 Aucune infobulle n'invente de règle : elle affiche des valeurs du catalogue
@@ -12,7 +11,7 @@ son infobulle ne dit que ce qui est écrit.
 
 ## Forme commune
 
-Modèle : l'infobulle du tracteur (validée par l'auteur, 24 octobre 2026).
+Forme validée par l'auteur le 24 octobre 2026.
 
 1. Titre : le nom de la chose.
 2. Une phrase : à quoi elle sert, en termes de mécanisme.
@@ -31,14 +30,7 @@ Couleurs des barres :
 
 ## Faites
 
-| Icône | Contenu | Barres |
-| --- | --- | --- |
-| `[tracteur]` | une machine vaut un agriculteur (même place, même sortie, sans conducteur) ; cases par travailleur, boîte qui la reçoit, usine et fer par machine ; agriculteurs, machines possédées / limite | surface cultivée / cultivable (`--occ-farm`) |
-| `[bateau de pêche]` | idem pour un pêcheur ; boîte Pêcheurs | surface pêchée / pêchable (`--occ-fish`) |
-| `[pompe à vapeur]` | idem pour un mineur ; boîte Mineurs | cases de fer exploitées / cases de fer (`--occ-mine`) |
-
-Ces trois infobulles sont posées sur chaque symbole de machine dans l'onglet Ressources de la barre
-d'informations (`attachGoodTip`). Les pions de machine du panneau de production, les tuiles de sortie
+Les machines n'ont pas d'infobulle construite. Les pions de machine du panneau de production, les tuiles de sortie
 et les boîtes ont chacun un `title` (nom, ce qu'il montre, comment le glisser).
 
 Panneau de production (08 §11, nouvelles infobulles construites) :
@@ -50,8 +42,7 @@ Panneau de production (08 §11, nouvelles infobulles construites) :
 
 ## À faire
 
-Ordre proposé ; le contenu exact de chacune est à valider avec l'auteur comme
-pour le tracteur.
+Ordre proposé ; le contenu exact de chacune est à valider avec l'auteur.
 
 ### Ressources
 - `[fer]` (onglet Ressources, en-tête du panneau de production) : à quoi sert le fer (les

@@ -45,8 +45,11 @@ export class Mirror {
   readonly playerCount: number;
   readonly expansionRadius: number;
   readonly controlRadius: number;
+  readonly fishingRadius: number;
   /** Ville de chaque case, 0 = aucune. Même contenu que `state.tileCity` du moteur. */
   readonly tileCity: Uint16Array;
+  /** Ville qui pêche chaque case d'eau, 0 = aucune. Même contenu que `state.tileFisher` du moteur. */
+  readonly tileFisher: Uint16Array;
   tick = 0;
   cities: MirrorCity[] = [];
   /** Routes : paires d'identifiants de villes. */
@@ -96,17 +99,19 @@ export class Mirror {
     this.playerCount = init.playerCount;
     this.expansionRadius = init.expansionRadius;
     this.controlRadius = init.controlRadius;
+    this.fishingRadius = init.fishingRadius;
     this.catalog = init.catalog;
     this.military = init.military;
     this.roadPaths = new RoadPaths(init.width, init.height, init.terrain, Math.floor(init.expansionRadius / 2));
     const size = init.width * init.height;
     this.tileCity = new Uint16Array(size);
+    this.tileFisher = new Uint16Array(size);
     this.repaintMark = new Uint8Array(size);
     this.roadCorridor = new Uint8Array(size);
     const bins = init.controlRadius * init.controlRadius + 1;
     this.cityIds = Array.from({ length: init.playerCount }, () => []);
     this.farmHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
-    this.seaHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
+    this.seaHist = Array.from({ length: init.playerCount }, () => new Int32Array(init.fishingRadius * init.fishingRadius + 1));
     this.ironHist = Array.from({ length: init.playerCount }, () => new Int32Array(bins));
     this.farmThreshold = new Int32Array(init.playerCount).fill(-1);
     this.seaThreshold = new Int32Array(init.playerCount).fill(-1);
@@ -267,6 +272,18 @@ export class Mirror {
         }
       }
     }
+    const fishers = msg.fishers;
+    for (let i = 0; i < fishers.length; i += 2) {
+      const t = fishers[i]!;
+      const next = fishers[i + 1]!;
+      const prev = this.tileFisher[t]!;
+      if (prev !== next) {
+        this.countSea(t, prev, -1);
+        this.countSea(t, next, +1);
+      }
+      this.tileFisher[t] = next;
+      this.markSea(t, mark);
+    }
     if (msg.fronts !== null) this.setFronts(msg.fronts, mark);
     if (msg.divisions !== null) this.divisions = msg.divisions;
     if (msg.cities !== null) {
@@ -316,6 +333,12 @@ export class Mirror {
         if (this.tileCity[y * w + x] === cityId) this.count(y * w + x, cityId, sign);
       }
     }
+    const sea = this.fishingRadius;
+    for (let y = Math.max(0, cy - sea); y <= Math.min(this.height - 1, cy + sea); y++) {
+      for (let x = Math.max(0, cx - sea); x <= Math.min(w - 1, cx + sea); x++) {
+        if (this.tileFisher[y * w + x] === cityId) this.countSea(y * w + x, cityId, sign);
+      }
+    }
   }
 
   /**
@@ -363,7 +386,7 @@ export class Mirror {
   private count(tile: number, cityId: number, sign: number): void {
     if (cityId === 0) return;
     const kinds = this.kindsOf(tile);
-    if (!kinds.farm && !kinds.sea && !kinds.iron) return;
+    if (!kinds.farm && !kinds.iron) return;
     const city = this.cities[cityId - 1]!;
     const w = this.width;
     const dx = (tile % w) - (city.tile % w);
@@ -372,8 +395,28 @@ export class Mirror {
     if (d2 >= this.farmHist[0]!.length) return;
     const player = city.player - 1;
     if (kinds.farm) this.farmHist[player]![d2]! += sign;
-    if (kinds.sea) this.seaHist[player]![d2]! += sign;
     if (kinds.iron) this.ironHist[player]![d2]! += sign;
+  }
+
+  /** Ajoute (`sign` = +1) ou retire (-1) la case d'eau de l'histogramme de pêche du joueur de la ville `cityId` (0 : rien). */
+  private countSea(tile: number, cityId: number, sign: number): void {
+    if (cityId === 0) return;
+    const city = this.cities[cityId - 1]!;
+    const w = this.width;
+    const dx = (tile % w) - (city.tile % w);
+    const dy = Math.floor(tile / w) - Math.floor(city.tile / w);
+    this.seaHist[city.player - 1]![dx * dx + dy * dy]! += sign;
+  }
+
+  /** Marque la case d'eau et ses quatre voisines : le trait entre deux zones de pêche dépend des voisines. */
+  private markSea(t: number, mark: (t: number) => void): void {
+    const w = this.width;
+    const x = t % w;
+    mark(t);
+    if (x > 0) mark(t - 1);
+    if (x < w - 1) mark(t + 1);
+    if (t >= w) mark(t - w);
+    if (t + w < this.terrain.length) mark(t + w);
   }
 
   /** Marque les cases des villes du joueur `k` dont la distance au carré est dans ]min(a, b), max(a, b)]. */
@@ -381,7 +424,8 @@ export class Mirror {
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
     const w = this.width;
-    const r = this.controlRadius;
+    const r = kind === "sea" ? this.fishingRadius : this.controlRadius;
+    const tileOf = kind === "sea" ? this.tileFisher : this.tileCity;
     for (const id of this.cityIds[k]!) {
       const ct = this.cities[id - 1]!.tile;
       const cx = ct % w;
@@ -393,9 +437,10 @@ export class Mirror {
           const d2 = dx * dx + dy * dy;
           if (d2 <= lo || d2 > hi) continue;
           const t = y * w + x;
-          if (this.tileCity[t] !== id) continue;
+          if (tileOf[t] !== id) continue;
           if (!this.kindsOf(t)[kind]) continue;
-          mark(t);
+          if (kind === "sea") this.markSea(t, mark);
+          else mark(t);
         }
       }
     }
@@ -423,21 +468,25 @@ export class Mirror {
     return best;
   }
 
-  /** Recalcule les seuils depuis zéro à partir de `tileCity` (référence des tests). */
+  /** Recalcule les seuils depuis zéro à partir de `tileCity` et `tileFisher` (référence des tests). */
   referenceThresholds(): { farm: number[]; sea: number[]; iron: number[] } {
     const bins = this.controlRadius * this.controlRadius + 1;
-    const make = (): Int32Array[] => Array.from({ length: this.playerCount }, () => new Int32Array(bins));
-    const hist: Record<Kind, Int32Array[]> = { farm: make(), sea: make(), iron: make() };
+    const make = (size: number): Int32Array[] => Array.from({ length: this.playerCount }, () => new Int32Array(size));
+    const hist: Record<Kind, Int32Array[]> = { farm: make(bins), sea: make(this.fishingRadius * this.fishingRadius + 1), iron: make(bins) };
     const w = this.width;
-    for (let t = 0; t < this.tileCity.length; t++) {
-      const id = this.tileCity[t]!;
-      if (id === 0) continue;
-      const kinds = this.kindsOf(t);
+    const add = (t: number, id: number, kind: Kind): void => {
       const city = this.cities[id - 1]!;
       const dx = (t % w) - (city.tile % w);
       const dy = Math.floor(t / w) - Math.floor(city.tile / w);
-      const d2 = dx * dx + dy * dy;
-      for (const kind of ["farm", "sea", "iron"] as const) if (kinds[kind]) hist[kind][city.player - 1]![d2]!++;
+      hist[kind][city.player - 1]![dx * dx + dy * dy]!++;
+    };
+    for (let t = 0; t < this.tileCity.length; t++) {
+      const id = this.tileCity[t]!;
+      const fisher = this.tileFisher[t]!;
+      const kinds = this.kindsOf(t);
+      if (id !== 0 && kinds.farm) add(t, id, "farm");
+      if (id !== 0 && kinds.iron) add(t, id, "iron");
+      if (fisher !== 0) add(t, fisher, "sea");
     }
     return {
       farm: this.stats.map((p, k) => pickThreshold(hist.farm[k]!, p.cultivated)),

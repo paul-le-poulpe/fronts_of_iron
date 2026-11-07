@@ -139,15 +139,8 @@ export function divisionCount(state: GameState, player: number, type: number): n
   return n;
 }
 
-/** Divisions d'infanterie du joueur, élites comprises : la base du plafond des élites (08 §5). */
-export function infantryCount(state: GameState, player: number): number {
-  let n = 0;
-  for (const d of state.divisions) if (d.owner === player && DIVISION_DATA[d.type]!.niche === INFANTRY_NICHE) n++;
-  return n;
-}
-
-/** Plafond de la limite des élites (08 §5) : `floor(divisions d'infanterie / ELITE_TROOPS_RATIO)`. */
-export const eliteCap = (infantry: number): number => Math.floor(infantry / ELITE_TROOPS_RATIO);
+/** Plafond de la limite des élites (08 §5) : `floor(bonshommes de la caserne de réguliers / ELITE_TROOPS_RATIO)`. */
+export const eliteCap = (regularWorkers: number): number => Math.floor(regularWorkers / ELITE_TROOPS_RATIO);
 
 /** Numéro du tour en cours de calcul (`state.tick` n'avance qu'à la fin d'`applyTurn`). */
 export const currentTurn = (state: GameState): number => state.tick + 1;

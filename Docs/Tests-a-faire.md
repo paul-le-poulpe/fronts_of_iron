@@ -341,6 +341,32 @@ devient `running` ; nouveaux champs du joueur `ironDemanded`, `ironConsumed`, le
   après les champs. Tester : petite population avec une ligne de bateaux, les ouvriers de la ligne sont pris avant les
   pêcheurs.
 
+## Milice à 800 (7 novembre 2026)
+
+- `softAttack` de la milice passe de 600 à 800 : les tests de combat qui comptent sur 600 en dur sont à recalculer.
+
+## Rayon de pêche (7 novembre 2026)
+
+- À tester (00-Game §3.1) : mer à `CITY.fishingRadius` cases d'un port et hors zone comptée dans `seaTiles` ; rien pour une ville sans port ; case
+  entre deux ports à la plus proche, à la plus ancienne à égalité ; port perdu qui rend sa mer ; ville prise qui transfère `seaTiles`.
+- Client : `Mirror.referenceThresholds` lit `tileFisher` ; `msg.fishers` à fournir dans les messages de tour écrits à la main.
+
+## Limite des élites (7 novembre 2026)
+
+- Périmé dans `packages/engine/test/economy.test.ts` : « élites : plafonnées à floor(divisions d'infanterie / ELITE_TROOPS_RATIO) ».
+  Le plafond suit les bonshommes de la caserne de réguliers (08 §5), `divisionLimit` ne prend plus `state`.
+- À tester : retirer des postes de réguliers vide la caserne d'élite ; un ordre des boîtes avec les élites au-dessus des réguliers ;
+  blessés de la caserne de réguliers.
+
+## Blessés par les pertes (7 novembre 2026)
+
+- Périmés dans `packages/engine/test/economy.test.ts`, describe « blessés » : l'entrée par division détruite, et le soin
+  en tours de fin (`p.hurtHeal` est maintenant un compteur de points, seul le nom du champ a été remplacé pour le typecheck).
+- À tester (08 §8) : 1 000 hommes font un blessé ; 500 hommes font passer un soin de 80 % à 30 % ; 1 500 hommes font un
+  blessé de plus et 80 % à 30 % ; passage sous 0 % ; chars sans blessé ; encerclement ; caserne vide.
+- `CombatLosses.divisions` n'est plus lu par le client : à retirer avec le test de `combat.test.ts` qui le lit.
+- Bots : déploiement de la réserve sur les fronts, rien en partie de test.
+
 ## Armement × 2, fer à l'échelle de la demande (5 novembre 2026)
 
 - `productionPerHour` × 2 pour les 12 types (fusil 4 752 … antichar blindé 108), `maxStockSeconds` 800 inchangé : le stock

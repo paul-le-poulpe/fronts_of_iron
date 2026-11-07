@@ -87,6 +87,7 @@ export interface InitMessage {
   readonly playerColors: readonly number[];
   readonly expansionRadius: number;
   readonly controlRadius: number;
+  readonly fishingRadius: number;
   readonly stepMs: number;
   readonly catalog: ActivityCatalog;
   /** Types de division, niches et réglages des fronts (05-Fronts), envoyés une fois. */
@@ -138,7 +139,7 @@ export interface MilitaryCatalog {
   readonly niches: readonly { readonly id: string; readonly support: boolean; readonly types: readonly string[] }[];
   /** Tours entre deux rounds de combat. */
   readonly combatTurns: number;
-  /** `ELITE_TROOPS_RATIO` : divisions d'infanterie par division d'élite au plus (08 §5). */
+  /** `ELITE_TROOPS_RATIO` : bonshommes de la caserne de réguliers par division d'élite au plus (08 §5). */
   readonly eliteTroopsRatio: number;
   /** Délai d'un déplacement, en tours. */
   readonly transferTurns: number;
@@ -319,8 +320,10 @@ export interface HumanDetail {
   /** Tours de fin des machines à venir et en sursis, par bien, triés. */
   readonly machineArrivals: readonly (readonly number[])[];
   readonly machineLeaves: readonly (readonly number[])[];
-  /** Fin du soin du blessé en cours, 0 si aucun. */
-  readonly hurtHealEnd: number;
+  /** Soin du dernier blessé, de 0 à 100 (08 §8). */
+  readonly hurtHealPercent: number;
+  /** Tours restants de ce soin, à la population actuelle. */
+  readonly hurtHealTurnsLeft: number;
   /** Capacité de population (08 §3). */
   readonly capacity: number;
   /** Fer demandé par les usines et casernes (08 §4). */
@@ -446,16 +449,12 @@ export interface PlayerStats {
   readonly cultivated: number;
   readonly fished: number;
   readonly minedTiles: number;
-  /** Cases de fer, cases fertiles et cases d'eau des zones du joueur. */
-  readonly ironTiles: number;
+  /** Cases fertiles et cases d'eau des zones du joueur. */
   readonly farmTiles: number;
   readonly seaTiles: number;
   /** Fer produit et fer réservé par les usines et les casernes servies (08 §4). */
   readonly ironProduced: number;
   readonly ironReserved: number;
-  /** Machines possédées (Inactifs et activité) et limite, par bien dans l'ordre de `ActivityCatalog.goodIds`. */
-  readonly machines: readonly number[];
-  readonly machineLimits: readonly number[];
   /** Identifiant de la capitale, 0 = aucune. */
   readonly capital: number;
   readonly cities: number;
@@ -512,6 +511,8 @@ export interface TickMessage {
   readonly tick: number;
   /** Paires [case, ville] : les cases dont `tileCity` a changé pendant ce tour. */
   readonly tiles: Uint32Array;
+  /** Paires [case, ville] : les cases dont `tileFisher` a changé pendant ce tour, et celles d'une ville prise, à repeindre. */
+  readonly fishers: Uint32Array;
   /**
    * Liste complète des villes, 4 nombres chacune [joueur, case, port (0/1), groupe],
    * dans l'ordre des identifiants (ville 1 d'abord). Présente seulement si une ville

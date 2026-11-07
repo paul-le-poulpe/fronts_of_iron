@@ -367,14 +367,7 @@ bon : élites (nommées « forces spéciales » dans le client, décision de l'a
   `formationTurns` tours **de son type** (§3.4 : 100 pour les réguliers, 200 pour
   les élites, 0 pour la milice, prête aussitôt). En formation, elle n'est pas
   déplaçable (*provisoire*) ; son pion porte la flèche de statut vers le haut (§11.3).
-- **Limite des élites** : `ELITE_TROOPS_RATIO` (`config/divisions.ts`, **10**, décision de l'auteur du
-  1er novembre 2026 : une élite pour dix divisions d'infanterie) ;
-  une division d'un type `elite` n'est créée que si
-  `ELITE_TROOPS_RATIO × (élites + 1) ≤ divisions d'infanterie + 1`, divisions du
-  joueur de la niche, élites comprises, en formation ou non, où qu'elles soient.
-  Avec 10 : les élites sont au plus 10 % de l'infanterie, la première demande 9
-  divisions d'une autre sorte. Vérifiée **à la création seulement** : supprimer ou
-  perdre de l'infanterie ne supprime aucune élite. Sinon, l'ordre est sans effet.
+- **Limite des élites** : `08-Population.md` §5.
 - **Suppression** (ordre `delete_division`) : seulement une division de la
   **réserve nationale**, ni en déplacement, ni en formation (*provisoire* pour
   la formation). Ses hommes retournent à la population et son équipement au
@@ -938,7 +931,9 @@ contraire.
   contre le front : l'infanterie (le plus haut à l'écran) et une autre unité
   (char ou appui-feu), côte à côte. Les autres unités de la connexion suivent par
   deux sur les rangées de derrière, vers l'arrière du camp ; une unité seule sur
-  sa rangée est centrée. Les icônes des deux camps se font face et gardent leur
+  sa rangée est centrée. Les icônes sont dessinées vers la droite ; celles du camp
+  situé à droite sur le trait entre les deux villes sont retournées, pour que les
+  deux camps se fassent face (seul le sens gauche-droite du trait compte). Elles gardent leur
   taille à tout zoom : de loin, elles peuvent se chevaucher. Elles passent
   par-dessus les villes et les capitales.
   L'infanterie prend les connexions dans l'ordre de la chaîne, tant qu'il y en
@@ -1216,13 +1211,13 @@ accepté que ses boîtes aient de l'espace inutilisé. Les largeurs de la maquet
   rouge : « Pertes : x hommes / tour », `x` = les hommes perdus par les
   divisions de cette première ligne au dernier round de combat (une seconde),
   tranches de première ligne des percées comprises : la somme de
-  `FrontSide.lastLossByNiche`, remis à 0 à chaque round ; 0 sans combat.
+  `FrontSide.lastLossByNiche`, remis à 0 à chaque round ; la ligne disparaît 10 secondes après le dernier combat du front.
 - **Pertes par rangée** (auteur, 4 novembre 2026) : dans la colonne de
   statistiques de chaque première ligne, sous les trois statistiques de chaque
   rangée, une quatrième ligne en rouge « −N » : les hommes perdus par cette
   niche au dernier round (`lastLossByNiche[niche]`, notation courte de
-  `formatStat`). Vide sans perte, à la même hauteur, pour que les statistiques
-  ne bougent pas.
+  `formatStat`). Vide sans perte, ou 10 secondes après le dernier combat du front,
+  à la même hauteur, pour que les statistiques ne bougent pas.
 
 **Rangées par niche** (dans chaque ligne) : une rangée par niche, dans l'ordre
 infanterie, chars, antichar, antiaérien, artillerie (*provisoire*). Fond gris
@@ -1240,11 +1235,13 @@ très légèrement teinté :
   fond** (à peine visibles) : `INF`, `TANK`, `AT`, `AA`, `ART` (*provisoire*),
   alignées à droite de la rangée, derrière les pions. 36 px.
 - **Panneau de prédiction** : au survol du bouton d'attaque sur tout le front
-  ou du bouton « Lancer » d'une boîte, un panneau estime le combat. Vos pertes à
+  ou du bouton « Lancer » d'une boîte, un panneau estime le combat. Titres de colonnes « Vos pertes » et « Ses pertes » en gras. Vos pertes à
   gauche, celles de l'adversaire à droite, en % des divisions engagées, avec
   « ≈ » : total, puis infanterie, blindés et appui-feu. Entre les deux, une barre
   aux couleurs des joueurs, partagée selon ces pertes : le camp qui perd le moins
-  a la plus grande part, et le rapport de pertes (×2,5) est écrit sur elle. En
+  a la plus grande part, et le rapport de pertes (×2,5) est écrit sur elle. Si
+  une niche est vide d'un côté, ou, pour le total, si un camp n'a aucune division engagée, la barre est entièrement de la couleur du camp
+  qui a quelque chose dans cette niche. En
   bas, les déroutes de chaque camp, et au milieu l'avancée et la durée. Pour une
   percée, une ligne par combat.
   **Estimation** (*provisoire*) : avec les formules du §6 (PV, multiplicateurs

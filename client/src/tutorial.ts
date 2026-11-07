@@ -59,7 +59,7 @@ const LESSONS: Readonly<Record<string, Lesson>> = {
   // Onglets de la barre d'informations (infobar.ts).
   "tab-flow": {
     title: "Ressources",
-    body: ["Le fer des mineurs, réservé par les usines et les casernes servies, et les machines possédées sur leur limite. Rien ne se stocke."],
+    body: ["Le fer des mineurs, réservé par les usines et les casernes servies. Rien ne se stocke."],
   },
   "tab-forces": {
     title: "Forces",

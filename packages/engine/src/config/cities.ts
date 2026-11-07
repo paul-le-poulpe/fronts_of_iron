@@ -10,6 +10,8 @@ export const CITY = {
   expansionRadius: EXPANSION_RADIUS,
   /** Rayon de contrôle : zone maximale d'une ville. Moitié du rayon d'expansion. */
   controlRadius: Math.floor(EXPANSION_RADIUS / 2),
+  /** Rayon de pêche d'une ville à port, en cases (00-Game §3.1). Valeur absolue, indépendante du rayon de contrôle : 1,2 fois celui-ci pour l'instant. */
+  fishingRadius: 30,
   /** Coût de base, en population, d'une ville autre que la première (gratuite). */
   foundingCostPopulation: 500,
   /** Chaque ville déjà possédée ajoute ce pourcentage du coût de base au coût de la suivante. */

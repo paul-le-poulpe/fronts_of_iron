@@ -6,9 +6,9 @@
 // Déterministe (règle 2) : aucun hasard, cases parcourues dans un ordre fixé.
 
 import { ACTIVITY_DATA, DIVISION_ACTIVITY, IDLE, activityOf, openActivity } from "./activities.ts";
-import { CITY, ELITE_TROOPS_RATIO, TEST_GAME, TEST_SCENARIOS, type TestScenarioId } from "./config.ts";
+import { CITY, TEST_GAME, TEST_SCENARIOS, type TestScenarioId } from "./config.ts";
 import { foundCity, foundingCostPawns } from "./cities.ts";
-import { WIDTH_SCALE, DIVISION_DATA, DIVISION_IDS, addDivision, type Division } from "./divisions.ts";
+import { WIDTH_SCALE, DIVISION_DATA, DIVISION_IDS, addDivision, eliteCap, type Division } from "./divisions.ts";
 import { applyIntent } from "./intents.ts";
 import { isLand } from "./map.ts";
 import { computeRoads } from "./roads.ts";
@@ -157,22 +157,12 @@ export function setupTestGame(state: GameState, scenario: TestScenarioId = "full
   const typeIndex = (id: string): number => DIVISION_IDS.indexOf(id as (typeof DIVISION_IDS)[number]);
   const frontPart = composition.map((e) => ({ division: e.division, count: e.count * frontCount }));
   const reservePart: { division: string; count: number }[] = [];
-  let infantry = 0;
-  const eliteNiche = DIVISION_DATA.find((d) => d.elite)!.niche;
-  for (const e of frontPart) if (DIVISION_DATA[typeIndex(e.division)]!.niche === eliteNiche) infantry += e.count;
+  // Une place de caserne par division : autant de bonshommes dans la caserne de réguliers que de divisions de réguliers.
+  let regulars: number = TEST_GAME.reservePerType;
+  for (const e of frontPart) if (e.division === "regulars") regulars += e.count;
   for (const id of DIVISION_IDS) {
     const data = DIVISION_DATA[typeIndex(id)]!;
-    if (!data.elite && data.niche === eliteNiche) infantry += TEST_GAME.reservePerType;
-  }
-  for (const id of DIVISION_IDS) {
-    const data = DIVISION_DATA[typeIndex(id)]!;
-    let count: number = TEST_GAME.reservePerType;
-    if (data.elite) {
-      // La k-ième élite est permise si ratio × k ≤ (infanterie + k − 1) + 1 (`eliteAllowed`).
-      let k = 0;
-      while (k < count && ELITE_TROOPS_RATIO * (k + 1) <= infantry + k + 1) k++;
-      count = k;
-    }
+    const count = data.elite ? Math.min(TEST_GAME.reservePerType, eliteCap(regulars)) : TEST_GAME.reservePerType;
     reservePart.push({ division: id, count });
   }
   const wanted = [...frontPart, ...reservePart];

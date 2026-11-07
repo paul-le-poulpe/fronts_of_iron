@@ -3,7 +3,6 @@
 // parcourues par identifiant, fronts par identifiant, niches dans l'ordre de `NICHES` (règle 2 du CLAUDE.md).
 
 import { FRONTS } from "./config.ts";
-import { woundPawn } from "./activities.ts";
 import {
   DIVISION_DATA,
   INFANTRY_NICHE,
@@ -101,18 +100,13 @@ export function applyArrivals(state: GameState): void {
 
 /**
  * Divisions détruites (barre de vie à 0, 08 §5, provisoire) retirées de l'état. Seules les divisions de `hit`, celles qui
- * viennent de subir des pertes, peuvent l'être. Une division d'infanterie détruite fait passer un bonhomme de sa caserne
- * à Blessés, et un inactif remplit la place s'il y en a un (08 §8) ; chars et appui-feu : aucun blessé, la division se
- * reforme tant que la limite le permet.
+ * viennent de subir des pertes, peuvent l'être. Les blessés viennent des pertes (`woundMen`, 08 §8), pas de la destruction.
  */
 export function removeDestroyed(state: GameState, hit: readonly Division[]): void {
   const dead = hit.filter(isEmpty);
   if (dead.length === 0) return;
   const gone = new Set(dead.map((d) => d.id));
   state.divisions = state.divisions.filter((d) => !gone.has(d.id));
-  for (const d of dead) {
-    if (DIVISION_DATA[d.type]!.niche === INFANTRY_NICHE) woundPawn(state.players[d.owner - 1]!, d.type);
-  }
 }
 
 /** Divisions d'un camp d'un front, sur place (pas en déplacement), par identifiant croissant. */

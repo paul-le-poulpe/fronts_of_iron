@@ -230,7 +230,7 @@ a changé et toutes les parties enregistrées se rejoueraient autrement.
 - Toute écriture de `owner` passe par `setOwner`, qui tient à jour le nombre de
   cases de chaque joueur, le nombre de cases de chaque ressource
   (`Player.resourceTiles`), les totaux de fertilité (`farmTiles`,
-  `fertilitySum`, `seaTiles`) et la liste des cases modifiées.
+  `fertilitySum`) et la liste des cases modifiées.
 - Un ordre arrive du réseau : chaque champ est vérifié (`typeof`, entier, dans
   les bornes) avant usage. Un ordre invalide ne modifie rien et n'est pas
   signalé. Un `intents` qui n'est pas un tableau compte comme vide.
@@ -256,8 +256,8 @@ Dans `GameState` :
   (identifiant de ville, 0 = aucune), `cityIds` (dans l'ordre de fondation),
   `resourceTiles` (nombre de cases du joueur qui portent chaque ressource),
   `farmTiles` (cases du joueur de fertilité > 0 : `surface_max`), `fertilitySum`
-  (somme de leurs fertilités : `fertilité_totale`), `seaTiles` (cases d'eau du
-  joueur, mer et lacs), et les résultats du dernier tour : `farmers`, `fishers`,
+  (somme de leurs fertilités : `fertilité_totale`), `seaTiles` (cases d'eau, mer et lacs,
+  que pêchent ses villes, `tileFisher`, tenu à jour par `setFisher`), et les résultats du dernier tour : `farmers`, `fishers`,
   `idle`, `cultivated`, `farmMechanization` (mécanisation M de l'agriculture,
   millièmes de case par fermier), `fished`, `fishMechanization` (M de la pêche,
   par pêcheur), `wheat`, `fish`, `food`, `factoryWorkers`, `miners`,
@@ -965,7 +965,7 @@ Choix faits pour que le moteur tourne ; tous peuvent être remis en cause par
     selon l'auteur), sur la même courbe que la mécanisation (00-Game §6.4,
     `waterYieldMilli`). Sans usine, il n'y a pas de bateau : le rendement reste 3.
 16. Totaux par joueur tenus à jour dans `setOwner`, comme `resourceTiles` :
-    `farmTiles`, `fertilitySum`, `seaTiles`.
+    `farmTiles`, `fertilitySum`. `seaTiles` est tenu à jour par `setFisher` (00-Game §3.1).
 17. Répartition fermiers / pêcheurs : `farmPercent`, entier 0 à 100, part de la
     population hors usines qui devient fermiers ; le reste devient pêcheurs. 100
     au départ. Ordre `set_farm_share { player, percent }`, valide si `percent` est

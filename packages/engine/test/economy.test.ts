@@ -269,15 +269,15 @@ describe("limites (08 §5)", () => {
     assign(s, { miners: 2, tractor: 1, militia: 3, infantryTank: 3 });
     stepEconomy(s);
     assert.equal(machineLimit(p, TRACTOR), 2);
-    assert.equal(divisionLimit(s, p, D.militia), 3);
-    assert.equal(divisionLimit(s, p, D.infantryTank), 1, "3 ouvriers, 2 par char");
+    assert.equal(divisionLimit(p, D.militia), 3);
+    assert.equal(divisionLimit(p, D.infantryTank), 1, "3 ouvriers, 2 par char");
   });
 
   it("une boîte verrouillée ou fermée ne donne aucune limite", () => {
     const s = withCity(IRON_MAP);
     const p = s.players[0]!;
     assert.equal(machineLimit(p, TRACTOR), 0);
-    assert.equal(divisionLimit(s, p, D.regulars), 0);
+    assert.equal(divisionLimit(p, D.regulars), 0);
   });
 
   it("élites : plafonnées à floor(divisions d'infanterie / ELITE_TROOPS_RATIO), élites comprises, places comprises", () => {
@@ -292,9 +292,9 @@ describe("limites (08 §5)", () => {
     play(s, 1);
     assert.deepEqual([box(p, "elite").places, box(p, "elite").workers, idlePawns(p)], [0, 0, 3], "9 infanteries : aucune place, ouvriers dans Inactifs");
     put(s, 1, "militia");
-    assert.equal(divisionLimit(s, p, D.elite), 0, "la sortie est nulle tant qu'aucun ouvrier n'est revenu");
+    assert.equal(divisionLimit(p, D.elite), 0, "la sortie est nulle tant qu'aucun ouvrier n'est revenu");
     box(p, "elite").output = 2;
-    assert.equal(divisionLimit(s, p, D.elite), 1, "10 infanteries : plafond 1, même avec une sortie de 2");
+    assert.equal(divisionLimit(p, D.elite), 1, "10 infanteries : plafond 1, même avec une sortie de 2");
   });
 });
 
@@ -392,7 +392,7 @@ describe("apparition et disparition (08 §6)", () => {
       [D.militia, 0, STATE_SCALE, 1 + 1],
     ]);
     assert.ok(inFormation(s, s.divisions[0]!));
-    assert.equal(s.divisions.length, divisionLimit(s, p, D.regulars) + divisionLimit(s, p, D.militia));
+    assert.equal(s.divisions.length, divisionLimit(p, D.regulars) + divisionLimit(p, D.militia));
     play(s, 20);
     assert.equal(s.divisions.length, 2, "la limite est atteinte");
   });
@@ -500,7 +500,7 @@ describe("blessés (08 §8)", () => {
       assign(s, { hurt: 1 });
       p.population = population;
       stepEconomy(s);
-      assert.equal(p.hurtHealEnd, 1 + turns, `${population} bonshommes`);
+      assert.equal(p.hurtHeal, 1 + turns, `${population} bonshommes`);
     }
   });
 
@@ -509,12 +509,12 @@ describe("blessés (08 §8)", () => {
     const p = s.players[0]!;
     assign(s, { idle: 98, hurt: 2 });
     play(s, 1);
-    assert.equal(p.hurtHealEnd, 1 + 1000);
+    assert.equal(p.hurtHeal, 1 + 1000);
     play(s, 999);
     assert.equal(hurtPawns(p), 2);
     play(s, 1);
     assert.equal(hurtPawns(p), 1);
-    assert.ok(p.hurtHealEnd > s.tick);
+    assert.ok(p.hurtHeal > s.tick);
   });
 });
 

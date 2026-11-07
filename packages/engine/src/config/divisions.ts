@@ -86,7 +86,7 @@ export const COMBAT = {
 
 /**
  * Elite Troops Ratio : la limite de la caserne d'élites est aussi plafonnée à
- * `floor(divisions d'infanterie du joueur / ratio)`, élites comprises (08 §5). 10 : les élites sont au plus 10 % de l'infanterie.
+ * `floor(bonshommes de la caserne de réguliers / ratio)` (08 §5). 10 : une élite pour 10 bonshommes.
  */
 export const ELITE_TROOPS_RATIO = 10;
 
@@ -163,7 +163,7 @@ export const DIVISIONS = {
     movement: "foot",
   },
   militia: {
-    softAttack: 600, hardAttack: 20, airAttack: 0,
+    softAttack: 800, hardAttack: 20, airAttack: 0,
     production: { building: "barracks", parent: "idle", unlockCost: 10, unlockByPopulation: true, workersPerUnit: 1, ironPerUnit: 0 },
     icon: "armament/icon-inf-milicia.png",
     description: "Des hommes avec quelques fusils. Mieux que rien.",
@@ -182,7 +182,7 @@ export const DIVISIONS = {
     softAttack: 2000, hardAttack: 200, airAttack: 0,
     production: { building: "barracks", parent: "regulars", unlockCost: U, workersPerUnit: 1, ironPerUnit: 100 },
     icon: "armament/icon-inf-elite.png",
-    description: `La crème de la crème. Limités à ${Math.floor((200 + ELITE_TROOPS_RATIO) / (2 * ELITE_TROOPS_RATIO))} % de votre infanterie totale.`,
+    description: `La crème de la crème. Limités à ${Math.floor((200 + ELITE_TROOPS_RATIO) / (2 * ELITE_TROOPS_RATIO))} % des bonshommes de votre caserne de réguliers.`,
     frontWidth: 1,
     breakthroughWidth: 1,
     productionTurns: 600,

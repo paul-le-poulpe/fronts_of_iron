@@ -234,17 +234,25 @@ Les villes sont l'unité avec laquelle un joueur contrôle la carte.
 
 ### 3.1 Les rayons
 
-Chaque ville a trois rayons, du plus grand au plus petit :
+Chaque ville a quatre rayons :
 
 | Rayon | Rôle | Valeur |
 | --- | --- | --- |
 | Expansion | zone où le joueur peut fonder une nouvelle ville | fixe, fichier de configuration |
-| Contrôle | zone maximale que la ville contrôle ; une ressource n'est exploitable que dans la zone de contrôle d'une ville | fixe, fichier de configuration |
+| Pêche | zone de mer que peut pêcher une ville à port | fixe, fichier de configuration, valeur absolue |
+| Contrôle | zone maximale que la ville contrôle ; une ressource n'est exploitable que dans la zone de contrôle d'une ville, sauf la mer | fixe, fichier de configuration |
 | Exploitation | zone des terres agricoles cultivées | dépend des fermiers ; **affichage seulement** (§6.6) |
 
 Les rayons d'expansion et de contrôle sont les mêmes pour toutes les villes.
 **Le rayon de contrôle est la moitié du rayon d'expansion** (règle de
 l'auteur) : seul le rayon d'expansion est réglé, le moteur en déduit l'autre.
+
+**Pêche** : le rayon de pêche (`CITY.fishingRadius`) est réglé à part, en cases, sans lien avec les
+autres rayons. Une case d'eau est pêchée par une seule ville : la ville **à port** (§3.6) la plus
+proche à une distance ≤ rayon de pêche, la plus ancienne à égalité. Une ville sans port ne pêche pas
+et ne retire de mer à personne. Une ville qui perd son port rend sa mer aux autres ports. Une ville
+prise garde sa mer, qui passe à son nouveau joueur. Cette mer peut être hors de toute zone : elle
+n'a pas de propriétaire et le territoire n'en change pas.
 
 **Ordre de grandeur** (repère de l'auteur, 25 octobre 2026, pas une règle du
 moteur) : le rayon de contrôle d'une ville vaut environ **10 000 m**. Avec 25
@@ -514,8 +522,8 @@ moteur ne calcule pas ce rayon.
 Une case sans fertilité (montagne, eau) n'est pas comptée : le disque cultivé
 s'étend plus loin quand il en contient.
 
-Pêche : même calcul, sur les cases de mer de la zone des villes à port, avec
-la surface pêchée (§6.4). Le disque est centré sur la ville, pas sur l'icône
+Pêche : même calcul, sur les cases que pêchent les villes du joueur (§3.1), avec
+la surface pêchée. Le disque est centré sur la ville, pas sur l'icône
 du port (§3.6).
 
 Fer (et toute ressource extraite, §7) : même calcul, sur les cases de fer des
@@ -553,6 +561,7 @@ choisies ensemble plus tard, en essayant des valeurs.
 | --- | --- |
 | `CITY.expansionRadius` | rayon d'expansion, en cases ; 50, valeur donnée par l'auteur (25 avant le 23 octobre 2026) |
 | `CITY.controlRadius` | rayon de contrôle, en cases : la moitié du rayon d'expansion, calculée (§3.1) ; 25 (10 avant) |
+| `CITY.fishingRadius` | rayon de pêche, en cases (§3.1) ; 30, valeur absolue donnée par l'auteur : 1,2 fois le rayon de contrôle |
 | `CITY.foundingCostPopulation` | coût de base, en population, d'une ville autre que la première (§3.3) ; 500, valeur donnée par l'auteur (100 avant) |
 | `CITY.foundingCostIncreasePercent` | pourcentage du coût de base ajouté au coût d'une ville par ville déjà possédée (§3.3) ; 100, valeur donnée par l'auteur |
 | `FERTILITY.land` | fertilité (0 à 10) d'une case de terre qui n'est pas une montagne, pour commencer (§2) |
@@ -589,7 +598,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
   couleur un peu plus claire.
 - **Le territoire s'arrête à la côte.** La zone d'une ville couvre aussi l'eau
   pour les règles (port, pêche : §3.6, §6.4), mais la couleur du joueur et les
-  frontières et limites ne sont dessinées que sur la terre.
+  frontières et limites ne sont dessinées que sur la terre, sauf le trait entre deux zones de pêche : deux cases d'eau voisines, travaillées par les pêcheurs de deux joueurs différents (texture de pêche, §6.6), prennent chacune un trait léger, la couleur de frontière de leur joueur tirée vers le bleu (`09-Couleurs.md` §3).
 - **Menu « Carte »** dans la barre d'informations, contre son bord droit (à
   gauche du panneau de debug quand il est ouvert), texte plus gros que les sections (une icône de carte à
   terme), avec des cases à cocher : « Ressources naturelles » (hachures rouge
@@ -644,8 +653,7 @@ Ces points ne concernent que le client. Ils seront tranchés avec l'auteur.
      production du tour, **gros trait noir** = production requise par les
      usines et casernes ; si
      la production est sous le requis, l'écart est
-     **rouge**. Machines (tracteurs, bateaux de pêche, pompes à vapeur) :
-     machines existantes sur la limite de leur usine.
+     **rouge**.
 - Taille des villes : la même pour toutes (§3.7).
 - Panneau de production : `08-Population.md` §11.
 - Une icône par ressource, par bien et par type d'armement, nommée dans le

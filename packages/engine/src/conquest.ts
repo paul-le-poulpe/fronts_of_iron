@@ -1,9 +1,10 @@
 // Prise d'une ville par un front (Docs/Design/05-Fronts.md §10) : encerclement,
 // changement de propriétaire de la ville et de sa zone, recalcul des fronts.
 
+import { woundMen } from "./activities.ts";
 import { CITY, FRONTS } from "./config.ts";
 import { endBreakthrough } from "./breakthroughs.ts";
-import { computeGroups } from "./cities.ts";
+import { computeGroups, fishedTileCount } from "./cities.ts";
 import { LINE_FIRST, LOSS_SCALE, applyLoss, dataOf, type Division } from "./divisions.ts";
 import { ROUTE, updateFronts } from "./fronts.ts";
 import { removeDestroyed, sideDivisions } from "./placement.ts";
@@ -52,7 +53,7 @@ export function captureCity(
     const f = Math.floor((encircled * FRONTS.encirclementLossPercent * LOSS_SCALE) / (front.connections.length * 100));
     for (const d of sideDivisions(state, front, defender)) {
       if (d.line !== LINE_FIRST || d.engaged === 0) continue;
-      applyLoss(d, Math.floor((f * d.engaged) / dataOf(d).width));
+      woundMen(state.players[defender - 1]!, d.type, applyLoss(d, Math.floor((f * d.engaged) / dataOf(d).width)));
       hit.push(d);
       touched++;
     }
@@ -75,6 +76,9 @@ export function captureCity(
   }
   const lost = state.players[defender - 1]!;
   const won = state.players[attacker - 1]!;
+  const sea = fishedTileCount(state, city);
+  lost.seaTiles -= sea;
+  won.seaTiles += sea;
   lost.cityIds.splice(lost.cityIds.indexOf(cityId), 1);
   let at = won.cityIds.findIndex((id) => id > cityId);
   if (at < 0) at = won.cityIds.length;

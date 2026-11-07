@@ -114,7 +114,7 @@ export function hashState(state: GameState): number {
     h = mixWord(h, p.ironProduced);
     h = mixWord(h, p.ironReserved);
     h = mixWord(h, p.ironWanted);
-    h = mixWord(h, p.hurtHealEnd);
+    h = mixWord(h, p.hurtHeal);
     h = mixWord(h, p.autoAssign ? 1 : 0);
     h = mixWord(h, p.defeated ? 1 : 0);
     // Activités dans leur ordre (la priorité du joueur).
@@ -201,5 +201,9 @@ export function hashState(state: GameState): number {
   i = 0;
   for (; i + 1 < c.length; i += 2) h = mixWord(h, c[i]! | (c[i + 1]! << 16));
   if (i < c.length) h = mixWord(h, c[i]!);
+  const f = state.tileFisher;
+  i = 0;
+  for (; i + 1 < f.length; i += 2) h = mixWord(h, f[i]! | (f[i + 1]! << 16));
+  if (i < f.length) h = mixWord(h, f[i]!);
   return fmix32(h ^ state.owner.length);
 }

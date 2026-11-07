@@ -22,7 +22,6 @@ import { FrontWindow } from "./frontwindow.ts";
 import { InfoBar, MAP_OPTIONS, type MapOption } from "./infobar.ts";
 import { ProductionPanel } from "./production.ts";
 import { MapView, RESOURCE_LEGEND } from "./render.ts";
-import { setGoodTipCatalog, setGoodTipStats } from "./goodtips.ts";
 import { applyBlinkPeriod } from "./blink.ts";
 import { currentTheme, toggleTheme } from "./theme.ts";
 import { installTooltips, refreshTip } from "./tooltip.ts";
@@ -276,7 +275,6 @@ function onInit(s: Session, init: InitMessage): void {
     onHoverFront: (id) => s.forces?.setHighlight(id),
   });
   s.view.placementCheck = (tile) => foundingProblem(mirror, tile);
-  setGoodTipCatalog(init.catalog);
   setProductIcons(init.catalog.icons);
   s.production = new ProductionPanel($("prod"), init.catalog, init.military, sendOrder, (tab) => s.infobar?.openTab(tab));
   // Le painter et la vue neufs ont les réglages de début de partie : les cases du menu « Carte » repartent de `initial`.
@@ -315,7 +313,6 @@ function onInit(s: Session, init: InitMessage): void {
   );
   s.infobar = new InfoBar(
     $("infobar"),
-    init.catalog,
     setMapOption,
     s.forces,
     s.players,
@@ -406,7 +403,6 @@ function onTick(s: Session, msg: TickMessage): void {
   s.players?.update(msg.players);
   s.production?.update(msg.human, msg.players[localPlayer() - 1]!);
   s.infobar?.update(msg.human, msg.players[localPlayer() - 1]!);
-  setGoodTipStats(msg.players[localPlayer() - 1]!);
   refreshTip();
   // Les barres de temps restant d'abord, puis les cartes créées par ce tour (elles lisent le tour courant).
   updateNotifications(msg.tick);

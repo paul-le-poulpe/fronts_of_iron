@@ -62,7 +62,7 @@ Les textes sont courts : une ou deux phrases. Tous sont provisoires, à relire.
 | `prod-pawn` | chaque pion saisissable d'une boîte | 08 §6 (à venir, en sursis), §7 (places vides), §11 (glisser) |
 | `prod-parent` | cadenas ouvert d'une boîte parente | 08 §9, §11 |
 | `prod-locked` | boîte verrouillée | 08 §9, §11 |
-| `tab-flow` | onglet Ressources (flux) | 08 §4 (fer), §5 (limite des machines) |
+| `tab-flow` | onglet Ressources (flux) | 08 §4 (fer) |
 | `tab-forces` | onglet Forces | 05-Fronts §11.2 |
 | `tab-diplomacy` | onglet Diplomatie | 00-Game §1 (Diplomatie) |
 | `pie` | camemberts du fer et de l'aluminium (onglet Ressources) | 03-Client §7 (infobulle du camembert) |

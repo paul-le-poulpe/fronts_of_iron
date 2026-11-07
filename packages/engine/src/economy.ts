@@ -18,6 +18,7 @@ import {
   MINERS,
   activityOf,
   divisionLimit,
+  eliteLimit,
   machineCount,
   machineLimit,
   slotsOf,
@@ -32,8 +33,6 @@ import {
   addDivision,
   currentTurn,
   divisionCount,
-  eliteCap,
-  infantryCount,
   inFormation,
   type Division,
 } from "./divisions.ts";
@@ -53,13 +52,13 @@ export function stepEconomy(state: GameState): void {
     } else {
       fixOverflow(p);
       balance(p, false);
-      fillPlaces(state, p);
+      fillPlaces(p);
       progressUnlock(p);
       stepPopulation(p, turn);
       stepMachines(p, turn);
       stepDivisions(state, p, turn);
     }
-    healHurt(p, turn);
+    healHurt(p);
     healDivisions(state, p);
   }
 }
@@ -152,13 +151,13 @@ function balance(p: Player, unlimitedIron: boolean): void {
  * peut donc rejoindre une boîte plus haute ou plus basse. Enfin, avec l'auto-assignation, une boîte qui a encore de la
  * place prend les ouvriers des boîtes plus basses, la plus basse d'abord (08 §7 bis).
  */
-function fillPlaces(state: GameState, p: Player): void {
+function fillPlaces(p: Player): void {
   const idle = activityOf(p, IDLE)!;
   for (const a of p.activities) {
     const data = ACTIVITY_DATA[a.id]!;
     if (data.hasPlaces) {
-      // Élites : au plus une division pour `ELITE_TROOPS_RATIO` divisions d'infanterie (08 §5).
-      if (DIVISION_DATA[data.division]!.elite) a.places = Math.min(a.places, eliteCap(infantryCount(state, p.id)) * data.workersPerUnit);
+      // Élites : au plus une division pour `ELITE_TROOPS_RATIO` bonshommes de la caserne de réguliers (08 §5).
+      if (DIVISION_DATA[data.division]!.elite) a.places = Math.min(a.places, eliteLimit(p, data.division) * data.workersPerUnit);
       a.disabled = Math.min(a.disabled, a.places);
       const allowed = a.places - (p.autoAssign ? a.disabled : 0);
       if (a.workers > allowed) {
@@ -319,7 +318,7 @@ function stepDivisions(state: GameState, p: Player, turn: number): void {
   const choose = leaveOrder(state);
   let removed = false;
   for (let t = 0; t < DIVISION_DATA.length; t++) {
-    const limit = divisionLimit(state, p, t);
+    const limit = divisionLimit(p, t);
     const mine = state.divisions.filter((d) => d.owner === p.id && d.type === t);
     const excess = Math.max(0, mine.length - limit);
     const marked = mine.filter((d) => d.leaveTick !== 0);
@@ -338,7 +337,7 @@ function stepDivisions(state: GameState, p: Player, turn: number): void {
       removed = true;
     }
     // Un joueur éliminé n'arrive pas ici (sans ville) ; les nouvelles divisions naissent pleines, en formation.
-    for (let n = divisionCount(state, p.id, t); n < divisionLimit(state, p, t); n++) {
+    for (let n = divisionCount(state, p.id, t); n < divisionLimit(p, t); n++) {
       addDivision(state, p.id, t, turn + DIVISION_DATA[t]!.productionTurns);
     }
   }
@@ -348,27 +347,29 @@ function stepDivisions(state: GameState, p: Player, turn: number): void {
 // ---- soin (08 §5, §8) ----
 
 /**
- * Soin d'un blessé à la fois (08 §8) : `min(hurtHealMaxTurns, floor(hurtHealTurnsTimesPop / population))` tours, calculés
- * au démarrage. À la fin, le bonhomme passe dans Inactifs (provisoire). Le compteur démarre quand aucun soin n'est en cours
- * et que Blessés n'est pas vide.
+ * Soin d'un blessé à la fois (08 §8) : le dernier de la boîte gagne chaque tour autant de points que la population, au
+ * moins `hurtHealTurnsTimesPop / hurtHealMaxTurns`, sur `hurtHealTurnsTimesPop` points. À la fin, le bonhomme passe dans
+ * Inactifs (provisoire) et le suivant repart de 0.
  */
-function healHurt(p: Player, turn: number): void {
+const hurtHealRate = (p: Player): number => Math.max(p.population, Math.ceil(POPULATION.hurtHealTurnsTimesPop / POPULATION.hurtHealMaxTurns));
+
+/** Tours restants avant la fin du soin du dernier blessé, à la population actuelle (08 §8). 0 sans blessé. */
+export function hurtHealTurnsLeft(p: Player): number {
+  if (activityOf(p, HURT)!.workers === 0) return 0;
+  return Math.ceil((POPULATION.hurtHealTurnsTimesPop - p.hurtHeal) / hurtHealRate(p));
+}
+
+function healHurt(p: Player): void {
   const hurt = activityOf(p, HURT)!;
-  if (p.hurtHealEnd !== 0 && turn >= p.hurtHealEnd) {
-    p.hurtHealEnd = 0;
-    if (hurt.workers > 0) {
-      hurt.workers--;
-      activityOf(p, IDLE)!.workers++;
-    }
-  }
   if (hurt.workers === 0) {
-    p.hurtHealEnd = 0;
+    p.hurtHeal = 0;
     return;
   }
-  if (p.hurtHealEnd === 0) {
-    const turns = Math.min(POPULATION.hurtHealMaxTurns, Math.floor(POPULATION.hurtHealTurnsTimesPop / Math.max(1, p.population)));
-    p.hurtHealEnd = turn + Math.max(1, turns);
-  }
+  p.hurtHeal += hurtHealRate(p);
+  if (p.hurtHeal < POPULATION.hurtHealTurnsTimesPop) return;
+  p.hurtHeal = 0;
+  hurt.workers--;
+  activityOf(p, IDLE)!.workers++;
 }
 
 /**
@@ -385,7 +386,7 @@ function healDivisions(state: GameState, p: Player): void {
     if (d.owner !== p.id || d.leaveTick !== 0 || d.state >= STATE_SCALE || d.breakthrough !== 0 || fighting.has(d.front)) continue;
     let limit = limits.get(d.type);
     if (limit === undefined) {
-      limit = divisionLimit(state, p, d.type);
+      limit = divisionLimit(p, d.type);
       limits.set(d.type, limit);
     }
     if (limit > 0) d.state = Math.min(STATE_SCALE, d.state + gain);

@@ -18,8 +18,16 @@ import { textPanel, typePanel } from "./infopanels.ts";
 import { activityName, localPlayer, productName, productSymbol, unitName } from "./names.ts";
 import type { ActivityCatalog, ActivityInfo, ActivityView, HumanDetail, HumanOrder, MilitaryCatalog, PlayerStats } from "./protocol.ts";
 import { dec, num } from "./format.ts";
-import { RESOURCE_LEGEND } from "./render.ts";
+import { WATER } from "./painter.ts";
+import { FERTILE_RGBA, RESOURCE_LEGEND } from "./render.ts";
 import { setTip } from "./tooltip.ts";
+
+/** Entrée d'Agriculteurs, Pêcheurs et Mineurs (08 §11) : nom de la surface et couleur de la carte, hachurée sauf la mer. */
+const SURFACE_INPUTS: Readonly<Record<string, { readonly name: string; readonly rgb: readonly number[]; readonly hatched: boolean }>> = {
+  farming: { name: "Surface cultivable", rgb: FERTILE_RGBA, hatched: true },
+  fishing: { name: "Mer", rgb: WATER, hatched: false },
+  mining: { name: "Gisement de fer", rgb: RESOURCE_LEGEND.iron.rgba, hatched: true },
+};
 
 /** Délai maximal pendant lequel une reconstruction est retenue après un ordre, le temps que le moteur l'applique (ms). */
 const HOLD_MS = 500;
@@ -44,6 +52,9 @@ const WORKER_ICON: Readonly<Record<string, string>> = {
 };
 
 /** Un pion tel que la boîte le dessine. */
+/** Tours par seconde de jeu (`DEFAULT_STEP_MS`, 100 ms). */
+const TURNS_PER_SECOND = 10;
+
 interface Pawn {
   /** `w` : un bonhomme ; `m:<bien>` : une machine. */
   readonly pk: string;
@@ -240,12 +251,15 @@ export class ProductionPanel {
       }
     }
     if (this.root.hidden) return;
+    const anchor = this.lineUnderPointer();
     const key = this.structureKey(detail);
     if (key !== this.key && this.canRebuild(key)) {
       this.key = key;
       this.rebuild(detail);
     }
     this.refreshNumbers(detail, stats);
+    // Mesuré après `refreshNumbers`, qui écrit les textes des boîtes reconstruites : eux aussi changent les hauteurs.
+    this.keepLine(anchor);
   }
 
   /** Après la réouverture du panneau ou la fin d'un glisser : remet le panneau à jour. */
@@ -307,19 +321,28 @@ export class ProductionPanel {
       ...(gone.length > 0 ? [separator("miscellaneous/icon-padlock-open.png", "Déverrouillé"), ...gone] : []),
       ...(locked.length > 0 ? [separator("miscellaneous/icon-padlock-closed.png", "Verrouillé"), ...locked] : []),
     ];
-    const anchor = this.lineUnderPointer();
     this.list.replaceChildren(...boxes, ...parts);
-    // Une boîte au-dessus a pu changer de hauteur : le défilement compense pour que la ligne sous la souris ne bouge pas.
-    const line = anchor === null ? null : this.list.querySelector<HTMLElement>(`[data-line="${anchor.id}"]`);
-    if (anchor !== null && line !== null) this.root.scrollTop += line.getBoundingClientRect().top - anchor.top;
   }
 
-  /** La ligne sous la souris et sa position à l'écran, ou `null`. */
+  /**
+   * La ligne à la hauteur de la souris et sa position à l'écran, ou `null` si la souris est hors du panneau. Entre deux
+   * lignes : celle du dessous, ou la dernière. La hauteur seule compte : une infobulle sous la souris ne change rien.
+   */
   private lineUnderPointer(): { readonly id: string; readonly top: number } | null {
     if (this.pointer === null) return null;
-    const line = document.elementFromPoint(this.pointer.x, this.pointer.y)?.closest<HTMLElement>("[data-line]") ?? null;
-    if (line === null || !this.list.contains(line)) return null;
-    return { id: line.dataset["line"]!, top: line.getBoundingClientRect().top };
+    const lines = [...this.list.querySelectorAll<HTMLElement>("[data-line]")];
+    const y = this.pointer.y;
+    const line = lines.find((l) => l.getBoundingClientRect().bottom >= y) ?? lines[lines.length - 1];
+    return line === undefined ? null : { id: line.dataset["line"]!, top: line.getBoundingClientRect().top };
+  }
+
+  /** Une ligne a pu changer de hauteur : le défilement compense pour que la ligne `anchor` ne bouge pas à l'écran. */
+  private keepLine(anchor: { readonly id: string; readonly top: number } | null): void {
+    if (anchor === null) return;
+    const line = this.list.querySelector<HTMLElement>(`[data-line="${anchor.id}"]`);
+    if (line === null) return;
+    const shift = line.getBoundingClientRect().top - anchor.top;
+    if (Math.abs(shift) >= 0.5) this.root.scrollTop += shift;
   }
 
   /**
@@ -394,13 +417,12 @@ export class ProductionPanel {
       cell.dataset["total"] = String(p.total);
       cell.append(el("i", "pw-bar"));
     }
-    const what = p.pk === "w" ? "Bonhomme" : productName(p.pk.slice(2));
     cell.title =
       p.state === "coming" ? (p.pk === "w" ? "Nourriture excédentaire. Population en croissance." : "Arrive bientôt.")
       : p.state === "leaving" ? (p.pk === "w" ? "Pas assez de nourriture. Population en déclin." : "En trop : va bientôt disparaître.")
       : p.state === "empty" ? "Poste vacant : glissez ici un bonhomme ou une machine."
-      : kindOfAct === "hurt" ? `${what} blessé : soigné un à la fois, il retourne ensuite dans Inactifs.`
       : "Glissez pour le déplacer, avec ceux à sa droite.";
+    if (kindOfAct === "hurt" && p.pk === "w") setTip(cell, () => this.healTip());
     return cell;
   }
 
@@ -422,10 +444,20 @@ export class ProductionPanel {
       this.bindGrip(grip, box, a.id);
     }
 
-    // Entrée : fer des usines et casernes qui en prennent (08 §4). Sans entrée, la colonne reste vide.
+    // Entrée : surface travaillée d'Agriculteurs, Pêcheurs et Mineurs (08 §11), fer des usines et casernes qui en prennent (08 §4). Sans entrée, la colonne reste vide.
     const input = el("div", "pb-in");
     const arrowIn = el("span", "pb-arrow pb-arrow-in");
-    if (info.ironPerUnit > 0) {
+    const surface = SURFACE_INPUTS[kind];
+    if (surface !== undefined) {
+      const tile = el("div", "pb-tile pb-surface");
+      const swatch = el("span", "legend-swatch");
+      const [red, green, blue] = surface.rgb;
+      swatch.style.setProperty("--hatch", `rgb(${red} ${green} ${blue})`);
+      if (!surface.hatched) swatch.style.background = "var(--hatch)";
+      tile.append(swatch, el("span", undefined, surface.name));
+      input.append(tile);
+      arrowIn.classList.add("on");
+    } else if (info.ironPerUnit > 0) {
       const tile = el("div", "pb-tile");
       tile.dataset["in"] = a.id;
       tile.append(img(icon32Path("goods/goods-iron-ingot.png"), "pb-tile-ic"), el("span"));
@@ -532,6 +564,11 @@ export class ProductionPanel {
     const row = el("div", "pb-row");
     if (this.hostKind(a.id) && info.good !== null) append(row, a.machines, leaving.machines.get(`${a.id}:${info.good}`) ?? 0, `m:${info.good}`);
     append(row, a.workers, leaving.workers.get(a.id) ?? 0, "w");
+    // Le dernier blessé est celui qui se soigne : sa barre se remplit à chaque tour (08 §8).
+    if (kind === "hurt" && row.lastElementChild !== null) {
+      row.lastElementChild.classList.add("pw-heal");
+      row.lastElementChild.append(el("i", "pw-bar"));
+    }
     if (info.hasSlots) {
       // Postes vacants, avec l'icône du bonhomme qui finira dans la boîte (08 §11).
       for (let i = a.workers + a.machines; i < a.slots; i++) row.append(this.pawnEl(a.id, kind, { pk: "w", state: "empty" }));
@@ -571,14 +608,14 @@ export class ProductionPanel {
     const row = el("section", `pl pl-${state}`);
     row.dataset["line"] = info.id;
     if (state !== "locked") {
-      // Boîte débloquée, ou supprimée : un clic la met dans la liste ; la première fois, avec son panneau d'information (08 §9).
+      // Boîte débloquée : un clic ouvre son panneau d'information, qui peut l'ajouter à la liste. Boîte supprimée : un clic la remet dans la liste (08 §9).
       const button = el("span", "pl-name pl-open", activityName(info.id));
       row.append(this.productIcon(info) ?? el("span", "pb-sym"), button, el("span", "pl-state", state === "new" ? "Débloquée" : "Cliquer pour recréer la ligne"));
       row.title = state === "new" ? "Cliquez pour découvrir cette ligne." : "Cliquer pour recréer la ligne.";
       row.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
         if (state === "new") this.showInfo(info);
-        this.order({ type: "open_activity", activity: info.id });
+        else this.order({ type: "open_activity", activity: info.id });
       });
       return row;
     }
@@ -590,15 +627,16 @@ export class ProductionPanel {
     const sym = parent === undefined ? null : ((this.hostKind(parent.id) ? null : this.productIcon(parent)) ?? img(`population/${WORKER_ICON[parent.kind]}.png`, "pb-sym", activityName(parent.id)));
     const bar = el("div", "pl-bar");
     bar.append(el("i", "pl-fill"));
-    bar.append(el("span", "pl-name", activityName(info.id)), el("span", "pl-num"));
+    if (sym !== null) bar.append(sym);
+    bar.append(el("span", "pl-num"));
     const lock = img("miscellaneous/icon-padlock-closed.png", "pl-lock", "Verrouillé");
-    row.append(this.productIcon(info) ?? el("span", "pb-sym"), lock, el("span", "pl-sep"), sym ?? el("span", "pb-sym"), bar);
+    row.append(this.productIcon(info) ?? el("span", "pb-sym"), lock, el("span", "pl-name", activityName(info.id)), bar);
     setTip(row, () => this.lockedTip(info));
     this.writeLocked(row, info, d.unlock[info.index]!);
     return row;
   }
 
-  /** Panneau d'information d'une ligne débloquée (08 §9) : description et statistiques de l'unité, jusqu'au clic sur « Compris ». */
+  /** Panneau d'information d'une ligne débloquée (08 §9) : description et statistiques de l'unité. « Ajouter la production » ouvre la ligne ; « Compris » l'ouvre et la supprime aussitôt : elle passe dans les lignes déverrouillées. */
   private showInfo(info: ActivityInfo): void {
     document.querySelector(".pp-info")?.remove();
     const box = el("div", "pp-info themed");
@@ -611,14 +649,50 @@ export class ProductionPanel {
       box.append(picture);
     }
     box.append(type !== undefined ? typePanel(type) : textPanel(activityName(info.id), `Remplace un ${activityName(host?.id ?? "").toLowerCase().replace(/s$/, "")}.`));
-    const ok = el("button", "pp-info-ok", "Compris");
+    const add = el("button", "pp-info-add", "Ajouter la production");
+    add.type = "button";
+    add.addEventListener("click", () => {
+      this.order({ type: "open_activity", activity: info.id });
+      box.remove();
+    });
+    const ok = el("button", undefined, "Compris");
     ok.type = "button";
-    ok.addEventListener("click", () => box.remove());
-    box.append(ok);
+    ok.addEventListener("click", () => {
+      this.order({ type: "open_activity", activity: info.id });
+      this.order({ type: "close_activity", activity: info.id });
+      box.remove();
+    });
+    const actions = el("div", "pp-info-actions");
+    actions.append(add, ok);
+    box.append(actions);
     document.body.append(box);
   }
 
   // ---- infobulles ----
+
+  /** Survol d'un blessé (08 §8) : jauge verte du soin du dernier de la liste, pourcentage et temps restant estimé. */
+  private healTip(): Node {
+    const box = el("div", "pt");
+    const d = this.last?.detail;
+    if (d === undefined) return box;
+    box.append(el("div", "pt-title", "Soin du dernier blessé"));
+    const row = el("div", "pt-row");
+    const bar = el("span", "pt-bar pt-heal");
+    const fill = el("i");
+    fill.style.width = `${d.hurtHealPercent}%`;
+    bar.append(fill);
+    row.append(el("span", "pt-name", "Soin"), bar, el("span", "pt-num", `${d.hurtHealPercent} %`));
+    const seconds = Math.ceil(d.hurtHealTurnsLeft / TURNS_PER_SECOND);
+    const left = seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+    const waiting = Math.max(0, (d.activities.find((a) => a.id === "hurt")?.workers ?? 0) - 1);
+    box.append(
+      row,
+      el("div", "pt-note", `Temps restant estimé : ${left}`),
+      el("div", "pt-note", `${num(waiting)} blessé${waiting > 1 ? "s" : ""} en attente`),
+      el("div", "pt-note", "Plus la population est grande, plus le soin va vite. Soigné, il retourne dans Inactifs."),
+    );
+    return box;
+  }
 
   /**
    * Survol du « ? » du fer : utilisation, production actuelle et maximale, part de chaque boîte, et la représentation des
@@ -792,7 +866,7 @@ Besoin satisfait à ${units === 0 ? 100 : Math.floor((a.output * 100) / units)} 
           if (info.good === null) {
             const elite = this.military.divisions.find((t) => t.id === info.division)?.elite === true;
             const cap = elite ? `
-Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` : "";
+Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % des bonshommes de la caserne de réguliers` : "";
             tileOut.title = `${num(a.existing - a.forming)} active(s), ${num(a.forming)} en formation${cap}`;
           }
         }
@@ -804,6 +878,8 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % de l'infanterie` 
       const bar = c.querySelector<HTMLElement>(".pw-bar");
       if (bar) bar.style.width = `${Math.max(0, Math.min(100, Math.round(((total - (end - d.tick)) * 100) / total)))}%`;
     }
+    const heal = this.list.querySelector<HTMLElement>(".pw-heal .pw-bar");
+    if (heal !== null) heal.style.width = `${d.hurtHealPercent}%`;
     // `data-lock` : seulement les boîtes verrouillées ; les boîtes débloquées ou supprimées n'ont pas de barre à écrire.
     for (const row of this.list.querySelectorAll<HTMLElement>(".pl[data-lock]")) {
       const c = this.catalog.activities[Number(row.dataset["lock"])]!;

@@ -14,9 +14,9 @@
 // de ses quatre voisines.
 
 import { Mirror, TERRAIN_ALTITUDE, TERRAIN_LAND } from "./mirror.ts";
-import { LAND_MID, TERRITORY_ALPHA, playerBorder, playerColor, playerLimit, type Rgb } from "./playercolors.ts";
+import { LAND_MID, TERRITORY_ALPHA, playerBorder, playerColor, playerLimit, playerSeaBorder, type Rgb } from "./playercolors.ts";
 
-const WATER: Rgb = [111, 156, 204];
+export const WATER: Rgb = [111, 156, 204];
 const FIELD_DARK: Rgb = [96, 152, 52];
 const FIELD_LIGHT: Rgb = [128, 190, 72];
 // Avec « Couleur des joueurs », un champ, une zone de pêche ou une mine garde 70 % de la couleur de la case
@@ -24,6 +24,8 @@ const FIELD_LIGHT: Rgb = [128, 190, 72];
 const TEXTURE_ALPHA_ON_PLAYER = 0.3;
 const FISH_DARK: Rgb = [138, 184, 224];
 const FISH_LIGHT: Rgb = [225, 240, 250];
+/** Part du ton du joueur dans le trait entre deux zones de pêche, le reste étant la case de mer (09-Couleurs §3). */
+const SEA_BORDER_ALPHA = 0.18;
 // Texture provisoire de la mine (fer exploité) : bandes diagonales sombres et orangées.
 const MINE_DARK: Rgb = [58, 52, 48];
 const MINE_LIGHT: Rgb = [214, 126, 46];
@@ -67,6 +69,7 @@ export class Painter {
   private readonly playerRgb: Rgb[] = [];
   private readonly borderRgb: Rgb[] = [];
   private readonly limitRgb: Rgb[] = [];
+  private readonly seaBorderRgb: Rgb[] = [];
   /** Case « Couleur des joueurs » du menu Carte. */
   showPlayerColor = true;
 
@@ -82,6 +85,7 @@ export class Painter {
       this.playerRgb.push(playerColor(p));
       this.borderRgb.push(playerBorder(p));
       this.limitRgb.push(playerLimit(p));
+      this.seaBorderRgb.push(playerSeaBorder(p));
     }
   }
 
@@ -113,8 +117,10 @@ export class Painter {
     const x = t % w;
     const y = (t - x) / w;
 
-    if (id !== 0) {
-      const city = m.cities[id - 1]!;
+    // La zone de pêche dépasse les zones des villes (00-Game §3.1) : une case d'eau suit la ville qui la pêche.
+    const shown = onLand ? id : m.tileFisher[t]!;
+    if (shown !== 0) {
+      const city = m.cities[shown - 1]!;
       // Le territoire n'est dessiné que sur la terre (00-Game §11) : la zone d'une
       // ville couvre aussi l'eau dans le moteur, mais pas à l'affichage.
       if (onLand && this.showPlayerColor) {
@@ -161,6 +167,11 @@ export class Painter {
           g = e[1];
           bl = e[2];
         }
+      } else if (this.fishedPlayer(t) === city.player && this.neighbors(t, x).some((u) => this.fishedPlayer(u) !== 0 && this.fishedPlayer(u) !== city.player)) {
+        const e = this.seaBorderRgb[city.player]!;
+        r = Math.round(r * (1 - SEA_BORDER_ALPHA) + e[0] * SEA_BORDER_ALPHA);
+        g = Math.round(g * (1 - SEA_BORDER_ALPHA) + e[1] * SEA_BORDER_ALPHA);
+        bl = Math.round(bl * (1 - SEA_BORDER_ALPHA) + e[2] * SEA_BORDER_ALPHA);
       }
     }
     return ((255 << 24) | (bl << 16) | (g << 8) | r) >>> 0;
@@ -190,6 +201,17 @@ export class Painter {
       if (m.tileCity[u]! !== id) return this.limitRgb[player]!;
     }
     return null;
+  }
+
+  /** Joueur dont les pêcheurs travaillent la case d'eau `t` (texture de pêche, à moins de son rayon d'exploitation), 0 sinon. Sert au trait entre deux zones de pêche (00-Game §11). */
+  private fishedPlayer(t: number): number {
+    const m = this.mirror;
+    const id = m.tileFisher[t]!;
+    if (id === 0 || (m.terrain[t]! & TERRAIN_LAND) !== 0) return 0;
+    const city = m.cities[id - 1]!;
+    const dx = (t % m.width) - (city.tile % m.width);
+    const dy = Math.floor(t / m.width) - Math.floor(city.tile / m.width);
+    return dx * dx + dy * dy <= m.seaThreshold[city.player - 1]! ? city.player : 0;
   }
 
   /** Les quatre voisines de la case `t` (colonne `x`) qui sont dans la carte. */

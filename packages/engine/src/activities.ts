@@ -2,8 +2,8 @@
 // les ordres du joueur sur ses bonshommes. Le calcul du tour est dans economy.ts. Un bonhomme déposé dans une caserne y
 // ajoute une place ; Inactifs et Blessés sont des activités comme les autres, pour l'ordre (`Player.activities`).
 
-import { ACTIVITIES, DIVISIONS, FARMING, FISHING, GOODS, MINING, type ActivityConfig, type ActivityId, type ActivityKind, type DivisionId, type DivisionProductionConfig, type GoodId } from "./config.ts";
-import { DIVISION_IDS, DIVISION_DATA, eliteCap, infantryCount } from "./divisions.ts";
+import { ACTIVITIES, DIVISIONS, FARMING, FISHING, GOODS, MINING, POPULATION, type ActivityConfig, type ActivityId, type ActivityKind, type DivisionId, type DivisionProductionConfig, type GoodId } from "./config.ts";
+import { DIVISION_IDS, DIVISION_DATA, INFANTRY_NICHE, STATE_SCALE, eliteCap } from "./divisions.ts";
 import { IRON_INDEX } from "./map.ts";
 import type { GameState, Player } from "./state.ts";
 
@@ -183,30 +183,53 @@ export function machineLimit(p: Player, good: number): number {
 }
 
 /**
- * Limite d'un type de division (08 §5) : la sortie de son usine ou de sa caserne, 0 si elle est verrouillée. Les élites
- * sont aussi plafonnées à `eliteCap` des divisions d'infanterie du joueur, élites comprises.
+ * Plafond d'un type d'élite (08 §5) : `eliteCap` des bonshommes qui travaillent dans la caserne parente, celle des
+ * réguliers.
  */
-export function divisionLimit(state: GameState, p: Player, type: number): number {
+export function eliteLimit(p: Player, type: number): number {
+  return eliteCap(activityOf(p, ACTIVITY_DATA[DIVISION_ACTIVITY[type]!]!.parent)?.workers ?? 0);
+}
+
+/** Limite d'un type de division (08 §5) : la sortie de son usine ou de sa caserne, 0 si elle est verrouillée, plafonnée à `eliteLimit` pour les élites. */
+export function divisionLimit(p: Player, type: number): number {
   const limit = activityOf(p, DIVISION_ACTIVITY[type]!)?.output ?? 0;
-  return DIVISION_DATA[type]!.elite ? Math.min(limit, eliteCap(infantryCount(state, p.id))) : limit;
+  return DIVISION_DATA[type]!.elite ? Math.min(limit, eliteLimit(p, type)) : limit;
 }
 
 // ---- blessés (08 §8) ----
 
 /**
- * Un bonhomme de la caserne du type passe aux Blessés (08 §8) : la division d'infanterie de ce type vient d'être
- * détruite. Sa place reste ; un inactif la remplit aussitôt s'il y en a un, sinon elle reste vide. Sans bonhomme dans la
- * caserne, rien ne se passe.
+ * Un bonhomme de la caserne du type passe aux Blessés (08 §8). Sa place reste ; un inactif la remplit aussitôt s'il y en a
+ * un, sinon elle reste vide. Sans bonhomme dans la caserne, rien ne se passe et renvoie false.
  */
-export function woundPawn(p: Player, type: number): void {
+function woundPawn(p: Player, type: number): boolean {
   const barracks = activityOf(p, DIVISION_ACTIVITY[type]!);
-  if (barracks === undefined || barracks.workers === 0) return;
+  if (barracks === undefined || barracks.workers === 0) return false;
   const idle = activityOf(p, IDLE)!;
   barracks.workers--;
   activityOf(p, HURT)!.workers++;
   if (idle.workers > 0) {
     idle.workers--;
     barracks.workers++;
+  }
+  return true;
+}
+
+/**
+ * Une division de type `type` vient de perdre `lost` points d'état (08 §8). Infanterie seulement : une division pleine
+ * vaut un bonhomme, donc `lost` est retiré du soin du dernier blessé, à l'échelle `hurtHealTurnsTimesPop` ; sous 0, un
+ * bonhomme de plus est blessé et reprend le reste, à partir d'un soin plein.
+ */
+export function woundMen(p: Player, type: number, lost: number): void {
+  if (DIVISION_DATA[type]!.niche !== INFANTRY_NICHE) return;
+  const full = POPULATION.hurtHealTurnsTimesPop;
+  p.hurtHeal -= Math.floor((lost * full) / STATE_SCALE);
+  while (p.hurtHeal < 0) {
+    if (!woundPawn(p, type)) {
+      p.hurtHeal = 0;
+      return;
+    }
+    p.hurtHeal += full;
   }
 }
 

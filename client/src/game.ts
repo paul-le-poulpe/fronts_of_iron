@@ -33,6 +33,7 @@ import {
   GOODS,
   GOODS_TIMING,
   HURT,
+  hurtHealTurnsLeft,
   IDLE,
   idlePawns,
   inFormation,
@@ -268,6 +269,7 @@ export class Game {
   readonly you: number;
   /** `tileCity` tel qu'envoyé à la page : sert à trouver les cases qui ont changé. */
   private readonly sentTileCity: Uint16Array;
+  private readonly sentTileFisher: Uint16Array;
   /** Les fronts tels qu'envoyés à la page (JSON), pour n'envoyer que les changements. */
   private sentFronts = "";
   /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
@@ -296,6 +298,7 @@ export class Game {
       setupTestGame(this.state, options.testGame as TestScenarioId);
     }
     this.sentTileCity = new Uint16Array(this.state.tileCity.length);
+    this.sentTileFisher = new Uint16Array(this.state.tileFisher.length);
   }
 
   /** Copies de la carte (le moteur garde ses tableaux) : la page peut les recevoir par transfert. */
@@ -315,6 +318,7 @@ export class Game {
       playerColors: this.options.players.map((p) => p.color),
       expansionRadius: CITY.expansionRadius,
       controlRadius: CITY.controlRadius,
+      fishingRadius: CITY.fishingRadius,
       stepMs: this.stepMs,
       catalog: activityCatalog(),
       military: militaryCatalog(),
@@ -366,6 +370,7 @@ export class Game {
     // `applyTurn` ne renvoie pas les cases qui passent d'une ville à une autre
     // du même joueur ; la comparaison avec ce qui a été envoyé les trouve.
     let tiles: Uint32Array;
+    let fishers: Uint32Array;
     let cities: Uint32Array | null = null;
     let roads: Uint16Array | null = null;
     if (full || initial || state.cities.length !== citiesBefore || captured.length > 0) {
@@ -390,6 +395,17 @@ export class Game {
         }
       }
       tiles = Uint32Array.from(list);
+      const fishList: number[] = [];
+      const fisherNow = state.tileFisher;
+      const fisherSent = this.sentTileFisher;
+      const taken = new Set(captured.map((c) => c.city));
+      for (let t = 0; t < fisherNow.length; t++) {
+        if (fisherNow[t] !== fisherSent[t] || taken.has(fisherNow[t]!)) {
+          fishList.push(t, fisherNow[t]!);
+          fisherSent[t] = fisherNow[t]!;
+        }
+      }
+      fishers = Uint32Array.from(fishList);
       cities = new Uint32Array(state.cities.length * 4);
       state.cities.forEach((c, i) => {
         cities![4 * i] = c.player;
@@ -404,6 +420,7 @@ export class Game {
       });
     } else {
       tiles = new Uint32Array(0);
+      fishers = new Uint32Array(0);
     }
 
     // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
@@ -450,13 +467,10 @@ export class Game {
         cultivated: p.cultivated,
         fished: p.fished,
         minedTiles: p.minedTiles,
-        ironTiles: p.resourceTiles[IRON]!,
         farmTiles: p.farmTiles,
         seaTiles: p.seaTiles,
         ironProduced: p.ironProduced,
         ironReserved: p.ironReserved,
-        machines: GOOD_IDS.map((_, g) => machineCount(p, g)),
-        machineLimits: GOOD_IDS.map((_, g) => machineLimit(p, g)),
         capital: p.capital,
         cities: p.cityIds.length,
         defeated: p.defeated,
@@ -469,6 +483,7 @@ export class Game {
       type: "tick",
       tick: state.tick,
       tiles,
+      fishers,
       cities,
       roads,
       human: this.humanDetail(),
@@ -546,7 +561,7 @@ export class Game {
         ironUsed: a.ironUsed,
         forming: d.division < 0 ? 0 : state.divisions.filter((x) => x.owner === p.id && x.type === d.division && inFormation(state, x)).length,
         existing: !product ? -1 : machine ? machineCount(p, d.good) : divisionCount(state, p.id, d.division),
-        limit: !product ? -1 : machine ? machineLimit(p, d.good) : divisionLimit(state, p, d.division),
+        limit: !product ? -1 : machine ? machineLimit(p, d.good) : divisionLimit(p, d.division),
       };
     });
     const served = ACTIVITY_DATA.map((d) => {
@@ -570,7 +585,8 @@ export class Game {
       popLeaves: p.popLeaves.slice(),
       machineArrivals: p.machineArrivals.map((a) => a.slice()),
       machineLeaves: p.machineLeaves.map((a) => a.slice()),
-      hurtHealEnd: p.hurtHealEnd,
+      hurtHealPercent: Math.floor((p.hurtHeal * 100) / POPULATION.hurtHealTurnsTimesPop),
+      hurtHealTurnsLeft: hurtHealTurnsLeft(p),
       capacity: p.capacity,
       ironProduced: p.ironProduced,
       ironReserved: p.ironReserved,

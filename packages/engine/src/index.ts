@@ -101,7 +101,6 @@ export {
   divisionCount,
   eliteCap,
   inFormation,
-  infantryCount,
   isDivisionId,
   isEmpty,
   isFleeing,
@@ -152,7 +151,7 @@ export {
   type Activity,
   type ActivityData,
 } from "./activities.ts";
-export { stepEconomy } from "./economy.ts";
+export { hurtHealTurnsLeft, stepEconomy } from "./economy.ts";
 export {
   declareWar,
   expireProposals,

@@ -418,7 +418,7 @@ describe("tour et ordres", () => {
       p.popLeaves.push(99);
       p.machineArrivals[0]!.push(99);
       p.machineLeaves[0]!.push(99);
-      p.hurtHealEnd = 99;
+      p.hurtHeal = 99;
       return s;
     };
     const reference = hashState(base());
@@ -438,7 +438,7 @@ describe("tour et ordres", () => {
       ["popLeaves", (s) => void s.players[0]!.popLeaves[0]!++],
       ["machineArrivals", (s) => void s.players[0]!.machineArrivals[0]![0]!++],
       ["machineLeaves", (s) => void s.players[0]!.machineLeaves[0]![0]!++],
-      ["hurtHealEnd", (s) => void s.players[0]!.hurtHealEnd++],
+      ["hurtHeal", (s) => void s.players[0]!.hurtHeal++],
       ["autoAssign", (s) => void (s.players[0]!.autoAssign = false)],
       ["defeated", (s) => void (s.players[0]!.defeated = true)],
       ...(["capacity", "food", "wheat", "fish", "cultivated", "fished", "minedTiles", "ironProduced", "ironReserved", "ironWanted"] as const).map((key): [string, (s: GameState) => void] => [key, (s) => void s.players[0]![key]++]),

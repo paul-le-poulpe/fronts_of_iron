@@ -6,7 +6,7 @@ import { IDLE, activityOf, hurtPawns, takePawn } from "./activities.ts";
 import { isLand } from "./map.ts";
 import { activeFrontCities, updateFronts } from "./fronts.ts";
 import { addCityToRoads } from "./roads.ts";
-import { setOwner, type City, type GameState } from "./state.ts";
+import { setFisher, setOwner, type City, type GameState } from "./state.ts";
 
 /**
  * Ordre `found_city` (00-Game §3.3), après vérification des champs par
@@ -46,9 +46,21 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   const losers = updateZones(state, city, changed);
   addCityToRoads(state.roadNetwork, tile, state.roads);
   city.port = zoneHasWater(state, city);
+  let portLost = false;
   for (const loser of losers) {
     const c = state.cities[loser - 1]!;
+    const had = c.port;
     c.port = zoneHasWater(state, c);
+    if (had && !c.port) {
+      releaseFishing(state, c);
+      portLost = true;
+    }
+  }
+  // Un port perdu libère sa mer : les autres ports la reprennent, la nouvelle ville comprise.
+  if (portLost) {
+    for (const c of state.cities) if (c.port) claimFishing(state, c);
+  } else if (city.port) {
+    claimFishing(state, city);
   }
   computeGroups(state);
   updateFronts(state);
@@ -146,6 +158,58 @@ function zoneHasWater(state: GameState, city: City): boolean {
     }
   }
   return false;
+}
+
+/** Appelle `visit` sur chaque case d'eau du disque de pêche de `city`, avec sa distance au carré à la ville. */
+function forFishingDisc(state: GameState, city: City, visit: (tile: number, d2: number) => void): void {
+  const { width: w, height: h } = state.map;
+  const radius = CITY.fishingRadius;
+  const r2 = radius * radius;
+  const cx = city.tile % w;
+  const cy = (city.tile - cx) / w;
+  for (let y = Math.max(0, cy - radius); y <= Math.min(h - 1, cy + radius); y++) {
+    const dy = y - cy;
+    for (let x = Math.max(0, cx - radius); x <= Math.min(w - 1, cx + radius); x++) {
+      const dx = x - cx;
+      const d2 = dx * dx + dy * dy;
+      const t = y * w + x;
+      if (d2 <= r2 && !isLand(state.map, t)) visit(t, d2);
+    }
+  }
+}
+
+/** `city` prend les cases d'eau de son disque de pêche dont elle est le port le plus proche, le plus ancien à égalité (00-Game §3.1). */
+function claimFishing(state: GameState, city: City): void {
+  const w = state.map.width;
+  const cityId = city.id;
+  forFishingDisc(state, city, (t, d2) => {
+    const current = state.tileFisher[t]!;
+    if (current === cityId) return;
+    if (current !== 0) {
+      const other = state.cities[current - 1]!.tile;
+      const ox = (other % w) - (t % w);
+      const oy = Math.floor(other / w) - Math.floor(t / w);
+      const otherD2 = ox * ox + oy * oy;
+      if (d2 > otherD2 || (d2 === otherD2 && cityId > current)) return;
+    }
+    setFisher(state, t, cityId);
+  });
+}
+
+/** `city` n'a plus de port : elle ne pêche plus aucune case. */
+function releaseFishing(state: GameState, city: City): void {
+  forFishingDisc(state, city, (t) => {
+    if (state.tileFisher[t] === city.id) setFisher(state, t, 0);
+  });
+}
+
+/** Nombre de cases d'eau que pêche `city`. */
+export function fishedTileCount(state: GameState, city: City): number {
+  let n = 0;
+  forFishingDisc(state, city, (t) => {
+    if (state.tileFisher[t] === city.id) n++;
+  });
+  return n;
 }
 
 /**

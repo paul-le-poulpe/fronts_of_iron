@@ -111,6 +111,9 @@ html[data-theme="dark"] {
   background: var(--pp-tile); color: var(--pp-tile-ink);
   font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+/* Entrée d'Agriculteurs, Pêcheurs et Mineurs : la surface de la carte au-dessus de son nom. */
+.pb-tile.pb-surface { flex-direction: column; gap: 2px; width: 100%; box-sizing: border-box; padding: 3px 4px; font-size: 11px; line-height: 1.15; text-align: center; white-space: normal; }
+.pb-surface .legend-swatch { width: 40px; height: 20px; box-sizing: border-box; }
 /* Flèches de la production visée : tout à droite de la boîte. */
 .pb-out { gap: 3px; }
 .pb-steps { display: grid; grid-template-columns: repeat(2, 26px); gap: 1px; flex: none; }
@@ -173,27 +176,27 @@ html[data-theme="dark"] {
 body.pw-moving, body.pw-moving * { cursor: none !important; }
 .pw-ghost .pw-sel { outline: none; }
 
-/* Boîtes verrouillées : très pâles. De gauche à droite : ce qui est débloqué, cadenas, séparateur, ce qui débloque, barre de progression. */
+/* Boîtes verrouillées : très pâles. De gauche à droite : ce qui est débloqué, cadenas, nom, barre de progression avec ce qui débloque. */
 .pl {
-  display: grid; grid-template-columns: 24px 16px 12px 24px minmax(0, 1fr); align-items: center; column-gap: 6px;
+  display: grid; grid-template-columns: 24px 16px minmax(0, 1fr) minmax(0, 1fr); align-items: center; column-gap: 6px;
   padding: 4px 8px; border: 1px solid var(--pp-line); border-radius: 8px;
   background: var(--pp-pale); color: var(--pp-pale-ink); opacity: 0.8;
 }
 .pl .pb-sym { width: 24px; height: 24px; opacity: 0.7; }
-.pl-bar { position: relative; height: 22px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--pp-ink) 6%, transparent); }
+.pl-bar { position: relative; display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--pp-ink) 6%, transparent); }
 .pl-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); }
-.pl-name, .pl-num { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-size: 12px; color: var(--pp-ink); opacity: 0.75; }
-.pl-name { right: 6px; }
-.pl-num { left: 6px; font-variant-numeric: tabular-nums; }
+.pl-bar .pb-sym { position: relative; width: 16px; height: 16px; }
+.pl-name, .pl-num { font-size: 12px; color: var(--pp-ink); opacity: 0.75; }
+.pl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-num { position: relative; font-variant-numeric: tabular-nums; }
 .pl-lock { width: 16px; height: 16px; image-rendering: pixelated; opacity: 0.6; }
-.pl-sep { height: 2px; background: currentColor; opacity: 0.5; }
 
 /* Ligne débloquée : clignote en bleu en tête des lignes verrouillées. Ligne supprimée : en bas, cliquable. */
 .pl-new, .pl-gone { grid-template-columns: 24px minmax(0, 1fr) auto; cursor: pointer; }
 .pl-new { opacity: 1; border: 2px solid var(--accent); animation: pl-blink var(--blink-period, 1000ms) steps(1, end) infinite; }
 @keyframes pl-blink { 50% { background: color-mix(in srgb, var(--accent) 45%, var(--pp-card)); } }
 .pl-gone:hover { opacity: 1; }
-.pl-open { position: static; font-weight: 700; }
+.pl-open { font-weight: 700; }
 .pl-state { font-size: 12px; }
 /* Croix de suppression d'une ligne, tout à droite. */
 .pb-close { display: flex; padding: 0; border: 0; background: none; cursor: pointer; }
@@ -202,7 +205,10 @@ body.pw-moving, body.pw-moving * { cursor: none !important; }
 .pp-info { position: fixed; z-index: 400; top: 80px; right: calc(var(--panel-w, 0px) + var(--prod-w) + 16px); width: 300px; padding: 10px; border-radius: 8px; border: 2px solid var(--accent); background: var(--t-panel); color: var(--t-fg); box-shadow: 0 4px 16px #0006; }
 .pp-info .ip { position: static; box-shadow: none; border: 0; padding: 0; max-width: none; background: none; }
 .pp-info-img { display: block; width: 64px; height: 64px; margin: 0 auto 8px; image-rendering: pixelated; }
-.pp-info-ok { display: block; margin: 10px 0 0 auto; padding: 4px 14px; cursor: pointer; }
+.pp-info-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+.pp-info-actions button { padding: 4px 14px; cursor: pointer; }
+/* L'option préférable : contour bleu. */
+.pp-info-actions .pp-info-add { border: 2px solid var(--accent); font-weight: 700; }
 
 /* Infobulles construites (cadenas ouvert, boîtes verrouillées). */
 .pt { display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
@@ -210,6 +216,7 @@ body.pw-moving, body.pw-moving * { cursor: none !important; }
 .pt-row { display: grid; grid-template-columns: 1fr 80px auto; align-items: center; gap: 6px; }
 .pt-bar { height: 6px; border-radius: 3px; background: #8884; overflow: hidden; }
 .pt-bar i { display: block; height: 100%; background: var(--accent, #2b5fa5); }
+.pt-bar.pt-heal i { background: #3fa34d; }
 .pt-num { font-variant-numeric: tabular-nums; font-size: 12px; }
 .pt-note { font-size: 12px; opacity: 0.85; }
 .pt-replace { display: flex; align-items: center; gap: 6px; }

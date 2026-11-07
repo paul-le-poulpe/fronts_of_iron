@@ -45,6 +45,8 @@ export const LAND_MID: Rgb = [181, 160, 118];
 // Réglages provisoires du calcul (09-Couleurs §3).
 const BORDER_LIGHT = -0.13;
 const LIMIT_LIGHT = 0.13;
+const SEA_BORDER_BLUE: Rgb = [52, 96, 150];
+const SEA_BORDER_BLUE_PART = 0.75;
 const DARK_SAT = 0.05;
 const DARK_LIGHT = -0.25;
 const DARK_LIGHT_MIN = 0.15;
@@ -97,6 +99,13 @@ export function playerBorder(player: number): Rgb {
   const c = entryOf(player);
   return hsl(c.hue, c.sat, c.light + BORDER_LIGHT);
 }
+/** Ton du trait entre deux zones de pêche : la frontière du joueur, tirée vers le bleu. */
+export function playerSeaBorder(player: number): Rgb {
+  const b = playerBorder(player);
+  const mix = (i: 0 | 1 | 2): number => Math.round(b[i] * (1 - SEA_BORDER_BLUE_PART) + SEA_BORDER_BLUE[i] * SEA_BORDER_BLUE_PART);
+  return [mix(0), mix(1), mix(2)];
+}
+
 /** Couleur de limite entre deux villes d'un même joueur : sa teinte, plus claire que `playerColor`. */
 export function playerLimit(player: number): Rgb {
   const c = entryOf(player);

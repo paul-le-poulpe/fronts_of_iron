@@ -206,6 +206,8 @@ Worker → page (`FromWorker`) :
   - `tick` : numéro du tour ;
   - `tiles` : paires `[case, ville]` des cases dont `tileCity` a changé, pas
     plus ; le propriétaire se déduit de la ville ;
+  - `fishers` : paires `[case, ville]` des cases dont `tileFisher` a changé (00-Game §3.1), et de toute la mer d'une ville
+    prise. La page en tire l'histogramme de pêche et la texture de pêche, qui peut être hors des zones ;
   - `cities` et `roads` : listes complètes, **seulement** si une ville a été
     fondée pendant ce tour (c'est le seul cas où les villes, ports, groupes et
     routes changent) ; sinon `null` ;
@@ -214,7 +216,7 @@ Worker → page (`FromWorker`) :
     fer réservé, et pour une usine ou une caserne les existants et la limite effective, élites plafonnées),
     `unlock` (progression de chaque activité), `served` (ouvriers servis en fer de chaque activité : la vitesse de
     déblocage de ses enfants), `idleMachines`, les compteurs d'apparition et de sursis (`popArrivals`, `popLeaves`,
-    `machineArrivals`, `machineLeaves` : des tours de fin, triés), `hurtHealEnd`, la capacité de population, le
+    `machineArrivals`, `machineLeaves` : des tours de fin, triés), `hurtHealPercent`, la capacité de population, le
     fer produit et le fer réservé ; `tick` donne le tour courant, pour lire les compteurs ;
   - `players` : par joueur, population, capacité, bonshommes d'Inactifs, de Blessés, d'Agriculteurs, de Pêcheurs, de
     Mineurs et de casernes (`soldiers`), nombre de divisions, nourriture, blé, poisson, surface cultivée, surface
@@ -296,7 +298,7 @@ au début du tour) contient l'événement attendu pour ce joueur (`war_declared`
 ## 5. Les bots (`src/bots.ts`)
 
 Ce ne sont pas des règles du jeu : un bot lit l'état et envoie des ordres
-`found_city` et `move_pawn`, que le moteur valide comme ceux de l'humain. Stratégie minimale, pour le débogage.
+`found_city`, `move_pawn` et `move_division`, que le moteur valide comme ceux de l'humain. Stratégie minimale, pour le débogage.
 Chacun a son générateur (`createRng`, graine = graine de la carte mélangée à son
 identifiant), donc deux parties de mêmes réglages envoient les mêmes ordres.
 
@@ -307,6 +309,9 @@ identifiant), donc deux parties de mêmes réglages envoient les mêmes ordres.
 - **Affectation** : tous les 10 tours (`ASSIGN_EVERY_TURNS`), les bonshommes d'Inactifs vont d'abord dans
   Agriculteurs (jusqu'aux places libres), puis, après l'éventuelle fondation, dans Mineurs, puis dans la caserne de
   milice (sans limite de places). Un seul `move_pawn` par destination, avec `count`.
+- **Déploiement** : au même rythme, chaque division formée de la réserve nationale va sur le front du bot qui en a le
+  moins, parmi ses fronts en guerre, ou tous ses fronts s'il n'est en guerre avec personne. Pas dans une partie de test
+  (`economyFrozen`), dont le scénario a déjà placé les divisions. Les bots ne lancent aucune attaque.
 - **Expansion** : au plus tous les 15 à 24 tours, si la surface cultivée atteint la moitié de la surface cultivable
   (`2 × cultivated ≥ farmTiles`, valeurs du dernier tour) et que les inactifs restants paient le coût de la ville
   suivante (`foundingCostPawns`), il tire des cases dans le rayon d'expansion d'une de ses villes (ville tirée au
@@ -330,13 +335,14 @@ les messages `tick`. `Mirror.applyTick` renvoie la liste des cases à repeindre.
 case. Ordre de peinture d'une case, comme `packages/engine/test/cities-viz.ts` :
 relief (ou fer) → teinte du joueur **sur la terre seulement** (00-Game §11) →
 texture de champs (terre fertile), de pêche (eau) ou de mine (case de fer
-exploitée) → trait, tracé sur la terre seulement. Pour une case de terre de la
+exploitée) → trait, tracé sur la terre, et sur l'eau seulement entre deux zones de pêche. Pour une case de terre de la
 ville d'un joueur P : si une de ses quatre voisines (dans la carte) est de la
 terre sans ville ou à un autre joueur, **frontière** de P (`playerBorder`, sa
 teinte plus sombre) ; sinon, si sa voisine de droite ou du dessous est de la
 terre d'une autre ville du même joueur, **limite** (`playerLimit`, sa teinte plus
 claire). L'eau et le bord de la carte ne déclenchent rien. Entre deux joueurs,
-chaque côté est peint de sa couleur : double ligne. Le trait ne dépend pas des
+chaque côté est peint de sa couleur : double ligne. Sur l'eau : une case à texture de pêche (`tileFisher`, à moins du seuil de son joueur, `Painter.fishedPlayer`) dont une
+voisine a la texture de pêche d'un autre joueur prend un trait léger (`playerSeaBorder`, mélangé à la mer, 09-Couleurs §3), double ligne aussi ; rien entre deux villes du même joueur. Le trait ne dépend pas des
 cases du menu « Carte » (`showPlayerColor` : mélange à 40 % de la couleur du
 joueur sur la terre). Le relief d'une case de fer est toujours recouvert d'un gris
 brun-rouge (`landIron`, `IRON_TINT` à 55 %) ; sinon, celui d'une case cultivable
@@ -486,7 +492,8 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     six colonnes : poignée `⋮⋮`, entrée, flèche →, colonne centrale, flèche →, sortie. Les colonnes d'entrée (64 px) et de
     sortie (76 px) ont une largeur fixe : elles sont alignées d'une boîte à l'autre ; sans entrée, la tuile et sa flèche
     disparaissent et la colonne reste vide. Grille de deux rangées : titre en haut de la colonne centrale, pions en dessous, et entrée, flèches et sortie dans la rangée des pions, alignées en haut (`.pb-center` est en `display: contents`) ;
-  - **entrée et sortie** sont dans la boîte, sur une petite tuile à fond clair, sans couleur de ressource. Entrée : le fer
+  - **entrée et sortie** sont dans la boîte, sur une petite tuile à fond clair, sans couleur de ressource. Entrée : la surface pour Agriculteurs, Pêcheurs et Mineurs
+    (`SURFACE_INPUTS` : nom, puis couleur de la carte en `legend-swatch`, `FERTILE_RGBA`, `WATER`, `RESOURCE_LEGEND.iron`), sinon le fer
     réservé de l'usine ou de la caserne qui en prend (`ironUsed`, rouge quand le fer manque : unités servies
     < `floor(ouvriers / workersPerUnit)`). Sortie : `+n` et l'icône de population pour Agriculteurs et Pêcheurs (la nourriture
     de la boîte ÷ `foodPerPawn`, une décimale), `+n` et le lingot pour Mineurs, « existants / limite » et l'icône du
@@ -518,9 +525,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
     poignée et n'est pas une cible, 08 §2) ;
   - **ligne sous la souris** : quand le panneau est reconstruit (`rebuild`), `scrollTop` de `#prod` est corrigé de l'écart de position de la ligne sous la souris (`data-line`), pour qu'elle reste au même endroit de l'écran si Inactifs ou une autre boîte change de hauteur. Limite : tout en haut du panneau, `scrollTop` ne passe pas sous 0, donc une boîte du dessus qui rétrécit fait encore monter la ligne ; tout en bas, de même si le contenu raccourcit ;
   - **une erreur dans `ProductionPanel.update` coupe la fin de `onTick`** (`InfoBar.update`, diplomatie, notifications, résultats des ordres) : `refreshNumbers` ne lit que les `.pl[data-lock]`, car une boîte débloquée ou supprimée n'a pas de `data-lock` ;
-  - **boîtes verrouillées**, sous un séparateur, très pâles : l'icône de ce qui est débloqué, le cadenas (`miscellaneous/icon-padlock-closed.png`), un
-    petit trait, le symbole de la boîte parente (son produit, ou son bonhomme pour Agriculteurs, Pêcheurs et Mineurs), puis une
-    barre de progression (« progression / coût » à gauche, nom de la boîte à droite) ; triées par progression décroissante (`lockedOrder`), le panneau défile vers le
+  - **boîtes verrouillées**, sous un séparateur, très pâles : l'icône de ce qui est débloqué, le cadenas (`miscellaneous/icon-padlock-closed.png`), le
+    nom de la boîte, puis une barre de progression qui contient à gauche le symbole de la boîte parente (son produit, ou son bonhomme pour
+    Agriculteurs, Pêcheurs et Mineurs) et « progression / coût » ; triées par progression décroissante (`lockedOrder`), le panneau défile vers le
     bas ; le survol donne l'explication (`lockedTip` : la progression gagne chaque tour le nombre d'ouvriers de la boîte parente
     servis en fer, `HumanDetail.served`, et le temps restant à ce rythme). Une boîte débloquée rejoint le bas des boîtes
     ouvertes.
@@ -564,11 +571,10 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   détail ouvert ; un détail replié est mis à jour à l'ouverture). Les barres
   **vertes** sont des flux.
   Les icônes sont des textes provisoires entre crochets (`[fer]`…), `⇄` pour les
-  flux, sauf la population et les trois machines : images
+  flux, sauf la population : images
   16 × 16 de `public/icons/` (00-Game §11), affichées à 16 px sans lissage
   (`image-rendering: pixelated`) ; `pop-default` sur l'onglet, une icône par
-  occupation dans son détail. Les machines tirent la leur de `icon` dans
-  `config/goods.ts` (voir ci-dessous).
+  occupation dans son détail.
   **Icônes en 32 px (essai)** : dans l'onglet militaire (tableau des unités et
   combats), les icônes de machines et d'unités sont affichées à 32 px
   (`productIcon(id, 32)`, classe `.ib-img.big`, `.fp-icon-img`) ; la barre du haut et
@@ -630,15 +636,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   appelé par `main.ts` après la barre d'informations). Encadré de 340 px, en 13 px
   (largeur du contenu). `setTip(el, build, beside)` : l'encadré est placé à droite de `beside`
   au lieu de sous `el`.
-  Les contenus des machines sont dans `goodtips.ts` (`attachGoodTip(el, bien)`, posé
-  sur chaque `[bien]` de l'onglet Ressources). Feuille de route de toutes les icônes : `04-Tooltips.md`. Les trois
-  **machines** (tracteur, bateau de pêche, pompe à vapeur) ont la même infobulle, décrite par une entrée de
-  `MACHINE_TIPS` (noms, ce qu'on lit dans les statistiques, couleur de la barre) : titre ; une phrase (une machine vaut un
-  travailleur : même place dans sa boîte, même sortie, sans personne pour l'actionner, elle libère un bonhomme) ; les règles
-  lues dans le catalogue (cases par travailleur ou machine, boîte qui la reçoit, usine et fer par machine) ; « Votre nation ·
-  travailleurs · machines possédées / limite » et une barre de la couleur du métier : « Surface cultivée » cultivées /
-  cultivables (`--occ-farm`), « Surface pêchée » pêchées / cases d'eau (`--occ-fish`), « Cases exploitées » cases de fer
-  exploitées / cases de fer (`--occ-mine`).
+  Feuille de route de toutes les icônes : `04-Tooltips.md`.
   1. **Ressources (flux)** : rien dans la barre que le titre et la mini-barre du fer. Détail, barres vertes :
      *Fer* : échelle = le plus grand du fer produit (`HumanDetail.ironProduced`) et du fer réservé (`ironReserved`) ; orange clair
      (`.ib-front`) jusqu'au fer produit, orange jusqu'au fer réservé ; texte « réservé / produit ». *Aluminium* : ligne grisée
@@ -647,14 +645,12 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
      (`miscellaneous/icon-pie-chart.png`, `pieIcon`). **Infobulle du camembert du fer** (`setTip`, `InfoBar.ironTip`) : titre
      « fer réservé, fer produit » ; puis une rangée par activité qui réserve du fer, de la plus grosse à la plus petite : nom de
      l'activité, barre orange, fer réservé ; toutes les barres ont la même échelle. Camembert de l'aluminium : grisé, infobulle
-     « Aucune consommation ». *Tracteurs*, *bateaux de pêche*, *pompes à vapeur* : l'icône de la machine (infobulle de
-     `goodtips.ts`), une barre verte « possédées / limite » (`PlayerStats.machines`, `machineLimits`, 08 §5) et ce texte.
-     Une ligne de légende (fer réservé, fer produit).
+     « Aucune consommation ». Une ligne de légende (fer réservé, fer produit).
   2. **Forces** (deuxième position, juste à droite de Ressources ; 05-Fronts §11.2, `forcestab.ts`) : « Forces n » (nombre de divisions du joueur). Détail : l'onglet des forces
      (§ « Onglet des forces » ci-dessous). Le volet (`.ib-pane.forces`) a la classe `themed` : fond et couleurs de son thème.
   3. **Diplomatie** (troisième position, `diplomacytab.ts`).
 
-  Calculé côté page à partir des messages : les barres du fer et des machines, les durées restantes des compteurs, les pions
+  Calculé côté page à partir des messages : la barre du fer, les durées restantes des compteurs, les pions
   en sursis (déduits de 08 §6), les temps de déblocage restants. Lu tel quel du moteur : tout le reste.
 - **Fenêtre d'un front** (`frontwindow.ts`, 05-Fronts §11.4), posée sur la carte (`#front-panel`, dans `#stage`), qu'elle recouvre presque en entier (10 px de marge, `.fw` à 100 % de largeur et de hauteur ; les boîtes ont de l'espace inutilisé), ouverte par la liste
   des fronts, par un clic dans une zone de front, affichée ou non (`MapView.frontAt`, qui passe avant le menu de diplomatie ; hors zone,

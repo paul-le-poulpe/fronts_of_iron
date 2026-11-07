@@ -16,7 +16,7 @@
 import { compactInt } from "./format.ts";
 import type { Stats } from "./frontstats.ts";
 import { unitIconUrl } from "./uniticons.ts";
-import { playerName, unitName } from "./names.ts";
+import { playerName, strengthOf, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
@@ -51,6 +51,27 @@ export const COMBAT_KIND: Readonly<Record<CombatView["kind"], string>> = {
   breakthrough: "Percée : première ligne",
   counter: "Percée : contre-attaque du défenseur",
 };
+
+/**
+ * Hommes et matériel perdus par `owner` dans un combat (08 §8 bis), lus dans les pertes d'état de chaque round : d'abord
+ * toute l'infanterie, puis chaque autre type dans l'ordre des types. Un type sans perte arrondie n'est pas listé.
+ */
+function equipmentLost(c: CombatView, military: MilitaryCatalog, owner: number): { readonly count: number; readonly name: string }[] {
+  const lost = new Map<number, number>();
+  for (const r of c.rounds) {
+    for (const [i, loss] of r.hits) {
+      const u = c.units[i]!;
+      if (u.owner === owner) lost.set(u.type, (lost.get(u.type) ?? 0) + loss);
+    }
+  }
+  const nicheOf = (type: number): string => military.divisions[type]?.niche ?? "";
+  const share = (type: number): number => lost.get(type)! / military.stateScale;
+  const types = [...lost.keys()].sort((a, b) => a - b);
+  const infantry = types.filter((t) => nicheOf(t) === "infantry");
+  const men = strengthOf("", "infantry", infantry.reduce((sum, t) => sum + share(t), 0));
+  const others = types.filter((t) => nicheOf(t) !== "infantry").map((t) => strengthOf(military.divisions[t]?.id ?? "", nicheOf(t), share(t)));
+  return [men, ...others].filter((s) => s.count > 0);
+}
 
 /**
  * Vainqueur d'un combat (06-Combat-Simplifie §2) : le camp qui a perdu le moins d'infanterie, en état de division
@@ -396,13 +417,16 @@ export class CombatReplay {
         const l = c.losses[side === attackerSide ? 0 : 1];
         const box = el("div", side === 0 ? "cr-loss" : "cr-loss right");
         box.append(el("div", "cr-loss-title", side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
-        // Pertes en divisions détruites et en état (08 §11), sans décimale : l'état perdu est la somme des barres de vie, en pourcent d'une division.
-        const destroyed = el("div", "cr-loss-row");
-        destroyed.append(el("span", "cr-loss-n", compactInt(l.divisions, 10_000)), el("span", undefined, l.divisions > 1 ? "divisions détruites" : "division détruite"));
+        // Pertes (08 §11), sans décimale : la somme des barres de vie, en pourcent d'une division, puis les hommes et le matériel.
         const state = el("div", "cr-loss-row");
-        state.append(el("span", "cr-loss-n", compactInt(Math.round((l.state * 100) / this.military.stateScale), 10_000)), el("span", undefined, "% d'état perdu"));
+        state.append(el("span", "cr-loss-n", `${compactInt(Math.round((l.state * 100) / this.military.stateScale), 10_000)} %`), el("span", undefined, "de division détruite"));
         state.title = "Somme des barres de vie perdues par les divisions de ce camp : 100 % valent une division entière.";
-        box.append(destroyed, state);
+        box.append(state);
+        for (const s of equipmentLost(c, this.military, side === attackerSide ? c.attacker : c.defender)) {
+          const row = el("div", "cr-loss-row");
+          row.append(el("span", "cr-loss-n", compactInt(s.count, 10_000)), el("span", undefined, s.name));
+          box.append(row);
+        }
         return box;
       };
       const pct = Math.round(advance / 10);

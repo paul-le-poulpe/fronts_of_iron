@@ -1,10 +1,12 @@
 // Bots du mode solo. Ce ne sont pas des règles du jeu : ce code lit l'état et
-// produit des ordres `found_city` et `move_pawn`, comme le ferait un joueur, et
-// le moteur les valide comme les autres. Ils ne servent qu'à donner un
+// produit des ordres `found_city`, `move_pawn` et `move_division`, comme le ferait un
+// joueur, et le moteur les valide comme les autres. Ils ne servent qu'à donner un
 // adversaire pour tester le client (stratégie minimale, pour le débogage) :
 // les inactifs vont d'abord aux Agriculteurs, puis aux Mineurs, puis à la
 // caserne de milice ; la ville suivante est fondée quand les inactifs en
-// paient le coût.
+// paient le coût ; les divisions formées quittent la réserve pour le front le
+// moins garni, les fronts en guerre d'abord. Une partie de test garde ses
+// divisions là où le scénario les a posées.
 //
 // Déterministes : le hasard vient de `createRng` / `nextInt` du moteur, graine =
 // graine des bots mélangée à l'identifiant du joueur. Même graine, même état,
@@ -18,6 +20,8 @@ import {
   createRng,
   foundingCostPawns,
   idlePawns,
+  inFormation,
+  isActive,
   isLand,
   nextInt,
   slotsOf,
@@ -99,8 +103,26 @@ export function createBot(player: number, botSeed: number): Bot {
       }
       send("miners");
       send("militia");
+      if (!state.economyFrozen) deployReserve(state, player, out);
     },
   };
+}
+
+/** Envoie chaque division formée de la réserve nationale sur le front du joueur qui en a le moins, les fronts en guerre d'abord. */
+function deployReserve(state: GameState, player: number, out: Intent[]): void {
+  const reserve = state.divisions.filter((d) => d.owner === player && d.front === 0 && !inFormation(state, d));
+  if (reserve.length === 0) return;
+  let fronts = state.fronts.filter((f) => f.players.includes(player));
+  if (fronts.some((f) => isActive(state, f))) fronts = fronts.filter((f) => isActive(state, f));
+  if (fronts.length === 0) return;
+  const count = new Map(fronts.map((f) => [f.id, state.divisions.filter((d) => d.owner === player && d.front === f.id).length]));
+  const ids = new Map<number, number[]>();
+  for (const d of reserve) {
+    const front = fronts.reduce((best, f) => (count.get(f.id)! < count.get(best.id)! ? f : best));
+    count.set(front.id, count.get(front.id)! + 1);
+    ids.set(front.id, [...(ids.get(front.id) ?? []), d.id]);
+  }
+  for (const [front, list] of ids) out.push({ type: "move_division", player, ids: list, front });
 }
 
 /**

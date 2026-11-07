@@ -61,6 +61,7 @@ et clarté `l` :
 | Barre de front (onglet Forces) | 60 % du sol de mi-altitude `#b5a076`, 40 % de la couleur de carte, contour de la couleur de frontière |
 | Frontière | `hsl(h, s, l − 0,13)` |
 | Limite entre villes | `hsl(h, s, l + 0,13)` |
+| Trait entre deux zones de pêche | 82 % de la case de mer, 18 % d'un ton fait de 25 % de la frontière et 75 % du bleu `#346096` (`SEA_BORDER_ALPHA`, `painter.ts` ; `playerSeaBorder`) |
 | Villes et routes | `hsl(h, s + 0,05, l − 0,25)`, clarté d'au moins 0,15 |
 | Ton moyen d'unité | `hsl(h, s × 0,5, m)`, avec `m` = `l` ramené entre 0,28 et 0,58 |
 | Ton foncé d'unité | `hsl(h, s × 0,5, m − 0,14)` |

@@ -5,7 +5,7 @@
 
 import { currentAttacks, maxAttacks, statePercent, statusLabel, typeOf } from "./divisions.ts";
 import { unitIconUrl } from "./uniticons.ts";
-import { nicheName, unitName } from "./names.ts";
+import { nicheName, strengthOf, unitName } from "./names.ts";
 import { type DivisionTypeInfo, type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 import { num } from "./format.ts";
 
@@ -73,15 +73,26 @@ function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
     row.classList.add(type.attackMultiplier < 100 ? "ip-low" : "ip-high");
     p.append(row);
   }
-  if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) p.append(stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier)));
+  if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) {
+    const row = stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier));
+    row.classList.add(type.defenseHitPointsMultiplier < 100 ? "ip-low" : "ip-high");
+    p.append(row);
+  }
   p.append(line(motorIcon(type.motorized), "Déplacement", type.motorized ? "Motorisé" : "À pied"));
 }
 
-/** Panneau d'un type de division : description, attaques d'une division pleine, statistiques non nulles. */
+/** Effectif d'une division (08 §8 bis), juste après la description. */
+function strengthLine(type: DivisionTypeInfo): HTMLElement {
+  const s = strengthOf(type.id, type.niche, 1);
+  return el("div", "ip-desc", `${num(s.count)} ${s.name}`);
+}
+
+/** Panneau d'un type de division : description, effectif, attaques d'une division pleine, statistiques non nulles. */
 export function typePanel(type: DivisionTypeInfo): HTMLElement {
   const p = el("div", "ip");
   p.append(head(type));
   if (type.description !== "") p.append(el("div", "ip-desc", type.description));
+  p.append(strengthLine(type));
   p.append(el("div", "ip-sep"));
   const a = maxAttacks(type);
   if (a.soft > 0) p.append(stat("Attaque anti-infanterie", num(a.soft)));
@@ -91,7 +102,7 @@ export function typePanel(type: DivisionTypeInfo): HTMLElement {
   return p;
 }
 
-/** Panneau d'un pion : icône et rang, nom et niche, description, état, attaques actuelles / maximales, puis les statistiques du type. */
+/** Panneau d'un pion : icône et rang, nom et niche, description, effectif, état, attaques actuelles / maximales, puis les statistiques du type. */
 export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLElement {
   const type = typeOf(military, d);
   const p = el("div", "ip");
@@ -107,6 +118,7 @@ export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLEleme
   rank.alt = "";
   p.append(head(type, icon, rank));
   if (type.description !== "") p.append(el("div", "ip-desc", type.description));
+  p.append(strengthLine(type));
   p.append(el("div", "ip-sep"));
   p.append(stat("État", `${statePercent(military, d)} %`));
   const now = currentAttacks(type, d, military.stateScale);

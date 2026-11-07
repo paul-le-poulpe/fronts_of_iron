@@ -15,7 +15,7 @@ de production. Il remplace, là où il les contredit :
   corbeille de §11.2.
 
 L'onglet Ressources (flux) sera remanié plus tard : il reste en place, branché sur
-le fer et les machines.
+le fer.
 
 Décisions de l'auteur du 5 novembre 2026. Ce qu'il n'a pas tranché est marqué
 « *provisoire* » et listé au §12. Les valeurs de configuration sont des valeurs
@@ -46,9 +46,9 @@ Les boîtes sont empilées de haut en bas dans le panneau de production.
 | --- | --- | --- | --- |
 | Inactifs | bonshommes ; machines disponibles, sur une ligne par type | aucune | aucune |
 | Blessés | seulement par le §8 | aucune | aucune |
-| Agriculteurs | bonshommes, tracteurs | nourriture, donc capacité de population | aucune |
-| Pêcheurs | bonshommes, bateaux de pêche | nourriture, donc capacité de population | aucune |
-| Mineurs | bonshommes, pompes à vapeur | fer | aucune |
+| Agriculteurs | bonshommes, tracteurs | nourriture, donc capacité de population | surface cultivable |
+| Pêcheurs | bonshommes, bateaux de pêche | nourriture, donc capacité de population | mer |
+| Mineurs | bonshommes, pompes à vapeur | fer | gisement de fer |
 | Usine de machines, une par produit | bonshommes | limite d'un bien | fer |
 | Usine de division, une par type | bonshommes | limite de ce type de division | fer |
 | Caserne, une par type d'infanterie | bonshommes | limite de ce type de division | fer |
@@ -174,8 +174,9 @@ Une caserne peut prendre du fer en entrée, comme une usine : `ironPerUnit` est 
   soignent hors combat (*provisoire* : `COMBAT.healPercentPerSecond`, 2 % par seconde,
   toutes en même temps). Une division en trop (§6) ne se soigne pas.
 - **Limite des élites** : les places et la limite de la caserne d'élites sont plafonnées à
-  `floor(divisions d'infanterie du joueur / ELITE_TROOPS_RATIO)`, élites comprises, en formation ou non.
-  Si l'infanterie baisse, les places en trop disparaissent et leurs ouvriers retournent dans Inactifs.
+  `floor(bonshommes qui travaillent dans la caserne de réguliers / ELITE_TROOPS_RATIO)`. Si ce nombre
+  baisse, postes retirés ou blessés, les places en trop disparaissent, leurs ouvriers retournent dans
+  Inactifs, et les élites au-delà de la limite disparaissent (§6). S'il remonte, les places ne reviennent pas seules.
 
 ## 6. Apparition et disparition
 
@@ -258,7 +259,7 @@ et les ouvriers en trop retournent dans Inactifs. La production visée ne passe 
 La sortie affiche deux nombres : à gauche du trait oblique, ce que permettent les ouvriers
 présents ; à droite, le maximum réglé. Elle ne distingue pas les divisions en formation des
 divisions déployées ; le survol donne le nombre d'actives et le nombre en formation, et pour les élites leur limite
-(« Max 10 % de l'infanterie », d'après `ELITE_TROOPS_RATIO`).
+(« Max 10 % des bonshommes de la caserne de réguliers », d'après `ELITE_TROOPS_RATIO`).
 
 ## 8. Blessés
 
@@ -266,23 +267,43 @@ Le jeu a deux vitesses : la population grandit vite, mais les pertes au combat d
 coûter du temps. Les blessés restent dans la population, occupent de la capacité, et
 ne se soignent que lentement.
 
-- **Entrée** : une division d'**infanterie** détruite (barre de vie à 0, *provisoire*,
-  condition exacte à déterminer) fait passer un bonhomme de sa caserne à Blessés. Sa
-  place reste : un inactif la remplit aussitôt s'il y en a un (§7), sinon elle reste
-  vide. Encerclement compris.
-- Une division de **chars ou d'appui-feu** détruite ne fait aucun blessé : elle se
-  reforme tant que la limite le permet (§6).
-- **Soin, un bonhomme à la fois** :
+- **Entrée** : les pertes d'**infanterie**, pas la destruction d'une division. Une
+  division pleine vaut 1 000 hommes, donc un bonhomme. Chaque tranche de 1 000 hommes
+  perdus fait passer un bonhomme de la caserne du type touché à Blessés. Sa place reste :
+  un inactif la remplit aussitôt s'il y en a un (§7), sinon elle reste vide. Sans bonhomme
+  dans cette caserne, la perte ne blesse personne. Encerclement compris.
+- **Reste de la tranche** : il est retiré du soin du dernier blessé. Blessé à 80 % de son
+  soin, 500 hommes perdus : il retombe à 30 %. 1 500 hommes perdus : un blessé de plus, et
+  celui qui se soigne retombe de 80 % à 30 %.
+- **Soin qui passerait sous 0 %** : un bonhomme de plus est blessé et
+  reprend le reste, depuis 100 %. Blessé à 30 %, 500 hommes perdus : un blessé de plus, et
+  le dernier est à 80 %. Blessé à 30 %, 700 hommes perdus : le dernier est à 60 %. Sans aucun blessé, 500 hommes perdus : un blessé à 50 %.
+- Les **chars et l'appui-feu** ne font aucun blessé : une division détruite se reforme tant
+  que la limite le permet (§6).
+- **Soin, un bonhomme à la fois** : le dernier de la boîte, le plus à droite, avec une barre
+  de vie. Il faut `POPULATION.hurtHealTurnsTimesPop` points, 100 000. Chaque tour, il gagne
+  autant de points que la population du moment, blessés compris, et au moins 25
+  (`hurtHealTurnsTimesPop / hurtHealMaxTurns`, avec `hurtHealMaxTurns` à 4 000) :
 
   ```
-  tours = min(POPULATION.hurtHealMaxTurns, floor(POPULATION.hurtHealTurnsTimesPop / population))
+  tours = min(POPULATION.hurtHealMaxTurns, POPULATION.hurtHealTurnsTimesPop / population)
   ```
 
-  `hurtHealTurnsTimesPop` vaut 100 000, `hurtHealMaxTurns` 4 000 : mêmes rythmes que
-  l'ancienne guérison (400 s par bonhomme jusqu'à 25 bonshommes de population, 100 s à
-  100, 10 s à 1 000). Le compteur démarre quand aucun soin n'est en cours et que Blessés
-  n'est pas vide. La durée est calculée au démarrage.
-- **Fin du soin** : le bonhomme passe dans Inactifs (*provisoire*).
+  Mêmes rythmes que l'ancienne guérison : 400 s par bonhomme jusqu'à 25 bonshommes de
+  population, 100 s à 100, 10 s à 1 000. La vitesse suit la population à chaque tour.
+- **Fin du soin** : le bonhomme passe dans Inactifs (*provisoire*), et le suivant part de 0 %.
+- **Survol d'un blessé**, n'importe lequel : une jauge verte du soin du dernier de la liste, son
+  pourcentage, le temps restant estimé à la population du moment, et le nombre de blessés en
+  attente, tous sauf celui qui se soigne.
+
+### 8 bis. Effectif affiché
+
+Une division d'infanterie représente 1 000 hommes, toute autre division 100 exemplaires
+de son matériel. Ces nombres sont de l'habillage : hors de la conversion des pertes en
+blessés ci-dessus, le moteur ne les lit pas. Le panneau de survol d'une unité les écrit
+juste après la description, dans la même police (« 1 000 hommes », « 100 chars moyens »).
+Le rapport de combat convertit de la même façon : 2 divisions d'infanterie de pertes font
+2 000 hommes, une demi-division de chars 50 chars.
 
 ## 9. Déblocage
 
@@ -326,7 +347,10 @@ ne se soignent que lentement.
   ancienne enfant des mitrailleuses, comme l'a décidé l'auteur.
 - **Boîte débloquée** : elle n'entre pas seule dans la liste. Elle clignote en bleu tout en haut
   des boîtes verrouillées. Quand le joueur clique dessus, un panneau d'information montre la
-  description de l'unité et ses statistiques, et la boîte rejoint le bas des boîtes ouvertes.
+  description de l'unité et ses statistiques. En bas à gauche, « Ajouter la production », à contour
+  bleu, l'option préférable : la boîte rejoint le bas des boîtes ouvertes. En bas à droite, « Compris »
+  fait comme si la boîte avait été ouverte puis supprimée : elle passe avec les boîtes supprimées, sous
+  « Déverrouillé », et ne clignote plus.
 - **Suppression** : une croix rouge, tout à droite d'une usine ou d'une caserne, supprime la
   boîte. Ses ouvriers retournent dans Inactifs, et ses unités deviennent en trop (§6). Elle passe
   sous les boîtes ouvertes, avec le texte « Cliquer pour recréer la ligne », au-dessus des boîtes
@@ -399,6 +423,9 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
   par agriculteur ou tracteur ; par pêcheur ou bateau ; chacun avec une flèche vers son total. À
   droite : les messages, pour l'instant « Nouvelle ligne disponible », quand une ligne débloquée
   attend. Il clignote comme ces lignes, et un clic fait défiler le panneau jusqu'à elles.
+- **Entrée** : le fer de la boîte qui en prend. Agriculteurs : « Surface cultivable » et les hachures
+  vertes des cases cultivables de la carte. Pêcheurs : « Mer » et le bleu de la mer. Mineurs :
+  « Gisement de fer » et les hachures rouges du fer. L'image est un rectangle de 40 × 20 px, au-dessus du nom.
 - **Sortie** : `+N` et son symbole pour la nourriture (agriculteurs, pêcheurs) ou du fer, « existants / limite » pour
   une usine de machines, « permis / maximum » pour une production visée (§7 ter).
 - Les **pions** sont dans une case de 22 px, avec les icônes de 16 × 16 de
@@ -409,6 +436,9 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 - **États d'un pion** : normal ; à venir, contour et barre de compteur ; en sursis, il
   clignote ; poste vacant ou place vide, case à fond gris très léger et en pointillés, avec l'icône pâle du bonhomme
   qui finira dans la boîte, autant de cases que de postes vacants.
+- **Stabilité sous la souris** : quand une boîte change de hauteur, celle qui est à la hauteur de la
+  souris ne bouge pas à l'écran : le défilement compense, et ce sont les autres qui bougent. Tout en
+  haut ou tout en bas du défilement, la compensation peut être limitée.
 - **Réorganisation** : pendant le glisser d'une boîte, c'est l'interstice entre deux boîtes
   qui est mis en surbrillance, le plus proche de la souris, même au-dessus d'une boîte. La
   boîte est déposée dans cet interstice.
@@ -419,9 +449,9 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
   enfants reste verrouillée. Son survol liste ces boîtes avec la barre de progression de chacune.
   Rien n'est affiché hors du survol.
 - **Boîte verrouillée** : très pâle, peu de contraste. De gauche à droite : l'icône de ce qui est
-  débloqué, le cadenas fermé, un petit trait horizontal, le symbole de ce qui débloque (le produit du
-  parent, ou son bonhomme si le parent est Agriculteurs, Pêcheurs ou Mineurs), puis la barre de
-  progression. Dans la barre, les chiffres sont à gauche et le nom à droite. Les plus
+  débloqué, le cadenas fermé, le nom, puis la barre de progression. Dans la barre, à gauche : le
+  symbole de ce qui débloque (le produit du parent, ou son bonhomme si le parent est Agriculteurs,
+  Pêcheurs ou Mineurs), puis les chiffres. Les plus
   proches du déblocage sont en haut, et le panneau défile vers le bas. Le survol donne
   plus d'explications.
 
@@ -429,12 +459,13 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 une usine », le bouton RECRUTEMENT et la corbeille de l'onglet Forces, la mobilisation
 forcée, la jauge d'armement de la fenêtre d'un front.
 
-Le rapport de combat donne les pertes en divisions et en état, à la place des hommes et
-du matériel (*provisoire*).
+Le rapport de combat donne, pour chaque camp, `X % de division détruite` (la somme des barres
+de vie perdues, 100 % valant une division), puis les hommes perdus et le matériel perdu, type
+par type (§8 bis). Les divisions fuient plutôt que de mourir, d'où ce total en pourcentage.
 
 ## 12. Choix provisoires (non tranchés par l'auteur)
 
-1. Condition de destruction d'une division : barre de vie à 0.
+1. Condition de destruction d'une division : barre de vie à 0. Elle ne crée plus de blessé (§8).
 2. Barre de vie de `06-Combat-Simplifie.md` §3.3, soin de 2 % par seconde hors combat.
 3. Attaques d'une division : la somme des anciens composants, facultatifs compris.
 4. Bonhomme soigné : il passe dans Inactifs.
@@ -444,7 +475,6 @@ du matériel (*provisoire*).
 8. Ville prise : le trop-plein d'une boîte retourne dans Inactifs.
 9. Coût de fondation arrondi vers le haut ; places de caserne gardées après le paiement.
 10. Capacité arrondie vers le haut.
-11. Rapport de combat en divisions et en état.
 12. Caserne d'élites débloquée par les réguliers.
 13. Annulation du compteur le plus récent quand un écart se referme.
 19. `unitsPerWorker` à 2 pour les usines de machines, valeur de l'exemple de l'auteur.
@@ -458,7 +488,6 @@ du matériel (*provisoire*).
 16. Milice sans fer : sinon, un joueur sans fer dans sa première ville ne pourrait ni recruter
     ni débloquer les réguliers.
 17. Glisser plus grand que les places libres : il est réduit à ce qui tient.
-18. Pertes d'état du rapport affichées en pourcentage, 100 % valant une division.
 
 **Valeurs à fixer avec l'auteur** : les délais du §6, `workersPerUnit` et `ironPerUnit` de
 chaque boîte, le coût `U` et le coût en bonshommes des villes.
@@ -470,7 +499,9 @@ chaque boîte, le coût `U` et le coût en bonshommes des villes.
 - Dans le code, une boîte de ce document s'appelle une **activité** (`Activity`,
   `Player.activities`) : `Box` et `state.boxes` désignent déjà les boîtes de percée.
 - Tout ce qui décide d'une règle entre dans le hash : activités et leur ordre, compteurs,
-  déblocage, `Division.state`, tour de départ d'une division.
+  déblocage, `Division.state`, tour de départ d'une division, `Player.hurtHeal` (soin du dernier blessé).
+- Les pertes passent par `woundMen` (`activities.ts`) à chaque perte d'état, round par round : le
+  combat tient dans un tour, donc les blessés apparaissent à sa fin.
 - Compteurs : des tableaux de tours de fin, triés, parcourus dans l'ordre (règle 2).
 - `Player.soldiers` n'existe plus : le nombre de soldats se lit dans les casernes.
 - `applyLoss` n'utilise plus le générateur aléatoire : `Division.state` perd directement
