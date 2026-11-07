@@ -1246,10 +1246,12 @@ très légèrement teinté :
   a la plus grande part, et le rapport de pertes (×2,5) est écrit sur elle. En
   bas, les déroutes de chaque camp, et au milieu l'avancée et la durée. Pour une
   percée, une ligne par combat.
-  **Estimation** (*provisoire*) : les pertes d'un seul round, calculées avec les
-  formules du §6 (PV, multiplicateurs d'attaque, de percée, de contre-attaque et
-  de défense), sont prolongées jusqu'à ce que l'infanterie d'un camp atteigne
-  son seuil de fuite, au plus `combatMaxRounds` rounds. Ni renforts ni replis.
+  **Estimation** (*provisoire*) : avec les formules du §6 (PV, multiplicateurs
+  d'attaque, de percée, de contre-attaque et de défense). Une attaque sur tout
+  le front est rejouée round par round, renforts, rounds d'attente et replis
+  compris. Pour une percée, sans renforts, les pertes d'un round sont prolongées
+  jusqu'à ce que l'infanterie d'un camp atteigne son seuil de fuite, au plus
+  `combatMaxRounds` rounds.
   **Verdict** (*provisoire*) : position dominante si l'infanterie adverse cède
   d'abord et que vous perdez au moins deux fois moins que l'adversaire ; position
   perdante si la vôtre cède d'abord et que vous perdez au moins deux fois plus ;

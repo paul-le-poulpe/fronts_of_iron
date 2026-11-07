@@ -1,7 +1,7 @@
 // Estimation d'un combat, pour le panneau de prédiction de la fenêtre d'un front (Docs/Design/05-Fronts.md §11.4). Pas de DOM,
-// aucune règle : la page calcule un seul round avec les formules du moteur (`strike` et `frontAdvance` dans
-// `packages/engine/src/combat.ts`), en flottants, puis prolonge ces pertes jusqu'à ce qu'une infanterie cède. Renforts et replis
-// ne sont pas suivis : c'est une estimation, jamais utilisée par le moteur.
+// aucune règle : la page rejoue les formules du moteur (`strike` et `frontAdvance` dans `packages/engine/src/combat.ts`), en
+// flottants. Une attaque sur tout le front est jouée round par round, renforts et replis compris ; un combat de percée, sans
+// renfort, est calculé sur un round puis prolongé jusqu'à ce qu'une infanterie cède. Une estimation, jamais utilisée par le moteur.
 
 import { type DivisionView, type MilitaryCatalog } from "./protocol.ts";
 
@@ -164,29 +164,118 @@ function lineFighters(military: MilitaryCatalog, divisions: readonly DivisionVie
     });
 }
 
-/** Attaque sur tout le front : `mine` attaque `theirs`. `connections` : largeur du front. */
+/** Un camp pendant une attaque sur tout le front. */
+interface LineSide {
+  readonly fighters: Fighter[];
+  /** Divisions de seconde ligne prêtes à monter, les meilleures d'abord. */
+  readonly reserve: DivisionView[];
+  /** Renforts en retrait : round où ils combattent. */
+  readonly pending: Map<Fighter, number>;
+  /** Toutes les divisions qui ont pris part au combat, et ce que chacune a perdu. */
+  readonly lost: Map<Fighter, number>;
+  routs: number;
+}
+
+const inLine = (side: LineSide): Fighter[] => side.fighters.filter((f) => !side.pending.has(f));
+
+function lineSide(military: MilitaryCatalog, divisions: readonly DivisionView[], attacking: boolean): LineSide {
+  const fighters = lineFighters(military, divisions, attacking);
+  const reserve = divisions.filter((d) => d.line === "second" && d.status === "ready").sort((a, b) => b.state - a.state || a.id - b.id);
+  return { fighters, reserve, pending: new Map(), lost: new Map(fighters.map((f) => [f, 0])), routs: 0 };
+}
+
+/** Renfort : la seconde ligne reprend les places libres, niche par niche, en retrait pendant `reinforceRounds` (`arrangeSide` du moteur). */
+function reinforce(military: MilitaryCatalog, side: LineSide, connections: number, attacking: boolean, round: number): void {
+  for (const niche of military.niches) {
+    const here = (d: DivisionView): boolean => military.divisions[d.type]!.niche === niche.id;
+    let room = connections * WIDTH_SCALE - side.fighters.filter((f) => here(f.d)).reduce((sum, f) => sum + f.width, 0);
+    for (const d of side.reserve.filter(here)) {
+      if (room <= 0) break;
+      const type = military.divisions[d.type]!;
+      const full = type.frontWidth * WIDTH_SCALE;
+      const width = Math.min(room, full);
+      room -= width;
+      const f: Fighter = { d, width, full, attackMult: attacking ? type.attackMultiplier : 100, hpMult: attacking ? 100 : type.defenseHitPointsMultiplier, state: stateOf(military, d) };
+      side.fighters.push(f);
+      side.lost.set(f, 0);
+      side.pending.set(f, round + 1 + military.reinforceRounds);
+      side.reserve.splice(side.reserve.indexOf(d), 1);
+    }
+  }
+}
+
+/** Repli faute d'infanterie : sans infanterie en ligne ni en renfort, les autres divisions quittent la ligne. */
+function withdraw(military: MilitaryCatalog, side: LineSide): void {
+  if (side.fighters.some((f) => groupOf(military, f.d) === "infantry")) return;
+  side.routs += side.fighters.length;
+  side.fighters.length = 0;
+  side.pending.clear();
+}
+
+function lineEstimate(military: MilitaryCatalog, side: LineSide): SideEstimate {
+  const everyone = [...side.lost.keys()];
+  const groups = { infantry: null, armor: null, support: null } as Record<LossGroup, number | null>;
+  for (const name of LOSS_GROUPS) {
+    const here = everyone.filter((f) => groupOf(military, f.d) === name);
+    if (here.length > 0) groups[name] = (100 * here.reduce((sum, f) => sum + side.lost.get(f)!, 0)) / here.length;
+  }
+  const total = everyone.reduce((sum, f) => sum + side.lost.get(f)!, 0);
+  return { total: everyone.length === 0 ? 0 : (100 * total) / everyone.length, groups, routs: side.routs };
+}
+
+/** Attaque sur tout le front : `mine` attaque `theirs`, round par round. `connections` : largeur du front. */
 export function estimateFrontAttack(military: MilitaryCatalog, mine: readonly DivisionView[], theirs: readonly DivisionView[], connections: number): FrontEstimate {
-  const attacker = lineFighters(military, mine, true);
-  const defender = lineFighters(military, theirs, false);
-  const result = fight(military, attacker, defender, connections * WIDTH_SCALE);
-  const max = military.combatMaxRounds;
+  const attacker = lineSide(military, mine, true);
+  const defender = lineSide(military, theirs, false);
+  const flee = military.fleeStatePercent / 100;
   const width = (side: readonly Fighter[]): number => infantryOf(military, side).reduce((sum, f) => sum + f.width, 0);
-  const speed = frontSpeed(military, attacker);
-  const fighting = frontAdvance(military, width(attacker), width(defender), speed) * result.fought;
-  // Défenseur sans infanterie : l'attaquant avance à sa vitesse maximale pendant les rounds qui restent (06-Combat-Simplifie §1).
-  const walking = result.cedes === "defender" ? (max - result.fought) * speed : 0;
-  const lost = result.attacker.total;
-  const dealt = result.defender.total;
-  const verdict: Verdict =
-    result.cedes === "defender" && dealt >= POSITION_RATIO * lost ? "dominant" : result.cedes === "attacker" && lost >= POSITION_RATIO * dealt ? "losing" : "balanced";
-  return {
-    attacker: result.attacker,
-    defender: result.defender,
-    cedes: result.cedes,
-    rounds: result.cedes === "attacker" ? Math.ceil(result.fought) : max,
-    advance: (fighting + walking) / 10,
-    verdict,
-  };
+  let advance = 0;
+  let rounds = 0;
+  let cedes: FightEstimate["cedes"] = null;
+  for (let r = 0; r < military.combatMaxRounds; r++) {
+    for (const side of [attacker, defender]) for (const [f, at] of [...side.pending]) if (at <= r) side.pending.delete(f);
+    const a = inLine(attacker);
+    const d = inLine(defender);
+    if (width(a) === 0) {
+      cedes ??= "attacker";
+      // Rien à attendre : le combat s'arrête. Sinon, round sans dégâts ni avancée.
+      if (![...attacker.pending.keys()].some((f) => groupOf(military, f.d) === "infantry")) break;
+      rounds++;
+      continue;
+    }
+    rounds++;
+    if (width(d) === 0) {
+      cedes ??= "defender";
+      withdraw(military, defender);
+      advance += frontSpeed(military, a);
+      continue;
+    }
+    const rates = new Map<Fighter, number>();
+    strike(military, a, d, connections * WIDTH_SCALE, rates);
+    strike(military, d, a, connections * WIDTH_SCALE, rates);
+    for (const side of [attacker, defender]) {
+      for (const f of inLine(side)) {
+        const hit = Math.min(f.state, rates.get(f)!);
+        f.state -= hit;
+        side.lost.set(f, side.lost.get(f)! + hit);
+        if (f.state > flee) continue;
+        side.fighters.splice(side.fighters.indexOf(f), 1);
+        side.routs++;
+      }
+    }
+    reinforce(military, attacker, connections, true, r);
+    reinforce(military, defender, connections, false, r);
+    withdraw(military, attacker);
+    withdraw(military, defender);
+    const after = inLine(attacker);
+    advance += frontAdvance(military, width(after), width(inLine(defender)), frontSpeed(military, after));
+  }
+  const attackerSide = lineEstimate(military, attacker);
+  const defenderSide = lineEstimate(military, defender);
+  const lost = attackerSide.total;
+  const dealt = defenderSide.total;
+  const verdict: Verdict = cedes === "defender" && dealt >= POSITION_RATIO * lost ? "dominant" : cedes === "attacker" && lost >= POSITION_RATIO * dealt ? "losing" : "balanced";
+  return { attacker: attackerSide, defender: defenderSide, cedes, rounds, advance: advance / 10, verdict };
 }
 
 /** Une liaison par niche, dans l'ordre des niches, les meilleures divisions d'abord : `fill` du moteur. Appui-feu seulement avec de l'infanterie. */

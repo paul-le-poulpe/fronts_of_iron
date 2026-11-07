@@ -150,6 +150,7 @@ export interface MilitaryCatalog {
   readonly attackDelayTurns: number;
   /** Réglages du combat lus par l'estimation du panneau de prédiction (`prediction.ts`). */
   readonly combatMaxRounds: number;
+  readonly reinforceRounds: number;
   readonly fleeStatePercent: number;
   readonly advanceThresholdA: number;
   readonly advanceThresholdB: number;

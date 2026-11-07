@@ -60,7 +60,7 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
-| `src/prediction.ts` | estimation d'un combat pour le panneau de prédiction (05-Fronts §11.4) : un round avec les formules du moteur, sans DOM ; `POSITION_RATIO` |
+| `src/prediction.ts` | estimation d'un combat pour le panneau de prédiction (05-Fronts §11.4) : attaque rejouée round par round avec les formules du moteur, sans DOM ; `POSITION_RATIO` |
 | `src/predictionpanel.ts` | panneau de prédiction au survol des boutons d'attaque de la fenêtre d'un front |
 | `src/frontunits.ts` | répartition de la première ligne sur les connexions d'un front, pour la carte (05-Fronts §11.1) : `linkUnits`, sans DOM |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |

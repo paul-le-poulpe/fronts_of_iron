@@ -189,6 +189,7 @@ export function militaryCatalog(): MilitaryCatalog {
     breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
     attackDelayTurns: FRONTS.attackDelayTurns,
     combatMaxRounds: FRONTS.combatMaxRounds,
+    reinforceRounds: FRONTS.reinforceRounds,
     fleeStatePercent: FRONTS.fleeStatePercent,
     advanceThresholdA: FRONTS.advanceThresholdA,
     advanceThresholdB: FRONTS.advanceThresholdB,
