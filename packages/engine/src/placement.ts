@@ -45,6 +45,8 @@ const LINES: Readonly<Record<string, number>> = { first: LINE_FIRST, second: LIN
  * être au joueur, hors formation et hors percée ; le joueur doit être un camp du front. Provisoire : les divisions
  * invalides de la liste sont ignorées, les autres déplacées. Sur le même front (ou vers la destination d'un
  * déplacement en cours) ou vers la réserve, sans délai ; sinon `transferRounds` rounds. Valide si au moins une division est déplacée.
+ * Vers la première ligne : si les divisions de la niche qui y sont ou y vont, en route comprises, en couvrent déjà toute la
+ * largeur, la division va en seconde ligne.
  */
 export function moveDivisions(state: GameState, player: number, ids: unknown, frontId: unknown, line: unknown, box?: unknown): boolean {
   if (!Array.isArray(ids) || !Number.isInteger(frontId)) return false;
@@ -82,12 +84,29 @@ export function moveDivisions(state: GameState, player: number, ids: unknown, fr
     }
     // Sur le même front, ou vers la destination d'un déplacement en cours : sans nouveau délai (provisoire) ; le
     // rangement des lignes décide de la place en première et seconde ligne.
-    d.line = toLine;
-    d.box = toLine === LINE_BOX ? boxId : 0;
-    if (toLine !== LINE_FIRST) d.engaged = 0;
+    const target = toLine === LINE_FIRST && firstLineFull(state, d, player, dest) ? LINE_SECOND : toLine;
+    d.line = target;
+    d.box = target === LINE_BOX ? boxId : 0;
+    if (target !== LINE_FIRST) d.engaged = 0;
     moved = true;
   }
   return moved;
+}
+
+/**
+ * La première ligne du front `frontId` est-elle pleine pour la niche de `d` (05-Fronts §5.2) ? Comptent les divisions du
+ * joueur de cette niche qui y sont ou y vont, en route comprises, sauf `d`. Comme au rangement, une division entre tant
+ * qu'il reste de la largeur, même si elle n'y est engagée qu'en partie.
+ */
+function firstLineFull(state: GameState, d: Division, player: number, frontId: number): boolean {
+  const front = frontById(state, frontId)!;
+  const niche = DIVISION_DATA[d.type]!.niche;
+  let used = 0;
+  for (const o of state.divisions) {
+    if (o === d || o.owner !== player || o.front !== frontId || o.line !== LINE_FIRST) continue;
+    if (DIVISION_DATA[o.type]!.niche === niche) used += DIVISION_DATA[o.type]!.width;
+  }
+  return used >= frontWidth(front);
 }
 
 // ---- arrivées, divisions détruites, lignes (05-Fronts §4.2, §4.4) ----

@@ -295,7 +295,7 @@ export type DivisionId = keyof typeof DIVISIONS;
  */
 export const NICHES = {
   infantry: { support: false, types: ["elite", "regulars", "militia"] },
-  tanks: { support: false, types: ["mediumTank", "infantryTank", "cruiserTank", "tankette"] },
+  tanks: { support: false, types: ["infantryTank", "mediumTank", "cruiserTank", "tankette"] },
   antiTank: { support: true, types: ["armoredAntiTank", "antiTank"] },
   antiAir: { support: true, types: ["selfPropelledAntiAir", "antiAir"] },
   artillery: { support: true, types: ["selfPropelledArtillery", "artillery"] },

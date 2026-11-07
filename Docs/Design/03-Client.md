@@ -723,7 +723,7 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   sans mouvement (moins de 4 px) ne dépose rien.
 - **Panneaux de survol** (`infopanels.ts`, 05-Fronts §11.7) : posés sur `document.body` (position fixe), un seul à la fois. Panneau d'un type :
   nom en gras et niche en gris, description, composants (icône 32 × 32 : `icon32Path`, nom, quantité), statistiques non nulles (attaques, PV,
-  blindage, largeur de front, largeur de front en percée, multiplicateurs d'attaque et de PV en défense s'ils diffèrent de × 1, déplacement),
+  blindage, largeur de front, largeur de front en percée, multiplicateurs d'attaque, de percée, de contre-attaque et de PV en défense s'ils diffèrent de × 1 (rouge sous × 1, vert au-dessus), déplacement),
   carrés provisoires, sauf les deux largeurs de front (icône `icon-front-width.png`, `frontWidthIcon`) et le déplacement (icône camion / pieds, `motorIcon`). Ces statistiques sont écrites par `typeStats`, commune aux deux panneaux.
   Panneau d'un pion : icône du type (32 × 32), rang (icône 8 × 10 agrandie ×2), nom, niche, description,
   composants « présents / requis », état (« 92 % »), attaques actuelles / maximales (`currentAttacks`, `maxAttacks` : stat × taux, sans

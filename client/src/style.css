@@ -456,7 +456,8 @@ tr.me td { font-weight: 600; }
 #game:has(#prod:not([hidden])) .ib-map { margin-right: 0; }
 #game:not(:has(#prod:not([hidden]))) .ib-options { display: none; }
 .menu.ib-menu { top: 100%; bottom: auto; left: auto; right: calc(var(--panel-w) + var(--prod-offset, 0px)); min-width: 210px; border-top: 0; border-radius: 0 0 8px 8px; }
-.menu.ib-menu.ib-options-menu { right: calc(var(--panel-w) + var(--prod-w)); transform: translateX(100%); }
+/* Menu « Options » : toute la largeur du panneau de production, comme son bouton. */
+.menu.ib-menu.ib-options-menu { right: var(--panel-w); width: var(--prod-w); min-width: 0; box-sizing: border-box; }
 /* Message à côté du menu « Options », qui clignote jusqu'à son ouverture. */
 .ib-hint { position: absolute; top: 100%; right: calc(var(--panel-w) + var(--prod-w) + 8px); z-index: 30; max-width: 280px; padding: 6px 10px; border: 2px solid var(--tuto); border-radius: 6px; background: var(--card); color: var(--fg); font-size: 13px; box-shadow: 0 2px 8px #0005; }
 .ib-options.ib-attn { animation: ib-attn var(--blink-period, 1000ms) steps(1, end) infinite; }

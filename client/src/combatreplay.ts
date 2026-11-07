@@ -20,6 +20,9 @@ import { playerName, strengthOf, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
+/** Divisions perdues du rapport de fin de combat (08 §11) : deux décimales au plus. */
+const DIVISIONS_LOST = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+
 const percentFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 
 /** Durée d'un round dans le replay, en ms (provisoire, 06-Combat-Simplifie §2) : 50 rounds en 22,5 s au plus. */
@@ -417,10 +420,11 @@ export class CombatReplay {
         const l = c.losses[side === attackerSide ? 0 : 1];
         const box = el("div", side === 0 ? "cr-loss" : "cr-loss right");
         box.append(el("div", "cr-loss-title", side === 0 ? "Vos pertes" : `Pertes de ${playerName(other)}`));
-        // Pertes (08 §11), sans décimale : la somme des barres de vie, en pourcent d'une division, puis les hommes et le matériel.
+        // Pertes (08 §11) : la somme des barres de vie, en divisions à deux décimales, puis les hommes et le matériel.
         const state = el("div", "cr-loss-row");
-        state.append(el("span", "cr-loss-n", `${compactInt(Math.round((l.state * 100) / this.military.stateScale), 10_000)} %`), el("span", undefined, "de division détruite"));
-        state.title = "Somme des barres de vie perdues par les divisions de ce camp : 100 % valent une division entière.";
+        const lost = l.state / this.military.stateScale;
+        state.append(el("span", "cr-loss-n", DIVISIONS_LOST.format(lost)), el("span", undefined, lost >= 2 ? "divisions perdues" : "division perdue"));
+        state.title = "Somme des barres de vie perdues par les divisions de ce camp : une barre entière vaut une division.";
         box.append(state);
         for (const s of equipmentLost(c, this.military, side === attackerSide ? c.attacker : c.defender)) {
           const row = el("div", "cr-loss-row");

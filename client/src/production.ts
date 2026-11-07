@@ -203,7 +203,7 @@ export class ProductionPanel {
     this.installPawnDrag();
   }
 
-  /** Option du menu « Options » (08 §11) : deux carrés, 16 × 16 et 32 × 32, le sélectionné en bleu, puis « Icônes ». */
+  /** Option du menu « Options » (08 §11) : deux carrés, 16 × 16 et 32 × 32, le sélectionné en bleu, puis « Taille des icônes ». */
   private iconSizeOption(): HTMLElement {
     const row = el("div", "pp-options");
     const small = el("button", "pp-size pp-size-16");
@@ -223,7 +223,7 @@ export class ProductionPanel {
     }
     this.chooseIcons = choose;
     choose(true);
-    row.append(small, big, el("span", undefined, "Icônes"));
+    row.append(small, big, el("span", undefined, "Taille des icônes"));
     return row;
   }
 
@@ -232,7 +232,7 @@ export class ProductionPanel {
     const label = el("label", "pp-options pp-check");
     this.autoBox.type = "checkbox";
     this.autoBox.addEventListener("change", () => this.order({ type: "set_auto_assign", enabled: this.autoBox.checked }));
-    label.append(this.autoBox, el("span", undefined, "Auto-assignation"));
+    label.append(this.autoBox, el("span", undefined, "Auto-assignation de la population"));
     label.title = "Bonshommes et machines se placent seuls, de haut en bas. Désactive le glisser-déposer.";
     return label;
   }

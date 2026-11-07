@@ -348,8 +348,9 @@ bon : élites (nommées « forces spéciales » dans le client, décision de l'a
   élites : « La crème de la crème. Limités à 10 % de votre infanterie totale. »
   (le pourcentage vient de `ELITE_TROOPS_RATIO`). Les trois nouveaux chars n'ont
   pas de description propre : celle de leur armement (`config/armament.ts`).
-- Niche des chars, du meilleur au moins bon : char moyen, char d'infanterie, char
-  de cavalerie, chenillette (*provisoire* : ordre choisi pour l'implémentation).
+- Niche des chars, du meilleur au moins bon : char d'infanterie, char moyen, char
+  de cavalerie, chenillette (l'auteur place le char d'infanterie en tête ; le reste de l'ordre
+  est *provisoire*).
   Chaque niche d'appui-feu range sa variante blindée avant celle à pied
   (*provisoire*, même raison).
 
@@ -534,7 +535,7 @@ Règles :
 | --- | --- | --- |
 | `create_division` | type de division | stocks et inactifs suffisants (§3.5) |
 | `delete_division` | division | elle est au joueur, dans la réserve nationale, ni en déplacement ni en formation |
-| `move_division` | liste de divisions ; destination : réserve nationale, ou front + ligne (première, seconde, réaction rapide, boîte de percée existante, nouvelle boîte ; sans ligne → seconde) | chaque division est au joueur, n'est pas en formation ni engagée dans une percée ; le joueur est un camp du front ; la boîte est à lui sur ce front. *Provisoire* : les divisions invalides de la liste sont ignorées, les autres déplacées |
+| `move_division` | liste de divisions ; destination : réserve nationale, ou front + ligne (première, seconde, réaction rapide, boîte de percée existante, nouvelle boîte ; sans ligne → seconde). Vers la première ligne : si les divisions de sa niche qui y sont ou y vont, en route comprises, couvrent déjà toute la largeur du front, la division va en seconde ligne | chaque division est au joueur, n'est pas en formation ni engagée dans une percée ; le joueur est un camp du front ; la boîte est à lui sur ce front. *Provisoire* : les divisions invalides de la liste sont ignorées, les autres déplacées |
 | `start_breakthrough` | front, boîte, axe (`city1`, `city2`) | front actif ; la boîte est au joueur sur ce front ; l'axe est une connexion du front ; la boîte a au moins une division disponible |
 | `cancel_breakthrough` | percée | la percée est au joueur (*provisoire* : l'annulation de la v0.1 est gardée) |
 | `set_forced_mobilization` | oui / non | toujours |

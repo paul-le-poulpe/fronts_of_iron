@@ -73,6 +73,16 @@ function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
     row.classList.add(type.attackMultiplier < 100 ? "ip-low" : "ip-high");
     p.append(row);
   }
+  if (type.breakthroughMultiplier !== 100) {
+    const row = stat("Multiplicateur en percée", ratio(type.breakthroughMultiplier));
+    row.classList.add(type.breakthroughMultiplier < 100 ? "ip-low" : "ip-high");
+    p.append(row);
+  }
+  if (type.counterAttackMultiplier !== 100) {
+    const row = stat("Multiplicateur en contre-attaque", ratio(type.counterAttackMultiplier));
+    row.classList.add(type.counterAttackMultiplier < 100 ? "ip-low" : "ip-high");
+    p.append(row);
+  }
   if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) {
     const row = stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier));
     row.classList.add(type.defenseHitPointsMultiplier < 100 ? "ip-low" : "ip-high");

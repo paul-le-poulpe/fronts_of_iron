@@ -392,7 +392,8 @@ petit cadenas fermé et « Verrouillé » au-dessus des autres.
 
 **Menu « Options »** : un menu déroulant au survol, dans la barre des onglets, au-dessus du
 panneau de production. Il contient la taille des icônes de pions et l'auto-assignation (§7 bis). Deux carrés, de
-16 × 16 et de 32 × 32, suivis du texte « Icônes ». Un clic sélectionne un carré et
+16 × 16 et de 32 × 32, suivis du texte « Taille des icônes », puis la case « Auto-assignation de la
+population ». Le menu a la largeur du panneau, comme son bouton. Un clic sélectionne un carré et
 désélectionne l'autre ; le carré sélectionné est en bleu. Une partie commence en grandes icônes.
 Dès que la population dépasse 50, le panneau passe en petites icônes, une fois par partie, et le
 menu « Options » clignote. À son ouverture, il cesse et un message à côté du menu explique le passage. Le joueur peut ensuite revenir en grandes icônes.
@@ -459,8 +460,9 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 une usine », le bouton RECRUTEMENT et la corbeille de l'onglet Forces, la mobilisation
 forcée, la jauge d'armement de la fenêtre d'un front.
 
-Le rapport de combat donne, pour chaque camp, `X % de division détruite` (la somme des barres
-de vie perdues, 100 % valant une division), puis les hommes perdus et le matériel perdu, type
+Le rapport de combat donne, pour chaque camp, `X divisions perdues` (la somme des barres de vie
+perdues, une barre entière valant une division, deux décimales au plus : « 3,67 divisions perdues »,
+« 0,5 division perdue »), puis les hommes perdus et le matériel perdu, type
 par type (§8 bis). Les divisions fuient plutôt que de mourir, d'où ce total en pourcentage.
 
 ## 12. Choix provisoires (non tranchés par l'auteur)
