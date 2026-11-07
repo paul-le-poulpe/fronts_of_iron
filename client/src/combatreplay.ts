@@ -20,6 +20,8 @@ import { playerName, unitName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals } from "./stattotals.ts";
 
+const percentFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+
 /** Durée d'un round dans le replay, en ms (provisoire, 06-Combat-Simplifie §2) : 50 rounds en 22,5 s au plus. */
 const ROUND_MS = 450;
 /** Durée de l'approche des deux colonnes avant le premier round, en ms. */
@@ -279,6 +281,19 @@ export class CombatReplay {
       return `${who.join(" ; ")} : plus d'infanterie`;
     };
 
+    /**
+     * Message d'un round sans division touchée (06-Combat-Simplifie §1) : sans avancée, l'attaquant attend ses renforts
+     * d'infanterie ; avec, le défenseur n'a plus d'infanterie et l'attaquant avance. `total` : avancée depuis le début, en %.
+     */
+    const quietRoundText = (advance: number, total: number): string => {
+      const attacking = c.attacker === me;
+      if (advance === 0) {
+        return attacking ? "Plus d'infanterie en ligne : en attente des renforts d'infanterie" : `${playerName(c.attacker)} n'a plus d'infanterie en ligne : en attente de ses renforts`;
+      }
+      const moved = `${percentFormat.format(total)} %`;
+      return attacking ? `Plus d'infanterie en face : avancée ${moved}` : `Plus d'infanterie en ligne : ${playerName(c.attacker)} avance de ${moved}`;
+    };
+
     const redraw = (lossByCard: ReadonlyMap<Card, number>): void => {
       const totals = [noStats(), noStats()] as const;
       for (const card of cards) {
@@ -341,9 +356,9 @@ export class CombatReplay {
     const showRound = (): void => {
       const r = next++;
       const rd = c.rounds[r]!;
-      // Un round sans division touchée : le défenseur n'a plus d'infanterie, l'attaquant avance (06-Combat-Simplifie §1).
-      const total = Math.round(c.rounds.slice(0, r + 1).reduce((s, x) => s + x.advance, 0) / 10);
-      round.textContent = rd.hits.length === 0 ? `Round ${r + 1} / ${c.rounds.length} — plus d'infanterie en face : avancée ${total} %` : `Round ${r + 1} / ${c.rounds.length}`;
+      const total = c.rounds.slice(0, r + 1).reduce((s, x) => s + x.advance, 0) / 10;
+      const label = `Round ${r + 1} / ${c.rounds.length}`;
+      round.textContent = rd.hits.length === 0 ? `${label} — ${quietRoundText(rd.advance, total)}` : label;
       if (rd.withdrawn.length > 0) round.textContent += ` — ${withdrawnText(rd.withdrawn)}`;
       // Renforts qui rejoignent la première ligne au début du round.
       for (const i of rd.joined) {

@@ -925,6 +925,29 @@ contraire.
   du front (§11.5, petit point rouge foncé) et, de chaque côté sur le segment
   droit entre les deux villes, **un rond de la couleur du joueur de ce côté**,
   de la taille d'une ville, qui touche le point. Fronts actifs seulement.
+- **Unités** : quand l'écran montre au plus `FRONT_INFANTRY_MAX_TILES` cases
+  (960 000, soit environ huit cents villes, *provisoire*), chaque camp dessine
+  au plus une infanterie par connexion, centrée sur le segment droit, et rien
+  d'autre, pas même le petit rond d'un emplacement vide. Quand il montre au plus `FRONT_UNITS_MAX_TILES` cases
+  (240 000, soit environ deux cents villes, *provisoire*), toutes les icônes
+  32 × 32 de la première ligne sont dessinées, aux couleurs de leur
+  propriétaire, sur tous les fronts, **en guerre comme en paix** : elles
+  remplacent les ronds d'un front actif. En paix, le point vaut le milieu de la
+  route, sans petit point rouge. De chaque côté du point
+  d'avancement, les unités sont en rangées parallèles au front. Première rangée,
+  contre le front : l'infanterie (le plus haut à l'écran) et une autre unité
+  (char ou appui-feu), côte à côte. Les autres unités de la connexion suivent par
+  deux sur les rangées de derrière, vers l'arrière du camp ; une unité seule sur
+  sa rangée est centrée. Les icônes des deux camps se font face et gardent leur
+  taille à tout zoom : de loin, elles peuvent se chevaucher.
+  L'infanterie prend les connexions dans l'ordre de la chaîne, tant qu'il y en
+  a ; un emplacement d'infanterie vide montre un petit rond de la couleur du
+  joueur sur un front actif (*provisoire*), rien en paix. Chaque autre niche est
+  espacée régulièrement le long du front, à partir d'un point de départ propre à
+  la niche, pour que les types se mélangent ; une connexion reçoit d'abord une
+  niche qu'elle n'a pas, puis celle qui a le moins d'unités passe avant
+  (*provisoire*). Toute la première ligne est affichée. Une division en
+  déplacement n'est pas montrée (*provisoire*).
 - **Mode choix d'axe** (bouton « Lancer » d'une boîte de percée) : la fenêtre
   du front se ferme le temps du choix ; un clic sur la carte lance la percée
   sur la connexion du front la plus proche du clic (*provisoire*), surlignée
@@ -1215,6 +1238,28 @@ très légèrement teinté :
 - **Lettres de niche** en grosses lettres grasses, **plus sombres que le
   fond** (à peine visibles) : `INF`, `TANK`, `AT`, `AA`, `ART` (*provisoire*),
   alignées à droite de la rangée, derrière les pions. 36 px.
+- **Panneau de prédiction** : au survol du bouton d'attaque sur tout le front
+  ou du bouton « Lancer » d'une boîte, un panneau estime le combat. Vos pertes à
+  gauche, celles de l'adversaire à droite, en % des divisions engagées, avec
+  « ≈ » : total, puis infanterie, blindés et appui-feu. Entre les deux, une barre
+  aux couleurs des joueurs, partagée selon ces pertes : le camp qui perd le moins
+  a la plus grande part, et le rapport de pertes (×2,5) est écrit sur elle. En
+  bas, les déroutes de chaque camp, et au milieu l'avancée et la durée. Pour une
+  percée, une ligne par combat.
+  **Estimation** (*provisoire*) : les pertes d'un seul round, calculées avec les
+  formules du §6 (PV, multiplicateurs d'attaque, de percée, de contre-attaque et
+  de défense), sont prolongées jusqu'à ce que l'infanterie d'un camp atteigne
+  son seuil de fuite, au plus `combatMaxRounds` rounds. Ni renforts ni replis.
+  **Verdict** (*provisoire*) : position dominante si l'infanterie adverse cède
+  d'abord et que vous perdez au moins deux fois moins que l'adversaire ; position
+  perdante si la vôtre cède d'abord et que vous perdez au moins deux fois plus ;
+  position équilibrée sinon. Percée probable si les deux combats sont gagnés,
+  incertaine si seul le combat 1 l'est, improbable sinon ; un combat est gagné
+  si l'infanterie adverse cède avant la vôtre.
+- **Infanterie manquante** : quand la rangée d'infanterie de la première ligne
+  du joueur, ou celle d'une de ses boîtes de percée, est vide, le texte rouge
+  « L'infanterie est essentielle. » s'y affiche : les autres unités ne peuvent
+  rien faire sans elle.
 - **En première ligne seulement** (du joueur et de l'adversaire), sous les
   lettres, le **pourcentage de couverture du front** de la niche (largeur
   engagée / largeur du front), de même taille et gras ; lettres et
@@ -1623,6 +1668,10 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - nouvelle connexion créée en guerre par une fondation : 500 (§2.4) ; route
   vers un troisième joueur après une prise : 500 (§10.1) ;
 - pion : place de la barre non réservée à 100 % (§11.3) ;
+- panneau de prédiction : estimation sur un round, seuil de rapport de pertes
+  (×2) et conditions des verdicts (§11.4) ;
+- unités sur la carte : seuil de cases à l'écran, petit rond d'un emplacement d'infanterie
+  vide, divisions en déplacement non montrées (§11.1) ;
 - interface : ordre et lettres des niches, tri des fronts de l'onglet, place
   du bouton Retour et du panneau de type, largeurs, icônes de statut
   diplomatique, de statistique et de corbeille, panneau d'un pion adverse

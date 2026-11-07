@@ -50,7 +50,9 @@ export function recolorPixels(data: Uint8ClampedArray, tones: readonly [Rgb, Rgb
 
 /** Pixels de chaque PNG lu, par nom de fichier. */
 const pixels = new Map<string, ImageData>();
-/** URL de chaque icône déjà colorée, par `fichier|indice de couleur`. */
+/** Chaque icône déjà colorée, par `fichier|indice de couleur`. */
+const colored = new Map<string, HTMLCanvasElement>();
+/** URL de chaque icône déjà colorée, même clé. */
 const urls = new Map<string, string>();
 
 function read(file: string, image: HTMLImageElement): void {
@@ -89,18 +91,32 @@ export const unitIconUrl = (path: string, player: number, size: 16 | 32 = 32): s
  */
 export function colorIconUrl(path: string, index: number, size: 16 | 32 = 32): string {
   const shown = size === 32 ? icon32Path(path) : path;
-  const data = pixels.get(shown.slice(shown.lastIndexOf("/") + 1));
-  if (data === undefined) return `icons/${shown}`;
   const key = `${shown}|${index}`;
   const known = urls.get(key);
   if (known !== undefined) return known;
+  const canvas = coloredCanvas(shown, index);
+  if (canvas === null) return `icons/${shown}`;
+  const url = canvas.toDataURL("image/png");
+  urls.set(key, url);
+  return url;
+}
+
+/** L'icône `shown` dans la couleur `index`, ou `null` si ses pixels ne sont pas lus. */
+function coloredCanvas(shown: string, index: number): HTMLCanvasElement | null {
+  const key = `${shown}|${index}`;
+  const known = colored.get(key);
+  if (known !== undefined) return known;
+  const data = pixels.get(shown.slice(shown.lastIndexOf("/") + 1));
+  if (data === undefined) return null;
   const copy = new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
   recolorPixels(copy.data, unitTones(index));
   const canvas = document.createElement("canvas");
   canvas.width = copy.width;
   canvas.height = copy.height;
   canvas.getContext("2d")!.putImageData(copy, 0, 0);
-  const url = canvas.toDataURL("image/png");
-  urls.set(key, url);
-  return url;
+  colored.set(key, canvas);
+  return canvas;
 }
+
+/** Version 32 × 32 de l'icône `path` aux couleurs de `player`, à dessiner sur un canvas ; `null` si ses pixels ne sont pas lus. */
+export const unitIconCanvas = (path: string, player: number): HTMLCanvasElement | null => coloredCanvas(icon32Path(path), playerColorIndex(player));

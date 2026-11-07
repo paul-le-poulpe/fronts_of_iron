@@ -218,6 +218,8 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 .fw-pct { display: block; font-size: 24px; font-weight: 800; letter-spacing: 0.04em; }
 .fw-row.cov .fw-big { color: var(--n-ink2); }
 .fw-row.cov .fw-letters { font-size: 24px; }
+/* Rangée d'infanterie vide : le message laisse passer le glisser vers la rangée. */
+.fw-need { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 700; color: var(--t-red); pointer-events: none; }
 .fw-zone { position: relative; flex: 1; min-width: 0; height: 50px; }
 /* Première ligne : les pions ne passent jamais sous les lettres de niche et le pourcentage (05-Fronts §11.4) : la zone que `renderZone`
    mesure (`clientWidth`) exclut leur place, d'où des piles plus tôt. */
@@ -403,6 +405,23 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
   font-size: 12px;
   pointer-events: none;
 }
+/* Panneau de prédiction d'une attaque : vos pertes à gauche, les siennes à droite, la barre au milieu. */
+.pr { width: 320px; max-width: 320px; }
+.pr-verdict { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.pr-verdict.good { color: #3f9142; }
+.pr-verdict.even { color: #c9892a; }
+.pr-verdict.bad { color: var(--t-red); }
+.pr-cols { display: flex; justify-content: space-between; font-size: 11px; color: var(--t-ip-desc); margin-bottom: 4px; }
+.pr-row { display: grid; grid-template-columns: 58px minmax(0, 1fr) 58px; gap: 6px; align-items: end; margin-bottom: 6px; font-size: 13px; }
+.pr-main { font-size: 16px; font-weight: 700; }
+.pr-right { text-align: right; }
+.pr-name { font-size: 11px; font-weight: 400; text-align: center; color: var(--t-ip-desc); margin-bottom: 2px; }
+.pr-bar { display: flex; height: 16px; border-radius: 3px; overflow: hidden; }
+.pr-bar i { display: block; min-width: 0; overflow: hidden; font-style: normal; font-size: 11px; font-weight: 400; line-height: 16px; text-align: center; color: #fff; }
+.pr-foot { display: grid; grid-template-columns: 62px minmax(0, 1fr) 62px; gap: 6px; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--t-ip-sep); font-size: 11px; color: var(--t-ip-desc); }
+.pr-foot b { display: block; font-size: 13px; }
+.pr-mid { text-align: center; }
+.pr-note { margin-top: 6px; font-size: 11px; color: var(--t-ip-desc); }
 .ip-head { margin: 0 0 4px; font-size: 13px; font-weight: 400; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .ip-name { display: inline-flex; align-items: center; gap: 6px; }
 .ip-name b { font-weight: 700; }
