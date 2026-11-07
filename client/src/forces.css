@@ -198,6 +198,8 @@ html[data-theme="light"] .themed .n-artillery { --n-bg: #e9e6cf; --n-ink: #d8d4b
 /* Titre d'une colonne, en haut à gauche ; à droite, en première ligne, les pertes du dernier round (rouge). Même hauteur
    dans toutes les colonnes : les rangées restent alignées. Colonnes comprimées de l'adversaire : plus petit, pour tenir. */
 .fw-lab { position: relative; flex: none; height: var(--fw-lab-h); display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 18px; color: var(--t-muted); white-space: nowrap; }
+.fw-lab { font-weight: 700; }
+.fw-lab > .fw-tots { font-weight: 400; }
 .fw-col.comp > .fw-lab { font-size: 11px; }
 .fw-loss { color: var(--t-red); font-weight: 600; font-size: 12px; }
 .fw-rows { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
