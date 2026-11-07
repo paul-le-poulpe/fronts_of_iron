@@ -418,7 +418,11 @@ function frontAttackRound(state: GameState, front: Front, x: number, record: Com
   const fighting = (i: number): Division[] => engagedOf(sideDivisions(state, front, front.players[i]!)).filter((d) => !pending.has(d.id));
   const sides = [0, 1].map(fighting);
   const attacker = sides[x]!;
-  if (infantryWidth(attacker) === 0) return undefined;
+  if (infantryWidth(attacker) === 0) {
+    // De l'infanterie en renfort arrive : round sans dégâts ni avancée, le combat reprend avec elle (06-Combat-Simplifie §1).
+    const reinforced = engagedOf(sideDivisions(state, front, front.players[x]!)).some((d) => pending.has(d.id) && dataOf(d).niche === INFANTRY_NICHE);
+    return reinforced ? advanceRound(front, x, 0, record, { hits: [], destroyed: [], fled: [], arrived: [], joined, withdrawn: [] }) : undefined;
+  }
   // Le défenseur n'a plus d'infanterie engagée (détruite ou en fuite) : l'attaquant avance sans combat, à sa vitesse
   // maximale (06-Combat-Simplifie §1), jusqu'à la fin des rounds ou au retour d'une infanterie du défenseur (renfort).
   if (infantryWidth(sides[1 - x]!) === 0) {

@@ -60,6 +60,8 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
+| `src/prediction.ts` | estimation d'un combat pour le panneau de prédiction (05-Fronts §11.4) : un round avec les formules du moteur, sans DOM ; `POSITION_RATIO` |
+| `src/predictionpanel.ts` | panneau de prédiction au survol des boutons d'attaque de la fenêtre d'un front |
 | `src/frontunits.ts` | répartition de la première ligne sur les connexions d'un front, pour la carte (05-Fronts §11.1) : `linkUnits`, sans DOM |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |
@@ -972,7 +974,7 @@ Comportement de `OnlineGame` :
 - **Envoyer un glisser de pions plus gros que les places libres** : le moteur refuse tout l'ordre (08 §10). La page réduit le
   glisser à ce qui tient (`dropCount`) ; Blessés ne reçoit ni ne donne, et une machine hors de sa boîte n'est pas une cible.
 - **Reconstruire la fenêtre d'un front ou l'onglet des forces à chaque message** : un bouton remplacé entre le `pointerdown` et le `click`
-  perd le clic ; `FrontWindow` ne remplace que le contenu des rangées et des textes, et seulement si `fronts` ou `divisions` ont changé ;
+  perd le clic ; `FrontWindow` ne remplace que le contenu des rangées et des textes, et seulement si `fronts` ou `divisions` ont changé ; l'historique des combats, lui, n'est refait que si sa liste change (`historyKey`), sinon ses lignes clignotent très vite et le clic se perd ;
   `ForcesTab` compare une clé (identifiants, états, largeur).
 - **`renderZone` remplace le contenu de son conteneur** (`innerHTML`) : les écouteurs sont sur le conteneur, jamais sur un pion, et le panneau
   de survol retrouve le pion par `ZoneView.pawnEl` (l'élément lu au survol a pu être remplacé par un changement d'aperçu).

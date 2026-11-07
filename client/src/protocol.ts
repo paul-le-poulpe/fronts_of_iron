@@ -148,6 +148,13 @@ export interface MilitaryCatalog {
   readonly breakthroughDelayTurns: number;
   /** Délai entre l'ordre d'attaque sur tout le front et son combat, en tours (06-Combat-Simplifie §1). */
   readonly attackDelayTurns: number;
+  /** Réglages du combat lus par l'estimation du panneau de prédiction (`prediction.ts`). */
+  readonly combatMaxRounds: number;
+  readonly fleeStatePercent: number;
+  readonly advanceThresholdA: number;
+  readonly advanceThresholdB: number;
+  readonly footSpeedPermille: number;
+  readonly motorizedSpeedPermille: number;
 }
 
 /** Une division d'un combat, telle qu'au début du combat (06-Combat-Simplifie §1). */

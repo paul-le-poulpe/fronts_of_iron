@@ -1238,6 +1238,24 @@ très légèrement teinté :
 - **Lettres de niche** en grosses lettres grasses, **plus sombres que le
   fond** (à peine visibles) : `INF`, `TANK`, `AT`, `AA`, `ART` (*provisoire*),
   alignées à droite de la rangée, derrière les pions. 36 px.
+- **Panneau de prédiction** : au survol du bouton d'attaque sur tout le front
+  ou du bouton « Lancer » d'une boîte, un panneau estime le combat. Vos pertes à
+  gauche, celles de l'adversaire à droite, en % des divisions engagées, avec
+  « ≈ » : total, puis infanterie, blindés et appui-feu. Entre les deux, une barre
+  aux couleurs des joueurs, partagée selon ces pertes : le camp qui perd le moins
+  a la plus grande part, et le rapport de pertes (×2,5) est écrit sur elle. En
+  bas, les déroutes de chaque camp, et au milieu l'avancée et la durée. Pour une
+  percée, une ligne par combat.
+  **Estimation** (*provisoire*) : les pertes d'un seul round, calculées avec les
+  formules du §6 (PV, multiplicateurs d'attaque, de percée, de contre-attaque et
+  de défense), sont prolongées jusqu'à ce que l'infanterie d'un camp atteigne
+  son seuil de fuite, au plus `combatMaxRounds` rounds. Ni renforts ni replis.
+  **Verdict** (*provisoire*) : position dominante si l'infanterie adverse cède
+  d'abord et que vous perdez au moins deux fois moins que l'adversaire ; position
+  perdante si la vôtre cède d'abord et que vous perdez au moins deux fois plus ;
+  position équilibrée sinon. Percée probable si les deux combats sont gagnés,
+  incertaine si seul le combat 1 l'est, improbable sinon ; un combat est gagné
+  si l'infanterie adverse cède avant la vôtre.
 - **Infanterie manquante** : quand la rangée d'infanterie de la première ligne
   du joueur, ou celle d'une de ses boîtes de percée, est vide, le texte rouge
   « L'infanterie est essentielle. » s'y affiche : les autres unités ne peuvent
@@ -1650,6 +1668,8 @@ Choisis pour pouvoir implémenter ; à valider avec l'auteur :
 - nouvelle connexion créée en guerre par une fondation : 500 (§2.4) ; route
   vers un troisième joueur après une prise : 500 (§10.1) ;
 - pion : place de la barre non réservée à 100 % (§11.3) ;
+- panneau de prédiction : estimation sur un round, seuil de rapport de pertes
+  (×2) et conditions des verdicts (§11.4) ;
 - unités sur la carte : seuil de cases à l'écran, petit rond d'un emplacement d'infanterie
   vide, divisions en déplacement non montrées (§11.1) ;
 - interface : ordre et lettres des niches, tri des fronts de l'onglet, place

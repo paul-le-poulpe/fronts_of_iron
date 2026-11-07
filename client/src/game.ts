@@ -188,6 +188,12 @@ export function militaryCatalog(): MilitaryCatalog {
     stateScale: STATE_SCALE,
     breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
     attackDelayTurns: FRONTS.attackDelayTurns,
+    combatMaxRounds: FRONTS.combatMaxRounds,
+    fleeStatePercent: FRONTS.fleeStatePercent,
+    advanceThresholdA: FRONTS.advanceThresholdA,
+    advanceThresholdB: FRONTS.advanceThresholdB,
+    footSpeedPermille: FRONTS.footSpeedPermille,
+    motorizedSpeedPermille: FRONTS.motorizedSpeedPermille,
   };
 }
 

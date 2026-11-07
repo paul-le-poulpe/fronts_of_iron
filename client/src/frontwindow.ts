@@ -18,6 +18,8 @@ import { attachPawnPanels, attachTextPanel, frontWidthIcon, hidePanel, motorIcon
 import { STAT_KINDS, firstLineStats, formatStat, type FirstLineStats, type StatKind } from "./frontstats.ts";
 import { unitIconUrl } from "./uniticons.ts";
 import { localPlayer, nicheLetters, playerName } from "./names.ts";
+import { estimateBreakthrough, estimateFrontAttack } from "./prediction.ts";
+import { breakthroughPredictionPanel, frontPredictionPanel } from "./predictionpanel.ts";
 import { pawnOrder, renderZone } from "./pawn.ts";
 import { STAT_TITLE, drawTotals, statIcon, statTotals, type Totals } from "./stattotals.ts";
 import { combatSummary, dismissCombat, isDismissed, isViewed, localWon } from "./combatreplay.ts";
@@ -140,6 +142,8 @@ export class FrontWindow implements DndHost {
   private readonly title: HTMLElement;
   private readonly advancedBox: HTMLInputElement;
   private readonly attackButton: HTMLButtonElement;
+  /** Texte du bouton d'attaque, en bas de son panneau de prédiction. */
+  private attackNote = "";
   private readonly backButton: HTMLButtonElement;
   private readonly onLaunch: (front: number, box: number) => void;
   private readonly columns: {
@@ -173,6 +177,8 @@ export class FrontWindow implements DndHost {
   /** Historique des combats du front ouvert (06-Combat-Simplifie §2) ; un clic sur une ligne ouvre le replay. */
   private readonly history: HTMLElement;
   private combats: readonly CombatView[] = [];
+  /** Lignes affichées par `history` : combats et combats visionnés. */
+  private historyKey = "";
   onReplay: ((c: CombatView) => void) | null = null;
 
   constructor(
@@ -204,6 +210,7 @@ export class FrontWindow implements DndHost {
     this.attackButton.type = "button";
     this.attackButton.dataset.tuto = "attack";
     this.attackButton.addEventListener("click", () => this.toggleAttack());
+    attachTextPanel(this.attackButton, () => this.attackPrediction());
     const barrage = el("button", "fw-btn", "Barrage d'artillerie");
     barrage.type = "button";
     barrage.disabled = true;
@@ -382,6 +389,10 @@ export class FrontWindow implements DndHost {
   private drawHistory(): void {
     const mine = this.combats.filter((c) => c.front === this.frontId && !isDismissed(c.id)).slice(-HISTORY_SIZE).reverse();
     this.history.hidden = mine.length === 0;
+    // `draw` passe ici dès que les divisions changent : refaire les lignes relancerait leur clignotement et perdrait le clic en cours.
+    const key = mine.map((c) => `${c.id}:${isViewed(c.id)}`).join(",");
+    if (key === this.historyKey) return;
+    this.historyKey = key;
     this.history.replaceChildren(
       el("span", "fw-history-title", "Derniers combats :"),
       ...mine.map((c) => {
@@ -412,11 +423,35 @@ export class FrontWindow implements DndHost {
     this.attackButton.classList.toggle("on", waiting);
     this.attackButton.disabled = !front.active;
     this.attackButton.setAttribute("aria-pressed", String(waiting));
-    this.attackButton.title = front.active
-      ? waiting
-        ? "Un clic annule l'attaque avant le combat."
-        : `Le combat a lieu ${Math.round(this.military.attackDelayTurns / this.military.combatTurns)} s après le clic, en une fois ; une icône apparaît ensuite sur la carte pour le revoir.`
-      : "Seulement sur un front actif.";
+    this.attackNote = waiting
+      ? "Un clic annule l'attaque avant le combat."
+      : `Le combat a lieu ${Math.round(this.military.attackDelayTurns / this.military.combatTurns)} s après le clic, en une fois ; une icône apparaît ensuite sur la carte pour le revoir.`;
+    this.attackButton.title = front.active ? "" : "Seulement sur un front actif.";
+  }
+
+  /** Divisions des deux camps sur le front ouvert, pour le panneau de prédiction. */
+  private sides(): { readonly front: FrontView; readonly me: number; readonly other: number; readonly mine: DivisionView[]; readonly theirs: DivisionView[] } | null {
+    const front = this.fronts.find((f) => f.id === this.frontId);
+    if (front === undefined || !front.active) return null;
+    const me = localPlayer();
+    if (!front.players.includes(me)) return null;
+    const other = front.players[0] === me ? front.players[1] : front.players[0];
+    const here = this.divisions.filter((d) => d.front === front.id);
+    return { front, me, other, mine: here.filter((d) => d.owner === me), theirs: here.filter((d) => d.owner === other) };
+  }
+
+  private attackPrediction(): HTMLElement | null {
+    const s = this.sides();
+    if (s === null) return null;
+    return frontPredictionPanel(estimateFrontAttack(this.military, s.mine, s.theirs, s.front.connections.length), s.me, s.other, this.attackNote);
+  }
+
+  private breakthroughPrediction(box: number): HTMLElement | null {
+    const s = this.sides();
+    if (s === null) return null;
+    const force = this.inBox(s.mine, box);
+    if (force.length === 0) return null;
+    return breakthroughPredictionPanel(estimateBreakthrough(this.military, force, s.theirs), s.me, s.other, "Choisir l'axe de la percée sur la carte.");
   }
 
   /** À appeler à chaque tour. */
@@ -812,6 +847,7 @@ export class FrontWindow implements DndHost {
     const go = (): void => this.onLaunch(this.frontId, id);
     launch.addEventListener("click", go);
     popLaunch.addEventListener("click", go);
+    for (const button of [launch, popLaunch]) attachTextPanel(button, () => this.breakthroughPrediction(id));
     return ui;
   }
 
@@ -880,7 +916,7 @@ export class FrontWindow implements DndHost {
             ? "La boîte est vide."
             : !infantry
               ? "Vous avez besoin d'infanterie pour la percée."
-              : "Choisir l'axe de la percée sur la carte.";
+              : "";
       }
       ui.root.dataset.drop = `box:${front.id}:${b.id}`;
       ui.pop.dataset.drop = `box:${front.id}:${b.id}`;

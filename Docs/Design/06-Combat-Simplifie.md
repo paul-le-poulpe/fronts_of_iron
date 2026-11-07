@@ -37,7 +37,7 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    dégâts, mêmes pertes, fuites, échanges ; *provisoire*) pendant **50 rounds**
    (`FRONTS.combatMaxRounds`), ou jusqu'à ce que **l'attaquant n'ait plus
    d'infanterie engagée** en première ligne, ou jusqu'à une prise de ville
-   (décisions de l'auteur, 5 novembre 2026). Quand c'est **le défenseur** qui
+   (décisions de l'auteur, 5 novembre 2026) et aucune en renfort. Quand c'est **le défenseur** qui
    n'a plus d'infanterie engagée (détruite ou en fuite), **l'attaquant avance
    pendant les rounds qui restent**, sans combat (*provisoire* : sans dégâts
    de part et d'autre), à sa vitesse maximale (`05-Fronts.md` §7.1 : 0,3 % de
@@ -55,6 +55,12 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
    combat. Pas d'échange avec la seconde ligne pendant le combat
    (`05-Fronts.md` §5.3 : une division abîmée mais encore en ligne reste). Un
    défenseur dont l'infanterie revient par un renfort combat de nouveau.
+   Un attaquant dont toute l'infanterie engagée a disparu, mais qui a de
+   l'infanterie en renfort dans ses rounds de retrait, ne perd pas le combat :
+   ces rounds passent **sans dégâts ni avancée**, puis le combat reprend avec
+   elle (décision de l'auteur, 7 novembre 2026). Ils comptent dans les 50 rounds.
+   Le replay l'annonce au round (« Plus d'infanterie en ligne : en attente des
+   renforts d'infanterie »).
    **Repli faute d'infanterie** (demande de l'auteur, 5 novembre 2026) : un camp
    qui n'a plus d'infanterie engagée en première ligne (détruite ou en fuite) et
    aucune infanterie en renfort qui arrive **replie ses autres divisions de
