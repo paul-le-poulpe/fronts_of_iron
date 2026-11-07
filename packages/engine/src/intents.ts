@@ -14,7 +14,7 @@ import type { ActivityId, GoodId } from "./config.ts";
 import { foundCity } from "./cities.ts";
 import { STATUS_NEUTRAL, STATUS_WAR, answerProposal, breakPact, declareWar, propose, statusOf } from "./diplomacy.ts";
 import { endWar, startWar } from "./fronts.ts";
-import { startFrontAttack, stopFrontAttack } from "./attacks.ts";
+import { startFrontAttack } from "./attacks.ts";
 import { cancelBreakthrough, startBreakthrough } from "./breakthroughs.ts";
 import { moveDivisions } from "./placement.ts";
 import { changeProductionTarget, closeActivity, movePawn, openActivityOrder, setActivityOrder, setAutoAssign, setDisabledSlots } from "./activities.ts";
@@ -153,9 +153,9 @@ export interface CancelBreakthroughIntent {
   readonly id: number;
 }
 
-/** Lancer ou arrêter l'attaque sur tout le front (05-Fronts §5). */
+/** Lancer l'attaque sur tout le front, résolue dans le tour (05-Fronts §5, 06-Combat-Simplifie §1). */
 export interface FrontAttackIntent {
-  readonly type: "start_front_attack" | "stop_front_attack";
+  readonly type: "start_front_attack";
   readonly player: number;
   readonly front: number;
 }
@@ -232,8 +232,6 @@ export function applyIntent(state: GameState, intent: unknown, changed: number[]
       return cancelBreakthrough(state, player, fields["id"]);
     case "start_front_attack":
       return startFrontAttack(state, player, fields["front"]);
-    case "stop_front_attack":
-      return stopFrontAttack(state, player, fields["front"]);
     default:
       return false;
   }

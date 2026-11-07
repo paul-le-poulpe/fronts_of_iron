@@ -97,16 +97,17 @@ export function putMany(s: GameState, player: number, type: DivisionId, n: numbe
   return Array.from({ length: n }, () => put(s, player, type, frontId).id);
 }
 
-/** Guerre entre les joueurs 1 et 2 sur le front du duel ; les joueurs de `attackers` lancent ensemble une attaque sur tout le front. */
-export function war(s: GameState, ...attackers: number[]): void {
+/** Guerre entre les joueurs 1 et 2 sur le front du duel. */
+export function war(s: GameState): void {
   turn(s, { type: "declare_war", player: 1, target: 2 });
-  if (attackers.length > 0) turn(s, ...attackers.map((player): Intent => ({ type: "start_front_attack", player, front: front(s).id })));
 }
 
-/** Joue jusqu'à la fin du délai des attaques en attente (06-Combat-Simplifie §1). Renvoie le dernier rapport, s'il y en a un. */
-export function resolve(s: GameState): CombatRecord | undefined {
-  do turn(s);
-  while (s.fronts.some((f) => f.sides.some((x) => x.attackAt !== 0)));
+/**
+ * Les joueurs de `attackers` lancent chacun une attaque sur tout le front, résolue dans ce tour (06-Combat-Simplifie §1).
+ * Renvoie le dernier rapport, s'il y en a un.
+ */
+export function attack(s: GameState, ...attackers: number[]): CombatRecord | undefined {
+  turn(s, ...attackers.map((player): Intent => ({ type: "start_front_attack", player, front: front(s).id })));
   return s.combats.at(-1);
 }
 

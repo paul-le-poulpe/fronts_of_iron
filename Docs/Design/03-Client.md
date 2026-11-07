@@ -180,7 +180,7 @@ Page → Worker (`ToWorker`) :
 - `pause { paused }` (solo : le relais local ; en ligne : demande à l'hôte, que le relais refuse à un autre joueur).
 - `order` accepte aussi les ordres des fronts (05-Fronts §5.2, 02-Engine §4) : `move_division { ids, front, line?, box? }` (`front` 0 : réserve nationale ; sans `line` : seconde ligne ;
   `line` : `first`, `second`, `rapid` ou `box` ; `box` : boîte de percée, 0 pour en créer une),
-  `start_front_attack { front }`, `stop_front_attack { front }`,
+  `start_front_attack { front }`,
   `start_breakthrough { box, city1, city2 }`, `cancel_breakthrough { id }`. Les divisions ne se créent ni ne se
   suppriment par ordre (08 §6).
 - `debug { action: "addPopulation" | "armBots", amount }` (voir §3).
@@ -661,8 +661,9 @@ dans l'état d'avant (`FrontWindow.fromTab`, mémorisé par `startAxisMode`). `f
   un clic sur le territoire d'un autre joueur ouvre toujours la diplomatie), ou par une section de l'onglet des forces (avec le bouton
   « ← Retour », qui rouvre l'onglet). N'importe quel front s'ouvre ; seuls ceux dont le joueur est un camp ont des réglages. Bandeau en
   deux moitiés autour de la barre verticale : titre, interrupteur « Sélection avancée » (éteint à chaque ouverture) et boutons
-  « Attaque sur tout le front » (interrupteur, `start_front_attack` / `stop_front_attack`, grisé en paix, contour rouge qui clignote quand
-  l'attaque est en cours) et « Barrage d'artillerie » (grisé, sans effet) à gauche ; « ← Retour » et ✕ à droite. Corps : côté du joueur,
+  « Attaque sur tout le front » (bouton, `start_front_attack`, grisé en paix et pendant le délai de 5 s après le dernier combat du camp, qui
+  affiche « Prochaine attaque dans N s ») et « Barrage d'artillerie » (grisé, sans effet) à gauche ; « ← Retour » et ✕ à droite. Le replay
+  du combat s'ouvre dès que l'attaque est résolue. Corps : côté du joueur,
   les forces de percée (170 px : liste défilante des boîtes dont le dernier élément est la boîte « + » `data-drop="box:front:0"` (`drawBoxes`
   fait `replaceChildren(...boîtes, plus)`), puis la zone « Retour à la réserve
   nationale », visible pendant un glisser seulement) et la réaction rapide (170 px, rangées par niche, `data-drop="line:front:rapid"`),

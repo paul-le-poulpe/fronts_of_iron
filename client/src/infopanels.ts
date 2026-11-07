@@ -67,7 +67,12 @@ function typeStats(p: HTMLElement, type: DivisionTypeInfo): void {
   if (type.armorPercent > 0) p.append(stat("Blindage", `${type.armorPercent} %`));
   p.append(line(frontWidthIcon(), "Largeur de front", `${type.frontWidth} liaison${type.frontWidth > 1 ? "s" : ""}`));
   if (type.breakthroughWidth > 0) p.append(line(frontWidthIcon(), "Largeur de front en percée", `${type.breakthroughWidth} liaison${type.breakthroughWidth > 1 ? "s" : ""}`));
-  if (type.attackMultiplier !== 100) p.append(stat("Multiplicateur en attaque", ratio(type.attackMultiplier)));
+  if (type.attackMultiplier !== 100) {
+    const row = stat("Multiplicateur en attaque", ratio(type.attackMultiplier));
+    // Un multiplicateur inférieur à × 1 affaiblit l'attaque (valeur en rouge), supérieur à × 1 la renforce (en vert).
+    row.classList.add(type.attackMultiplier < 100 ? "ip-low" : "ip-high");
+    p.append(row);
+  }
   if (type.hitPoints > 0 && type.defenseHitPointsMultiplier !== 100) p.append(stat("Multiplicateur de PV en défense", ratio(type.defenseHitPointsMultiplier)));
   p.append(line(motorIcon(type.motorized), "Déplacement", type.motorized ? "Motorisé" : "À pied"));
 }

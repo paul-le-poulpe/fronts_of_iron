@@ -209,7 +209,7 @@ export class FrontWindow implements DndHost {
     this.attackButton = el("button", "fw-btn", "Attaque sur tout le front");
     this.attackButton.type = "button";
     this.attackButton.dataset.tuto = "attack";
-    this.attackButton.addEventListener("click", () => this.toggleAttack());
+    this.attackButton.addEventListener("click", () => this.startAttack());
     attachTextPanel(this.attackButton, () => this.attackPrediction());
     const barrage = el("button", "fw-btn", "Barrage d'artillerie");
     barrage.type = "button";
@@ -413,19 +413,15 @@ export class FrontWindow implements DndHost {
     );
   }
 
-  /** Bouton d'attaque sur tout le front : compte à rebours du délai avant le combat (06-Combat-Simplifie §1). */
+  /** Bouton d'attaque sur tout le front : compte à rebours avant la prochaine attaque du camp (06-Combat-Simplifie §1). */
   private drawAttackButton(front: FrontView): void {
     const me = front.players.indexOf(localPlayer());
-    const at = front.sides[me]!.attackAt;
-    const waiting = at !== 0;
-    const seconds = Math.max(0, Math.ceil((at - this.tick) / this.military.combatTurns));
-    this.attackButton.textContent = waiting ? `Combat dans ${seconds} s — annuler` : "Attaque sur tout le front";
-    this.attackButton.classList.toggle("on", waiting);
-    this.attackButton.disabled = !front.active;
-    this.attackButton.setAttribute("aria-pressed", String(waiting));
-    this.attackNote = waiting
-      ? "Un clic annule l'attaque avant le combat."
-      : `Le combat a lieu ${Math.round(this.military.attackDelayTurns / this.military.combatTurns)} s après le clic, en une fois ; une icône apparaît ensuite sur la carte pour le revoir.`;
+    const ready = front.sides[me]!.attackReadyAt;
+    const waiting = ready > this.tick;
+    const seconds = Math.max(0, Math.ceil((ready - this.tick) / this.military.combatTurns));
+    this.attackButton.textContent = waiting ? `Prochaine attaque dans ${seconds} s` : "Attaque sur tout le front";
+    this.attackButton.disabled = !front.active || waiting;
+    this.attackNote = `Le combat a lieu aussitôt, en une fois, et s'affiche tout de suite. Ensuite, ${Math.round(this.military.attackCooldownTurns / this.military.combatTurns)} s avant la prochaine attaque de ce camp.`;
     this.attackButton.title = front.active ? "" : "Seulement sur un front actif.";
   }
 
@@ -680,12 +676,12 @@ export class FrontWindow implements DndHost {
 
   // ---- dessin ----
 
-  private toggleAttack(): void {
+  private startAttack(): void {
     const front = this.fronts.find((f) => f.id === this.frontId);
     if (front === undefined) return;
     const me = front.players.indexOf(localPlayer());
     if (me < 0 || !front.active) return;
-    this.send({ type: front.sides[me]!.frontAttack ? "stop_front_attack" : "start_front_attack", front: front.id });
+    this.send({ type: "start_front_attack", front: front.id });
   }
 
   private draw(): void {
@@ -734,8 +730,9 @@ export class FrontWindow implements DndHost {
     const theirs = divisionsAt(this.divisions, front.id, other);
 
     // Statistiques de combat des premières lignes (05-Fronts §11.4) : les attaques portent le multiplicateur d'attaque d'un camp qui attaque sur tout le front.
-    const mineStats = firstLineStats(m, mine, front.active && front.sides[me]!.frontAttack);
-    const theirStats = firstLineStats(m, theirs, front.active && front.sides[1 - me]!.frontAttack);
+    // Un camp « attaque » pendant le délai qui suit son attaque (`attackReadyAt`), le combat étant résolu tout de suite.
+    const mineStats = firstLineStats(m, mine, front.active && front.sides[me]!.attackReadyAt > this.tick);
+    const theirStats = firstLineStats(m, theirs, front.active && front.sides[1 - me]!.attackReadyAt > this.tick);
     this.drawStats(this.gutOurs, this.columns.o1.totals!, mineStats, theirStats);
     this.drawStats(this.gutTheirs, this.columns.t1.totals!, theirStats, mineStats);
 

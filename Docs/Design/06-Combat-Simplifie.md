@@ -28,11 +28,14 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
 
 ## 1. Combat instantané
 
-1. **Lancement** : le joueur clique sur l'attaque (attaque sur tout le front, ou
-   percée sur un axe). Un **délai de 5 secondes** (`FRONTS.attackDelayTurns`,
-   50 tours, la même durée que les délais de la percée) s'écoule, affiché par un
-   compte à rebours sur le bouton d'attaque, qui sert aussi à annuler.
-2. **Résolution** : au tour où le délai finit, le moteur calcule **tout le
+1. **Lancement** : le joueur clique sur l'attaque sur tout le front, qui est
+   **résolue tout de suite**, dans le tour du clic, après le rangement des lignes ;
+   la fenêtre du combat s'ouvre aussitôt (décision de l'auteur, 7 novembre 2026).
+   Pas de délai avant le combat, pas d'annulation. **Après** un combat, le camp
+   attend **5 secondes** (`FRONTS.attackCooldownTurns`, 50 tours) avant de pouvoir
+   en lancer un autre ; le bouton affiche ce compte à rebours. La percée garde son
+   délai de 5 secondes (`FRONTS.breakthroughDelayTurns`).
+2. **Résolution** : dans le tour, le moteur calcule **tout le
    combat dans ce tour**. Il enchaîne les rounds du §6 de `05-Fronts.md` (mêmes
    dégâts, mêmes pertes, fuites, échanges ; *provisoire*) pendant **50 rounds**
    (`FRONTS.combatMaxRounds`), ou jusqu'à ce que **l'attaquant n'ait plus

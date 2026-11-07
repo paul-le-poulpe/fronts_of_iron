@@ -187,7 +187,7 @@ export function militaryCatalog(): MilitaryCatalog {
     transferTurns: FRONTS.transferRounds * FRONTS.combatTurns,
     stateScale: STATE_SCALE,
     breakthroughDelayTurns: FRONTS.breakthroughDelayTurns,
-    attackDelayTurns: FRONTS.attackDelayTurns,
+    attackCooldownTurns: FRONTS.attackCooldownTurns,
     combatMaxRounds: FRONTS.combatMaxRounds,
     reinforceRounds: FRONTS.reinforceRounds,
     fleeStatePercent: FRONTS.fleeStatePercent,
@@ -212,8 +212,8 @@ export function frontView(state: GameState, f: Front): FrontView {
     active: isActive(state, f),
     connections: f.connections.map((c) => ({ city1: c.city1, city2: c.city2, position: c.position })),
     sides: [
-      { frontAttack: f.sides[0].attackAt !== 0, attackAt: f.sides[0].attackAt, lastLossByNiche: f.sides[0].lastLossByNiche.slice() },
-      { frontAttack: f.sides[1].attackAt !== 0, attackAt: f.sides[1].attackAt, lastLossByNiche: f.sides[1].lastLossByNiche.slice() },
+      { attackReadyAt: f.sides[0].attackReadyAt, lastLossByNiche: f.sides[0].lastLossByNiche.slice() },
+      { attackReadyAt: f.sides[1].attackReadyAt, lastLossByNiche: f.sides[1].lastLossByNiche.slice() },
     ],
     boxes: state.boxes.filter((b) => b.front === f.id).map((b) => ({ id: b.id, owner: b.owner })),
     breakthroughs: state.breakthroughs
@@ -652,9 +652,7 @@ export class Game {
       case "cancel_breakthrough":
         return !state.breakthroughs.some((b) => b.id === order.id);
       case "start_front_attack":
-        return this.mySide(order.front)?.attackAt !== 0;
-      case "stop_front_attack":
-        return this.mySide(order.front)?.attackAt === 0;
+        return state.combats.some((c) => c.tick === state.tick && c.kind === "front" && c.front === order.front && c.attacker === this.you);
     }
   }
 }

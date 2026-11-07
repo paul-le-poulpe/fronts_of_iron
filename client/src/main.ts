@@ -351,6 +351,9 @@ function onTick(s: Session, msg: TickMessage): void {
   if (msg.combats !== null) {
     s.combatIcons?.setCombats(msg.combats);
     s.frontPanel?.setCombats(msg.combats);
+    // L'attaque sur tout le front du joueur local, résolue à ce tour : son replay s'ouvre tout de suite.
+    const own = msg.combats.find((c) => c.tick === msg.tick && c.kind === "front" && c.attacker === localPlayer());
+    if (own !== undefined) s.replay?.open(own);
   }
   s.forces?.setData(mirror.fronts, mirror.divisions);
   if (msg.failedBreakthroughs > 0) toast("Percée arrêtée : plus aucune division à engager dans la force qui perce.", 6000);

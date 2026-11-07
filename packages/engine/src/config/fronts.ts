@@ -11,10 +11,10 @@
 
 export const FRONTS = {
   /**
-   * Délai entre le clic sur l'attaque sur tout le front et le combat, en tours (50 = 5 s, comme les délais de la percée ;
-   * 06-Combat-Simplifie §1).
+   * Délai entre la fin d'une attaque sur tout le front et la suivante du même camp, en tours (50 = 5 s ; le combat, lui,
+   * est résolu tout de suite ; 06-Combat-Simplifie §1).
    */
-  attackDelayTurns: 50,
+  attackCooldownTurns: 50,
   /**
    * Rounds au plus d'un combat résolu en un tour ; il s'arrête avant quand un camp n'a plus d'infanterie engagée
    * (06-Combat-Simplifie §1 ; décision de l'auteur, 5 novembre 2026).

@@ -32,7 +32,7 @@ export type HumanOrder =
   | { readonly type: "move_division"; readonly ids: readonly number[]; readonly front: number; readonly line?: "first" | "second" | "rapid" | "box"; readonly box?: number }
   | { readonly type: "start_breakthrough"; readonly box: number; readonly city1: number; readonly city2: number }
   | { readonly type: "cancel_breakthrough"; readonly id: number }
-  | { readonly type: "start_front_attack" | "stop_front_attack"; readonly front: number };
+  | { readonly type: "start_front_attack"; readonly front: number };
 
 // ---- page → Worker ----
 
@@ -146,8 +146,8 @@ export interface MilitaryCatalog {
   readonly stateScale: number;
   /** Délai entre le lancement d'une percée et son combat 1, en tours (05-Fronts §7.2). */
   readonly breakthroughDelayTurns: number;
-  /** Délai entre l'ordre d'attaque sur tout le front et son combat, en tours (06-Combat-Simplifie §1). */
-  readonly attackDelayTurns: number;
+  /** Délai entre deux attaques sur tout le front d'un même camp, en tours (06-Combat-Simplifie §1). */
+  readonly attackCooldownTurns: number;
   /** Réglages du combat lus par l'estimation du panneau de prédiction (`prediction.ts`). */
   readonly combatMaxRounds: number;
   readonly reinforceRounds: number;
@@ -341,10 +341,8 @@ export interface FrontConnectionView {
 
 /** Un camp d'un front, tout visible (pas de brouillard de guerre). Ses divisions sont dans `TickMessage.divisions`. */
 export interface FrontSideView {
-  /** Attaque sur tout le front lancée, qui attend son combat (06-Combat-Simplifie §1). */
-  readonly frontAttack: boolean;
-  /** Tour où cette attaque sera résolue, 0 sans attaque (compte à rebours). */
-  readonly attackAt: number;
+  /** Premier tour où ce camp peut lancer une attaque sur tout le front, 0 avant tout combat (compte à rebours, 06-Combat-Simplifie §1). */
+  readonly attackReadyAt: number;
   /** État perdu par sa première ligne au dernier round de combat (échelle `stateScale`), par niche (ordre de `military.niches`, 05-Fronts §11.4). */
   readonly lastLossByNiche: readonly number[];
 }

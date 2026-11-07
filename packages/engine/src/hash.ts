@@ -49,6 +49,7 @@ function hashFront(h: number, f: Front): number {
   }
   for (const s of f.sides) {
     h = mixWord(h, s.attackAt);
+    h = mixWord(h, s.attackReadyAt);
     for (const n of s.lastLossByNiche) h = mixWord(h, n);
   }
   return h;

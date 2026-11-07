@@ -524,10 +524,36 @@ function captureArrivals(state: GameState, pending: readonly Arrival[], changed:
 }
 
 /**
- * Attaques sur tout le front arrivées à leur tour (06-Combat-Simplifie §1), fronts par identifiant, camps 0 puis 1 :
- * chacune est résolue en entier dans ce tour, jusqu'à `FRONTS.combatMaxRounds` rounds, jusqu'à ce que l'attaquant
- * n'ait plus d'infanterie engagée, ou jusqu'à une prise de ville. Quand le défenseur n'en a plus, les rounds restants
- * ne sont que des avancées. Appelée par `applyTurn` à chaque tour.
+ * Attaque sur tout le front du camp `x` de `front`, résolue en entier (06-Combat-Simplifie §1) : jusqu'à
+ * `FRONTS.combatMaxRounds` rounds, jusqu'à ce que l'attaquant n'ait plus d'infanterie engagée, ou jusqu'à une prise de
+ * ville. Quand le défenseur n'en a plus, les rounds restants ne sont que des avancées. Le camp ne peut pas en relancer
+ * une avant `FRONTS.attackCooldownTurns` tours.
+ */
+function resolveFrontAttack(state: GameState, front: Front, x: number, changed: number[]): void {
+  front.sides[x]!.attackReadyAt = currentTurn(state) + FRONTS.attackCooldownTurns;
+  for (const s of front.sides) s.lastLossByNiche.fill(0);
+  const first = front.connections[0]!;
+  const record = newRecord(state, front, "front", front.players[x]!, front.players[1 - x]!, first.city1, first.city2);
+  let arrivals: Arrival[] = [];
+  const pending = new Map<number, number>();
+  for (let r = 0; r < FRONTS.combatMaxRounds; r++) {
+    const got = frontAttackRound(state, front, x, record, r, pending);
+    if (got === undefined) break;
+    if (got.length > 0) {
+      arrivals = got;
+      break;
+    }
+  }
+  record.captured = captureArrivals(state, arrivals, changed);
+  record.success = record.captured !== 0 || record.rounds.some((r) => r.advance > 0);
+  removeEmptyBoxes(state);
+  if (record.rounds.length > 0) state.combats.push(record);
+}
+
+/**
+ * Attaques sur tout le front ordonnées ce tour (`FrontSide.attackAt` égal au tour courant), fronts par identifiant,
+ * camps 0 puis 1 : chacune est résolue en entier dans ce tour (`resolveFrontAttack`). Appelée par `applyTurn` après le
+ * rangement des lignes, pour que les divisions placées ce tour combattent.
  */
 export function resolveFrontAttacks(state: GameState, changed: number[]): void {
   const now = currentTurn(state);
@@ -535,7 +561,7 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
   for (const front of state.fronts) {
     for (let x = 0; x < 2; x++) {
       const s = front.sides[x]!;
-      if (s.attackAt === 0 || s.attackAt > now) continue;
+      if (s.attackAt !== now) continue;
       s.attackAt = 0;
       if (isActive(state, front)) due.push({ front: front.id, x });
     }
@@ -544,23 +570,7 @@ export function resolveFrontAttacks(state: GameState, changed: number[]): void {
     // Une prise d'un combat précédent a pu recalculer les fronts.
     const front = state.fronts.find((f) => f.id === id);
     if (front === undefined || !isActive(state, front)) continue;
-    for (const s of front.sides) s.lastLossByNiche.fill(0);
-    const first = front.connections[0]!;
-    const record = newRecord(state, front, "front", front.players[x]!, front.players[1 - x]!, first.city1, first.city2);
-    let arrivals: Arrival[] = [];
-    const pending = new Map<number, number>();
-    for (let r = 0; r < FRONTS.combatMaxRounds; r++) {
-      const got = frontAttackRound(state, front, x, record, r, pending);
-      if (got === undefined) break;
-      if (got.length > 0) {
-        arrivals = got;
-        break;
-      }
-    }
-    record.captured = captureArrivals(state, arrivals, changed);
-    record.success = record.captured !== 0 || record.rounds.some((r) => r.advance > 0);
-    removeEmptyBoxes(state);
-    if (record.rounds.length > 0) state.combats.push(record);
+    resolveFrontAttack(state, front, x, changed);
   }
   if (due.length > 0) trimCombats(state);
 }

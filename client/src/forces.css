@@ -432,6 +432,8 @@ html[data-theme="light"] .fw-bt-phase { color: #8a6a00; }
 .ip-desc { color: var(--t-ip-desc); margin-bottom: 6px; }
 .ip-sep { height: 1px; margin: 6px 0; background: var(--t-ip-sep); }
 .ip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+.ip-row.ip-low b { color: var(--t-red); }
+.ip-row.ip-high b { color: #3f9142; }
 .ip-label { flex: 1; }
 .ip-icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; background: var(--t-icon-bg); border-radius: 3px; }
 .ip-misc { width: 16px; height: 16px; flex: none; image-rendering: pixelated; display: block; }

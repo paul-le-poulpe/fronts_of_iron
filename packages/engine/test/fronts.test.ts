@@ -94,7 +94,7 @@ describe("détection des fronts (05-Fronts §2)", () => {
   it("en paix : pas de position ; le front reste ; il n'y a rien d'actif", () => {
     const s = duel();
     assert.equal(front(s).connections[0]!.position, 0);
-    assert.equal(front(s).sides[0]!.attackAt, 0);
+    assert.equal(front(s).sides[0]!.attackReadyAt, 0);
   });
 
   it("une connexion retrouvée garde sa position, une nouvelle reçoit 500 (fondation en guerre)", () => {
@@ -118,11 +118,12 @@ describe("détection des fronts (05-Fronts §2)", () => {
     s.players.forEach((p) => (p.population = 1_000_000));
     const id = front(s).id;
     turn(s, { type: "declare_war", player: 1, target: 2 });
+    const readyAt = s.tick + 1 + FRONTS.attackCooldownTurns;
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
     turn(s, found(1, at(9.5, 12.6)));
     assert.equal(front(s).id, id, "l'identifiant du front est gardé");
-    assert.equal(front(s).sides[0]!.attackAt !== 0, true);
-    assert.equal(front(s).sides[1]!.attackAt !== 0, false);
+    assert.equal(front(s).sides[0]!.attackReadyAt, readyAt, "le délai de l'attaque est gardé");
+    assert.equal(front(s).sides[1]!.attackReadyAt, 0);
   });
 });
 
@@ -176,7 +177,6 @@ describe("guerre et paix (05-Fronts §2.3)", () => {
     turn(s, { type: "answer_proposal", player: 2, from: 1, accept: true });
     const f = front(s);
     assert.deepEqual(f.connections.map((c) => c.position), [0]);
-    assert.equal(f.sides[0]!.attackAt !== 0, false);
     assert.equal(d.front, id, "les divisions restent sur le front");
   });
 });
@@ -208,16 +208,17 @@ describe("ordres des fronts (05-Fronts §5)", () => {
     assert.ok(!applyIntent(t, { type: "move_division", player: 3, ids: [third.id], front: 1 }, []));
   });
 
-  it("attaque sur tout le front : ordre ponctuel de chaque camp, annulable pendant son délai, pas de second ordre en attente", () => {
+  it("attaque sur tout le front : un ordre par camp et par tour, résolue dans le tour ; l'autre camp n'est pas concerné", () => {
     const s = duel();
     const id = front(s).id;
     turn(s, { type: "declare_war", player: 1, target: 2 });
+    const ordered = s.tick + 1;
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
-    assert.ok(!applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []));
+    assert.ok(!applyIntent(s, { type: "start_front_attack", player: 1, front: id }, []), "déjà ordonnée ce tour");
     assert.ok(applyIntent(s, { type: "start_front_attack", player: 2, front: id }, []));
-    assert.ok(applyIntent(s, { type: "stop_front_attack", player: 1, front: id }, []));
-    assert.equal(front(s).sides[0]!.attackAt, 0);
-    assert.equal(front(s).sides[1]!.attackAt, s.tick + 1 + FRONTS.attackDelayTurns);
+    assert.deepEqual(front(s).sides.map((x) => x.attackAt), [ordered, ordered]);
+    turn(s);
+    assert.deepEqual(front(s).sides.map((x) => [x.attackAt, x.attackReadyAt]), [[0, ordered + FRONTS.attackCooldownTurns], [0, ordered + FRONTS.attackCooldownTurns]]);
   });
 });
 
@@ -257,7 +258,7 @@ describe("hash des fronts et des divisions (05-Fronts §13.3)", () => {
     const div = (s: GameState) => s.divisions[0]!;
     const mutations: [string, (s: GameState) => void][] = [
       ["position", (s) => void front(s).connections[0]!.position++],
-      ["attaque", (s) => void (front(s).sides[0]!.attackAt = 0)],
+      ["délai d'attaque", (s) => void (front(s).sides[0]!.attackReadyAt = 0)],
       ["nextFrontId", (s) => void s.nextFrontId++],
       ["nextDivisionId", (s) => void s.nextDivisionId++],
       ["barre de vie", (s) => void div(s).state--],

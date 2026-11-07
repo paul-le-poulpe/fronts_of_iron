@@ -1,32 +1,22 @@
-// Ordres d'attaque (Docs/Design/06-Combat-Simplifie.md §1) : l'attaque sur tout le front
-// est un ordre ponctuel. Le combat est résolu `FRONTS.attackDelayTurns` tours après
-// l'ordre, en un seul tour (combat.ts). Seulement sur un front actif.
+// Ordres d'attaque (Docs/Design/06-Combat-Simplifie.md §1) : l'attaque sur tout le front est un
+// ordre ponctuel. Elle est résolue en entier dans le tour de l'ordre, après le rangement des lignes
+// (combat.ts, `resolveFrontAttacks`). Seulement sur un front actif, et `FRONTS.attackCooldownTurns`
+// tours après le combat précédent du camp.
 
-import { FRONTS } from "./config.ts";
 import { currentTurn } from "./divisions.ts";
 import { frontById, isActive, sideIndex } from "./fronts.ts";
 import type { GameState } from "./state.ts";
 
-function mine(state: GameState, player: number, frontId: unknown) {
-  if (!Number.isInteger(frontId)) return undefined;
-  const front = frontById(state, frontId as number);
-  if (front === undefined || !isActive(state, front)) return undefined;
-  const i = sideIndex(front, player);
-  return i < 0 ? undefined : { front, i, side: front.sides[i]! };
-}
-
-/** `start_front_attack` : invalide (sans effet) si une attaque attend déjà son combat. */
+/** `start_front_attack` : sans effet si le camp attend encore son délai, si une attaque est déjà ordonnée ce tour, ou si le front n'est pas actif. */
 export function startFrontAttack(state: GameState, player: number, frontId: unknown): boolean {
-  const m = mine(state, player, frontId);
-  if (m === undefined || m.side.attackAt !== 0) return false;
-  m.side.attackAt = currentTurn(state) + FRONTS.attackDelayTurns;
-  return true;
-}
-
-/** `stop_front_attack` : annule une attaque qui attend son combat. */
-export function stopFrontAttack(state: GameState, player: number, frontId: unknown): boolean {
-  const m = mine(state, player, frontId);
-  if (m === undefined || m.side.attackAt === 0) return false;
-  m.side.attackAt = 0;
+  if (!Number.isInteger(frontId)) return false;
+  const front = frontById(state, frontId as number);
+  if (front === undefined || !isActive(state, front)) return false;
+  const i = sideIndex(front, player);
+  if (i < 0) return false;
+  const side = front.sides[i]!;
+  const now = currentTurn(state);
+  if (side.attackAt !== 0 || now < side.attackReadyAt) return false;
+  side.attackAt = now;
   return true;
 }

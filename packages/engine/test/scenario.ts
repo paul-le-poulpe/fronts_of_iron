@@ -234,8 +234,6 @@ function frontOrder(bot: Rng, state: GameState, player: number): Intent {
     case 9:
     case 10:
       return { type: "start_front_attack", player, front };
-    case 11:
-      return { type: "stop_front_attack", player, front };
     default:
       return { type: "move_division", player, ids: [division], front };
   }

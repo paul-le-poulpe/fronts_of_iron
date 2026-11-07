@@ -536,7 +536,7 @@ cases exploitées.
 | Changer de capitale | la ville | la ville appartient au joueur ; coût et conditions à définir (§3.4) | la ville devient la capitale ; recalcule les villes reliées (§3.5, §3.6) |
 | Interdire / autoriser une zone maritime | la zone | la zone existe | ajoute ou retire la zone des zones interdites du joueur ; recalcule ses routes maritimes (§3.6) |
 | Déplacer des divisions | les divisions ; la réserve nationale, ou un front et une ligne | au joueur, pas en formation ; le joueur est un camp du front | `move_division` (§4, §5.2) |
-| Lancer ou arrêter l'attaque sur tout le front | le front | front actif ; le joueur en est un camp | `start_front_attack`, `stop_front_attack` (§5) |
+| Lancer l'attaque sur tout le front | le front | front actif ; le joueur en est un camp ; délai de 5 s depuis son dernier combat | `start_front_attack` (§5) |
 
 Les noms et formats exacts des ordres sont fixés avec la session du moteur.
 

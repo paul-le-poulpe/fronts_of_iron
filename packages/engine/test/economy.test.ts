@@ -48,7 +48,7 @@ import {
 } from "../src/index.ts";
 import { DEFAULT_SCENARIO, runScenario } from "./scenario.ts";
 import { box, checkCityInvariants, customMap, openBox, tileAt } from "./helpers.ts";
-import { D, duel, play, put, resolve, war } from "./war-helpers.ts";
+import { D, attack, duel, play, put, war } from "./war-helpers.ts";
 
 const R = CITY.controlRadius;
 
@@ -456,13 +456,12 @@ describe("blessés (08 §8)", () => {
     box(p, "militia").places = 2;
     box(p, "idle").workers = 1;
     p.population = 3;
-    war(s, 2);
+    war(s);
     put(s, 2, "regulars", 1);
     if (type === "tankette") put(s, 1, "militia", 1);
-    // Posée au dernier tour du délai : avant, sa caserne la soignerait.
-    play(s, FRONTS.attackDelayTurns - 1);
+    // Posée juste avant l'attaque, dans le même tour : avant, sa caserne la soignerait.
     put(s, 1, type, 1, type === "tankette" ? 5 : 30);
-    resolve(s);
+    attack(s, 2);
     return s;
   };
 
@@ -481,11 +480,10 @@ describe("blessés (08 §8)", () => {
     box(p, "militia").places = 1;
     box(p, "idle").workers = 0;
     p.population = 1;
-    war(s, 2);
+    war(s);
     put(s, 2, "regulars", 1);
-    play(s, FRONTS.attackDelayTurns - 1);
     put(s, 1, "militia", 1, 30);
-    resolve(s);
+    attack(s, 2);
     assert.deepEqual([hurtPawns(p), box(p, "militia").workers, box(p, "militia").places], [1, 0, 1]);
   });
 

@@ -201,6 +201,7 @@ body.pw-moving, body.pw-moving * { cursor: none !important; }
 /* Panneau d'information d'une ligne débloquée : à gauche du panneau de production. */
 .pp-info { position: fixed; z-index: 400; top: 80px; right: calc(var(--panel-w, 0px) + var(--prod-w) + 16px); width: 300px; padding: 10px; border-radius: 8px; border: 2px solid var(--accent); background: var(--t-panel); color: var(--t-fg); box-shadow: 0 4px 16px #0006; }
 .pp-info .ip { position: static; box-shadow: none; border: 0; padding: 0; max-width: none; background: none; }
+.pp-info-img { display: block; width: 64px; height: 64px; margin: 0 auto 8px; image-rendering: pixelated; }
 .pp-info-ok { display: block; margin: 10px 0 0 auto; padding: 4px 14px; cursor: pointer; }
 
 /* Infobulles construites (cadenas ouvert, boîtes verrouillées). */

@@ -31,10 +31,15 @@ export interface FrontConnection {
 /** Un camp d'un front. Ses divisions sont dans `state.divisions` (`Division.front`). */
 export interface FrontSide {
   /**
-   * Attaque sur tout le front lancée (06-Combat-Simplifie §1) : tour où le combat est résolu, en un seul tour ; 0 si
-   * aucune attaque n'attend.
+   * Attaque sur tout le front ordonnée (06-Combat-Simplifie §1) : tour où elle est résolue, en un seul tour ; 0 si
+   * aucune n'est ordonnée. Revient à 0 dans le tour même.
    */
   attackAt: number;
+  /**
+   * Premier tour où ce camp peut ordonner une attaque sur tout le front (06-Combat-Simplifie §1) : le combat précédent
+   * plus `FRONTS.attackCooldownTurns` ; 0 avant tout combat.
+   */
+  attackReadyAt: number;
   /**
    * État perdu (échelle `STATE_SCALE`) par sa première ligne au dernier combat, par niche (ordre de `NICHE_IDS`, 05-Fronts §11.4) ;
    * remis à 0 au début de chaque combat.
@@ -230,8 +235,8 @@ export function updateFronts(state: GameState, capture?: CaptureInfo): void {
     });
     const before = matched.get(b.id);
     const sides: [FrontSide, FrontSide] = [
-      { attackAt: before?.sides[0].attackAt ?? 0, lastLossByNiche: before?.sides[0].lastLossByNiche.slice() ?? noLosses() },
-      { attackAt: before?.sides[1].attackAt ?? 0, lastLossByNiche: before?.sides[1].lastLossByNiche.slice() ?? noLosses() },
+      { attackAt: before?.sides[0].attackAt ?? 0, attackReadyAt: before?.sides[0].attackReadyAt ?? 0, lastLossByNiche: before?.sides[0].lastLossByNiche.slice() ?? noLosses() },
+      { attackAt: before?.sides[1].attackAt ?? 0, attackReadyAt: before?.sides[1].attackReadyAt ?? 0, lastLossByNiche: before?.sides[1].lastLossByNiche.slice() ?? noLosses() },
     ];
     return { id: b.id, players: [b.p1, b.p2], groups: [b.g1, b.g2], connections, sides };
   });

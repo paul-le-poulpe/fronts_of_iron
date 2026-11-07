@@ -27,7 +27,7 @@ function world(cities: [number, number][], roads: [number, number][]): GeomWorld
 
 /** Un front à la main, en paix ou en guerre. */
 function view(connections: [number, number, number][], active: boolean, id = 1): FrontView {
-  const empty = { frontAttack: false, attackAt: 0, lastLossByNiche: [0, 0, 0, 0, 0] };
+  const empty = { attackReadyAt: 0, lastLossByNiche: [0, 0, 0, 0, 0] };
   return {
     id,
     players: [1, 2],
@@ -174,14 +174,9 @@ test("prise d'une ville : la copie de la page suit le moteur (villes, cases, seu
   });
   // Une attaque avance d'au plus 15 % de la route (06-Combat-Simplifie §1) : le front part près de la ville du bot.
   front.connections[0]!.position = front.players[0] === HUMAN ? 950 : 50;
-  apply(game.step([{ id: 3, order: { type: "start_front_attack", front: front.id } }]));
-  let captured = false;
-  for (let i = 0; i < 2 * FRONTS.attackDelayTurns && !captured; i++) {
-    const msg = game.step([]);
-    apply(msg);
-    captured = msg.captured.some((c) => c.city === botCity);
-  }
-  assert.ok(captured, "la ville du bot est prise");
+  const msg = game.step([{ id: 3, order: { type: "start_front_attack", front: front.id } }]);
+  apply(msg);
+  assert.ok(msg.captured.some((c) => c.city === botCity), "la ville du bot est prise");
   assert.equal(game.state.cities[botCity - 1]!.player, HUMAN);
   assert.equal(mirror.cities[botCity - 1]!.player, HUMAN);
   assert.deepEqual(mirror.tileCity, game.state.tileCity);

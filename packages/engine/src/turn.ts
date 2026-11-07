@@ -37,8 +37,8 @@ export function applyTurn(state: GameState, turn: Turn): number[] {
   expireProposals(state);
   // Ordre du tour (05-Fronts §13.2, 08 §13, provisoire) : ordres ; économie (places, capacité, fer, déblocage,
   // apparitions et disparitions, soin ; pour chaque joueur dans l'ordre des identifiants) ; arrivées ; rangement des
-  // lignes ; échange hors combat ; attaques sur tout le front arrivées à leur tour, résolues en entier
-  // (06-Combat-Simplifie §1) ; round des percées et prises de villes.
+  // lignes ; échange hors combat ; attaques sur tout le front ordonnées ce tour, résolues en entier (06-Combat-Simplifie
+  // §1) ; round des percées et prises de villes.
   stepEconomy(state);
   applyArrivals(state);
   arrangeAll(state);

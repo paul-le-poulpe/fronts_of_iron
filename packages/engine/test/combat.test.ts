@@ -25,10 +25,11 @@ import {
 } from "../src/index.ts";
 import { applyLoss } from "../src/divisions.ts";
 import { applyFlight, applySwaps } from "../src/placement.ts";
-import { at, divisionsOf, duel, found, front, game, hitsOf, play, put, putMany, resolve, settle, turn, war, widen } from "./war-helpers.ts";
+import { at, attack, divisionsOf, duel, found, front, game, hitsOf, play, put, putMany, settle, turn, war, widen } from "./war-helpers.ts";
 
-const combat = (s: GameState): CombatRecord => {
-  const r = resolve(s);
+/** Attaque sur tout le front de `attackers` (le joueur 1 par défaut) : le rapport du dernier combat. */
+const combat = (s: GameState, ...attackers: number[]): CombatRecord => {
+  const r = attack(s, ...(attackers.length > 0 ? attackers : [1]));
   assert.ok(r !== undefined, "aucun rapport de combat");
   return r;
 };
@@ -58,7 +59,7 @@ describe("pertes : la barre de vie (08 §13)", () => {
 
   it("le combat n'utilise pas le générateur aléatoire", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 1);
     putMany(s, 2, "regulars", 1);
     const rng = [...s.rng];
@@ -72,40 +73,34 @@ describe("déroulement d'un combat (06-Combat-Simplifie §1)", () => {
     const s = duel();
     war(s);
     const [a] = putMany(s, 1, "regulars", 1);
-    play(s, 2 * FRONTS.attackDelayTurns);
+    play(s, 2 * FRONTS.attackCooldownTurns);
     assert.deepEqual(s.combats, []);
     assert.equal(s.divisions.find((d) => d.id === a)!.state, STATE_SCALE);
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE]);
   });
 
-  it("le combat est résolu attackDelayTurns tours après l'ordre, en un seul tour, et l'attaque n'est plus en attente", () => {
+  it("le combat est résolu dans le tour de l'ordre, et le camp ne peut en relancer un qu'attackCooldownTurns tours après", () => {
     const s = duel();
-    war(s, 1);
-    const ordered = s.tick;
+    war(s);
     putMany(s, 1, "regulars", 1);
     putMany(s, 2, "regulars", 1);
-    play(s, FRONTS.attackDelayTurns - 1);
-    assert.equal(s.combats.length, 0);
-    turn(s);
-    assert.deepEqual(s.combats.map((c) => [c.kind, c.tick, c.attacker, c.defender]), [["front", ordered + FRONTS.attackDelayTurns, 1, 2]]);
-    assert.equal(front(s).sides[0]!.attackAt, 0);
-  });
-
-  it("stop_front_attack annule l'attaque en attente : pas de combat", () => {
-    const s = duel();
-    war(s, 1);
-    putMany(s, 1, "regulars", 1);
-    turn(s, { type: "stop_front_attack", player: 1, front: front(s).id });
-    play(s, 2 * FRONTS.attackDelayTurns);
-    assert.deepEqual(s.combats, []);
+    const ordered = s.tick + 1;
+    turn(s, { type: "start_front_attack", player: 1, front: front(s).id });
+    assert.deepEqual(s.combats.map((c) => [c.kind, c.tick, c.attacker, c.defender]), [["front", ordered, 1, 2]]);
+    assert.equal(front(s).sides[0]!.attackReadyAt, ordered + FRONTS.attackCooldownTurns);
+    play(s, FRONTS.attackCooldownTurns - 2);
+    turn(s, { type: "start_front_attack", player: 1, front: front(s).id });
+    assert.equal(s.combats.length, 1);
+    turn(s, { type: "start_front_attack", player: 1, front: front(s).id });
+    assert.equal(front(s).sides[0]!.attackReadyAt, ordered + 2 * FRONTS.attackCooldownTurns, "la deuxième attaque est lancée à la fin du délai");
   });
 
   it("un attaquant sans infanterie engagée au lancement ne combat pas : aucun round, aucun rapport", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "tankette", 1);
     putMany(s, 2, "regulars", 1);
-    assert.equal(resolve(s), undefined);
+    assert.equal(attack(s, 1), undefined);
     assert.equal(s.divisions[1]!.state, STATE_SCALE);
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE]);
   });
@@ -113,7 +108,7 @@ describe("déroulement d'un combat (06-Combat-Simplifie §1)", () => {
   it("au plus combatMaxRounds rounds, et les pertes du rapport sont la somme de ceux-ci", () => {
     const s = duel();
     widen(s, 3);
-    war(s, 1);
+    war(s);
     putMany(s, 1, "elite", 3);
     putMany(s, 2, "elite", 3);
     const r = combat(s);
@@ -125,10 +120,10 @@ describe("déroulement d'un combat (06-Combat-Simplifie §1)", () => {
 
   it("deux attaques dans le même tour : deux combats, le camp 0 d'abord, chacun avec son rapport", () => {
     const s = duel();
-    war(s, 1, 2);
+    war(s);
     putMany(s, 1, "regulars", 1);
     putMany(s, 2, "regulars", 1);
-    resolve(s);
+    attack(s, 1, 2);
     assert.deepEqual(s.combats.map((c) => [c.attacker, c.defender]), [[1, 2], [2, 1]]);
   });
 });
@@ -137,7 +132,7 @@ describe("un round (05-Fronts §6)", () => {
   it("une infanterie contre une infanterie : 75 d'état pour le défenseur, 300 pour l'attaquant", () => {
     // Le 1 attaque (× 0,5) : 750 points sur 100 000 PV (défense), f = 7 500. Riposte sans multiplicateur : 1 500 sur 50 000, f = 30 000.
     const s = duel();
-    war(s, 1);
+    war(s);
     const [a] = putMany(s, 1, "regulars", 1);
     const [b] = putMany(s, 2, "regulars", 1);
     const hits = hitsOf(combat(s));
@@ -146,7 +141,7 @@ describe("un round (05-Fronts §6)", () => {
 
   it("les attaques suivent la barre de vie : à 50 %, la riposte est de moitié", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     const [a] = putMany(s, 1, "regulars", 1);
     put(s, 2, "regulars", 1, 5000);
     assert.equal(hitsOf(combat(s)).get(a!), 150);
@@ -162,7 +157,7 @@ describe("un round (05-Fronts §6)", () => {
     //   chacune : f = 42 500, 425 d'état.
     const s = duel();
     widen(s, 4);
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 4);
     putMany(s, 2, "regulars", 4);
     put(s, 2, "tankette", 1);
@@ -176,7 +171,7 @@ describe("un round (05-Fronts §6)", () => {
     // 50 000 PV : f = 46 666, 466 d'état.
     const s = duel();
     widen(s, 3);
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 3);
     putMany(s, 2, "regulars", 3);
     put(s, 2, "artillery", 1);
@@ -187,7 +182,7 @@ describe("un round (05-Fronts §6)", () => {
     // Front d'une liaison : l'artillerie du joueur 2 (id 3) n'est engagée qu'à 1 000 / 3 000. 750 points × 1/3 sur 100 000 PV :
     // f = 2 500, 25 d'état. Riposte : 1 500 + 2 500 / 3 = 2 333,3 sur 50 000 PV : f = 46 666, 466 d'état.
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 1);
     putMany(s, 2, "regulars", 1);
     put(s, 2, "artillery", 1);
@@ -202,7 +197,7 @@ describe("un round (05-Fronts §6)", () => {
     // - Riposte : 1 500 + 2 500 / 2 = 2 750 anti-infanterie. Infanterie du 1, seule de sa niche principale : f = 55 000, 550
     //   d'état. Canon (blindage 0) : 2 750 / 3 = 916,6 sur 50 000 PV : f = 18 333, 183 d'état.
     const s = duel();
-    war(s, 1);
+    war(s);
     put(s, 1, "regulars", 1);
     put(s, 1, "antiTank", 1);
     put(s, 2, "regulars", 1);
@@ -212,7 +207,7 @@ describe("un round (05-Fronts §6)", () => {
 
   it("une division à 0 d'état est détruite : elle disparaît, et le rapport la compte", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 1);
     const dead = put(s, 2, "regulars", 1, 50);
     const r = combat(s);
@@ -264,12 +259,12 @@ describe("fuite, renforts et repli pendant un combat (05-Fronts §5.4, 06-Combat
   it("fuite : sous 25 %, la division repasse en seconde ligne pour fleeRounds rounds ; elle ne revient pas avant", () => {
     // La division du joueur 1 est à 25,50 % : elle perd 75 d'état et tombe à 24,75 %.
     const s = duel();
-    war(s, 2);
+    war(s);
     const weak = put(s, 1, "regulars", 1, 2550);
     weak.line = LINE_FIRST;
     weak.engaged = 1000;
     const strong = put(s, 2, "regulars", 1);
-    const r = combat(s);
+    const r = combat(s, 2);
     const roundTurn = s.tick;
     assert.deepEqual(divisionsOf(r, r.rounds[0]!.fled), [weak.id]);
     assert.deepEqual([weak.state, weak.line, weak.engaged, weak.fleeUntilTick], [2475, LINE_SECOND, 0, roundTurn + FRONTS.fleeRounds * FRONTS.combatTurns]);
@@ -282,13 +277,13 @@ describe("fuite, renforts et repli pendant un combat (05-Fronts §5.4, 06-Combat
   it("renfort : la seconde ligne reprend la place, reste reinforceRounds rounds en retrait, puis combat", () => {
     // Le renfort est une milice à 50 % : ni meilleur type, ni plus de deux fois l'état, donc pas d'échange pendant le délai.
     const s = duel();
-    war(s, 2);
+    war(s);
     const weak = put(s, 1, "regulars", 1, 2550);
     weak.line = LINE_FIRST;
     weak.engaged = 1000;
     const spare = put(s, 1, "militia", 1, 5000);
     put(s, 2, "regulars", 1);
-    const r = combat(s);
+    const r = combat(s, 2);
     assert.deepEqual(divisionsOf(r, r.rounds[0]!.arrived), [spare.id]);
     const joinedAt = 1 + FRONTS.reinforceRounds;
     assert.deepEqual(divisionsOf(r, r.rounds[joinedAt]!.joined), [spare.id]);
@@ -300,13 +295,13 @@ describe("fuite, renforts et repli pendant un combat (05-Fronts §5.4, 06-Combat
   it("pas d'échange pendant un combat : une division abîmée mais encore en ligne reste", () => {
     // 36 % contre 70 % : pas d'échange au lancement. Le round 2 fait passer l'infanterie à 34,5 %, sous la moitié de la milice.
     const s = duel();
-    war(s, 2);
+    war(s);
     const worn = put(s, 1, "regulars", 1, 3600);
     worn.line = LINE_FIRST;
     worn.engaged = 1000;
     const spare = put(s, 1, "militia", 1, 7000);
     put(s, 2, "regulars", 1);
-    const r = combat(s);
+    const r = combat(s, 2);
     for (const k of [0, 1, 2, 3]) {
       assert.ok(hitsOf(r, k).has(worn.id), `round ${k}`);
       assert.equal(hitsOf(r, k).has(spare.id), false, "la seconde ligne n'a reçu aucun dégât");
@@ -315,7 +310,7 @@ describe("fuite, renforts et repli pendant un combat (05-Fronts §5.4, 06-Combat
 
   it("repli : sans infanterie en ligne ni en renfort, les autres divisions de première ligne se replient", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 1);
     // 750 points partagés avec la chenillette : 37 d'état, sous les 25 %.
     const weak = put(s, 2, "regulars", 1, 2510);
@@ -361,16 +356,16 @@ describe("avancée (05-Fronts §7)", () => {
   it("sans défenseur, chaque round avance à vitesse maximale, sans dégâts, dans le sens de l'attaquant", () => {
     const by = FRONTS.combatMaxRounds * FRONTS.footSpeedPermille;
     const s = duel();
-    war(s, 1);
+    war(s);
     putMany(s, 1, "regulars", 1);
     const r = combat(s);
     assert.deepEqual([r.rounds.length, r.rounds[0]!.hits, r.success], [FRONTS.combatMaxRounds, [], true]);
     assert.deepEqual(front(s).connections.map((c) => c.position), [MIDDLE + by]);
     // Le joueur 2 attaque : la position diminue.
     const t = duel();
-    war(t, 2);
+    war(t);
     putMany(t, 2, "regulars", 1);
-    resolve(t);
+    attack(t, 2);
     assert.deepEqual(front(t).connections.map((c) => c.position), [MIDDLE - by]);
   });
 
@@ -378,7 +373,7 @@ describe("avancée (05-Fronts §7)", () => {
     const speed = (motorized: boolean): number => {
       const s = duel();
       widen(s, 2);
-      war(s, 1);
+      war(s);
       putMany(s, 1, "regulars", 2);
       if (motorized) put(s, 1, "cruiserTank", 1);
       return combat(s).rounds[0]!.advance;
@@ -392,7 +387,7 @@ describe("avancée (05-Fronts §7)", () => {
     const first = (n: number): { advance: number; positions: number[] } => {
       const s = duel();
       widen(s, n);
-      war(s, 1);
+      war(s);
       putMany(s, 1, "regulars", n);
       putMany(s, 2, "regulars", 1);
       const r = combat(s);
@@ -449,7 +444,6 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     // Fronts recalculés : seule la route (2, 4) sépare encore les deux joueurs, à 1 % depuis la ville prise (X est city1).
     assert.equal(s.fronts.length, 1);
     assert.deepEqual(front(s).connections, [{ city1: 2, city2: 4, position: FRONTS.capturePercent * 10 }]);
-    assert.deepEqual(front(s).sides.map((x) => x.attackAt !== 0), [false, false]);
     // L'ancien front a disparu : ses divisions passent, sans délai, au front des mêmes joueurs le plus proche (05-Fronts §2.5).
     for (const d of s.divisions) assert.deepEqual([d.front, d.arrivalTick], [front(s).id, 0]);
   });
@@ -465,7 +459,7 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
 
   it("le combat prend la ville : la route de l'attaque ne compte pas pour l'encerclement ; dernière ville : joueur éliminé, plus de front", () => {
     const s = duel();
-    war(s, 1);
+    war(s);
     front(s).connections[0]!.position = 994;
     putMany(s, 1, "regulars", 1);
     const r = combat(s);
@@ -489,7 +483,6 @@ describe("prise d'une ville et encerclement (05-Fronts §10)", () => {
     const [attacked, other] = s.fronts;
     attacked!.connections[0]!.position = 996;
     other!.connections[0]!.position = 700;
-    turn(s, { type: "start_front_attack", player: 1, front: attacked!.id });
     put(s, 1, "regulars", attacked!.id);
     combat(s);
     assert.equal(s.cities[1]!.player, 1);

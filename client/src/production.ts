@@ -604,6 +604,12 @@ export class ProductionPanel {
     const box = el("div", "pp-info themed");
     const type = this.military.divisions.find((t) => t.id === info.division);
     const host = this.catalog.activities.find((c) => c.good === info.good && c.id !== info.id);
+    // Image de l'unité (ou de la machine) en 64 × 64 au-dessus de la description.
+    const picture = this.productIcon(info);
+    if (picture !== null) {
+      picture.classList.add("pp-info-img");
+      box.append(picture);
+    }
     box.append(type !== undefined ? typePanel(type) : textPanel(activityName(info.id), `Remplace un ${activityName(host?.id ?? "").toLowerCase().replace(/s$/, "")}.`));
     const ok = el("button", "pp-info-ok", "Compris");
     ok.type = "button";
