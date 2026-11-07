@@ -479,7 +479,8 @@ export class CombatIcons {
       b.type = "button";
       b.title = "Voir le combat";
       b.addEventListener("click", () => this.onOpen(c));
-      this.layer.append(b);
+      // Empilées au même endroit, la plus ancienne reste dessus : le dernier enfant est dessiné par-dessus les autres.
+      this.layer.prepend(b);
       this.icons.set(c.id, { combat: c, el: b });
     }
     this.place();

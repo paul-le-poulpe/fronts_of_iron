@@ -121,7 +121,9 @@ un événement ponctuel qu'on peut revoir ; une usine produit une division.
   perdu le moins d'infanterie (somme des pertes d'état des divisions de la
   niche d'infanterie ; *provisoire* : à égalité, le défenseur). Un combat
   **visionné** (replay ouvert, depuis la carte ou depuis la fenêtre d'un
-  front) **disparaît de la carte** ; sinon l'icône reste. *Provisoire* :
+  front) **disparaît de la carte** ; sinon l'icône reste. Quand plusieurs
+  icônes sont au même endroit, la plus ancienne est au-dessus : les combats se
+  revoient du plus vieux au plus récent. *Provisoire* :
   symbole ⚔ en attendant une icône de l'auteur ; « visionné » est retenu par la
   page, pour la partie en cours (pas dans l'état du moteur).
 - **Replay** : un clic sur l'icône ouvre un panneau, au milieu de la carte. Le
