@@ -391,7 +391,7 @@ export function checkBreakthrough(state: GameState, front: Front, bt: Breakthrou
 }
 
 /**
- * Combat d'une percée sans issue au bout de `FRONTS.combatMaxRounds` rounds (06-Combat-Simplifie §1, provisoire) :
+ * Combat d'une percée sans issue au bout de `FRONTS.combatCycles` cycles (06-Combat-Simplifie §1, provisoire) :
  * échec, comme une force essoufflée (délai de repli après le combat 1, gains minimes après le combat 2).
  */
 export function failBreakthroughCombat(state: GameState, front: Front, bt: Breakthrough): void {

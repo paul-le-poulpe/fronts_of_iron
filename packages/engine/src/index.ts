@@ -111,7 +111,7 @@ export {
   type DivisionData,
 } from "./divisions.ts";
 export { arrangeAll, arrangeSide, moveDivisions } from "./placement.ts";
-export { combatRound, endOf, frontAdvance, resolveFrontAttacks, type CombatLosses, type CombatRecord, type CombatRound } from "./combat.ts";
+export { combatRound, endOf, frontAdvance, resolveFrontAttacks, type CombatLosses, type CombatCycle, type CombatRecord, type CombatShot, type CombatUnit } from "./combat.ts";
 export { advanceOf, reactionFactor100, type Box, type Breakthrough } from "./breakthroughs.ts";
 export { captureCity } from "./conquest.ts";
 export { addCityToRoads, computeRoads, createRoadNetwork, segmentsCross, type RoadNetwork } from "./roads.ts";

@@ -150,8 +150,12 @@ export interface MilitaryCatalog {
   /** Délai entre deux attaques sur tout le front d'un même camp, en tours (06-Combat-Simplifie §1). */
   readonly attackCooldownTurns: number;
   /** Réglages du combat lus par l'estimation du panneau de prédiction (`prediction.ts`). */
-  readonly combatMaxRounds: number;
-  readonly reinforceRounds: number;
+  /** Cycles au plus d'un combat (10-Combat-Phases §1). */
+  readonly combatCycles: number;
+  /** Anciens rounds par cycle : dégâts d'une phase et avancée d'un cycle (10-Combat-Phases §1). */
+  readonly roundsPerCycle: number;
+  /** Multiplicateur temporaire des dégâts d'un tir, pendant le développement (10-Combat-Phases §1). */
+  readonly devDamageMultiplier: number;
   readonly fleeStatePercent: number;
   readonly advanceThresholdA: number;
   readonly advanceThresholdB: number;
@@ -167,24 +171,42 @@ export interface CombatUnitView {
   readonly type: number;
   /** État au début du combat, échelle `MilitaryCatalog.stateScale`. */
   readonly start: number;
+  /** En seconde ligne au début du combat : renfort possible (10-Combat-Phases §3). */
+  readonly reserve: boolean;
 }
 
-/** Un round d'un combat : pertes d'état des divisions engagées, détruites, en fuite, avancée de l'attaquant (millièmes de route). */
-export interface CombatRoundView {
-  /** [indice dans `units`, perte d'état]. */
+/** Un tir (10-Combat-Phases §1) : une niche d'un camp tire sur toutes les divisions engagées de l'autre camp. */
+export interface CombatShotView {
+  /** Le joueur qui tire. */
+  readonly owner: number;
+  /** Indice de la niche qui tire (ordre de `MilitaryCatalog.niches`). */
+  readonly niche: number;
+  /** Divisions qui tirent (indices dans `units`). */
+  readonly shooters: readonly number[];
+  /** Renforts montés de la seconde ligne pendant ce tir, dans leur ordre d'arrivée (ils sont aussi dans `hits`). */
+  readonly reinforced: readonly number[];
+  /** Divisions touchées : [indice dans `units`, perte d'état], dans l'ordre où elles prennent les pertes. */
   readonly hits: readonly (readonly [number, number])[];
+  /** Divisions tuées par ce tir : elles tirent jusqu'à la fin du cycle, puis sont retirées. */
   readonly destroyed: readonly number[];
+  /** Divisions en fuite après ce tir : elles quittent la ligne à la fin du cycle. */
   readonly fled: readonly number[];
-  /** Renforts montés de la seconde ligne à la fin du round, en retrait pendant quelques rounds. */
+}
+
+/** Un cycle d'un combat : ses tirs dans l'ordre, puis la fin de cycle. */
+export interface CombatCycleView {
+  readonly shots: readonly CombatShotView[];
+  /** Renforts montés de la seconde ligne en fin de cycle : ils combattent au cycle suivant. */
   readonly arrived: readonly number[];
-  /** Renforts qui rejoignent la première ligne au début du round. */
-  readonly joined: readonly number[];
-  /** Joueurs dont les troupes se replient à la fin du round faute d'infanterie (leurs divisions sont dans `fled`). */
+  /** Divisions repliées en fin de cycle faute d'infanterie. */
+  readonly fled: readonly number[];
+  /** Joueurs dont les troupes se replient en fin de cycle faute d'infanterie (leurs divisions sont dans `fled`). */
   readonly withdrawn: readonly number[];
+  /** Avancée de l'attaquant pendant le cycle, en millièmes de route. */
   readonly advance: number;
 }
 
-/** Rapport d'un combat résolu en un tour par le moteur, que la page rejoue (06-Combat-Simplifie §1, §2). */
+/** Rapport d'un combat résolu en un tour par le moteur, que la page rejoue (06-Combat-Simplifie §1, 10-Combat-Phases). */
 export interface CombatView {
   readonly id: number;
   /** Attaque sur tout le front ; percée contre la première ligne ; contre-attaque de la réaction rapide contre une percée. */
@@ -197,11 +219,11 @@ export interface CombatView {
   readonly city1: number;
   readonly city2: number;
   readonly units: readonly CombatUnitView[];
-  readonly rounds: readonly CombatRoundView[];
-  /** Pertes de l'attaquant puis du défenseur (08 §11) : divisions détruites, et état perdu (échelle `MilitaryCatalog.stateScale`). */
+  readonly cycles: readonly CombatCycleView[];
+  /** Pertes de l'attaquant puis du défenseur (08 §11) : divisions détruites, état perdu (échelle `MilitaryCatalog.stateScale`), bonshommes blessés. */
   readonly losses: readonly [
-    { readonly divisions: number; readonly state: number },
-    { readonly divisions: number; readonly state: number },
+    { readonly divisions: number; readonly state: number; readonly wounded: number },
+    { readonly divisions: number; readonly state: number; readonly wounded: number },
   ];
   /** Ville prise à la fin du combat, 0 sinon. */
   readonly captured: number;

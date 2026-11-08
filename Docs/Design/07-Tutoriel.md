@@ -58,7 +58,7 @@ Les textes sont courts : une ou deux phrases. Tous sont provisoires, à relire.
 | --- | --- | --- |
 | `found` | bouton « Créer une ville » | 00-Game §3.2, §3.3 ; 08 §10 (coût en bonshommes d'Inactifs) |
 | `production` | bouton « Production » | 08 §11 |
-| `prod-box` | chaque boîte d'activité (panneau de production) | 08 §2 (ordre et priorité), §11 (entrée, sortie, poignée) |
+| `prod-box` | chaque boîte d'activité (panneau de production) | 08 §2 (ordre et priorité), §4 (malus de fer), §11 (entrée, sortie, poignée) |
 | `prod-pawn` | chaque pion saisissable d'une boîte | 08 §6 (à venir, en sursis), §7 (places vides), §11 (glisser) |
 | `prod-parent` | cadenas ouvert d'une boîte parente | 08 §9, §11 |
 | `prod-locked` | boîte verrouillée | 08 §9, §11 |

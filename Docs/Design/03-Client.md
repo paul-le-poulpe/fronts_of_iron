@@ -60,8 +60,12 @@ Depuis la racine du dépôt, après `npm install` :
 | `src/roadpaths.ts` | tracé A* des routes sur les cases, en cache par paire de cases de villes (sans DOM) |
 | `src/mirror.ts` | copie locale de ce que l'affichage lit de la partie, rayons d'exploitation (champs, pêche, mine), fronts et leurs zones (sans DOM) |
 | `src/frontgeom.ts` | géométrie des fronts (05-Fronts §11.1, §11.4) : point du front d'une connexion, chaînes de connexions, zones de front ; flottants, sans DOM, aussi utilisée par `npm run viz:fronts` du moteur |
-| `src/prediction.ts` | estimation d'un combat pour le panneau de prédiction (05-Fronts §11.4) : attaque rejouée round par round avec les formules du moteur, sans DOM ; `POSITION_RATIO` |
+| `src/prediction.ts` | estimation d'un combat pour le panneau de prédiction (05-Fronts §11.4) : attaque ou percée rejouée cycle par cycle (5 phases, attaques figées, pertes concentrées, renforts) avec les formules du moteur, sans DOM ; `POSITION_RATIO` |
 | `src/predictionpanel.ts` | panneau de prédiction au survol des boutons d'attaque de la fenêtre d'un front |
+| `src/combatdata.ts` | lecture d'un rapport de combat (10-Combat-Phases), sans DOM : tirs, avancée, issue, vainqueur, dégâts affichés (« −x % »), état final des divisions, destructions par niche |
+| `src/combatreplay.ts` | icônes des combats sur la carte, combats visionnés, et `CombatReplay`, qui enchaîne les deux fenêtres d'un combat |
+| `src/combatwindow.ts`, `src/combat.css` | fenêtre de combat détaillée (10-Combat-Phases §3) : divisions posées en absolu dans le corps, déplacées par transition ; tir par tir, animations de `icons/animations/` (un `img` neuf à chaque fois, un GIF ne repart pas du début), infobulles, pertes, renforts ; styles des deux fenêtres |
+| `src/combatsummary.ts` | fenêtre de résumé d'un combat (10-Combat-Phases §4) |
 | `src/frontunits.ts` | répartition de la première ligne sur les connexions d'un front, pour la carte (05-Fronts §11.1) : `linkUnits`, sans DOM |
 | `src/frontlayer.ts` | ce que la carte dessine des fronts : masques et contours des zones, points d'avancement avec le joueur de chaque côté ; recalculé quand `Mirror.frontsVersion` change |
 | `src/format.ts` | écriture des nombres affichés (`num`, `compact`) : voir « Nombres » au §7 |

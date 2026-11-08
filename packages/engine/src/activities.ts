@@ -218,19 +218,22 @@ function woundPawn(p: Player, type: number): boolean {
 /**
  * Une division de type `type` vient de perdre `lost` points d'état (08 §8). Infanterie seulement : une division pleine
  * vaut un bonhomme, donc `lost` est retiré du soin du dernier blessé, à l'échelle `hurtHealTurnsTimesPop` ; sous 0, un
- * bonhomme de plus est blessé et reprend le reste, à partir d'un soin plein.
+ * bonhomme de plus est blessé et reprend le reste, à partir d'un soin plein. Renvoie le nombre de bonshommes blessés.
  */
-export function woundMen(p: Player, type: number, lost: number): void {
-  if (DIVISION_DATA[type]!.niche !== INFANTRY_NICHE) return;
+export function woundMen(p: Player, type: number, lost: number): number {
+  if (DIVISION_DATA[type]!.niche !== INFANTRY_NICHE) return 0;
   const full = POPULATION.hurtHealTurnsTimesPop;
+  let wounded = 0;
   p.hurtHeal -= Math.floor((lost * full) / STATE_SCALE);
   while (p.hurtHeal < 0) {
     if (!woundPawn(p, type)) {
       p.hurtHeal = 0;
-      return;
+      return wounded;
     }
+    wounded++;
     p.hurtHeal += full;
   }
+  return wounded;
 }
 
 // ---- ordres (08 §10) ----

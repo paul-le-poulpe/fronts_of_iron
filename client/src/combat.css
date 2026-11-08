@@ -1,0 +1,131 @@
+/* Fenêtres de combat (Docs/Design/10-Combat-Phases.md §3, §4) : fenêtre détaillée `.cw`, résumé `.cs`. */
+
+.cw, .cs {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 8;
+  display: flex; flex-direction: column;
+  background: var(--t-panel); color: var(--t-fg); border: 1px solid var(--t-line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.cw[hidden], .cs[hidden] { display: none; }
+/* Grande : environ 75 % d'un écran 1920 × 1080 ; sur un écran plus petit, elle prend la place disponible. */
+.cw { width: min(1440px, calc(100% - 16px)); height: min(830px, calc(100% - 16px)); }
+.cs { width: min(1160px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; }
+
+.cw-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--t-head); border-bottom: 1px solid var(--t-line); }
+.cw-status { color: var(--t-muted); margin-right: 8px; }
+
+.cw-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.cw-body > * { position: absolute; box-sizing: border-box; }
+.cw-air {
+  display: flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--t-line); border-radius: 6px; color: var(--t-muted); font-size: 15px;
+}
+.cw-mid { background: var(--t-line); }
+.cw-box { border: 1px solid var(--t-line); border-radius: 6px; }
+.cw-reserve.s0 { border-color: #3d6fd1; }
+.cw-reserve.s1 { border-color: #c2443a; }
+.cw-box-title { text-align: center; color: var(--t-muted); padding-top: 3px; }
+.cw-legend { position: absolute; left: 6px; right: 6px; bottom: 6px; display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 4px 6px; color: var(--t-muted); }
+.cw-flag-icon { width: 16px; height: 16px; image-rendering: pixelated; }
+
+.cw-niche { border-radius: 6px; transition: background 0.2s; }
+.cw-niche.s0 { background: rgba(61, 111, 209, 0.07); }
+.cw-niche.s1 { background: rgba(194, 68, 58, 0.07); }
+.cw-niche.s0.firing { background: rgba(61, 111, 209, 0.28); }
+.cw-niche.s1.firing { background: rgba(194, 68, 58, 0.28); }
+.cw-niche-title { text-align: center; color: var(--t-muted); font-weight: 700; padding-top: 6px; }
+
+/* Les divisions : posées en absolu dans `.cw-layer`, déplacées par `transform` (transition). */
+.cw-layer { inset: 0; pointer-events: none; }
+.cw-u { position: absolute; left: 0; top: 0; width: 32px; height: 32px; transform-origin: 0 0; transition: transform 0.36s ease-out; }
+.cw-layer.still .cw-u { transition: none; }
+.cw-uf { position: absolute; inset: 0; }
+/* Camp de droite : l'icône regarde le centre ; la barre passe à gauche de l'icône. */
+.cw-uf.flip { transform: scaleX(-1); }
+.cw-ic { position: absolute; left: 0; top: 0; width: 32px; height: 32px; image-rendering: pixelated; }
+.cw-ic.flip { transform: scaleX(-1); }
+/* Sacs de sable de l'infanterie en défense, par-dessus l'icône : seulement en première ligne, tant qu'elle se bat. */
+.cw-sandbag { display: none; position: absolute; left: 0; top: 0; width: 32px; height: 32px; image-rendering: pixelated; pointer-events: none; }
+.cw-u.line:not(.dead):not(.fled) .cw-sandbag { display: block; }
+
+/* Animations de tir et d'impact (`icons/animations/`). Tir collé à droite de l'icône (+32, 0) ou en haut à droite à 45°. */
+.cw-fx { position: absolute; width: 32px; height: 32px; image-rendering: pixelated; z-index: 2; }
+.cw-fx.fire-h { left: 32px; top: 0; }
+.cw-fx.fire-up { left: 20px; top: -18px; transform: rotate(-45deg); transform-origin: 0 50%; }
+/* Impact, au centre de l'icône ; dessiné pour un tir venu de la gauche : retourné par rapport à l'unité. */
+.cw-fx.cw-inc { left: 0; top: 0; transform: scaleX(-1); }
+
+/*
+ * Barre de vie touchée, en deux temps (`DROP_MS` dans combatwindow.ts) : la barre descend en continu et laisse la part
+ * perdue en blanc (`.cw-lostfill`, sous elle), puis le blanc descend à son tour.
+ */
+.cw-u .pz-fill { transition: height 0.35s linear, background 0.35s linear; }
+.cw-lostfill { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; transition: height 0.35s linear; }
+.cw-layer.still .cw-u .pz-fill, .cw-layer.still .cw-lostfill { transition: none; }
+/* Dégâts reçus, en petit à côté de la barre qui descend : à droite pour le camp de gauche, à gauche (miroir) pour l'autre. */
+.cw-dmg {
+  position: absolute; top: 50%; left: 39px; transform: translateY(-50%); z-index: 4; pointer-events: none;
+  color: #ff5a4d; font: 700 11px/1 system-ui, sans-serif; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 2px #000;
+}
+.cw-uf.flip ~ .cw-dmg { left: auto; right: 39px; }
+
+/* Pertes : pâles ; croix rouge pour une division tuée, drapeau blanc pour une division en fuite. */
+.cw-u.dead .cw-ic, .cw-u.fled .cw-ic, .cs-u.out .cw-ic { opacity: 0.4; filter: grayscale(1); transition: opacity 0.4s, filter 0.4s; }
+.cw-cross { display: none; position: absolute; inset: 3px; z-index: 3; pointer-events: none; }
+.cw-cross::before, .cw-cross::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 125%; height: 3px; border-radius: 2px; background: #e2403a;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.cw-cross::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.cw-u.dead .cw-cross, .cs-u.dead .cw-cross, .cs-kill-icon .cw-cross { display: block; }
+.cw-cross.small { display: block; position: relative; inset: auto; width: 16px; height: 16px; }
+.cw-flag { display: none; position: absolute; left: -4px; top: -4px; z-index: 3; width: 16px; height: 16px; image-rendering: pixelated; }
+.cw-u.fled .cw-flag, .cs-u.fled .cw-flag { display: block; }
+
+.cw-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--t-line); background: var(--t-head); }
+.cw-order { display: flex; align-items: center; gap: 6px; color: var(--t-muted); }
+.cw-step { padding: 2px 8px; border-radius: 4px; }
+.cw-step.on { background: var(--t-blue); color: #000; font-weight: 700; }
+.cw-skip { font: 700 15px/1 system-ui, sans-serif; padding: 9px 20px; border-radius: 6px; border: 1px solid var(--t-btn-line); background: var(--t-btn); color: var(--t-fg); cursor: pointer; }
+/* « Passer » : bouton bleu, bien visible. */
+.cw-skip.go { padding: 11px 28px; font-size: 17px; background: #2f6fe0; border-color: #1d4fb0; color: #fff; }
+.cw-skip.go:hover { background: #3d7ff0; }
+
+/* ---- résumé ---- */
+.cs-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.cs-name { flex: 1; font-weight: 700; font-size: 15px; }
+.cs-name.s0 { color: #3d6fd1; }
+.cs-name.s1 { color: #c2443a; text-align: right; }
+.cs-result { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 14px; border-radius: 6px; border: 1px solid; }
+.cs-result strong { font-size: 16px; }
+.cs-result.win { border-color: #3d6fd1; background: rgba(61, 111, 209, 0.15); }
+.cs-result.lose { border-color: #c2443a; background: rgba(194, 68, 58, 0.15); }
+.cs-air { position: relative; height: 90px; margin: 0 12px 10px; }
+.cs-field { display: flex; align-items: stretch; gap: 4px; padding: 0 12px; }
+.cs-mid { flex: none; width: 2px; background: var(--t-line); margin: 0 4px; }
+.cs-niche { flex: 1; min-width: 0; border-radius: 6px; display: flex; flex-direction: column; }
+.cs-niche.s0 { background: rgba(61, 111, 209, 0.07); }
+.cs-niche.s1 { background: rgba(194, 68, 58, 0.07); }
+.cs-stack { position: relative; margin: 6px 0; }
+.cs-u { position: absolute; width: 32px; height: 32px; }
+/* Dans une pile, la barre dépasse sur l'icône du dessous : piste opaque, comme les pions. */
+.cs-u .pz-bar { background: #2b2b2b; }
+.cs-kills { border-top: 1px solid var(--t-line); margin: 0 6px; padding: 6px 0; min-height: 64px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.cs-kill { display: flex; align-items: center; gap: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cs-kill-icon { position: relative; width: 32px; height: 32px; }
+/* Détail des destructions, au survol de la zone : mêmes lignes, chaque type touché, deux décimales. */
+.cs-kills { position: relative; }
+.cs-kills-pop {
+  display: none; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); z-index: 2000;
+  flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 10px;
+  background: var(--t-panel); border: 1px solid var(--t-line); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.cs-kills:hover .cs-kills-pop { display: flex; }
+.cs-hurt { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding-top: 10px; border-top: 1px solid var(--t-line); }
+.cs-hurt-title { font-weight: 700; }
+.cs-hurt-side { flex: 1; display: flex; align-items: center; gap: 8px; }
+.cs-hurt-side.s0 { flex-direction: row-reverse; }
+.cs-hurt-icons { display: flex; gap: 2px; }
+.cs-hurt-icons img { width: 32px; height: 32px; image-rendering: pixelated; }
+.cs-hurt-n { color: #e2403a; font-weight: 700; font-size: 18px; }
+.cs-foot { display: flex; justify-content: center; padding: 12px; }

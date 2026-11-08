@@ -36,6 +36,10 @@ const SMALL_ICONS_POPULATION = 50;
 
 /** Déplacement de la souris, en px, à partir duquel un appui sur un pion devient un glisser. */
 const DRAG_PX = 4;
+/** Glisser d'un pion : part de la hauteur du panneau, en haut et en bas, où le panneau défile (08 §11). */
+const EDGE_SCROLL_SHARE = 0.1;
+/** Défilement par image, en px, souris au bord du panneau ou au-delà ; il décroît jusqu'à 0 à la limite intérieure de la bande. */
+const EDGE_SCROLL_PX = 14;
 
 /** Onglet de la barre d'informations qu'ouvre une ligne de l'en-tête. */
 export type SummaryTab = "resources";
@@ -76,6 +80,11 @@ interface PawnDrag {
   started: boolean;
   ghost: HTMLElement | null;
   over: HTMLElement | null;
+  /** Dernière position de la souris, lue par le défilement aux bords. */
+  px: number;
+  py: number;
+  /** `requestAnimationFrame` du défilement aux bords, 0 s'il n'y en a pas. */
+  frame: number;
 }
 
 /** Réorganisation d'une boîte par sa poignée (08 §2). `ghost` est `null` tant que la souris n'a pas bougé de `DRAG_PX`. */
@@ -567,6 +576,7 @@ export class ProductionPanel {
         coming(row, d.machineArrivals[g] ?? [], this.catalog.machineArrivalTurns, `m:${good}`);
         if (row.childElementCount > 0) into.append(row);
       });
+      this.leavingMachineTips(into);
       return;
     }
     const row = el("div", "pb-row");
@@ -609,6 +619,23 @@ export class ProductionPanel {
       row.append(gauge);
     }
     into.append(row);
+    this.leavingMachineTips(into);
+  }
+
+  /**
+   * Machines en sursis (08 §6, §11) : le survol met en gras que les usines ne tournent plus, puis le texte de survol
+   * déjà écrit sur la case (en trop, ou croix de l'auto-assignation). À appeler une fois ce texte définitif.
+   */
+  private leavingMachineTips(into: HTMLElement): void {
+    for (const cell of into.querySelectorAll<HTMLElement>(".pw-leaving")) {
+      if (cell.dataset["pk"] === "w") continue;
+      const text = cell.title;
+      setTip(cell, () => {
+        const box = el("div", "pt");
+        box.append(el("strong", undefined, "Les usines ne tournent plus, ces machines vont disparaître."), el("div", undefined, text));
+        return box;
+      });
+    }
   }
 
   private lockedBox(info: ActivityInfo, d: HumanDetail): HTMLElement {
@@ -999,6 +1026,9 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % des bonshommes de
         started: false,
         ghost: null,
         over: null,
+        px: e.clientX,
+        py: e.clientY,
+        frame: 0,
       };
       e.preventDefault();
       window.addEventListener("pointermove", this.onMove);
@@ -1021,15 +1051,44 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % des bonshommes de
       document.body.classList.add("pw-moving");
       drag.ghost = ghost;
       for (const p of drag.els) p.classList.add("pw-drag");
+      drag.frame = requestAnimationFrame(this.edgeScroll);
     }
+    drag.px = e.clientX;
+    drag.py = e.clientY;
     drag.ghost!.style.left = `${e.clientX}px`;
     drag.ghost!.style.top = `${e.clientY}px`;
-    const over = this.dropBox(drag, e.clientX, e.clientY);
+    this.updateOver(drag);
+  };
+
+  private updateOver(drag: PawnDrag): void {
+    const over = this.dropBox(drag, drag.px, drag.py);
     if (over !== drag.over) {
       drag.over?.classList.remove("pb-over");
       over?.classList.add("pb-over");
       drag.over = over;
     }
+  }
+
+  /**
+   * Une image du défilement aux bords (08 §11) : souris dans les 10 % du haut ou du bas du panneau, ou au-delà, le
+   * panneau défile de ce côté, d'autant plus vite que la souris est près du bord. La boîte sous la souris est recalculée,
+   * puisque les boîtes ont bougé sous elle.
+   */
+  private readonly edgeScroll = (): void => {
+    const drag = this.pawnDrag;
+    if (drag === null) return;
+    const r = this.root.getBoundingClientRect();
+    const band = r.height * EDGE_SCROLL_SHARE;
+    let depth = 0;
+    if (drag.py < r.top + band) depth = -(r.top + band - drag.py) / band;
+    else if (drag.py > r.bottom - band) depth = (drag.py - (r.bottom - band)) / band;
+    depth = Math.max(-1, Math.min(1, depth));
+    if (depth !== 0) {
+      const before = this.root.scrollTop;
+      this.root.scrollTop += depth * EDGE_SCROLL_PX;
+      if (this.root.scrollTop !== before) this.updateOver(drag);
+    }
+    drag.frame = requestAnimationFrame(this.edgeScroll);
   };
 
   /** La boîte sous la souris qui accepte au moins un pion du glisser. */
@@ -1069,6 +1128,7 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % des bonshommes de
   private endPawnDrag(): void {
     const drag = this.pawnDrag;
     if (drag === null) return;
+    cancelAnimationFrame(drag.frame);
     drag.ghost?.remove();
     document.body.classList.remove("pw-moving");
     drag.over?.classList.remove("pb-over");

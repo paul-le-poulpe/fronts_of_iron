@@ -48,7 +48,7 @@ import {
 } from "../src/index.ts";
 import { DEFAULT_SCENARIO, runScenario } from "./scenario.ts";
 import { box, checkCityInvariants, customMap, openBox, tileAt } from "./helpers.ts";
-import { D, attack, duel, play, put, war } from "./war-helpers.ts";
+import { D, attack, duel, play, put, putMany, war, widen } from "./war-helpers.ts";
 
 const R = CITY.controlRadius;
 
@@ -456,11 +456,20 @@ describe("blessés (08 §8)", () => {
     box(p, "militia").places = 2;
     box(p, "idle").workers = 1;
     p.population = 3;
+    widen(s, 10);
     war(s);
-    put(s, 2, "regulars", 1);
-    if (type === "tankette") put(s, 1, "militia", 1);
+    if (type === "militia") {
+      // Dix infanteries : leur tir détruit en un coup la division à 26 % (au-dessus de 25 %, elle ne fuirait pas avant de tirer).
+      putMany(s, 2, "regulars", 10);
+    } else {
+      // Une chenillette (blindage 100) ne reçoit que les antiblindés : des chars, qui tirent avant l'infanterie, la détruisent.
+      // L'infanterie qui tient la ligne est de réguliers, sans caserne ouverte : sa mort éventuelle ne blesse personne.
+      putMany(s, 2, "regulars", 1);
+      putMany(s, 2, "mediumTank", 4);
+      put(s, 1, "regulars", 1);
+    }
     // Posée juste avant l'attaque, dans le même tour : avant, sa caserne la soignerait.
-    put(s, 1, type, 1, type === "tankette" ? 5 : 30);
+    put(s, 1, type, 1, 2600);
     attack(s, 2);
     return s;
   };
@@ -472,6 +481,15 @@ describe("blessés (08 §8)", () => {
     assert.deepEqual([hurtPawns(p), box(p, "militia").workers, box(p, "militia").places, idlePawns(p), p.population], [1, 2, 2, 0, 3]);
   });
 
+  it("le rapport de combat compte les blessés : une infanterie qui perd une division complète en blesse au moins un", () => {
+    const s = killed("militia");
+    const r = s.combats.at(-1)!;
+    assert.equal(r.losses[1].divisions, 1);
+    assert.ok(r.losses[1].wounded >= 1);
+    assert.equal(r.losses[1].wounded, hurtPawns(s.players[0]!));
+    assert.equal(r.losses[0].wounded, 0, "l'attaquant n'a rien perdu");
+  });
+
   it("sans inactif, la place reste vide", () => {
     const s = duel();
     const p = s.players[0]!;
@@ -480,9 +498,10 @@ describe("blessés (08 §8)", () => {
     box(p, "militia").places = 1;
     box(p, "idle").workers = 0;
     p.population = 1;
+    widen(s, 10);
     war(s);
-    put(s, 2, "regulars", 1);
-    put(s, 1, "militia", 1, 30);
+    putMany(s, 2, "regulars", 10);
+    put(s, 1, "militia", 1, 2600);
     attack(s, 2);
     assert.deepEqual([hurtPawns(p), box(p, "militia").workers, box(p, "militia").places], [1, 0, 1]);
   });

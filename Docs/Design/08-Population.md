@@ -196,7 +196,7 @@ bonhomme, une machine ou une division.
 - **Disparition** : si `existants > limite`, un compteur démarre pour chaque unité
   en trop. Elle clignote jusqu'à la fin de son compteur, puis disparaît. Le pion d'une division
   en trop porte aussi la flèche rouge vers le bas (05-Fronts §11.3).
-  - Population : `POPULATION.leaveTurns`. Machine : `GOODS_TIMING.leaveTurns` (200 tours, 20 s).
+  - Population : `POPULATION.leaveTurns`. Machine : `GOODS_TIMING.leaveTurns` (400 tours, 40 s).
     Division : `DIVISION_TIMING.leaveTurns`.
 - Si l'écart se referme avant la fin d'un compteur, le compteur le plus récent est
   annulé (*provisoire*). Une unité à venir annulée n'apparaît pas, une unité en sursis
@@ -414,6 +414,9 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 - Dans une boîte, les machines sont toujours à gauche et les bonshommes à droite.
 - Pendant un glisser, une boîte qui accepte le dépôt est mise en surbrillance, y compris
   quand des machines y renvoient des bonshommes dans Inactifs.
+- Pendant le glisser d'un pion, la souris dans les 10 % du haut ou du bas du panneau, ou au-delà,
+  le fait défiler de ce côté, d'autant plus vite qu'elle est près du bord (au plus 14 px par image,
+  *provisoire*). Sans cela, Inactifs, en haut, est hors d'atteinte dès que le panneau a défilé.
 - **Survol des sorties** : nourriture, « Augmente la limite de population » ; fer, « Sert à produire
   des machines » ; machine, « Remplace les » suivi du métier et de son icône.
 - **En-tête** : deux boîtes côte à côte, sans séparation visuelle, sur deux tiers et un tiers de la
@@ -439,6 +442,8 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 - **États d'un pion** : normal ; à venir, contour et barre de compteur ; en sursis, il
   clignote ; poste vacant ou place vide, case à fond gris très léger et en pointillés, avec l'icône pâle du bonhomme
   qui finira dans la boîte, autant de cases que de postes vacants.
+- **Survol d'une machine en sursis**, dans Inactifs ou dans sa boîte : en gras, « Les usines ne
+  tournent plus, ces machines vont disparaître. », puis le texte de survol habituel de la case.
 - **Stabilité sous la souris** : quand une boîte change de hauteur, celle qui est à la hauteur de la
   souris ne bouge pas à l'écran : le défilement compense, et ce sont les autres qui bougent. Tout en
   haut ou tout en bas du défilement, la compensation peut être limitée.

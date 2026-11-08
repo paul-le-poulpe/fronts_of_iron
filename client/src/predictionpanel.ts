@@ -89,7 +89,7 @@ export function frontPredictionPanel(estimate: FrontEstimate, me: number, other:
   root.append(row("Total", totalOf(estimate.attacker), totalOf(estimate.defender), me, other, true));
   groupRows(root, estimate.attacker, estimate.defender, me, other);
   const foot = el("div", "pr-foot");
-  const middle = el("div", "pr-mid", `Avancée ≈ ${Math.round(estimate.advance * 10) / 10} % · Durée ≈ ${estimate.rounds} rounds`.replace(".", ","));
+  const middle = el("div", "pr-mid", `Avancée ≈ ${Math.round(estimate.advance * 10) / 10} % · Durée ≈ ${estimate.cycles} cycles`.replace(".", ","));
   const side = (value: number, cls?: string): HTMLElement => {
     const s = el("div", cls, "Déroutes");
     s.append(el("b", undefined, `≈ ${value}`));

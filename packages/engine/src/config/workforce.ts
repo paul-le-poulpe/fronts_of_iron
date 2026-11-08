@@ -18,12 +18,12 @@ export const POPULATION = {
   hurtHealMaxTurns: 4000,
 } as const;
 
-/** Délais des machines (tracteurs, bateaux de pêche, pompes) : 10 s pour apparaître, 20 s pour disparaître (08 §6). */
+/** Délais des machines (tracteurs, bateaux de pêche, pompes) : 10 s pour apparaître, 40 s pour disparaître (08 §6). */
 export const GOODS_TIMING = {
   /** Tours avant qu'une machine apparaisse dans sa ligne d'Inactifs. */
   arrivalTurns: 100,
-  /** Tours avant qu'une machine en trop disparaisse. */
-  leaveTurns: 200,
+  /** Tours avant qu'une machine en trop disparaisse : 400, valeur de l'auteur. */
+  leaveTurns: 400,
 } as const;
 
 /** Nourriture (08 §3). */

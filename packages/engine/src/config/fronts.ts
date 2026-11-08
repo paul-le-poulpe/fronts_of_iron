@@ -16,15 +16,22 @@ export const FRONTS = {
    */
   attackCooldownTurns: 50,
   /**
-   * Rounds au plus d'un combat résolu en un tour ; il s'arrête avant quand un camp n'a plus d'infanterie engagée
-   * (06-Combat-Simplifie §1 ; décision de l'auteur, 5 novembre 2026).
+   * Cycles au plus d'un combat résolu en un tour ; un cycle est 5 phases, une par niche (10-Combat-Phases §1 ; auteur,
+   * 8 novembre 2026, essai à 5 cycles après 10 puis 1). Il s'arrête avant, en fin de cycle, quand l'attaquant n'a plus
+   * d'infanterie engagée.
    */
-  combatMaxRounds: 50,
+  combatCycles: 5,
   /**
-   * Rounds pendant lesquels un renfort monté de la seconde ligne reste en retrait, sans combattre, avant de rejoindre la
-   * première ligne, dans une attaque sur tout le front (06-Combat-Simplifie §1 ; auteur, 5 novembre 2026).
+   * Anciens rounds dans un cycle (10-Combat-Phases §1) : une niche inflige en une phase `roundsPerCycle` fois les
+   * dégâts d'un round, et l'avancée d'un cycle vaut `roundsPerCycle` rounds. 5 cycles × 10 = les 50 rounds d'avant.
    */
-  reinforceRounds: 5,
+  roundsPerCycle: 10,
+  /**
+   * Multiplicateur TEMPORAIRE des dégâts de chaque tir, pendant le développement (10-Combat-Phases §1 ; auteur,
+   * 8 novembre 2026), sans toucher aux statistiques des divisions. Provisoire : 1 depuis le combat en un seul cycle (le ×2
+   * servait à raccourcir les combats à 10 cycles). À retirer quand les PV des divisions seront baissés.
+   */
+  devDamageMultiplier: 1,
   /** Rapports de combat gardés par joueur, les plus anciens supprimés (06-Combat-Simplifie §1 ; provisoire). */
   combatHistoryPerPlayer: 20,
   /** Tours entre deux rounds de combat (10 = 1 s). */

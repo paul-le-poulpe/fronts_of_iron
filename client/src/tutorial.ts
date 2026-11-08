@@ -37,8 +37,9 @@ const LESSONS: Readonly<Record<string, Lesson>> = {
   "prod-box": {
     title: "Ligne de production",
     body: [
-      "Le fer consommé est à gauche, ce qui est produit à droite.",
-      "Les bonshommes vont d'abord aux lignes du haut, et les disparitions commencent par celles du bas. S'il manque du fer, toutes les lignes perdent la même part de leur production. Glissez la poignée ⋮⋮ pour changer l'ordre.",
+      "Une ligne prend ce qui est à gauche (champs, mer, gisements ou fer) et produit ce qui est à droite (nourriture, fer, machines ou divisions). Au milieu : les bonshommes et les machines qui y travaillent.",
+      "L'ordre des lignes est leur priorité : les bonshommes remplissent d'abord celles du haut, et quand la population baisse, ceux des lignes du bas partent en premier. Glissez la poignée ⋮⋮ pour changer l'ordre.",
+      "S'il manque du fer, chaque ligne qui en consomme perd la même part de sa production.",
     ],
   },
   "prod-pawn": {

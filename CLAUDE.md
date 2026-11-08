@@ -51,6 +51,11 @@ inventée — et rien n'est repris d'OpenFront « par défaut ».
   ne fait pas foi : `00-Game-History.md`.
 - `Docs/Design/09-Couleurs.md` — couleurs des joueurs : liste provisoire, calcul des
   tons et réglages, icônes de remplacement, choix dans la salle d'attente.
+- `Docs/Design/10-Combat-Phases.md` — combat en 5 cycles de 5 phases (une niche
+  tire à la fois, attaques figées, renforts qui absorbent), dégâts sur l'unité la plus abîmée, fenêtre de combat
+  détaillée et fenêtre de résumé ; fait foi et remplace les parties de
+  `05-Fronts.md` et `06-Combat-Simplifie.md` qu'il liste en tête. Maquettes dans
+  `Docs/Design/maquettes/`.
 
 ---
 

@@ -574,6 +574,11 @@ rang de la niche (§4.2) égal ou meilleur.
 
 ## 6. Combat : le round
 
+`10-Combat-Phases.md` remplace l'ordre d'application des dégâts (phases par
+niche), la part de chaque division dans un type (§6.2 point 2 : l'unité la plus
+abîmée d'abord) et le moment de la fuite (§5.4) ; la répartition entre niches
+(§6.1 à §6.3) reste celle-ci.
+
 - Un round tous les `FRONTS.combatTurns` tours (**10**, une seconde).
 - **Pas d'attaque en cours sur un front : aucun dégât.**
 - **Seule la première ligne combat et reçoit des dégâts.**

@@ -17,6 +17,7 @@ import {
   LINE_SECOND,
   STATE_SCALE,
   type CombatRecord,
+  type CombatShot,
   type Division,
   type DivisionId,
   type Front,
@@ -111,12 +112,21 @@ export function attack(s: GameState, ...attackers: number[]): CombatRecord | und
   return s.combats.at(-1);
 }
 
-/** État perdu par chaque division engagée pendant un round d'un rapport, par identifiant de division (échelle `STATE_SCALE`). */
-export function hitsOf(record: CombatRecord, round = 0): Map<number, number> {
-  return new Map(record.rounds[round]!.hits.map(([unit, lost]) => [record.units[unit]!.division, lost]));
+/**
+ * État perdu par chaque division pendant un cycle d'un rapport (somme de ses tirs), ou pendant un seul tir (`shot`, indice
+ * dans `cycles[cycle].shots`), par identifiant de division (échelle `STATE_SCALE`).
+ */
+export function hitsOf(record: CombatRecord, cycle = 0, shot?: number): Map<number, number> {
+  const shots = shot === undefined ? record.cycles[cycle]!.shots : [record.cycles[cycle]!.shots[shot]!];
+  const out = new Map<number, number>();
+  for (const sh of shots) for (const [unit, lost] of sh.hits) out.set(record.units[unit]!.division, (out.get(record.units[unit]!.division) ?? 0) + lost);
+  return out;
 }
 
-/** Indices d'unités d'un rapport (`fled`, `destroyed`, `arrived`, `joined`) convertis en identifiants de divisions. */
+/** Tous les tirs d'un rapport, dans l'ordre. */
+export const shotsOf = (record: CombatRecord): CombatShot[] => record.cycles.flatMap((c) => [...c.shots]);
+
+/** Indices d'unités d'un rapport (`fled`, `destroyed`, `arrived`) convertis en identifiants de divisions. */
 export const divisionsOf = (record: CombatRecord, units: readonly number[]): number[] => units.map((u) => record.units[u]!.division);
 
 /**
@@ -128,4 +138,9 @@ export function widen(s: GameState, width: number): void {
   const f = front(s);
   const c = f.connections[0]!;
   while (f.connections.length < width) f.connections.push({ city1: c.city1, city2: c.city2, position: c.position });
+}
+
+/** Pertes d'un tir dans l'ordre où elles ont été prises : [identifiant de division, état perdu]. */
+export function hitList(record: CombatRecord, cycle: number, shot: number): [number, number][] {
+  return record.cycles[cycle]!.shots[shot]!.hits.map(([unit, lost]) => [record.units[unit]!.division, lost]);
 }

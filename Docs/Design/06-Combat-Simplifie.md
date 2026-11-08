@@ -16,6 +16,9 @@ plus foi là où elles le contredisent :
 centres de recrutement), sauf la barre de vie (§3.3) et le soin (§3.6), qu'il reprend. Les
 pertes du rapport sont décrites par `08-Population.md` §8 bis et §11.
 
+**`10-Combat-Phases.md` remplace** la durée du combat (50 rounds, §1) et le
+replay (§2) : combat en cycles de phases, fenêtre détaillée et résumé.
+
 Décisions de l'auteur du 4 novembre 2026. Ce que l'auteur n'a pas tranché est
 marqué « *provisoire* » et listé au §5. Version stable d'avant : tag git
 `v0.2` (même commit que `avant-combat-simplifie`).
