@@ -25,6 +25,7 @@ import {
   FOOD,
   FRONTS,
   foundingCostPawns,
+  plannedCityCount,
   generateTestMap,
   setupTestGame,
   TEST_SCENARIOS,
@@ -276,6 +277,9 @@ export class Game {
   /** Les divisions telles qu'envoyées à la page (JSON), pour n'envoyer que les changements. */
   private sentDivisions = "";
   private sentCombats = "";
+  private sentFoundings = "";
+  /** Debug « Villes instantanées » (03-Client §7) : chaque construction de ville se termine au tour suivant. */
+  private instantCities = false;
   /** Le premier tour a été envoyé (partie de test : il porte les villes de départ). */
   private initialSent = false;
 
@@ -356,6 +360,7 @@ export class Game {
     const pawnsBefore = human.length > 0 ? this.pawnCounts() : null;
     const t1 = performance.now();
     this.advance(turn);
+    if (this.instantCities) for (const f of state.foundings) f.endTick = Math.min(f.endTick, state.tick + 1);
     const t2 = performance.now();
 
     const captured = full ? [] : state.events.flatMap((e) => (e.type === "city_captured" ? [{ city: e.city, from: e.from, to: e.to }] : []));
@@ -424,6 +429,12 @@ export class Game {
       fishers = new Uint32Array(0);
     }
 
+    // Villes en construction : la liste change à un ordre `found_city` et à la fin d'une construction.
+    const foundingViews = state.foundings.map((f) => ({ player: f.player, tile: f.tile, startTick: f.startTick, endTick: f.endTick }));
+    const foundingsKey = JSON.stringify(foundingViews);
+    const foundings = full || foundingsKey !== this.sentFoundings ? foundingViews : null;
+    this.sentFoundings = foundingsKey;
+
     // Fronts : reconstruits à chaque round, quand le joueur a donné un ordre ou quand les villes changent.
     let fronts: FrontView[] | null = null;
     if (full || initial || state.tick % FRONTS.combatTurns === 0 || human.length > 0 || state.cities.length !== citiesBefore || captured.length > 0) {
@@ -475,7 +486,7 @@ export class Game {
         capital: p.capital,
         cities: p.cityIds.length,
         defeated: p.defeated,
-        foundingCost: foundingCostPawns(p.cityIds.length),
+        foundingCost: foundingCostPawns(plannedCityCount(state, p.id)),
       };
     });
     const t3 = performance.now();
@@ -487,6 +498,7 @@ export class Game {
       fishers,
       cities,
       roads,
+      foundings,
       human: this.humanDetail(),
       players,
       results,
@@ -508,7 +520,7 @@ export class Game {
    * local directement, entre deux tours, hors des règles et sans ordre. N'existent
    * qu'en solo : en ligne, l'état ne se modifie que par les tours (règle 3).
    */
-  debug(action: "addPopulation" | "armBots", amount: number): void {
+  debug(action: "addPopulation" | "armBots" | "instantCities", amount: number): void {
     if (!Number.isInteger(amount)) return;
     const grant = (p: GameState["players"][number], n: number): void => {
       const n2 = Math.max(n, -idlePawns(p));
@@ -516,6 +528,8 @@ export class Game {
       p.population += n2;
     };
     if (action === "addPopulation") grant(this.state.players[this.you - 1]!, amount);
+    // Interrupteur : 1 allume, 0 éteint ; les constructions en cours se terminent aussi au tour suivant.
+    if (action === "instantCities") this.instantCities = amount === 1;
     if (action === "armBots") {
       for (const p of this.state.players) if (p.id !== this.you) grant(p, amount);
     }
@@ -623,6 +637,8 @@ export class Game {
     const me = state.players[this.you - 1]!;
     switch (order.type) {
       case "found_city":
+        // Mise en construction pendant ce tour (00-Game §3.3), ou fondée aussitôt (première ville).
+        if (state.foundings.some((f) => f.player === this.you && f.tile === order.tile && f.startTick === state.tick)) return true;
         for (let i = citiesBefore; i < state.cities.length; i++) {
           const c = state.cities[i]!;
           if (c.player === this.you && c.tile === order.tile) return true;

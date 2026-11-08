@@ -24,6 +24,7 @@ import {
   isActive,
   isLand,
   nextInt,
+  plannedCityCount,
   slotsOf,
   type GameState,
   type Intent,
@@ -92,7 +93,7 @@ export function createBot(player: number, botSeed: number): Bot {
       // Agriculture d'abord ; la ville suivante quand la moitié de la surface cultivable est cultivée et que les inactifs
       // en paient le coût ; puis les mines et la milice.
       send("farmers");
-      const cost = foundingCostPawns(me.cityIds.length);
+      const cost = foundingCostPawns(plannedCityCount(state, player));
       if (turn >= nextExpandTurn && 2 * me.cultivated >= me.farmTiles && idle >= cost) {
         nextExpandTurn = turn + EXPAND_EVERY_TURNS + nextInt(rng, EXPAND_JITTER);
         const tile = bestCandidate(state, rng, me.cityIds);

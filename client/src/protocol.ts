@@ -64,7 +64,7 @@ export type ToWorker =
    * `addPopulation` : `amount` bonshommes dans Inactifs du joueur humain ; `armBots` : chaque bot reçoit `amount`
    * bonshommes dans Inactifs (pour essayer les fronts sans attendre que les bots grandissent).
    */
-  | { readonly type: "debug"; readonly action: "addPopulation" | "armBots"; readonly amount: number };
+  | { readonly type: "debug"; readonly action: "addPopulation" | "armBots" | "instantCities"; readonly amount: number };
 
 // ---- Worker → page ----
 
@@ -528,6 +528,14 @@ export interface OrderResult {
   readonly applied: boolean;
 }
 
+/** Ville en construction (00-Game §3.3) : fondée au tour `endTick`. */
+export interface FoundingView {
+  readonly player: number;
+  readonly tile: number;
+  readonly startTick: number;
+  readonly endTick: number;
+}
+
 export interface TickMessage {
   readonly type: "tick";
   readonly tick: number;
@@ -543,6 +551,8 @@ export interface TickMessage {
   readonly cities: Uint32Array | null;
   /** Routes : paires d'identifiants de villes. Même condition que `cities`. */
   readonly roads: Uint16Array | null;
+  /** Villes en construction, dans l'ordre des ordres ; `null` si la liste n'a pas changé depuis le tour précédent. */
+  readonly foundings: readonly FoundingView[] | null;
   /** Les activités du joueur humain (panneau de production), à chaque tour. */
   readonly human: HumanDetail;
   /** Statistiques des joueurs, dans l'ordre des identifiants. */

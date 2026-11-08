@@ -55,7 +55,7 @@ export {
   type SeaZonesStep,
 } from "./seazones.ts";
 export { createRng, nextInt, nextU32, type Rng } from "./rng.ts";
-export { foundCity, foundingCost, foundingCostPawns } from "./cities.ts";
+export { foundCity, foundingCost, foundingCostPawns, plannedCityCount } from "./cities.ts";
 export {
   DIVISIONS,
   ELITE_TROOPS_RATIO,

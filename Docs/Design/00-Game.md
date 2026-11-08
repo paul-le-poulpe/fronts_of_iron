@@ -314,6 +314,26 @@ elles existeront.
 **Pendant une guerre** : le rayon d'expansion d'une ville impliquée dans un
 front actif ne compte pas pour fonder (règle dans `05-Fronts.md` §8).
 
+**Construction** : une ville autre que la première n'est pas fondée tout de
+suite. L'ordre accepté la paie et la met en construction ; elle est fondée
+`CITY.foundingTurns` tours plus tard (100, soit 10 s). Sur la carte, la case
+porte un rond pâle cerclé en pointillé de la couleur du joueur, et sous lui une
+jauge qui se remplit. Choix provisoires (non tranchés par l'auteur) :
+
+- la première ville est fondée aussitôt ;
+- les conditions sont vérifiées à l'ordre ; à la fin, seule compte la case :
+  si elle est entrée entre-temps dans la zone d'une ville (une autre
+  construction terminée avant, par exemple), la ville n'est pas fondée et ses
+  bonshommes reviennent dans Inactifs ;
+- le coût compte les villes en construction du joueur comme des villes
+  possédées ;
+- une seule construction par case, tous joueurs confondus ; plusieurs
+  constructions à la fois pour un même joueur sont permises ;
+- un joueur éliminé perd ses constructions, sans remboursement.
+
+Un interrupteur de la barre de debug du solo termine les constructions au tour
+suivant (`03-Client.md` §7).
+
 L'auteur a annoncé d'autres règles de placement, à décrire (§13).
 
 ### 3.4 Capitale

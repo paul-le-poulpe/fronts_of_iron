@@ -11,7 +11,7 @@
 // histogrammes sont tenus à jour case par case.
 
 import { computeFrontZones, type GeomWorld } from "./frontgeom.ts";
-import type { ActivityCatalog, DivisionView, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
+import type { ActivityCatalog, DivisionView, FoundingView, FrontView, HumanDetail, InitMessage, MilitaryCatalog, PlayerStats, TickMessage } from "./protocol.ts";
 import { RoadPaths } from "./roadpaths.ts";
 
 /** Rayon des couloirs de routes, en cases : 11 cases de large avec la route (provisoire). Purement visuel. */
@@ -52,6 +52,8 @@ export class Mirror {
   readonly tileFisher: Uint16Array;
   tick = 0;
   cities: MirrorCity[] = [];
+  /** Villes en construction (00-Game §3.3). */
+  foundings: readonly FoundingView[] = [];
   /** Routes : paires d'identifiants de villes. */
   roads: Uint16Array = new Uint16Array(0);
   /** Tracé d'affichage de chaque route (00-Game §3.5) : `roadTiles[i]` est la suite de cases de `roads[2i]`–`roads[2i+1]`. */
@@ -250,6 +252,7 @@ export class Mirror {
     }
     for (const cap of msg.captured) this.countZone(cap.city, +1);
     if (msg.roads !== null) this.roads = msg.roads;
+    if (msg.foundings !== null) this.foundings = msg.foundings;
     this.detail = msg.human;
 
     const tiles = msg.tiles;

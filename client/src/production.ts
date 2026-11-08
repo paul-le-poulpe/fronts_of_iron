@@ -160,6 +160,8 @@ export class ProductionPanel {
   /** Appelé au passage automatique en petites icônes : main.ts montre où est l'option. */
   onIconsShrunk: (() => void) | null = null;
   private last: { detail: HumanDetail; stats: PlayerStats } | null = null;
+  /** Boîtes réduites (08 §11) : leurs pions sont remplacés par un résumé. Gardé par la page seulement. */
+  private readonly folded = new Set<string>();
 
   constructor(root: HTMLElement, catalog: ActivityCatalog, military: MilitaryCatalog, send: (order: HumanOrder) => void, openTab: (tab: SummaryTab) => void) {
     this.root = root;
@@ -306,6 +308,7 @@ export class ProductionPanel {
       d.machineArrivals.map((x) => x.length),
       d.machineLeaves.map((x) => x.length),
       this.lockedOrder(d).map((a) => [a.index, this.lockState(a, d)]),
+      [...this.folded],
     ]);
   }
 
@@ -497,8 +500,13 @@ export class ProductionPanel {
     }
     // Après le cadenas : la longueur de ce texte varie, le cadenas ne doit pas bouger avec elle.
     head.append(places);
+    const foldable = info.hasSlots || info.hasPlaces;
+    const folded = foldable && this.folded.has(a.id);
+    // Réduire / Étendre (08 §11) : juste à droite du nombre de places.
+    if (foldable) head.append(this.foldButton(a.id, folded));
     const pawns = el("div", "pb-pawns");
-    this.fillPawns(pawns, a, info, d, leaving);
+    if (folded) pawns.append(this.foldedSummary(a, info, d));
+    else this.fillPawns(pawns, a, info, d, leaving);
     center.append(head, pawns);
 
     // Sortie : capacité, fer, ou « existants / limite » (08 §11).
@@ -534,6 +542,42 @@ export class ProductionPanel {
     }
     box.append(grip, input, arrowIn, center, arrowOut, output, close);
     return box;
+  }
+
+  /** Bouton « Réduire » (deux flèches qui se rejoignent) ou « Étendre » (deux flèches qui s'écartent). */
+  private foldButton(activity: string, folded: boolean): HTMLElement {
+    const b = el("button", `pb-fold${folded ? " pb-fold-out" : ""}`);
+    b.type = "button";
+    b.title = folded ? "Étendre la ligne : montrer les pions, qui redeviennent modifiables." : "Réduire la ligne à son résumé. Les pions ne sont plus modifiables.";
+    b.setAttribute("aria-label", folded ? "Étendre" : "Réduire");
+    b.append(el("i", "pb-fold-ic"));
+    b.addEventListener("click", () => {
+      if (folded) this.folded.delete(activity);
+      else this.folded.add(activity);
+      this.refresh();
+    });
+    return b;
+  }
+
+  /**
+   * Boîte réduite (08 §11) : bonshommes, machines et places fermées, chacun « nombre icône » en 32 × 32, séparés par
+   * « + », puis « / » et le nombre de places de la ligne.
+   */
+  private foldedSummary(a: ActivityView, info: ActivityInfo, d: HumanDetail): HTMLElement {
+    const sum = el("div", "pb-sum");
+    const parts: [number, HTMLElement][] = [[a.workers, img(`population/${WORKER_ICON[info.kind] ?? "pop-default"}.png`, "pb-sum-ic", "Bonshommes")]];
+    if (this.hostKind(a.id) && info.good !== null && a.machines > 0) {
+      const machine = this.machineIcon(info.good, "pb-sym");
+      machine.classList.add("pb-sum-ic");
+      parts.push([a.machines, machine]);
+    }
+    if (d.autoAssign && a.disabled > 0) parts.push([a.disabled, img("miscellaneous/misc-red-cross.png", "pb-sum-ic", "Places fermées")]);
+    parts.forEach(([n, icon], i) => {
+      if (i > 0) sum.append(el("span", undefined, "+"));
+      sum.append(el("b", undefined, num(n)), icon);
+    });
+    sum.append(el("span", undefined, "/"), el("b", "pb-sum-max", num(info.hasSlots ? a.slots : a.places)));
+    return sum;
   }
 
   /** Flèches de la production visée (08 §7 ter) : ±1, ±5 avec Maj, ±10 avec Ctrl (burst.ts) ; à côté, ±5 sans touche. */
@@ -976,7 +1020,8 @@ Max ${num(Math.floor(100 / this.military.eliteTroopsRatio))} % des bonshommes de
    */
   private dropCount(drag: PawnDrag, to: string): number {
     const target = this.byId.get(to);
-    if (target === undefined || to === drag.act || to === "hurt") return 0;
+    // Une boîte réduite ne se modifie pas (08 §11).
+    if (target === undefined || to === drag.act || to === "hurt" || this.folded.has(to)) return 0;
     const n = drag.els.length;
     if (drag.kind === "machine") {
       const host = this.catalog.activities.find((c) => c.good === drag.good && (c.kind === "farming" || c.kind === "fishing" || c.kind === "mining"));

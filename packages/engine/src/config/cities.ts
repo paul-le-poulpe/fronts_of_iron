@@ -16,4 +16,6 @@ export const CITY = {
   foundingCostPopulation: 500,
   /** Chaque ville déjà possédée ajoute ce pourcentage du coût de base au coût de la suivante. */
   foundingCostIncreasePercent: 100,
+  /** Tours de construction d'une ville autre que la première (100 = 10 s, 00-Game §3.3). */
+  foundingTurns: 100,
 } as const;

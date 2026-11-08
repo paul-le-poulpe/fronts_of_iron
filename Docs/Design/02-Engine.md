@@ -1196,6 +1196,12 @@ d'avant les usines :
 
 Tests à écrire plus tard (version 2 des fronts, points non tranchés) : `Docs/Tests-a-faire.md`.
 
+**Cassés par la construction des villes (9 novembre 2026, 00-Game §3.3)** : les tests qui fondent une
+deuxième ville par `found_city` et lisent `state.cities` au tour suivant (`cities.test.ts`, `engine.test.ts`,
+`economy.test.ts`, `activities.test.ts`, `combat.test.ts`, `bench.ts`) attendent une fondation immédiate. Elle
+arrive maintenant `CITY.foundingTurns` tours plus tard ; `foundCity(…, instant = true)` fonde aussitôt. Non
+corrigés, non exécutés.
+
 **Passe du 26 octobre 2026** (fin des fronts de la version 0.1). Tous les tests passaient (`npm test`). Ce qui a été
 repris : `factories.test.ts` (une usine naît avec une ligne ; un bien n'est rempli que sous la demande du tour précédent, le
 premier tour la fixe ; plus de suspension de l'armement) ; `specialization.test.ts` (une mer assez grande pour que la demande de

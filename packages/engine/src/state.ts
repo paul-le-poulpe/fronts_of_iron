@@ -101,6 +101,18 @@ export interface City {
   group: number;
 }
 
+/** Ville en construction (00-Game §3.3) : payée à l'ordre, fondée au tour `endTick`. */
+export interface Founding {
+  readonly player: number;
+  readonly tile: number;
+  /** Tour où l'ordre a été appliqué. */
+  readonly startTick: number;
+  /** Tour où la ville est fondée. Modifiable : la barre de debug du solo l'avance (03-Client §7). */
+  endTick: number;
+  /** Bonshommes payés, rendus si la fondation échoue à la fin. */
+  readonly paid: number;
+}
+
 export interface GameState {
   readonly map: GameMap;
   /** Hash du terrain et des dimensions, calculé une fois à la création. */
@@ -111,6 +123,8 @@ export interface GameState {
   readonly players: readonly Player[];
   /** `cities[id - 1]` est la ville `id`. Les villes ne disparaissent pas encore. */
   readonly cities: City[];
+  /** Villes en construction (00-Game §3.3), dans l'ordre des ordres. Réassigné à chaque fondation terminée. */
+  foundings: Founding[];
   /** Identifiant de la ville dont la zone contient la case (terre et eau), 0 = aucune (00-Game §3.2). */
   readonly tileCity: Uint16Array;
   /** Identifiant de la ville qui pêche la case d'eau, 0 = aucune : la ville à port la plus proche, dans `CITY.fishingRadius` (00-Game §3.1). */
@@ -231,6 +245,7 @@ export function createGame(setup: GameSetup): GameState {
     owner: new Uint16Array(size),
     players,
     cities: [],
+    foundings: [],
     tileCity: new Uint16Array(size),
     tileFisher: new Uint16Array(size),
     roads: [],

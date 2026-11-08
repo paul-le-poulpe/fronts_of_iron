@@ -408,7 +408,26 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
 
 - L'**entrée** et la **sortie** sont dans la boîte, sur une petite tuile à fond clair, sans
   couleur de ressource. Sans entrée, la tuile et sa flèche disparaissent, et la colonne
-  reste vide pour garder l'alignement. Les colonnes sont alignées d'une boîte à l'autre.
+  reste vide pour garder l'alignement. La boîte est symétrique : la poignée à gauche et la croix
+  de suppression à droite ont des colonnes de même largeur, l'entrée et la sortie ont au moins la
+  même largeur (la sortie s'élargit avec les flèches de la production visée, calée à droite). Le
+  titre et les pions forment un bloc, aussi large que le plus large des deux, centré entre les deux
+  flèches ; dans le bloc, titre et pions sont alignés à gauche.
+- **Tuile de sortie** : la place de « + » et de 5 chiffres, puis l'icône en 32 × 32, pour que
+  toutes les tuiles aient la même taille ; un texte plus long (« existants / limite ») l'élargit.
+- **Réduire / Étendre** : les boîtes qui ont des postes ou des places (agriculture, pêche, mines,
+  usines, casernes) ont, dans la ligne du titre, juste à droite du nombre de places, un bouton à deux
+  flèches qui se rejoignent (celle du haut vers le bas, celle du bas vers le haut). Réduite, la
+  boîte remplace ses cases par un résumé, en icônes de 32 × 32 : le nombre de bonshommes et leur
+  icône, `+` le nombre de machines et leur icône, `+` le nombre de places fermées et la croix
+  rouge, puis `/` et le nombre de postes ou de places de la ligne (par exemple
+  `12 [agriculteur] + 3 [tracteur] + 2 [croix] / 20`), centré dans la colonne des pions, le
+  nombre après `/` en plus gros (environ la hauteur des icônes). Les machines et les places fermées n'y
+  figurent que s'il y en a. Dans cette vue, les pions ne se modifient pas : pas de glisser, pas de
+  croix, la boîte refuse les dépôts. Réduite, le bouton montre deux flèches qui s'écartent ; « Réduire » et « Étendre » sont dans le texte de survol, pas sur le bouton. L'état
+  réduit est gardé par la page seulement, pour la partie en cours. Provisoire : Inactifs et
+  Blessés, sans maximum, ne se réduisent pas ; les flèches de la production visée restent
+  utilisables sur une boîte réduite.
 - Le titre et le nombre de places sont au-dessus des pions, dans la colonne centrale. Une
   usine s'appelle « Usine - » suivi du nom de ce qu'elle produit, sans nom inventé.
 - Dans une boîte, les machines sont toujours à gauche et les bonshommes à droite.
@@ -436,7 +455,8 @@ milieu de la boîte : ils ne bougent pas quand la liste s'étend vers le bas.
   une usine de machines, « permis / maximum » pour une production visée (§7 ter).
 - Les **pions** sont dans une case de 22 px, avec les icônes de 16 × 16 de
   `client/public/icons/population/` (case de 38 px et icône agrandie à 32 × 32 avec l'option). S'il y en a trop pour une ligne, ils passent à la
-  ligne et la boîte grandit vers le bas.
+  ligne et la boîte grandit vers le bas. Une ligne compte au plus 10 pions en petites icônes, 5 en
+  grandes.
 - Inactifs : une ligne de population, puis une ligne par type de machine, sans libellé. Le
   pion d'un inactif est l'icône de base `pop-default` ; `pop-inactive`, à rayures, n'est pas utilisée.
 - **États d'un pion** : normal ; à venir, contour et barre de compteur ; en sursis, il

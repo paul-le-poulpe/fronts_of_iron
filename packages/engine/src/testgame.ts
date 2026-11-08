@@ -147,7 +147,8 @@ export function setupTestGame(state: GameState, scenario: TestScenarioId = "full
     const idle = activityOf(p, IDLE)!;
     idle.workers = Math.max(idle.workers, foundingCostPawns(p.cityIds.length));
     p.population = idle.workers;
-    if (!foundCity(state, p.id, tile, changed)) throw new Error(`partie de test : ville refusée en ${tile} (joueur ${p.id})`);
+    // Fondées aussitôt : la partie de test commence avec ses villes.
+    if (!foundCity(state, p.id, tile, changed, true)) throw new Error(`partie de test : ville refusée en ${tile} (joueur ${p.id})`);
   }
   if (state.fronts.length === 0) throw new Error("partie de test : aucun front entre les deux joueurs");
 

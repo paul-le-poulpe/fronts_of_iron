@@ -8,35 +8,82 @@ import { activeFrontCities, updateFronts } from "./fronts.ts";
 import { addCityToRoads } from "./roads.ts";
 import { setFisher, setOwner, type City, type GameState } from "./state.ts";
 
+/** Villes du joueur et villes qu'il a en construction : c'est ce nombre qui fixe le coût de la suivante (00-Game §3.3). */
+export function plannedCityCount(state: GameState, playerId: number): number {
+  let n = state.players[playerId - 1]!.cityIds.length;
+  for (const f of state.foundings) if (f.player === playerId) n++;
+  return n;
+}
+
 /**
  * Ordre `found_city` (00-Game §3.3), après vérification des champs par
- * intents.ts. Fonde la ville du joueur sur `tile` si c'est permis ; renvoie
- * false, sans rien modifier, sinon.
+ * intents.ts. Si c'est permis, la ville est payée et mise en construction :
+ * `completeFoundings` la fonde `CITY.foundingTurns` tours plus tard. La
+ * première ville, et toutes avec `instant` (partie de test), sont fondées
+ * aussitôt. Renvoie false, sans rien modifier, si ce n'est pas permis.
  */
-export function foundCity(state: GameState, playerId: number, tile: number, changed: number[]): boolean {
+export function foundCity(state: GameState, playerId: number, tile: number, changed: number[], instant = false): boolean {
   if (!isLand(state.map, tile)) return false;
   // `tileCity[tile] === 0` équivaut à « la case est dans le rayon de contrôle
   // d'aucune ville » : si une ville est à distance ≤ rayon, la plus proche
   // l'est aussi, donc possède la case (zones, §3.2) ; et une case possédée est à
   // portée de sa ville.
   if (state.tileCity[tile] !== 0) return false;
-  if (state.cities.length >= MAX_CITIES) return false;
+  if (state.cities.length + state.foundings.length >= MAX_CITIES) return false;
+  // Une seule construction par case, tous joueurs confondus.
+  if (state.foundings.some((f) => f.tile === tile)) return false;
 
   const player = state.players[playerId - 1]!;
   const first = player.capital === 0;
+  const cost = first ? 0 : foundingCostPawns(plannedCityCount(state, playerId));
   if (!first) {
     // Toute la population paie, sauf les blessés (08 §10).
-    if (player.population - hurtPawns(player) < foundingCostPawns(player.cityIds.length)) return false;
+    if (player.population - hurtPawns(player) < cost) return false;
     if (!inExpansionRadius(state, player.cityIds, tile)) return false;
   }
 
-  // Tout est valide : les effets, dans l'ordre de 00-Game §3.3. La première ville est gratuite et donne un bonhomme (08 §10).
+  // Tout est valide. La première ville est gratuite et donne un bonhomme (08 §10).
   if (first) {
     player.population += POPULATION.initial;
     activityOf(player, IDLE)!.workers += POPULATION.initial;
   } else {
-    for (let n = foundingCostPawns(player.cityIds.length); n > 0; n--) takePawn(player);
+    for (let n = cost; n > 0; n--) takePawn(player);
   }
+  if (first || instant) {
+    buildCity(state, playerId, tile, changed);
+  } else {
+    const start = state.tick + 1;
+    state.foundings.push({ player: playerId, tile, startTick: start, endTick: start + CITY.foundingTurns, paid: cost });
+  }
+  return true;
+}
+
+/**
+ * Fin des constructions (00-Game §3.3), après les ordres du tour : chaque
+ * construction dont `endTick` est atteint est fondée, dans l'ordre des ordres.
+ * Si sa case est entre-temps entrée dans la zone d'une ville, elle ne l'est pas,
+ * et ses bonshommes reviennent dans Inactifs (provisoire).
+ */
+export function completeFoundings(state: GameState, changed: number[]): void {
+  const turn = state.tick + 1;
+  if (!state.foundings.some((f) => f.endTick <= turn)) return;
+  const done = state.foundings.filter((f) => f.endTick <= turn);
+  state.foundings = state.foundings.filter((f) => f.endTick > turn);
+  for (const f of done) {
+    if (state.tileCity[f.tile] === 0) {
+      buildCity(state, f.player, f.tile, changed);
+    } else {
+      const p = state.players[f.player - 1]!;
+      p.population += f.paid;
+      activityOf(p, IDLE)!.workers += f.paid;
+    }
+  }
+}
+
+/** Fonde la ville : zones, routes, ports, pêche, groupes et fronts, dans l'ordre de 00-Game §3.3. */
+function buildCity(state: GameState, playerId: number, tile: number, changed: number[]): void {
+  const player = state.players[playerId - 1]!;
+  const first = player.capital === 0;
   const id = state.cities.length + 1;
   const city: City = { id, player: playerId, tile, port: false, group: id };
   state.cities.push(city);
@@ -64,7 +111,6 @@ export function foundCity(state: GameState, playerId: number, tile: number, chan
   }
   computeGroups(state);
   updateFronts(state);
-  return true;
 }
 
 /**

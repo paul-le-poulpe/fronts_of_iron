@@ -148,9 +148,10 @@ par les tours (règle 3 du `CLAUDE.md`), et ces boutons n'existeront pas.
 | --- | --- |
 | « +10 bonshommes » | 10 bonshommes de plus dans Inactifs du joueur (`population` aussi) ; message `addPopulation` |
 | « Renforcer les bots » | chaque bot reçoit 3 bonshommes dans Inactifs ; message `armBots`. Pour essayer les fronts : fonder une ville près d'un bot, déclarer la guerre par le menu de diplomatie, ouvrir le front |
+| « Villes instantanées » | interrupteur : les villes en construction de tous les joueurs se terminent au tour suivant (00-Game §3.3) ; message `instantCities`, `amount` 1 allume et 0 éteint. Remis à éteint à chaque nouvelle partie |
 | « Thème : clair / sombre » | bascule le thème de la fenêtre d'un front et de l'onglet des forces (`theme.ts`, 05-Fronts §11.8) ; bouton temporaire en attendant un panneau de configuration du joueur ; pas de message : l'attribut `data-theme` de `<html>` |
 
-Les trois boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
+Les quatre boutons sont des outils de développement hors des règles, comme la pause (05-Fronts §15). En ligne la barre est cachée et le Worker ignore le message `debug` (le bouton du thème est caché avec elle).
 
 ### Partie de test
 

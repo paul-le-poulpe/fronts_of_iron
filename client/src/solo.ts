@@ -124,7 +124,7 @@ export class SoloGame {
   }
 
   /** Outils de développement : voir `Game.debug`. */
-  debug(action: "addPopulation" | "armBots", amount: number): void {
+  debug(action: "addPopulation" | "armBots" | "instantCities", amount: number): void {
     this.game.debug(action, amount);
   }
 }

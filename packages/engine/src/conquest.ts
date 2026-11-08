@@ -105,5 +105,7 @@ function eliminatePlayer(state: GameState, player: number, by: number): void {
   state.boxes = state.boxes.filter((b) => b.owner !== player);
   state.divisions = state.divisions.filter((d) => d.owner !== player);
   state.proposals = state.proposals.filter((p) => p.from !== player && p.to !== player);
+  // Ses villes en construction disparaissent, sans remboursement (provisoire).
+  state.foundings = state.foundings.filter((f) => f.player !== player);
   state.events.push({ type: "player_eliminated", from: by, to: player, turn: state.tick + 1 });
 }

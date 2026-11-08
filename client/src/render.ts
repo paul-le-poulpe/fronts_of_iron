@@ -775,6 +775,34 @@ export class MapView {
       }
     }
 
+    // Villes en construction (00-Game §3.3) : un rond pâle cerclé en pointillé de la couleur du joueur, et sous lui une
+    // jauge qui se remplit jusqu'à la fondation.
+    for (const f of mirror.foundings) {
+      const x = cx(f.tile);
+      const y = cy(f.tile);
+      const s = s0;
+      ctx.beginPath();
+      ctx.arc(x, y, s, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fill();
+      ctx.setLineDash([2 * px, 2 * px]);
+      ctx.lineWidth = 1.5 * px;
+      ctx.strokeStyle = rgbCss(playerDark(f.player));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const part = Math.max(0, Math.min(1, (mirror.tick - f.startTick) / Math.max(1, f.endTick - f.startTick)));
+      const bw = s * 4;
+      const bh = Math.max(3 * px, s * 0.7);
+      const by = y + s + 2 * px;
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(x - bw / 2, by, bw, bh);
+      ctx.fillStyle = rgbCss(playerColor(f.player));
+      ctx.fillRect(x - bw / 2, by, bw * part, bh);
+      ctx.lineWidth = px;
+      ctx.strokeStyle = "#fff";
+      ctx.strokeRect(x - bw / 2, by, bw, bh);
+    }
+
     // Case survolée en mode placement : verte si la fondation est permise, rouge sinon.
     if (this.placement && this.hoverTile >= 0) {
       const t = this.hoverTile;

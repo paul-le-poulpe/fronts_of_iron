@@ -34,8 +34,8 @@ html[data-theme="dark"] {
 #prod.pp { background: var(--pp-card); color: var(--pp-ink); overflow-anchor: none; }
 
 /* Taille des pions : icône et case, 16 × 16 par défaut, 32 × 32 avec l'option « Icônes » du menu « Options ». */
-.pp, .pw-ghost, .pb-ghost { --pw-icon: 16px; --pw-cell: 22px; }
-.pp.pp-big, .pw-ghost.pp-big, .pb-ghost.pp-big { --pw-icon: 32px; --pw-cell: 38px; }
+.pp, .pw-ghost, .pb-ghost { --pw-icon: 16px; --pw-cell: 22px; --pw-per-row: 10; }
+.pp.pp-big, .pw-ghost.pp-big, .pb-ghost.pp-big { --pw-icon: 32px; --pw-cell: 38px; --pw-per-row: 5; }
 
 /* En-tête : population / capacité, fer réservé / produit. */
 /* En-tête : deux boîtes côte à côte, sans séparation visuelle. À droite, les messages. */
@@ -63,16 +63,18 @@ html[data-theme="dark"] {
 .pp-sep { display: flex; align-items: center; gap: 4px; margin: 4px 0; font-size: 11px; color: var(--muted); }
 .pp-sep-line { flex: 1; border-top: 1px dashed var(--pp-line); }
 
-/* Une boîte : poignée, entrée, flèche, colonne centrale, flèche, sortie. Colonnes d'entrée et de sortie de largeur fixe,
-   alignées d'une boîte à l'autre ; vides sans entrée. Chaque genre d'activité a sa couleur (--box-c). */
+/* Une boîte : poignée, entrée, flèche, colonne centrale, flèche, sortie, croix. Symétrique : poignée et croix de même
+   largeur, padding égal des deux côtés, entrée et sortie de 100 px au moins (la sortie s'élargit avec les flèches de la
+   production visée, calée à droite). La colonne centrale prend le reste, et le bloc titre + pions y est centré.
+   Chaque genre d'activité a sa couleur (--box-c). */
 .pb {
   --box-c: var(--occ-idle);
   display: grid;
-  grid-template-columns: 14px 88px 28px minmax(0, 1fr) 28px 162px 18px;
+  grid-template-columns: 16px 100px 40px minmax(0, 1fr) 40px minmax(100px, auto) 16px;
   grid-template-rows: auto auto;
   align-items: start;
   gap: 4px;
-  padding: 6px 8px 6px 4px;
+  padding: 6px 4px;
   border: 2px solid var(--box-c);
   border-radius: 8px;
   background: color-mix(in srgb, var(--box-c) var(--pp-mix), var(--pp-card));
@@ -96,10 +98,11 @@ html[data-theme="dark"] {
 .pb-in { grid-area: 2 / 2; }
 .pb-arrow-in { grid-area: 2 / 3; }
 .pb-arrow-out { grid-area: 2 / 5; }
-.pb-out { grid-area: 2 / 6; }
+.pb-out { grid-area: 2 / 6; justify-content: flex-end; }
 .pb-end { grid-area: 1 / 7 / 3 / 8; }
 /* 8 px : centrée sur la tuile de 40 px. */
-.pb-arrow { margin-top: 8px; }
+/* Flèche de 28 px centrée dans sa colonne de 40 px : 6 px de marge de chaque côté, en plus de l'écart de la grille. */
+.pb-arrow { margin-top: 8px; display: flex; justify-content: center; }
 .pb-arrow.on::before { content: ""; display: block; width: 28px; height: 24px; background: var(--muted); clip-path: polygon(0 28%, 58% 28%, 58% 0, 100% 50%, 58% 100%, 58% 72%, 0 72%); }
 
 /* Entrée et sortie : petite tuile à fond clair, sans couleur de ressource. */
@@ -122,23 +125,42 @@ html[data-theme="dark"] {
 .pb-step-up::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .pb-step-down::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
 .pb-tile.pb-bad { color: var(--pp-bad); }
+/* Tuile de sortie : la place de « + » et 5 chiffres avant l'icône de 32 × 32, pour que toutes aient la même taille ; un texte
+   plus long (« existants / limite ») l'élargit. */
+.pb-out .pb-tile > span:first-child { min-width: 6ch; text-align: right; }
 .pb-tile-ic, .pb-sym { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
 .pb-tile .pb-sym { width: 20px; height: 20px; }
 /* Toutes les boîtes : icônes d'entrée et de sortie en 32 × 32. */
 .pb .pb-tile-ic, .pb .pb-tile .pb-sym { width: 32px; height: 32px; }
 
-/* Colonne centrale : titre et places au-dessus des pions, sans cadre intérieur. */
-/* Titre et pions sont placés directement dans la grille de la boîte. */
-.pb-center { display: contents; }
-.pb-head { grid-area: 1 / 4; min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* Colonne centrale : un bloc titre + pions, à la largeur du plus large des deux, centré entre les flèches. Ses deux
+   rangées sont celles de la boîte (subgrid) : entrée et sortie restent alignées sur le haut des pions. Titre et pions
+   sont alignés à gauche dans le bloc : le cadenas et les pions ne bougent pas quand une ligne se remplit. */
+.pb-center { grid-area: 1 / 4 / 3 / 5; display: grid; grid-template-rows: subgrid; justify-self: center; width: max-content; max-width: 100%; min-width: 0; }
+.pb-head { grid-row: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .pb-title { font-size: 14px; }
 .pb-places { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pb-lock { display: inline-flex; align-items: center; color: var(--muted); cursor: help; }
 .pb-open-lock { width: 16px; height: 16px; image-rendering: pixelated; }
 
+/* Réduire / Étendre : dans la ligne du titre, juste à droite du nombre de places. Deux triangles qui se rejoignent (réduire) ou s'écartent (étendre). */
+.pb-fold { align-self: center; display: inline-flex; align-items: center; padding: 2px 4px; border: 1px solid var(--pp-cell-line); border-radius: 4px; background: var(--pp-tile); color: var(--pp-tile-ink); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.pb-fold-ic { display: flex; flex-direction: column; gap: 2px; }
+.pb-fold-ic::before, .pb-fold-ic::after { content: ""; display: block; width: 9px; height: 5px; background: currentColor; }
+.pb-fold-ic::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.pb-fold-ic::after { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.pb-fold-out .pb-fold-ic::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.pb-fold-out .pb-fold-ic::after { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+/* Boîte réduite : « nombre icône » en 32 × 32, séparés par « + », puis « / » et les places, centrés dans la colonne. Le
+   nombre de places en plus grand, à peu près la hauteur des icônes. */
+.pb-sum { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.pb-sum-max { font-size: 22px; }
+.pb .pb-sum-ic { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+
 /* Pions : case et icône selon l'option « Icônes » ; la boîte grandit vers le bas. */
-.pb-pawns { grid-area: 2 / 4; min-width: 0; display: flex; flex-direction: column; gap: 2px; min-height: var(--pw-cell); }
-.pb-row { display: flex; flex-wrap: wrap; gap: 2px; }
+.pb-pawns { grid-row: 2; min-width: 0; display: flex; flex-direction: column; gap: 2px; min-height: var(--pw-cell); }
+/* Au plus --pw-per-row pions par ligne : 10 en petites icônes, 5 en grandes. */
+.pb-row { display: flex; flex-wrap: wrap; gap: 2px; max-width: calc(var(--pw-per-row) * var(--pw-cell) + (var(--pw-per-row) - 1) * 2px); }
 .pw {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
   width: var(--pw-cell); height: var(--pw-cell); flex: none; border-radius: 4px;

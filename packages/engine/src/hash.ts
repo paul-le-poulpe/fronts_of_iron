@@ -145,6 +145,14 @@ export function hashState(state: GameState): number {
     h = mixWord(h, c.port ? 1 : 0);
     h = mixWord(h, c.group);
   }
+  h = mixWord(h, state.foundings.length);
+  for (const f of state.foundings) {
+    h = mixWord(h, f.player);
+    h = mixWord(h, f.tile);
+    h = mixWord(h, f.startTick);
+    h = mixWord(h, f.endTick);
+    h = mixWord(h, f.paid);
+  }
   h = mixWord(h, state.roads.length);
   for (const road of state.roads) {
     h = mixWord(h, road[0]);

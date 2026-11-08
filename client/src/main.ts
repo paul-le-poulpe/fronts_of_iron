@@ -332,6 +332,8 @@ function onInit(s: Session, init: InitMessage): void {
   diplomacy.reset();
   setSpectator(false);
   $("dev-line").textContent = "tour 0";
+  // Une nouvelle partie commence sans l'interrupteur « Villes instantanées ».
+  $("dbg-cities").setAttribute("aria-pressed", "false");
 }
 
 function onTick(s: Session, msg: TickMessage): void {
@@ -339,6 +341,8 @@ function onTick(s: Session, msg: TickMessage): void {
   if (mirror === null || painter === null || view === null) return;
   const t0 = performance.now();
   const repaint = mirror.applyTick(msg);
+  // Jauge des villes en construction : elle avance à chaque tour.
+  if (mirror.foundings.length > 0 || msg.foundings !== null) view.requestDraw();
   painter.paintTiles(repaint);
   view.upload(repaint);
   if (msg.cities !== null) view.refresh();
@@ -553,6 +557,14 @@ $("dbg-pop").addEventListener("click", () => {
 $("dbg-bots").addEventListener("click", () => {
   if (session !== null) post({ type: "debug", action: "armBots", amount: 3 });
 });
+// Interrupteur : les villes en construction, de tous les joueurs, se terminent au tour suivant (00-Game §3.3).
+const citiesButton = $("dbg-cities");
+citiesButton.addEventListener("click", () => {
+  if (session === null) return;
+  const on = citiesButton.getAttribute("aria-pressed") !== "true";
+  citiesButton.setAttribute("aria-pressed", String(on));
+  post({ type: "debug", action: "instantCities", amount: on ? 1 : 0 });
+});
 // Bouton temporaire (05-Fronts §11.8) : bascule le thème de la fenêtre d'un front et de l'onglet des forces.
 const themeButton = $("dbg-theme");
 themeButton.textContent = `Thème : ${currentTheme() === "dark" ? "sombre" : "clair"}`;
@@ -681,6 +693,7 @@ document.addEventListener("keydown", (e) => {
 function foundingProblem(m: Mirror, tile: number): string | null {
   if (!m.isLand(tile)) return "Une ville se fonde sur la terre.";
   if (m.tileCity[tile] !== 0) return "Cette case est déjà dans la zone d'une ville.";
+  if (m.foundings.some((f) => f.tile === tile)) return "Une ville est déjà en construction sur cette case.";
   const me = m.stats[localPlayer() - 1];
   const mine = m.cityIds[localPlayer() - 1]!;
   if (mine.length === 0) return null;
