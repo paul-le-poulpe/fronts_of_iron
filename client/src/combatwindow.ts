@@ -14,6 +14,7 @@ import "./combat.css";
 import { COMBAT_KIND, PHASE_NICHES, lossPercent } from "./combatdata.ts";
 import { playerName } from "./names.ts";
 import type { CombatShotView, CombatView, MilitaryCatalog } from "./protocol.ts";
+import { attachTextPanel, hidePanel, unitPanel } from "./infopanels.ts";
 import { unitIconUrl } from "./uniticons.ts";
 
 /**
@@ -165,6 +166,7 @@ export class CombatWindow {
   }
 
   close(): void {
+    hidePanel();
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
     if (this.onResize !== null) window.removeEventListener("resize", this.onResize);
@@ -259,6 +261,12 @@ export class CombatWindow {
       flag.alt = "";
       root.append(flip, el("div", "cw-cross"), flag);
       layer.append(root);
+      // Survol : le même panneau que pour un pion, à l'état du moment dans le combat.
+      attachTextPanel(root, () => {
+        const unit = units[i]!;
+        const status = unit.dead ? "Détruite" : unit.fled ? "En repli" : unit.place === "reserve" ? "En seconde ligne" : null;
+        return unitPanel(m, { type: u.type, owner: u.owner, state: unit.hp }, status);
+      });
       return { i, side, niche: nicheOf(i), root, flip, fill, lost, hp: u.start, place: u.reserve ? "reserve" : "line", dead: false, fled: false };
     });
     /** Barre de vie à l'état de la division ; `lost` : la part blanche aussi (sinon elle reste à l'ancienne hauteur). */

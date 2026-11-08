@@ -8,6 +8,7 @@ import { COMBAT_KIND, PHASE_NICHES, finalUnits, issueText, killsBy, killsDetail,
 import { nicheTitle } from "./combatwindow.ts";
 import { playerName } from "./names.ts";
 import type { CombatView, MilitaryCatalog } from "./protocol.ts";
+import { attachTextPanel, hidePanel, unitPanel } from "./infopanels.ts";
 import { unitIconUrl } from "./uniticons.ts";
 
 /** Hauteur de la zone des unités d'une niche, en px : les icônes s'empilent pour y tenir. */
@@ -43,6 +44,7 @@ export class CombatSummary {
   }
 
   close(): void {
+    hidePanel();
     this.panel.hidden = true;
     this.panel.replaceChildren();
   }
@@ -110,6 +112,8 @@ export class CombatSummary {
         flag.src = "icons/miscellaneous/icon-white-flag.png";
         flag.alt = "";
         unit.append(flip, el("div", "cw-cross"), flag);
+        // Survol : le même panneau que pour un pion, à l'état de la fin du combat.
+        attachTextPanel(unit, () => unitPanel(m, { type: u.type, owner: u.owner, state: f.hp }, f.dead ? "Détruite" : f.fled ? "En repli" : null));
         const row = Math.floor(j / 2);
         unit.style.left = `calc(50% + ${(j % 2 === 0 ? -1 : 1) * 21 - (ICON + 5) / 2 + (row % 2 === 0 ? -3 : 3)}px)`;
         unit.style.top = `${row * step}px`;
@@ -132,9 +136,10 @@ export class CombatSummary {
         r.append(icon, el("span", undefined, format.format(kill.amount)));
         return r;
       };
-      for (const kill of [k.infantry, k.vehicles]) {
-        if (kill !== null && Math.round(kill.amount * 10) !== 0) kills.append(row(kill, KILLS));
-      }
+      // « a éliminé : » puis les victimes (plus tard, l'expérience sera attribuée ici, 10-Combat-Phases §4).
+      const shown = [k.infantry, k.vehicles].filter((kill): kill is Kill => kill !== null && Math.round(kill.amount * 10) !== 0);
+      if (shown.length > 0) kills.append(el("div", "cs-kills-title", "a éliminé :"));
+      for (const kill of shown) kills.append(row(kill, KILLS));
       // Au survol : le détail, chaque type adverse touché, à deux décimales, avec la même mise en page.
       const detail = killsDetail(c, m, owner, nicheIndex);
       if (detail.length > 0) {

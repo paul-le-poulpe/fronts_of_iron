@@ -282,13 +282,13 @@ Composants (`count`, requis, `weight`, `softAttack`, `hardAttack`, `airAttack`,
 | `antiTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `antiTankGun` | 100 | oui | 1 | 0 | 5 000 | 0 | 1 |
 | `antiAir` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
-| | `antiAirGun` | 100 | oui | 1 | 1 000 | 0 | 5 000 | 1 |
+| | `antiAirGun` | 100 | oui | 1 | 500 | 0 | 5 000 | 1 |
 | `artillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `artillery` | 50 | oui | 1 | 2 500 | 250 | 0 | 1 |
 | `armoredAntiTank` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `armoredAntiTankGun` | 100 | oui | 1 | 0 | 10 000 | 0 | 1 |
 | `selfPropelledAntiAir` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
-| | `selfPropelledAntiAirGun` | 100 | oui | 1 | 2 000 | 0 | 10 000 | 1 |
+| | `selfPropelledAntiAirGun` | 100 | oui | 1 | 1 000 | 0 | 10 000 | 1 |
 | `selfPropelledArtillery` | hommes | 500 | oui | 1 | 0 | 0 | 0 | 1 |
 | | `selfPropelledArtilleryGun` | 50 | oui | 1 | 3 000 | 0 | 0 | 1 |
 
@@ -304,19 +304,19 @@ Attributs :
 
 | Type | Nom | Niche | frontWidth | breakthroughWidth | hitPoints | defenseHP× | attack× | breakthrough× | counterAttack× | armorPercent | movement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `elite` | Forces spéciales | infanterie | 1 | 1 | 70 000 | 2 | 0,8 | 0,6 | 0,8 | 0 | foot |
-| `regulars` | Réguliers | infanterie | 1 | 1 | 50 000 | 2 | 0,5 | 0,2 | 0,7 | 0 | foot |
-| `militia` | Milice | infanterie | 1 | 1 | 40 000 | 2 | 0,3 | 0,2 | 0,7 | 0 | foot |
-| `tankette` | Chenillette | chars | 2 | 1 | 50 000 | 1 | 1 | 1 | 1 | 100 | foot |
-| `infantryTank` | Char d'infanterie | chars | 2 | 1 | 250 000 | 1 | 1 | 0,8 | 0,8 | 100 | foot |
-| `cruiserTank` | Char de cavalerie | chars | 2 | 1 | 100 000 | 1 | 1 | 1 | 1 | 100 | motorized |
-| `mediumTank` | Char moyen | chars | 2 | 1 | 200 000 | 1 | 1 | 1,2 | 1,2 | 100 | motorized |
+| `elite` | Forces spéciales | infanterie | 1 | 1 | 80 000 | 2 | 0,8 | 0,6 | 0,8 | 0 | foot |
+| `regulars` | Réguliers | infanterie | 1 | 1 | 60 000 | 2 | 0,5 | 0,2 | 0,7 | 0 | foot |
+| `militia` | Milice | infanterie | 1 | 1 | 50 000 | 2 | 0,3 | 0,2 | 0,7 | 0 | foot |
+| `tankette` | Chenillette | chars | 2 | 1 | 20 000 | 1 | 1 | 1 | 1 | 100 | foot |
+| `infantryTank` | Char d'infanterie | chars | 2 | 1 | 100 000 | 1 | 1 | 0,8 | 0,8 | 100 | foot |
+| `cruiserTank` | Char de cavalerie | chars | 2 | 1 | 40 000 | 1 | 1 | 1 | 1 | 100 | motorized |
+| `mediumTank` | Char moyen | chars | 2 | 1 | 80 000 | 1 | 1 | 1,2 | 1,2 | 100 | motorized |
 | `antiTank` | Canon anti-char | antichar | 3 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
 | `antiAir` | Canon anti-aérien | antiaérien | 3 | 5 | 50 000 | 2 | 0,2 | 0,2 | 0,7 | 0 | foot |
 | `artillery` | Artillerie | artillerie | 3 | 5 | 50 000 | 2 | 1 | 1 | 1 | 0 | foot |
-| `armoredAntiTank` | Canon anti-char blindé | antichar | 3 | 1 | 200 000 | 1 | 0,8 | 1 | 1,2 | 100 | motorized |
-| `selfPropelledAntiAir` | Canon anti-aérien autopropulsé | antiaérien | 3 | 1 | 100 000 | 1 | 0,8 | 1 | 1 | 100 | motorized |
-| `selfPropelledArtillery` | Artillerie autopropulsée | artillerie | 3 | 1 | 100 000 | 1 | 1 | 1,2 | 1 | 100 | motorized |
+| `armoredAntiTank` | Canon anti-char blindé | antichar | 3 | 1 | 80 000 | 1 | 0,8 | 1 | 1,2 | 100 | motorized |
+| `selfPropelledAntiAir` | Canon anti-aérien autopropulsé | antiaérien | 3 | 1 | 40 000 | 1 | 0,8 | 1 | 1 | 100 | motorized |
+| `selfPropelledArtillery` | Artillerie autopropulsée | artillerie | 3 | 1 | 40 000 | 1 | 1 | 1,2 | 1 | 100 | motorized |
 
 Formation (`formationTurns`) : élites 200 tours (20 s), réguliers 100 (10 s),
 milice 0, les autres types 100. Dans la niche d'infanterie, du meilleur au moins

@@ -114,10 +114,24 @@ export function typePanel(type: DivisionTypeInfo): HTMLElement {
 
 /** Panneau d'un pion : icône et rang, nom et niche, description, effectif, état, attaques actuelles / maximales, puis les statistiques du type. */
 export function pawnPanel(military: MilitaryCatalog, d: DivisionView): HTMLElement {
+  return unitPanel(military, d, statusLabel(d));
+}
+
+/** Une division vue ailleurs que sur un front (fenêtres de combat) : son type, son joueur, son état. */
+export interface UnitLike {
+  readonly type: number;
+  readonly owner: number;
+  readonly state: number;
+}
+
+/**
+ * Le panneau d'un pion pour toute division, où qu'elle soit affichée (05-Fronts §11.7, 10-Combat-Phases §3, §4) ;
+ * `status` : la ligne au-dessus du nom, ou `null`.
+ */
+export function unitPanel(military: MilitaryCatalog, d: UnitLike, status: string | null): HTMLElement {
   const type = typeOf(military, d);
   const p = el("div", "ip");
   // Ligne optionnelle au-dessus du nom : ce que veut dire l'icône de statut du pion.
-  const status = statusLabel(d);
   if (status !== null) p.append(el("div", "ip-status", status));
   // Icône du type, puis rang : le rang n'existe pas encore dans les règles (05-Fronts §16), donc 0 ; l'icône de 8 × 10 est agrandie ×2 (16 × 20).
   const icon = el("img", "ip-icon");

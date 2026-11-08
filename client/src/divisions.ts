@@ -5,7 +5,7 @@
 import { type DivisionTypeInfo, type DivisionView, type FrontView, type MilitaryCatalog } from "./protocol.ts";
 
 /** Le type d'une division. */
-export const typeOf = (military: MilitaryCatalog, d: DivisionView): DivisionTypeInfo => military.divisions[d.type]!;
+export const typeOf = (military: MilitaryCatalog, d: { readonly type: number }): DivisionTypeInfo => military.divisions[d.type]!;
 
 /** Une division que le joueur peut saisir : ni en formation ni en déplacement (05-Fronts §4.4, §11.4, 08 §6). */
 export const movable = (d: DivisionView): boolean => d.status === "ready" || d.status === "fleeing";
@@ -28,7 +28,7 @@ export function statusLabel(d: DivisionView): string | null {
 }
 
 /** État affiché, en pourcent entier. */
-export const statePercent = (military: MilitaryCatalog, d: DivisionView): number => Math.round((100 * d.state) / military.stateScale);
+export const statePercent = (military: MilitaryCatalog, d: { readonly state: number }): number => Math.round((100 * d.state) / military.stateScale);
 
 export interface Attacks {
   readonly soft: number;
@@ -42,7 +42,7 @@ export function maxAttacks(type: DivisionTypeInfo): Attacks {
 }
 
 /** Attaques actuelles d'une division : celles d'une division pleine × son état (08 §5). */
-export function currentAttacks(type: DivisionTypeInfo, d: DivisionView, stateScale: number): Attacks {
+export function currentAttacks(type: DivisionTypeInfo, d: { readonly state: number }, stateScale: number): Attacks {
   const r = d.state / stateScale;
   return { soft: Math.round(type.softAttack * r), hard: Math.round(type.hardAttack * r), air: Math.round(type.airAttack * r) };
 }

@@ -37,7 +37,7 @@
 
 /* Les divisions : posées en absolu dans `.cw-layer`, déplacées par `transform` (transition). */
 .cw-layer { inset: 0; pointer-events: none; }
-.cw-u { position: absolute; left: 0; top: 0; width: 32px; height: 32px; transform-origin: 0 0; transition: transform 0.36s ease-out; }
+.cw-u { pointer-events: auto; position: absolute; left: 0; top: 0; width: 32px; height: 32px; transform-origin: 0 0; transition: transform 0.36s ease-out; }
 .cw-layer.still .cw-u { transition: none; }
 .cw-uf { position: absolute; inset: 0; }
 /* Camp de droite : l'icône regarde le centre ; la barre passe à gauche de l'icône. */
@@ -113,6 +113,7 @@
 .cs-kills { border-top: 1px solid var(--t-line); margin: 0 6px; padding: 6px 0; min-height: 64px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .cs-kill { display: flex; align-items: center; gap: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .cs-kill-icon { position: relative; width: 32px; height: 32px; }
+.cs-kills-title { color: var(--t-muted); font-size: 12px; }
 /* Détail des destructions, au survol de la zone : mêmes lignes, chaque type touché, deux décimales. */
 .cs-kills { position: relative; }
 .cs-kills-pop {

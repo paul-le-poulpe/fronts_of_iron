@@ -213,7 +213,12 @@ Ouverte par « Passer ». Plus petite (au plus 1160 px de large). Icônes en
   des pions, §3), sauf les tuées. **Les icônes s'empilent** (se chevauchent verticalement) quand elles
   sont nombreuses, pour garder la fenêtre basse ; chacune recouvre le haut de
   celle du dessous, sa barre reste visible.
-- **Sous chaque niche, ce qu'elle a détruit** : une ligne pour l'infanterie,
+- **Survol d'une unité** (fenêtre détaillée et résumé) : le même panneau que
+  pour un pion d'un front (`05-Fronts.md` §11.7), à l'état du moment (fin du
+  combat dans le résumé), avec « Détruite » ou « En repli » au-dessus du nom.
+  De manière générale, une unité survolée, où qu'elle soit, montre ce panneau.
+- **Sous chaque niche, ce qu'elle a détruit**, sous le titre « a éliminé : »
+  (*plus tard*, c'est là que l'expérience sera attribuée) : une ligne pour l'infanterie,
   une pour les véhicules, en **divisions détruites** (une décimale, par
   exemple « 1,5 »). C'est la somme des états que la niche a fait perdre, en
   divisions complètes, que l'unité touchée soit morte, en fuite ou encore en
