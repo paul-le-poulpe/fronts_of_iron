@@ -228,7 +228,9 @@ Une option du menu « Options » (§11), propre à chaque joueur, **allumée au 
 - **Allumée** : bonshommes et machines se placent seuls. De haut en bas, les inactifs remplissent
   les postes non barrés d'Agriculteurs, Pêcheurs, Mineurs et des usines de machines. Une machine
   d'Inactifs va seule dans sa boîte, sur un poste non barré, et remplace un ouvrier si la boîte est
-  pleine. Le glisser-déposer des pions n'existe pas.
+  pleine. Le glisser-déposer des pions n'existe pas. Survol d'un bonshomme actif : « Remplira
+  automatiquement la première case de production libre. » Survol d'une machine d'Inactifs : le texte
+  de la sortie de l'usine qui la fabrique (« Remplace les pêcheurs », avec l'icône), comme en glisser.
 - **Éteinte** : le glisser-déposer des pions est le seul moyen de les déplacer. Les croix ne
   s'affichent pas et ne réagissent pas, et elles restent mémorisées.
 - **Croix** : au survol d'une ligne, le joueur peut poser une croix rouge (`misc-red-cross.png`)

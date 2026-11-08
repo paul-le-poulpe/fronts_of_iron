@@ -417,12 +417,19 @@ export class ProductionPanel {
       cell.dataset["total"] = String(p.total);
       cell.append(el("i", "pw-bar"));
     }
+    // Blessé : l'infobulle construite remplace le texte du survol, qui n'est donc jamais affiché.
+    if (kindOfAct === "hurt" && p.pk === "w") {
+      setTip(cell, () => this.healTip());
+      return cell;
+    }
     cell.title =
       p.state === "coming" ? (p.pk === "w" ? "Nourriture excédentaire. Population en croissance." : "Arrive bientôt.")
       : p.state === "leaving" ? (p.pk === "w" ? "Pas assez de nourriture. Population en déclin." : "En trop : va bientôt disparaître.")
       : p.state === "empty" ? "Poste vacant : glissez ici un bonhomme ou une machine."
+      : this.auto ? "Remplira automatiquement la première case de production libre."
       : "Glissez pour le déplacer, avec ceux à sa droite.";
-    if (kindOfAct === "hurt" && p.pk === "w") setTip(cell, () => this.healTip());
+    // Machine d'Inactifs : même texte que la sortie de l'usine qui la fabrique, en auto-assignation comme en glisser (08 §11).
+    if (kindOfAct === "idle" && p.pk !== "w" && p.state === "normal") setTip(cell, () => this.replacesTip(p.pk.slice(2)));
     return cell;
   }
 
@@ -494,7 +501,8 @@ export class ProductionPanel {
       if (kind === "farming" || kind === "fishing") tile.append(el("span"), img("miscellaneous/misc-food-ham.png", "pb-tile-ic"));
       else if (kind === "mining") tile.append(el("span"), img("goods/goods-iron-ingot.png", "pb-tile-ic"));
       else tile.append(el("span"), this.productIcon(info) ?? el("span"));
-      if (kind === "factory" && info.good !== null) setTip(tile, () => this.replacesTip(info));
+      const good = info.good;
+      if (kind === "factory" && good !== null) setTip(tile, () => this.replacesTip(good));
       output.append(tile);
       if (info.hasPlaces) output.append(this.targetArrows(a.id));
       arrowOut.classList.add("on");
@@ -731,9 +739,9 @@ export class ProductionPanel {
     return box;
   }
 
-  /** Survol de la sortie d'une usine de machines : le métier que la machine remplace, et son icône. */
-  private replacesTip(info: ActivityInfo): Node {
-    const host = this.catalog.activities.find((c) => c.good === info.good && c.id !== info.id)!;
+  /** Survol de la sortie d'une usine de machines, ou d'une machine d'Inactifs : le métier que la machine remplace, et son icône. */
+  private replacesTip(good: string): Node {
+    const host = this.catalog.activities.find((c) => c.good === good && this.hostKind(c.id))!;
     const box = el("div", "pt-replace");
     box.append(`Remplace les ${activityName(host.id).toLowerCase()}`, img(`population/${WORKER_ICON[host.kind]}.png`, "pp-ic"));
     return box;
